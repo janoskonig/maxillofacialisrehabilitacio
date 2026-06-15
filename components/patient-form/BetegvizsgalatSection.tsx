@@ -55,7 +55,7 @@ export function BetegvizsgalatSection({
   const [showPerio, setShowPerio] = useState(false);
   return (
     <div id="section-betegvizsgalat" className="card scroll-mt-20 sm:scroll-mt-24">
-      <h4 className="text-lg font-semibold text-gray-900 mb-4 flex items-center">
+      <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
         <Calendar className="w-5 h-5 mr-2 text-medical-primary" />
         BETEGVIZSGÁLAT
         {sectionErrors['betegvizsgalat'] > 0 && (
@@ -73,12 +73,12 @@ export function BetegvizsgalatSection({
         {/* Fogazati státusz */}
         <div className="border-t pt-4 mt-4">
           <div className="flex items-center gap-2 mb-3">
-            <h5 className="text-base sm:text-md font-semibold text-gray-900">Felvételi státusz</h5>
+            <h5 className="text-base sm:text-md font-semibold text-gray-900 dark:text-gray-100">Felvételi státusz</h5>
             {REQUIRED_FIELDS.some(f => f.key === 'meglevoFogak') && (
               <span className="text-medical-error text-sm">*</span>
             )}
           </div>
-          <p className="text-sm text-gray-600 mb-3">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
             Kattintson egy fogra a státusza beállításához (ép, hiányzó, tömött, korona,
             gyökértömött, implantátum stb.). A szuvasodás külön rátehető.
           </p>
@@ -89,25 +89,25 @@ export function BetegvizsgalatSection({
             const { d: dCount, f: fCount, m: mCount, dmft } = computeDMFT(fogak);
 
             return (
-              <div className="mt-4 p-3 sm:p-4 bg-blue-50 rounded-lg border border-blue-200">
-                <h6 className="font-semibold text-gray-900 mb-2 text-sm sm:text-base">DMF-T index</h6>
+              <div className="mt-4 p-3 sm:p-4 bg-blue-50 dark:bg-blue-950/40 rounded-lg border border-blue-200 dark:border-blue-800">
+                <h6 className="font-semibold text-gray-900 dark:text-gray-100 mb-2 text-sm sm:text-base">DMF-T index</h6>
                 <div className="grid grid-cols-2 sm:grid-cols-4 gap-2 sm:gap-3 text-sm">
                   <div>
-                    <span className="text-gray-600">D (szuvas):</span>
-                    <span className="ml-2 font-semibold text-red-700">{dCount}</span>
+                    <span className="text-gray-600 dark:text-gray-400">D (szuvas):</span>
+                    <span className="ml-2 font-semibold text-red-700 dark:text-red-300">{dCount}</span>
                   </div>
                   <div>
-                    <span className="text-gray-600">F (tömött):</span>
-                    <span className="ml-2 font-semibold text-blue-700">{fCount}</span>
+                    <span className="text-gray-600 dark:text-gray-400">F (tömött):</span>
+                    <span className="ml-2 font-semibold text-blue-700 dark:text-blue-300">{fCount}</span>
                   </div>
                   <div>
-                    <span className="text-gray-600">M (hiányzik):</span>
-                    <span className="ml-2 font-semibold text-gray-700">{mCount}</span>
+                    <span className="text-gray-600 dark:text-gray-400">M (hiányzik):</span>
+                    <span className="ml-2 font-semibold text-gray-700 dark:text-gray-300">{mCount}</span>
                   </div>
                   <div>
-                    <span className="text-gray-600">DMF-T:</span>
-                    <span className="ml-2 font-bold text-gray-900">{dmft}</span>
-                    <span className="ml-1 text-xs text-gray-500">/ 32</span>
+                    <span className="text-gray-600 dark:text-gray-400">DMF-T:</span>
+                    <span className="ml-2 font-bold text-gray-900 dark:text-gray-100">{dmft}</span>
+                    <span className="ml-1 text-xs text-gray-500 dark:text-gray-400">/ 32</span>
                   </div>
                 </div>
               </div>
@@ -124,18 +124,18 @@ export function BetegvizsgalatSection({
 
             const content = (
               <div className="space-y-3 sm:space-y-4 mt-4">
-                <h6 className="font-medium text-gray-700 text-sm sm:text-base">Fogankénti kezelési igények</h6>
+                <h6 className="font-medium text-gray-700 dark:text-gray-300 text-sm sm:text-base">Fogankénti kezelési igények</h6>
                 {presentTeeth.map((toothNumber) => {
                   const c = readConditions(fogak[toothNumber]);
                   return (
-                    <div key={toothNumber} className="border border-gray-200 rounded-md p-3 sm:p-4">
+                    <div key={toothNumber} className="border border-gray-200 dark:border-gray-800 rounded-md p-3 sm:p-4">
                       <div className="flex items-center gap-2 mb-2 flex-wrap">
-                        <span className="font-medium text-sm sm:text-base text-gray-900">{toothNumber}. fog</span>
-                        <span className="text-xs text-gray-500">
+                        <span className="font-medium text-sm sm:text-base text-gray-900 dark:text-gray-100">{toothNumber}. fog</span>
+                        <span className="text-xs text-gray-500 dark:text-gray-400">
                           {BASE_LABELS[c.base]}
                           {c.caries ? ' · szuvas' : ''}
                         </span>
-                        {c.description && <span className="text-xs text-gray-500">· {c.description}</span>}
+                        {c.description && <span className="text-xs text-gray-500 dark:text-gray-400">· {c.description}</span>}
                       </div>
                       <ToothTreatmentInline toothNumber={toothNumber} isViewOnly={isViewOnly} />
                     </div>
@@ -155,7 +155,7 @@ export function BetegvizsgalatSection({
           {patientId && (
             <div className="border-t pt-4 mt-4">
               <div className="flex items-center gap-3 mb-3 flex-wrap">
-                <span className="text-base sm:text-md font-semibold text-gray-900">Parodontális státusz</span>
+                <span className="text-base sm:text-md font-semibold text-gray-900 dark:text-gray-100">Parodontális státusz</span>
                 <button
                   type="button"
                   onClick={() => setShowPerio((v) => !v)}
@@ -167,7 +167,7 @@ export function BetegvizsgalatSection({
                     className={`relative inline-block w-9 h-5 rounded-full transition-colors ${showPerio ? 'bg-medical-primary' : 'bg-gray-300 dark:bg-gray-600'}`}
                   >
                     <span
-                      className={`absolute top-0.5 w-4 h-4 bg-white rounded-full transition-all ${showPerio ? 'right-0.5' : 'left-0.5'}`}
+                      className={`absolute top-0.5 w-4 h-4 bg-white dark:bg-gray-900 rounded-full transition-all ${showPerio ? 'right-0.5' : 'left-0.5'}`}
                     />
                   </span>
                   {showPerio ? 'bekapcsolva' : 'parodontális státuszfelvétel'}
@@ -217,17 +217,17 @@ export function BetegvizsgalatSection({
 
         {/* Fogpótlások – felső és alsó állcsont külön */}
         <div className="border-t pt-4 mt-4">
-          <h5 className="text-md font-semibold text-gray-900 mb-3">Fogpótlások</h5>
+          <h5 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-3">Fogpótlások</h5>
           {/* Felső állcsont */}
           <div className="mb-6">
             <div className="flex items-center mb-2">
               <input
                 {...register('felsoFogpotlasVan')}
                 type="checkbox"
-                className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+                className="rounded border-gray-300 dark:border-gray-700 text-medical-primary focus:ring-medical-primary"
                 disabled={isViewOnly}
               />
-              <label className="ml-2 text-sm text-gray-700">Felső állcsont: van-e fogpótlása?</label>
+              <label className="ml-2 text-sm text-gray-700 dark:text-gray-300">Felső állcsont: van-e fogpótlása?</label>
             </div>
             {felsoFogpotlasVan && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6 mt-2">
@@ -262,10 +262,10 @@ export function BetegvizsgalatSection({
                   <input
                     {...register('felsoFogpotlasElegedett')}
                     type="checkbox"
-                    className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+                    className="rounded border-gray-300 dark:border-gray-700 text-medical-primary focus:ring-medical-primary"
                     disabled={isViewOnly}
                   />
-                  <label className="ml-2 text-sm text-gray-700">Elégedett-e velük?</label>
+                  <label className="ml-2 text-sm text-gray-700 dark:text-gray-300">Elégedett-e velük?</label>
                 </div>
                 {!felsoFogpotlasElegedett && (
                   <div className="md:col-span-2">
@@ -289,10 +289,10 @@ export function BetegvizsgalatSection({
               <input
                 {...register('alsoFogpotlasVan')}
                 type="checkbox"
-                className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+                className="rounded border-gray-300 dark:border-gray-700 text-medical-primary focus:ring-medical-primary"
                 disabled={isViewOnly}
               />
-              <label className="ml-2 text-sm text-gray-700">Alsó állcsont: van-e fogpótlása?</label>
+              <label className="ml-2 text-sm text-gray-700 dark:text-gray-300">Alsó állcsont: van-e fogpótlása?</label>
             </div>
             {alsoFogpotlasVan && (
               <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6 mt-2">
@@ -327,10 +327,10 @@ export function BetegvizsgalatSection({
                   <input
                     {...register('alsoFogpotlasElegedett')}
                     type="checkbox"
-                    className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+                    className="rounded border-gray-300 dark:border-gray-700 text-medical-primary focus:ring-medical-primary"
                     disabled={isViewOnly}
                   />
-                  <label className="ml-2 text-sm text-gray-700">Elégedett-e velük?</label>
+                  <label className="ml-2 text-sm text-gray-700 dark:text-gray-300">Elégedett-e velük?</label>
                 </div>
                 {!alsoFogpotlasElegedett && (
                   <div className="md:col-span-2">
@@ -355,10 +355,10 @@ export function BetegvizsgalatSection({
             <input
               {...register('maxilladefektusVan')}
               type="checkbox"
-              className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+              className="rounded border-gray-300 dark:border-gray-700 text-medical-primary focus:ring-medical-primary"
               disabled={isViewOnly}
             />
-            <label className="ml-2 text-sm text-gray-700">Maxilladefektus van</label>
+            <label className="ml-2 text-sm text-gray-700 dark:text-gray-300">Maxilladefektus van</label>
           </div>
           {watch('maxilladefektusVan') && (
             <div className="space-y-4 ml-6 mt-2">
@@ -391,10 +391,10 @@ export function BetegvizsgalatSection({
             <input
               {...register('mandibuladefektusVan')}
               type="checkbox"
-              className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+              className="rounded border-gray-300 dark:border-gray-700 text-medical-primary focus:ring-medical-primary"
               disabled={isViewOnly}
             />
-            <label className="ml-2 text-sm text-gray-700">Mandibuladefektus van</label>
+            <label className="ml-2 text-sm text-gray-700 dark:text-gray-300">Mandibuladefektus van</label>
           </div>
           {watch('mandibuladefektusVan') && (
             <div className="ml-6 mt-2">
@@ -416,19 +416,19 @@ export function BetegvizsgalatSection({
           <input
             {...register('nyelvmozgásokAkadályozottak')}
             type="checkbox"
-            className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+            className="rounded border-gray-300 dark:border-gray-700 text-medical-primary focus:ring-medical-primary"
             disabled={isViewOnly}
           />
-          <label className="ml-2 text-sm text-gray-700">Nyelvmozgások akadályozottak</label>
+          <label className="ml-2 text-sm text-gray-700 dark:text-gray-300">Nyelvmozgások akadályozottak</label>
         </div>
         <div className="flex items-center">
           <input
             {...register('gombocosBeszed')}
             type="checkbox"
-            className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+            className="rounded border-gray-300 dark:border-gray-700 text-medical-primary focus:ring-medical-primary"
             disabled={isViewOnly}
           />
-          <label className="ml-2 text-sm text-gray-700">Gombócos beszéd</label>
+          <label className="ml-2 text-sm text-gray-700 dark:text-gray-300">Gombócos beszéd</label>
         </div>
         <div>
           <label className="form-label">Nyálmirigy állapot</label>

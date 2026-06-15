@@ -189,18 +189,18 @@ export function MarkCompletedRetroModal({
       aria-modal="true"
       aria-labelledby="mark-completed-retro-title"
     >
-      <div className="bg-white rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-lg w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b">
           <h2
             id="mark-completed-retro-title"
-            className="text-lg font-semibold text-gray-900 flex items-center gap-2"
+            className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2"
           >
             <CalendarCheck className="w-5 h-5 text-medical-primary" />
             Utólagos teljesítés rögzítése
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 p-1"
+            className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 p-1"
             aria-label="Bezárás"
             type="button"
           >
@@ -209,11 +209,11 @@ export function MarkCompletedRetroModal({
         </div>
 
         <div className="p-4 space-y-4">
-          <div className="text-sm text-gray-700 bg-gray-50 border border-gray-200 p-3 rounded">
-            <div className="font-medium text-gray-900">
+          <div className="text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 p-3 rounded">
+            <div className="font-medium text-gray-900 dark:text-gray-100">
               {stepLabel ?? 'Munkafázis'}
             </div>
-            <div className="text-xs text-gray-600 mt-1">
+            <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
               Válaszd ki, hogy mikor készült el ténylegesen ez a munkafázis.
               Ha egy korábbi foglalt időpontnál történt, válaszd ki a listából
               — ekkor a fázist ahhoz az időponthoz kötjük. Egyébként adj meg
@@ -222,33 +222,33 @@ export function MarkCompletedRetroModal({
           </div>
 
           <div>
-            <div className="text-sm font-medium text-gray-700 mb-2">
+            <div className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Régebbi foglalt időpontok
             </div>
             {loading && (
-              <div className="text-sm text-gray-500 py-3 text-center">
+              <div className="text-sm text-gray-500 dark:text-gray-400 py-3 text-center">
                 Betöltés…
               </div>
             )}
             {loadError && (
-              <div className="text-sm text-red-700 bg-red-50 border border-red-200 p-2 rounded">
+              <div className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 p-2 rounded">
                 {loadError}
               </div>
             )}
             {!loading && !loadError && appointments.length === 0 && (
-              <div className="text-sm text-gray-500 italic py-2">
+              <div className="text-sm text-gray-500 dark:text-gray-400 italic py-2">
                 Nincs régebbi foglalt időpont a betegnél — adj meg egyéni
                 dátumot lent.
               </div>
             )}
             {!loading && !loadError && appointments.length > 0 && (
-              <div className="border border-gray-200 rounded divide-y divide-gray-100 max-h-64 overflow-y-auto">
+              <div className="border border-gray-200 dark:border-gray-800 rounded divide-y divide-gray-100 dark:divide-gray-800 max-h-64 overflow-y-auto">
                 {appointments.map((appt) => {
                   const isSelected = selectedAppointmentId === appt.id;
                   return (
                     <label
                       key={appt.id}
-                      className={`flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 ${
+                      className={`flex items-start gap-2 px-3 py-2 cursor-pointer hover:bg-gray-50 dark:hover:bg-gray-800/50 ${
                         isSelected ? 'bg-medical-primary/5' : ''
                       }`}
                     >
@@ -260,7 +260,7 @@ export function MarkCompletedRetroModal({
                         onChange={() => setSelectedAppointmentId(appt.id)}
                       />
                       <div className="flex-1 min-w-0">
-                        <div className="text-sm text-gray-900 font-medium">
+                        <div className="text-sm text-gray-900 dark:text-gray-100 font-medium">
                           {new Date(appt.startTime).toLocaleString('hu-HU', {
                             year: 'numeric',
                             month: 'short',
@@ -269,16 +269,16 @@ export function MarkCompletedRetroModal({
                             minute: '2-digit',
                           })}
                         </div>
-                        <div className="text-xs text-gray-600 truncate">
+                        <div className="text-xs text-gray-600 dark:text-gray-400 truncate">
                           {appt.stepLabel ?? appt.stepCode ?? 'Időpont'}
                           {appt.appointmentStatus && (
-                            <span className="ml-1 text-gray-500">
+                            <span className="ml-1 text-gray-500 dark:text-gray-400">
                               · {appt.appointmentStatus}
                             </span>
                           )}
                         </div>
                         {appt.dentistEmail && (
-                          <div className="text-xs text-gray-500 truncate">
+                          <div className="text-xs text-gray-500 dark:text-gray-400 truncate">
                             {appt.dentistEmail}
                           </div>
                         )}
@@ -291,7 +291,7 @@ export function MarkCompletedRetroModal({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Egyéni dátum {selectedAppointment ? '(nem aktív)' : ''}
             </label>
             <input
@@ -303,15 +303,15 @@ export function MarkCompletedRetroModal({
                 if (selectedAppointmentId) setSelectedAppointmentId(null);
               }}
               disabled={!!selectedAppointment}
-              className="form-input w-full disabled:bg-gray-100 disabled:text-gray-500"
+              className="form-input w-full disabled:bg-gray-100 dark:disabled:bg-gray-800 disabled:text-gray-500 dark:disabled:text-gray-400"
             />
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               Csak múltbeli vagy mai dátum választható.
             </p>
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Indok (min {MIN_REASON_LENGTH} karakter) *
             </label>
             <textarea
@@ -322,7 +322,7 @@ export function MarkCompletedRetroModal({
               maxLength={500}
               placeholder="Pl. Külső praxisban végeztük el…"
             />
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
               <span>
                 {trimmedReason.length < MIN_REASON_LENGTH
                   ? `Még ${MIN_REASON_LENGTH - trimmedReason.length} karakter szükséges`
@@ -333,7 +333,7 @@ export function MarkCompletedRetroModal({
           </div>
 
           {submitError && (
-            <div className="text-sm text-red-700 bg-red-50 border border-red-200 p-2 rounded">
+            <div className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 p-2 rounded">
               {submitError}
             </div>
           )}

@@ -105,7 +105,7 @@ export default function PWARegister() {
   if (updateAvailable) {
     return (
       <div className="fixed bottom-4 right-4 z-50 max-w-sm">
-        <div className="bg-blue-50 border border-blue-200 text-blue-800 rounded-lg shadow-lg p-4 flex items-start gap-3">
+        <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 text-blue-800 dark:text-blue-300 rounded-lg shadow-lg p-4 flex items-start gap-3">
           <div className="flex-1 text-sm font-medium">
             Frissítés elérhető. Kattintson az &apos;Újratöltés&apos; gombra a legújabb verzió használatához.
           </div>
@@ -118,7 +118,7 @@ export default function PWARegister() {
             </button>
             <button
               onClick={handleDismiss}
-              className="px-3 py-1.5 bg-gray-200 text-gray-700 text-sm font-medium rounded hover:bg-gray-300 transition-colors"
+              className="px-3 py-1.5 bg-gray-200 dark:bg-gray-700 text-gray-700 dark:text-gray-300 text-sm font-medium rounded hover:bg-gray-300 dark:hover:bg-gray-600 transition-colors"
             >
               Később
             </button>

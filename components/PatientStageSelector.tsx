@@ -126,23 +126,23 @@ export function PatientStageSelector({
   const currentStageDate = currentStage && ('stageDate' in currentStage ? currentStage.stageDate : 'at' in currentStage ? currentStage.at : null);
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
-      <h3 className="text-lg font-semibold text-gray-900 mb-4">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
+      <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
         Stádium változtatása
       </h3>
 
       {useNewModel && !activeEpisodeId && (
-        <p className="mb-4 text-sm text-amber-700 bg-amber-50 p-3 rounded-md">
+        <p className="mb-4 text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-3 rounded-md">
           Nincs aktív epizód. Indítson új ellátási epizódot a stádium rögzítéséhez.
         </p>
       )}
 
       {currentStage && currentStageLabel && (
-        <div className="mb-4 p-3 bg-gray-50 rounded-md">
-          <p className="text-sm text-gray-600 mb-1">Jelenlegi stádium:</p>
-          <p className="text-base font-medium text-gray-900">{currentStageLabel}</p>
+        <div className="mb-4 p-3 bg-gray-50 dark:bg-gray-800/60 rounded-md">
+          <p className="text-sm text-gray-600 dark:text-gray-400 mb-1">Jelenlegi stádium:</p>
+          <p className="text-base font-medium text-gray-900 dark:text-gray-100">{currentStageLabel}</p>
           {currentStageDate && (
-            <p className="text-xs text-gray-500 mt-1">
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">
               {new Date(currentStageDate).toLocaleDateString('hu-HU', {
                 year: 'numeric',
                 month: 'long',
@@ -153,10 +153,10 @@ export function PatientStageSelector({
             </p>
           )}
           {'note' in currentStage && currentStage.note && (
-            <p className="text-sm text-gray-600 mt-1">{currentStage.note}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{currentStage.note}</p>
           )}
           {'notes' in currentStage && currentStage.notes && (
-            <p className="text-sm text-gray-600 mt-1">{currentStage.notes}</p>
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">{currentStage.notes}</p>
           )}
         </div>
       )}
@@ -164,14 +164,14 @@ export function PatientStageSelector({
       <div className="space-y-4">
         {useNewModel && catalog.length > 0 ? (
           <div>
-            <label htmlFor="stage-select" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="stage-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Új stádium
             </label>
             <select
               id="stage-select"
               value={selectedStageCode}
               onChange={(e) => setSelectedStageCode(e.target.value)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-medical-primary focus:border-medical-primary"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-medical-primary focus:border-medical-primary"
               disabled={saving || !activeEpisodeId}
             >
               {catalog.map((c) => (
@@ -181,14 +181,14 @@ export function PatientStageSelector({
           </div>
         ) : (
           <div>
-            <label htmlFor="stage-select" className="block text-sm font-medium text-gray-700 mb-2">
+            <label htmlFor="stage-select" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
               Új stádium
             </label>
             <select
               id="stage-select"
               value={selectedStage}
               onChange={(e) => setSelectedStage(e.target.value as PatientStage)}
-              className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-medical-primary focus:border-medical-primary"
+              className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-medical-primary focus:border-medical-primary"
               disabled={saving}
             >
               {patientStageOptions.map((option) => (
@@ -199,7 +199,7 @@ export function PatientStageSelector({
         )}
 
         <div>
-          <label htmlFor="stage-notes" className="block text-sm font-medium text-gray-700 mb-2">
+          <label htmlFor="stage-notes" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Megjegyzések (opcionális)
           </label>
           <textarea
@@ -207,7 +207,7 @@ export function PatientStageSelector({
             value={useNewModel ? note : notes}
             onChange={(e) => (useNewModel ? setNote(e.target.value) : setNotes(e.target.value))}
             rows={3}
-            className="w-full px-3 py-2 border border-gray-300 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-medical-primary focus:border-medical-primary"
+            className="w-full px-3 py-2 border border-gray-300 dark:border-gray-700 rounded-md shadow-sm focus:outline-none focus:ring-2 focus:ring-medical-primary focus:border-medical-primary"
             placeholder="Stádium változás indoklása..."
             disabled={saving}
           />

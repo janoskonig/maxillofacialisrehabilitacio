@@ -150,7 +150,7 @@ export function DocumentAnnotationThumbnail({
             }}
           >
             <div
-              className="rounded px-0.5 py-px shadow-sm border border-black/25 bg-white/90 text-gray-900 leading-tight"
+              className="rounded px-0.5 py-px shadow-sm border border-black/25 bg-white/90 dark:bg-gray-900/90 text-gray-900 dark:text-gray-100 leading-tight"
               style={{ fontSize: 'clamp(5px, 2.2vw, 9px)' }}
             >
               <p className="truncate font-medium">{String(p.text).trim()}</p>

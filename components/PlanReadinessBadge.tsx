@@ -17,10 +17,10 @@ const CONFIG: Record<
   PlanReadinessStatus,
   { Icon: typeof CheckCircle2; cls: string; label: string; title: string }
 > = {
-  errors: { Icon: XCircle, cls: 'text-red-600', label: 'Hibás', title: 'A kezelési terv hibát tartalmaz' },
-  warnings: { Icon: AlertTriangle, cls: 'text-amber-500', label: 'Ellenőrzendő', title: 'A kezelési terv figyelmeztetést tartalmaz' },
-  approved: { Icon: ShieldCheck, cls: 'text-emerald-600', label: 'Jóváhagyva', title: 'A kezelési terv jóváhagyva' },
-  ready: { Icon: CheckCircle2, cls: 'text-emerald-500', label: 'Foglalásra kész', title: 'A kezelési terv foglalásra kész' },
+  errors: { Icon: XCircle, cls: 'text-red-600 dark:text-red-300', label: 'Hibás', title: 'A kezelési terv hibát tartalmaz' },
+  warnings: { Icon: AlertTriangle, cls: 'text-amber-500 dark:text-amber-400', label: 'Ellenőrzendő', title: 'A kezelési terv figyelmeztetést tartalmaz' },
+  approved: { Icon: ShieldCheck, cls: 'text-emerald-600 dark:text-emerald-300', label: 'Jóváhagyva', title: 'A kezelési terv jóváhagyva' },
+  ready: { Icon: CheckCircle2, cls: 'text-emerald-500 dark:text-emerald-400', label: 'Foglalásra kész', title: 'A kezelési terv foglalásra kész' },
 };
 
 /**
@@ -51,7 +51,7 @@ export function PlanReadinessBadge({
         </span>
       )}
       {hasSequence && (
-        <span className="inline-flex items-center gap-1 text-amber-600" title={seqTitle} aria-label={seqTitle}>
+        <span className="inline-flex items-center gap-1 text-amber-600 dark:text-amber-300" title={seqTitle} aria-label={seqTitle}>
           <CalendarClock className="w-3.5 h-3.5 shrink-0" />
           {variant === 'label' && <span className="text-xs font-medium">Sorrend</span>}
         </span>

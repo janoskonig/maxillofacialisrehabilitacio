@@ -51,26 +51,26 @@ export function StepPopover({ open, step, episode, isMobile, onClose }: StepPopo
 
   const body = (
     <>
-      <div className="flex items-start justify-between gap-2 border-b border-gray-100 pb-2 mb-2">
+      <div className="flex items-start justify-between gap-2 border-b border-gray-100 dark:border-gray-800 pb-2 mb-2">
         <div>
-          <div className="font-semibold text-gray-900 text-sm">{step.label}</div>
-          <div className="flex items-center gap-1.5 mt-1 text-xs text-gray-600">
+          <div className="font-semibold text-gray-900 dark:text-gray-100 text-sm">{step.label}</div>
+          <div className="flex items-center gap-1.5 mt-1 text-xs text-gray-600 dark:text-gray-400">
             <span className="w-2 h-2 rounded-full shrink-0" style={{ background: STATUS_DOT[step.status] }} />
             {cfg.label}
           </div>
         </div>
         <button
           type="button"
-          className="p-1 rounded hover:bg-gray-100 text-gray-500"
+          className="p-1 rounded hover:bg-gray-100 dark:hover:bg-gray-700 text-gray-500 dark:text-gray-400"
           aria-label="Bezárás"
           onClick={onClose}
         >
           <X className="w-4 h-4" />
         </button>
       </div>
-      <div className="text-xs text-gray-600 space-y-1 mb-3">
+      <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1 mb-3">
         <div>
-          Pool: <span className="font-medium text-gray-800">{step.pool}</span> · {step.durationMinutes} perc
+          Pool: <span className="font-medium text-gray-800 dark:text-gray-200">{step.pool}</span> · {step.durationMinutes} perc
         </div>
         {step.windowStart && (
           <div>
@@ -128,7 +128,7 @@ export function StepPopover({ open, step, episode, isMobile, onClose }: StepPopo
           role="dialog"
           aria-modal="true"
           aria-labelledby="tp-pop-title"
-          className="w-full max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white shadow-xl p-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))]"
+          className="w-full max-h-[85vh] overflow-y-auto rounded-t-2xl bg-white dark:bg-gray-900 shadow-xl p-4 pb-[max(1rem,env(safe-area-inset-bottom,0px))]"
           onClick={(e) => e.stopPropagation()}
         >
           <div id="tp-pop-title" className="sr-only">
@@ -145,7 +145,7 @@ export function StepPopover({ open, step, episode, isMobile, onClose }: StepPopo
       ref={panelRef}
       role="dialog"
       aria-modal="true"
-      className="fixed z-[100] w-[min(100vw-2rem,22rem)] rounded-xl border border-gray-200 bg-white shadow-xl p-4"
+      className="fixed z-[100] w-[min(100vw-2rem,22rem)] rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 shadow-xl p-4"
       style={{
         top: 'min(12rem, 20vh)',
         right: '1rem',

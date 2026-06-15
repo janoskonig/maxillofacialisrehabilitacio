@@ -16,18 +16,18 @@ interface PatientHeaderBarProps {
 }
 
 const STAGE_BADGE_COLORS: Record<string, string> = {
-  uj_beteg: 'bg-blue-100 text-blue-800',
-  onkologiai_kezeles_kesz: 'bg-purple-100 text-purple-800',
-  arajanlatra_var: 'bg-yellow-100 text-yellow-800',
-  implantacios_sebeszi_tervezesre_var: 'bg-orange-100 text-orange-800',
-  fogpotlasra_var: 'bg-amber-100 text-amber-800',
-  fogpotlas_keszul: 'bg-indigo-100 text-indigo-800',
-  fogpotlas_kesz: 'bg-green-100 text-green-800',
-  gondozas_alatt: 'bg-gray-100 text-gray-800',
+  uj_beteg: 'bg-blue-100 text-blue-800 dark:bg-blue-950/50 dark:text-blue-300',
+  onkologiai_kezeles_kesz: 'bg-purple-100 text-purple-800 dark:bg-purple-950/50 dark:text-purple-300',
+  arajanlatra_var: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/50 dark:text-yellow-300',
+  implantacios_sebeszi_tervezesre_var: 'bg-orange-100 text-orange-800 dark:bg-orange-950/50 dark:text-orange-300',
+  fogpotlasra_var: 'bg-amber-100 text-amber-800 dark:bg-amber-950/50 dark:text-amber-300',
+  fogpotlas_keszul: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/50 dark:text-indigo-300',
+  fogpotlas_kesz: 'bg-green-100 text-green-800 dark:bg-green-950/50 dark:text-green-300',
+  gondozas_alatt: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
 };
 
 function getStageBadgeColor(stage: string): string {
-  return STAGE_BADGE_COLORS[stage] || 'bg-gray-100 text-gray-800';
+  return STAGE_BADGE_COLORS[stage] || 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
 }
 
 function getInitials(name?: string | null): string {
@@ -137,17 +137,17 @@ export function PatientHeaderBar({
       : `Adatteljesség — ${completeness.clinicalMissing} klinikai · ${completeness.researchMissing} kutatási hiányzó adat`;
 
   return (
-    <div className="bg-white rounded-lg border border-gray-200 px-3 sm:px-4 py-3 mb-4 sm:mb-6">
+    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 px-3 sm:px-4 py-3 mb-4 sm:mb-6">
       <div className="flex items-center gap-3">
         {/* Avatar / monogram */}
-        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-blue-50 text-blue-700 flex items-center justify-center font-medium text-sm shrink-0">
+        <div className="w-10 h-10 sm:w-11 sm:h-11 rounded-full bg-blue-50 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 flex items-center justify-center font-medium text-sm shrink-0">
           {getInitials(patient.nev)}
         </div>
 
         {/* Név + meta */}
         <div className="min-w-0 flex-1">
           <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-base font-medium text-gray-900 truncate">
+            <span className="text-base font-medium text-gray-900 dark:text-gray-100 truncate">
               {patient.nev || 'Névtelen beteg'}
             </span>
             {stageLabel && (
@@ -159,12 +159,12 @@ export function PatientHeaderBar({
               </span>
             )}
           </div>
-          <div className="text-xs sm:text-[13px] text-gray-500 mt-0.5 flex items-center gap-1.5 flex-wrap">
+          <div className="text-xs sm:text-[13px] text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
             {metaParts.length > 0 && <span>{metaParts.join(' · ')}</span>}
             {patient.telefonszam && (
               <a
                 href={`tel:${patient.telefonszam.replace(/\s/g, '')}`}
-                className="inline-flex items-center gap-1 text-blue-600 hover:text-blue-700"
+                className="inline-flex items-center gap-1 text-blue-600 dark:text-blue-400 hover:text-blue-700 dark:hover:text-blue-300"
               >
                 <Phone className="w-3 h-3" />
                 {patient.telefonszam}
@@ -191,8 +191,8 @@ export function PatientHeaderBar({
               className="block w-full text-right group"
               title="Ugrás a Kezelési terv & időpont fülre"
             >
-              <span className="block text-[11px] text-gray-400 leading-none">Következő lépés</span>
-              <span className="text-[13px] font-medium text-gray-900 group-hover:text-medical-primary inline-flex items-center gap-1">
+              <span className="block text-[11px] text-gray-400 dark:text-gray-500 leading-none">Következő lépés</span>
+              <span className="text-[13px] font-medium text-gray-900 dark:text-gray-100 group-hover:text-medical-primary inline-flex items-center gap-1">
                 {nextStepLabel}
                 <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
               </span>

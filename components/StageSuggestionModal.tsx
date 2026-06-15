@@ -93,39 +93,39 @@ export function StageSuggestionModal({
 
   return (
     <div className="fixed inset-0 z-50 flex items-center justify-center bg-black/50 p-4">
-      <div className="bg-white rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-900 rounded-xl shadow-xl max-w-md w-full max-h-[90vh] overflow-y-auto">
         <div className="p-6">
           {/* Header */}
           <div className="flex items-center justify-between mb-4">
             <div className="flex items-center gap-2">
-              <CheckCircle className="w-5 h-5 text-blue-600" />
-              <h3 className="text-lg font-semibold text-gray-900">Stádium javaslat</h3>
+              <CheckCircle className="w-5 h-5 text-blue-600 dark:text-blue-300" />
+              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Stádium javaslat</h3>
             </div>
             <button
               onClick={onClose}
-              className="p-1 text-gray-400 hover:text-gray-600 rounded"
+              className="p-1 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded"
             >
               <X className="w-5 h-5" />
             </button>
           </div>
 
           {/* Transition visualization */}
-          <div className="bg-gray-50 rounded-lg p-4 mb-4">
+          <div className="bg-gray-50 dark:bg-gray-800/60 rounded-lg p-4 mb-4">
             <div className="flex items-center justify-center gap-3">
               {fromStageLabel && (
                 <>
-                  <span className="text-sm text-gray-600 font-medium">{fromStageLabel}</span>
-                  <ArrowRight className="w-4 h-4 text-gray-400" />
+                  <span className="text-sm text-gray-600 dark:text-gray-400 font-medium">{fromStageLabel}</span>
+                  <ArrowRight className="w-4 h-4 text-gray-400 dark:text-gray-500" />
                 </>
               )}
-              <span className="text-sm font-bold text-blue-700 bg-blue-100 px-3 py-1 rounded-full">
+              <span className="text-sm font-bold text-blue-700 dark:text-blue-300 bg-blue-100 dark:bg-blue-950/50 px-3 py-1 rounded-full">
                 {stageLabel}
               </span>
             </div>
           </div>
 
           {/* Rule info */}
-          <div className="mb-4 text-sm text-gray-600">
+          <div className="mb-4 text-sm text-gray-600 dark:text-gray-400">
             <p>
               A rendszer javasolja a stádium módosítását az alábbi szabályok alapján:
             </p>
@@ -134,14 +134,14 @@ export function StageSuggestionModal({
                 {suggestion.ruleIds.map((ruleId) => (
                   <span
                     key={ruleId}
-                    className="text-xs bg-gray-100 px-2 py-0.5 rounded text-gray-500"
+                    className="text-xs bg-gray-100 dark:bg-gray-800 px-2 py-0.5 rounded text-gray-500 dark:text-gray-400"
                   >
                     {ruleId}
                   </span>
                 ))}
               </div>
             )}
-            <div className="flex items-center gap-1 mt-2 text-xs text-gray-400">
+            <div className="flex items-center gap-1 mt-2 text-xs text-gray-400 dark:text-gray-500">
               <Clock className="w-3 h-3" />
               <span>
                 Számítva: {new Date(suggestion.computedAt).toLocaleString('hu-HU')}
@@ -151,7 +151,7 @@ export function StageSuggestionModal({
 
           {/* Note field */}
           <div className="mb-4">
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Megjegyzés (opcionális)
             </label>
             <textarea
@@ -159,13 +159,13 @@ export function StageSuggestionModal({
               onChange={(e) => setNote(e.target.value)}
               placeholder="pl. Konzultáció alapján..."
               rows={2}
-              className="w-full rounded-md border border-gray-300 px-3 py-2 text-sm focus:ring-2 focus:ring-medical-primary focus:border-transparent"
+              className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm focus:ring-2 focus:ring-medical-primary focus:border-transparent"
             />
           </div>
 
           {/* Error */}
           {error && (
-            <div className="mb-4 p-3 bg-red-50 border border-red-200 rounded-md text-sm text-red-700">
+            <div className="mb-4 p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-md text-sm text-red-700 dark:text-red-300">
               {error}
             </div>
           )}
@@ -187,7 +187,7 @@ export function StageSuggestionModal({
             <button
               onClick={handleDismiss}
               disabled={accepting || dismissing}
-              className="px-4 py-2.5 border border-gray-300 rounded-md font-medium text-gray-700 hover:bg-gray-50 disabled:opacity-50 transition-colors text-sm"
+              className="px-4 py-2.5 border border-gray-300 dark:border-gray-700 rounded-md font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 disabled:opacity-50 transition-colors text-sm"
             >
               {dismissing ? (
                 <Loader2 className="w-4 h-4 animate-spin" />

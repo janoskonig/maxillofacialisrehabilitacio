@@ -43,7 +43,7 @@ export function AppointmentOutcomeChart({ data }: { data: AppointmentOutcomeRow[
 
   if (total === 0) {
     return (
-      <div className="flex h-64 items-center justify-center text-sm text-gray-500">
+      <div className="flex h-64 items-center justify-center text-sm text-gray-500 dark:text-gray-400">
         Nincs megjeleníthető időpont-kimenetel.
       </div>
     );
@@ -79,9 +79,9 @@ export function AppointmentOutcomeChart({ data }: { data: AppointmentOutcomeRow[
               if (!active || !payload?.length) return null;
               const row = payload[0].payload as { name: string; value: number; pct: number };
               return (
-                <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-md">
-                  <p className="font-semibold text-gray-900">{row.name}</p>
-                  <p className="mt-0.5 tabular-nums text-gray-600">
+                <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-800 px-3 py-2 text-sm shadow-md">
+                  <p className="font-semibold text-gray-900 dark:text-gray-100">{row.name}</p>
+                  <p className="mt-0.5 tabular-nums text-gray-600 dark:text-gray-400">
                     {row.value} db · {row.pct}%
                   </p>
                 </div>
@@ -97,8 +97,8 @@ export function AppointmentOutcomeChart({ data }: { data: AppointmentOutcomeRow[
         </PieChart>
       </ResponsiveContainer>
       <div className="pointer-events-none absolute inset-x-0 top-[42%] -translate-y-1/2 text-center">
-        <p className="text-2xl font-bold tabular-nums text-gray-900">{total}</p>
-        <p className="text-xs font-medium text-gray-500">összes</p>
+        <p className="text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">{total}</p>
+        <p className="text-xs font-medium text-gray-500 dark:text-gray-400">összes</p>
       </div>
     </div>
   );

@@ -11,7 +11,7 @@ export function ReferringDoctorsChart({ data }: ReferringDoctorsChartProps) {
 
   if (topData.length === 0) {
     return (
-      <div className="flex items-center justify-center h-64 text-gray-500">
+      <div className="flex items-center justify-center h-64 text-gray-500 dark:text-gray-400">
         Nincs adat megjelenítésre
       </div>
     );

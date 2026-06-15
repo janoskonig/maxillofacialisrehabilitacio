@@ -42,8 +42,8 @@ export default function TimeSlotsPage() {
 
   if (!authorized) {
     return (
-      <div className="min-h-screen bg-gray-50 flex items-center justify-center">
-        <p className="text-gray-500">Betöltés...</p>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-800/60 flex items-center justify-center">
+        <p className="text-gray-500 dark:text-gray-400">Betöltés...</p>
       </div>
     );
   }
@@ -90,15 +90,15 @@ export default function TimeSlotsPage() {
     >
       <div className="space-y-6">
           {/* Google Calendar Settings Info */}
-          <div className="bg-blue-50 border border-blue-200 rounded-lg p-4">
+          <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
             <div className="flex items-start gap-3">
-              <CalendarDays className="w-5 h-5 text-blue-600 flex-shrink-0 mt-0.5" />
+              <CalendarDays className="w-5 h-5 text-blue-600 dark:text-blue-300 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <p className="text-sm text-blue-900">
+                <p className="text-sm text-blue-900 dark:text-blue-200">
                   A Google Naptár beállítása a{' '}
                   <button
                     onClick={() => router.push('/settings')}
-                    className="text-blue-700 hover:text-blue-900 underline font-medium"
+                    className="text-blue-700 dark:text-blue-300 hover:text-blue-900 underline font-medium"
                   >
                     Beállítások
                   </button>

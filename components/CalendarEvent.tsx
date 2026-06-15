@@ -22,54 +22,54 @@ interface CalendarEventProps {
 export function CalendarEvent({ appointment, onClick, compact = false }: CalendarEventProps) {
   const getStatusInfo = () => {
     if (appointment.isLate) {
-      return { 
-        label: 'Késett', 
-        color: 'text-orange-600', 
-        bgColor: 'bg-orange-50', 
-        borderColor: 'border-orange-200',
-        icon: ClockIcon 
+      return {
+        label: 'Késett',
+        color: 'text-orange-600 dark:text-orange-300',
+        bgColor: 'bg-orange-50 dark:bg-orange-950/40',
+        borderColor: 'border-orange-300 dark:border-orange-700',
+        icon: ClockIcon
       };
     }
     switch (appointment.appointmentStatus) {
       case 'cancelled_by_doctor':
-        return { 
-          label: 'Lemondva (orvos)', 
-          color: 'text-red-600', 
-          bgColor: 'bg-red-50', 
-          borderColor: 'border-red-200',
-          icon: XCircle 
+        return {
+          label: 'Lemondva (orvos)',
+          color: 'text-red-600 dark:text-red-300',
+          bgColor: 'bg-red-50 dark:bg-red-950/40',
+          borderColor: 'border-red-300 dark:border-red-700',
+          icon: XCircle
         };
       case 'cancelled_by_patient':
-        return { 
-          label: 'Lemondva (beteg)', 
-          color: 'text-orange-600', 
-          bgColor: 'bg-orange-50', 
-          borderColor: 'border-orange-200',
-          icon: XCircle 
+        return {
+          label: 'Lemondva (beteg)',
+          color: 'text-orange-600 dark:text-orange-300',
+          bgColor: 'bg-orange-50 dark:bg-orange-950/40',
+          borderColor: 'border-orange-300 dark:border-orange-700',
+          icon: XCircle
         };
       case 'completed':
-        return { 
-          label: 'Teljesült', 
-          color: 'text-green-600', 
-          bgColor: 'bg-green-50', 
-          borderColor: 'border-green-200',
-          icon: CheckCircle2 
+        return {
+          label: 'Teljesült',
+          color: 'text-green-600 dark:text-green-300',
+          bgColor: 'bg-green-50 dark:bg-green-950/40',
+          borderColor: 'border-green-300 dark:border-green-700',
+          icon: CheckCircle2
         };
       case 'no_show':
-        return { 
-          label: 'Nem jelent meg', 
-          color: 'text-red-700', 
-          bgColor: 'bg-red-100', 
-          borderColor: 'border-red-300',
-          icon: AlertCircle 
+        return {
+          label: 'Nem jelent meg',
+          color: 'text-red-700 dark:text-red-300',
+          bgColor: 'bg-red-100 dark:bg-red-950/60',
+          borderColor: 'border-red-400 dark:border-red-600',
+          icon: AlertCircle
         };
       default:
-        return { 
-          label: 'Várható', 
-          color: 'text-blue-600', 
-          bgColor: 'bg-blue-50', 
-          borderColor: 'border-blue-200',
-          icon: null 
+        return {
+          label: 'Várható',
+          color: 'text-blue-600 dark:text-blue-300',
+          bgColor: 'bg-blue-50 dark:bg-blue-950/40',
+          borderColor: 'border-blue-300 dark:border-blue-700',
+          icon: null
         };
     }
   };
@@ -86,17 +86,17 @@ export function CalendarEvent({ appointment, onClick, compact = false }: Calenda
     return (
       <div
         onClick={onClick}
-        className={`${statusInfo.bgColor} ${statusInfo.borderColor} border-l-2 px-2 py-1 text-xs cursor-pointer hover:opacity-80 transition-opacity`}
+        className={`${statusInfo.bgColor} ${statusInfo.borderColor} border-l-2 rounded-r px-1.5 py-1 sm:px-2 text-xs cursor-pointer hover:opacity-80 transition-opacity`}
         title={`${appointment.patientName || 'Név nélküli'} - ${timeString}${appointment.dentistName ? ` - ${appointment.dentistName}` : ''}`}
       >
         <div className="flex items-center gap-1">
-          {StatusIcon && <StatusIcon className={`w-3 h-3 ${statusInfo.color}`} />}
+          {StatusIcon && <StatusIcon className={`w-3 h-3 flex-shrink-0 ${statusInfo.color}`} />}
           <div className="flex-1 min-w-0">
             <div className={`font-medium ${statusInfo.color} truncate`}>
               {timeString} {appointment.patientName || 'Név nélküli'}
             </div>
             {appointment.dentistName && (
-              <div className="text-gray-600 truncate text-[10px] mt-0.5">
+              <div className="text-gray-600 dark:text-gray-400 truncate text-[10px] mt-0.5">
                 {appointment.dentistName}
               </div>
             )}
@@ -119,21 +119,21 @@ export function CalendarEvent({ appointment, onClick, compact = false }: Calenda
               {timeString}
             </span>
           </div>
-          <div className="font-medium text-gray-900 truncate">
+          <div className="font-medium text-gray-900 dark:text-gray-100 truncate">
             {appointment.patientName || 'Név nélküli'}
           </div>
           {appointment.dentistName && (
-            <div className="text-xs font-medium text-gray-700 mt-0.5">
+            <div className="text-xs font-medium text-gray-700 dark:text-gray-300 mt-0.5">
               Orvos: {appointment.dentistName}
             </div>
           )}
           {appointment.patientTaj && (
-            <div className="text-xs text-gray-600 mt-0.5">
+            <div className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">
               TAJ: {appointment.patientTaj}
             </div>
           )}
           {appointment.teremszam && (
-            <div className="text-xs text-gray-500 mt-0.5">
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
               Terem: {appointment.teremszam}
             </div>
           )}

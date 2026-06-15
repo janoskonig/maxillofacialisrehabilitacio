@@ -35,45 +35,45 @@ export function OHIP14StatsChart({ ohip14 }: Props) {
   return (
     <div className="space-y-6">
       <div className="grid grid-cols-1 gap-3 sm:grid-cols-2">
-        <div className="rounded-xl border border-indigo-100 bg-indigo-50/60 px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700">
+        <div className="rounded-xl border border-indigo-100 dark:border-indigo-800 bg-indigo-50/60 dark:bg-indigo-950/40 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-indigo-700 dark:text-indigo-300">
             Egyedi betegek
           </p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-indigo-950">
+          <p className="mt-1 text-2xl font-bold tabular-nums text-indigo-950 dark:text-indigo-200">
             {ohip14.betegekLegalabbEgyKitoltessel}
           </p>
-          <p className="text-xs text-indigo-800/80">legalább egy OHIP-14 kitöltéssel</p>
+          <p className="text-xs text-indigo-800/80 dark:text-indigo-300">legalább egy OHIP-14 kitöltéssel</p>
         </div>
-        <div className="rounded-xl border border-slate-200 bg-slate-50 px-4 py-3">
-          <p className="text-xs font-semibold uppercase tracking-wide text-slate-600">
+        <div className="rounded-xl border border-slate-200 dark:border-slate-800 bg-slate-50 dark:bg-slate-950/40 px-4 py-3">
+          <p className="text-xs font-semibold uppercase tracking-wide text-slate-600 dark:text-slate-300">
             Összes kitöltés
           </p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900">
+          <p className="mt-1 text-2xl font-bold tabular-nums text-slate-900 dark:text-slate-200">
             {ohip14.osszesKitoltes}
           </p>
-          <p className="text-xs text-slate-600">minden időpont és epizód együtt</p>
+          <p className="text-xs text-slate-600 dark:text-slate-300">minden időpont és epizód együtt</p>
         </div>
       </div>
 
       {!hasAny ? (
-        <p className="text-center text-gray-500">Még nincs OHIP-14 kitöltés az adatbázisban.</p>
+        <p className="text-center text-gray-500 dark:text-gray-400">Még nincs OHIP-14 kitöltés az adatbázisban.</p>
       ) : (
         <>
-          <div className="overflow-x-auto rounded-xl border border-gray-200">
+          <div className="overflow-x-auto rounded-xl border border-gray-200 dark:border-gray-800">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 dark:bg-gray-800/60">
                 <tr>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Időpont</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-700">Kitöltések</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-700">Betegek</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-700">Átlag (0–56)</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-700">Medián</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">Időpont</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-700 dark:text-gray-300">Kitöltések</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-700 dark:text-gray-300">Betegek</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-700 dark:text-gray-300">Átlag (0–56)</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-700 dark:text-gray-300">Medián</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {ohip14.idopontokSzerint.map((row) => (
                   <tr key={row.timepoint}>
-                    <td className="px-3 py-2 text-gray-800">
+                    <td className="px-3 py-2 text-gray-800 dark:text-gray-200">
                       {TIMEPOINT_LABEL[row.timepoint] ?? row.timepoint}
                     </td>
                     <td className="px-3 py-2 text-right tabular-nums">{row.kitoltesekSzama}</td>
@@ -91,7 +91,7 @@ export function OHIP14StatsChart({ ohip14 }: Props) {
           </div>
 
           <div>
-            <h3 className="mb-3 text-sm font-semibold text-gray-800">
+            <h3 className="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-200">
               Kitöltések száma és átlagos összpontszám időpontonként
             </h3>
             <ResponsiveContainer width="100%" height={320}>
@@ -109,10 +109,10 @@ export function OHIP14StatsChart({ ohip14 }: Props) {
                   content={({ active, payload }) => {
                     if (!active || !payload?.length) return null;
                     return (
-                      <div className="rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm shadow-md">
+                      <div className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-3 py-2 text-sm shadow-md">
                         {payload.map((entry) => (
-                          <p key={String(entry.dataKey)} className="tabular-nums text-gray-800">
-                            <span className="font-medium text-gray-600">{entry.name}: </span>
+                          <p key={String(entry.dataKey)} className="tabular-nums text-gray-800 dark:text-gray-200">
+                            <span className="font-medium text-gray-600 dark:text-gray-400">{entry.name}: </span>
                             {entry.dataKey === 'kitoltesekSzama'
                               ? `${entry.value ?? 0} db`
                               : `${entry.value ?? 0} pont`}

@@ -41,25 +41,25 @@ export function TreatmentPlanStatsChart({ treatmentPlans }: Props) {
   return (
     <div className="space-y-8">
       <div className="grid grid-cols-2 gap-3 lg:grid-cols-4">
-        <div className="rounded-xl border border-teal-100 bg-teal-50/70 px-3 py-3">
-          <p className="text-xs font-medium text-teal-800">Betegek kiosztott tervvel</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-teal-950">
+        <div className="rounded-xl border border-teal-100 dark:border-teal-800 bg-teal-50/70 dark:bg-teal-950/40 px-3 py-3">
+          <p className="text-xs font-medium text-teal-800 dark:text-teal-300">Betegek kiosztott tervvel</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-teal-950 dark:text-teal-200">
             {tp.betegekKiosztottTervvel}
           </p>
-          <p className="text-xs text-teal-800/80">legalább egy tétel (felső / alsó / arc)</p>
+          <p className="text-xs text-teal-800/80 dark:text-teal-300">legalább egy tétel (felső / alsó / arc)</p>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white px-3 py-3">
-          <p className="text-xs font-medium text-gray-600">Tervsorok összesen</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900">{totalSorok}</p>
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-3 py-3">
+          <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Tervsorok összesen</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-gray-900 dark:text-gray-100">{totalSorok}</p>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-white px-3 py-3">
-          <p className="text-xs font-medium text-gray-600">Elkészült tételek</p>
-          <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-700">{totalKesz}</p>
-          <p className="text-xs text-gray-500">összes ív együtt: {pct(totalKesz, totalSorok)}</p>
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-3 py-3">
+          <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Elkészült tételek</p>
+          <p className="mt-1 text-2xl font-bold tabular-nums text-emerald-700 dark:text-emerald-300">{totalKesz}</p>
+          <p className="text-xs text-gray-500 dark:text-gray-400">összes ív együtt: {pct(totalKesz, totalSorok)}</p>
         </div>
-        <div className="rounded-xl border border-gray-200 bg-gray-50 px-3 py-3">
-          <p className="text-xs font-medium text-gray-600">Ívenként</p>
-          <ul className="mt-1 space-y-1 text-xs text-gray-800">
+        <div className="rounded-xl border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 px-3 py-3">
+          <p className="text-xs font-medium text-gray-600 dark:text-gray-400">Ívenként</p>
+          <ul className="mt-1 space-y-1 text-xs text-gray-800 dark:text-gray-200">
             <li>
               Felső: {tp.osszesTervSorAFelson} sor, elkészült {pct(tp.elkeszultFelson, tp.osszesTervSorAFelson)}
             </li>
@@ -75,13 +75,13 @@ export function TreatmentPlanStatsChart({ treatmentPlans }: Props) {
       </div>
 
       {fogChartData.length === 0 ? (
-        <p className="text-center text-gray-500">Nincs felső/alsó állcsonti tervsor a rendszerben.</p>
+        <p className="text-center text-gray-500 dark:text-gray-400">Nincs felső/alsó állcsonti tervsor a rendszerben.</p>
       ) : (
         <div>
-          <h3 className="mb-2 text-sm font-semibold text-gray-800">
+          <h3 className="mb-2 text-sm font-semibold text-gray-800 dark:text-gray-200">
             Fogpótlás-kezeléstípusok a kiosztott tervekben (felső + alsó ív)
           </h3>
-          <p className="mb-3 text-xs text-gray-500">
+          <p className="mb-3 text-xs text-gray-500 dark:text-gray-400">
             A `treatmentTypeCode` vagy a régi `tipus` mező alapján; a törzsben nem szereplő kódok külön sávban jelennek meg.
           </p>
           <ResponsiveContainer width="100%" height={Math.min(520, 120 + fogChartData.length * 28)}>
@@ -114,22 +114,22 @@ export function TreatmentPlanStatsChart({ treatmentPlans }: Props) {
       )}
 
       {arcData.length === 0 ? (
-        <p className="text-sm text-gray-500">Nincs arcot érintő tervsor.</p>
+        <p className="text-sm text-gray-500 dark:text-gray-400">Nincs arcot érintő tervsor.</p>
       ) : (
         <div>
-          <h3 className="mb-3 text-sm font-semibold text-gray-800">Arcot érintő tervek típusa</h3>
-          <div className="overflow-hidden rounded-xl border border-gray-200">
+          <h3 className="mb-3 text-sm font-semibold text-gray-800 dark:text-gray-200">Arcot érintő tervek típusa</h3>
+          <div className="overflow-hidden rounded-xl border border-gray-200 dark:border-gray-800">
             <table className="min-w-full text-sm">
-              <thead className="bg-gray-50">
+              <thead className="bg-gray-50 dark:bg-gray-800/60">
                 <tr>
-                  <th className="px-3 py-2 text-left font-semibold text-gray-700">Típus</th>
-                  <th className="px-3 py-2 text-right font-semibold text-gray-700">Tervsorok</th>
+                  <th className="px-3 py-2 text-left font-semibold text-gray-700 dark:text-gray-300">Típus</th>
+                  <th className="px-3 py-2 text-right font-semibold text-gray-700 dark:text-gray-300">Tervsorok</th>
                 </tr>
               </thead>
-              <tbody className="divide-y divide-gray-100">
+              <tbody className="divide-y divide-gray-100 dark:divide-gray-800">
                 {arcData.map((row) => (
                   <tr key={row.tipus}>
-                    <td className="px-3 py-2 text-gray-800">{row.megjelenes}</td>
+                    <td className="px-3 py-2 text-gray-800 dark:text-gray-200">{row.megjelenes}</td>
                     <td className="px-3 py-2 text-right tabular-nums font-medium">{row.darab}</td>
                   </tr>
                 ))}

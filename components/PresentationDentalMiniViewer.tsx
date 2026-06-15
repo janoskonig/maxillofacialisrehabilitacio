@@ -30,7 +30,7 @@ export function PresentationDentalMiniViewer({
 
   if (!hasAnyDentalData) {
     return (
-      <div className="rounded-lg border border-white/10 bg-gray-100/95 p-3 text-xs text-gray-600">
+      <div className="rounded-lg border border-white/10 bg-gray-100/95 dark:bg-gray-800 p-3 text-xs text-gray-600 dark:text-gray-400">
         Nincs rögzített fogazati státusz vagy implantátum adat.
       </div>
     );
@@ -39,18 +39,18 @@ export function PresentationDentalMiniViewer({
   const prefix = `present-dental-${patientId}`;
 
   return (
-    <div className="rounded-lg border border-white/10 bg-gray-100/95 p-3 space-y-2">
+    <div className="rounded-lg border border-white/10 bg-gray-100/95 dark:bg-gray-800 p-3 space-y-2">
       <div className="flex flex-wrap items-center justify-between gap-2">
-        <p className="text-xs font-semibold text-gray-800">Fogazati státusz</p>
+        <p className="text-xs font-semibold text-gray-800 dark:text-gray-200">Fogazati státusz</p>
         {(hasKnownImplant || hasUnknownImplant) && (
-          <span className="text-[10px] font-semibold uppercase tracking-wide rounded-full bg-amber-100 text-amber-900 px-2 py-0.5 border border-amber-200">
+          <span className="text-[10px] font-semibold uppercase tracking-wide rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 px-2 py-0.5 border border-amber-200 dark:border-amber-800">
             Implantátum
           </span>
         )}
       </div>
 
       {Object.keys(fogak).length > 0 && (
-        <div className="overflow-x-auto rounded-md bg-gray-50/80 p-2 border border-gray-200/80">
+        <div className="overflow-x-auto rounded-md bg-gray-50/80 dark:bg-gray-800/80 p-2 border border-gray-200/80 dark:border-gray-800/80">
           <div className="flex justify-between mb-1.5 min-w-[520px]">
             <div className="flex gap-0.5">
               {UPPER_L.map((tooth) => (
@@ -107,7 +107,7 @@ export function PresentationDentalMiniViewer({
       )}
 
       {(hasKnownImplant || hasUnknownImplant) && (
-        <div className="text-xs text-gray-800 space-y-1 border-t border-gray-200 pt-2">
+        <div className="text-xs text-gray-800 dark:text-gray-200 space-y-1 border-t border-gray-200 dark:border-gray-800 pt-2">
           {hasKnownImplant && (
             <ul className="list-disc pl-4 space-y-0.5">
               {implantEntries.map(([pos, detail]) => {

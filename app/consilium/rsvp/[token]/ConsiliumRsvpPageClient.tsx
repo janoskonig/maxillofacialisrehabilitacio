@@ -186,12 +186,12 @@ export default function ConsiliumRsvpPageClient() {
 
   const renderShell = (children: React.ReactNode) => (
     <div className="min-h-screen bg-gradient-to-b from-cyan-50 to-white">
-      <header className="bg-white shadow-soft border-b border-gray-200/60">
+      <header className="bg-white dark:bg-gray-900 shadow-soft border-b border-gray-200/60 dark:border-gray-800/60">
         <div className="max-w-3xl mx-auto px-4 sm:px-6 py-3 flex items-center gap-3">
           <Logo width={36} height={42} />
           <div>
             <h1 className="text-base sm:text-lg font-semibold text-medical-primary">Konzílium meghívó</h1>
-            <p className="text-xs text-gray-500">Kérjük, jelezz vissza a részvételedről</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400">Kérjük, jelezz vissza a részvételedről</p>
           </div>
         </div>
       </header>
@@ -203,7 +203,7 @@ export default function ConsiliumRsvpPageClient() {
 
   if (loading) {
     return renderShell(
-      <div className="card p-6 flex items-center gap-3 text-gray-600">
+      <div className="card p-6 flex items-center gap-3 text-gray-600 dark:text-gray-400">
         <Loader2 className="w-5 h-5 animate-spin" />
         <span>Meghívó betöltése…</span>
       </div>,
@@ -213,11 +213,11 @@ export default function ConsiliumRsvpPageClient() {
   if (loadError || !data) {
     return renderShell(
       <div className="card p-6 space-y-3">
-        <h2 className="text-lg font-semibold text-red-700">Nem sikerült betölteni a meghívót</h2>
-        <p className="text-sm text-gray-700">
+        <h2 className="text-lg font-semibold text-red-700 dark:text-red-300">Nem sikerült betölteni a meghívót</h2>
+        <p className="text-sm text-gray-700 dark:text-gray-300">
           {loadError || 'Ismeretlen hiba. Lehet, hogy a link visszavonásra került.'}
         </p>
-        <p className="text-xs text-gray-500">
+        <p className="text-xs text-gray-500 dark:text-gray-400">
           Ha úgy gondolod, hogy ez tévedés, kérlek, vedd fel a kapcsolatot a meghívást küldő kollégával.
         </p>
       </div>,
@@ -230,23 +230,23 @@ export default function ConsiliumRsvpPageClient() {
     <div className="space-y-4">
       <section className="card p-4 sm:p-6 space-y-3">
         <div className="space-y-1">
-          <p className="text-xs uppercase tracking-wide text-gray-500">Címzett</p>
-          <p className="text-sm font-medium text-gray-900">{data.attendeeName}</p>
+          <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Címzett</p>
+          <p className="text-sm font-medium text-gray-900 dark:text-gray-100">{data.attendeeName}</p>
         </div>
         <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-          <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-gray-500">Téma</p>
-            <p className="text-sm font-semibold text-gray-900 mt-0.5">{data.sessionTitle}</p>
+          <div className="rounded-md border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 p-3">
+            <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400">Téma</p>
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{data.sessionTitle}</p>
           </div>
-          <div className="rounded-md border border-gray-200 bg-gray-50 p-3">
-            <p className="text-xs uppercase tracking-wide text-gray-500 inline-flex items-center gap-1">
+          <div className="rounded-md border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 p-3">
+            <p className="text-xs uppercase tracking-wide text-gray-500 dark:text-gray-400 inline-flex items-center gap-1">
               <CalendarClock className="w-3.5 h-3.5" /> Időpont
             </p>
-            <p className="text-sm font-semibold text-gray-900 mt-0.5">{sessionDateText}</p>
+            <p className="text-sm font-semibold text-gray-900 dark:text-gray-100 mt-0.5">{sessionDateText}</p>
           </div>
         </div>
         {sessionClosed && (
-          <p className="text-xs text-amber-800 bg-amber-50 border border-amber-100 rounded px-2 py-1.5">
+          <p className="text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-100 dark:border-amber-800 rounded px-2 py-1.5">
             Az alkalom már lezárult, új RSVP választ nem fogadunk el.
           </p>
         )}
@@ -254,26 +254,26 @@ export default function ConsiliumRsvpPageClient() {
 
       {submittedOk ? (
         <section className="card p-4 sm:p-6 space-y-3">
-          <div className="flex items-center gap-2 text-emerald-700">
+          <div className="flex items-center gap-2 text-emerald-700 dark:text-emerald-300">
             <Check className="w-5 h-5" />
             <h2 className="text-base font-semibold">Köszönjük a visszajelzést!</h2>
           </div>
-          <p className="text-sm text-gray-700">
+          <p className="text-sm text-gray-700 dark:text-gray-300">
             Visszajelzésed: <strong>{RESPONSE_LABEL[submittedOk.response]}</strong>
           </p>
           {submittedOk.response === 'reschedule' && submittedOk.proposedAt && (
-            <p className="text-sm text-gray-700">
+            <p className="text-sm text-gray-700 dark:text-gray-300">
               Javasolt időpont: <strong>{formatHuDateTime(submittedOk.proposedAt)}</strong>
             </p>
           )}
           {submittedOk.proposedNote && (
-            <p className="text-sm text-gray-700 whitespace-pre-wrap">
+            <p className="text-sm text-gray-700 dark:text-gray-300 whitespace-pre-wrap">
               Megjegyzés: <em>{submittedOk.proposedNote}</em>
             </p>
           )}
           {!sessionClosed && (
-            <div className="pt-2 border-t border-gray-100">
-              <p className="text-xs text-gray-500 mb-2">
+            <div className="pt-2 border-t border-gray-100 dark:border-gray-800">
+              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
                 Ha meggondolnád magad, módosíthatod a választ.
               </p>
               <button
@@ -289,7 +289,7 @@ export default function ConsiliumRsvpPageClient() {
         </section>
       ) : (
         <section className="card p-4 sm:p-6 space-y-4">
-          <h2 className="text-base font-semibold text-gray-900">Mit válaszolsz?</h2>
+          <h2 className="text-base font-semibold text-gray-900 dark:text-gray-100">Mit válaszolsz?</h2>
           <div className="grid grid-cols-1 sm:grid-cols-3 gap-2">
             <button
               type="button"
@@ -297,14 +297,14 @@ export default function ConsiliumRsvpPageClient() {
               onClick={() => setChoice('going')}
               className={`rounded-lg border px-4 py-3 text-left transition disabled:opacity-50 ${
                 choice === 'going'
-                  ? 'border-emerald-500 bg-emerald-50 ring-2 ring-emerald-200'
-                  : 'border-gray-200 hover:border-emerald-300 bg-white'
+                  ? 'border-emerald-500 bg-emerald-50 dark:bg-emerald-950/40 ring-2 ring-emerald-200'
+                  : 'border-gray-200 dark:border-gray-800 hover:border-emerald-300 bg-white dark:bg-gray-900'
               }`}
             >
-              <p className="text-sm font-semibold text-emerald-800 inline-flex items-center gap-1.5">
+              <p className="text-sm font-semibold text-emerald-800 dark:text-emerald-300 inline-flex items-center gap-1.5">
                 <Check className="w-4 h-4" /> Ott leszek
               </p>
-              <p className="text-xs text-gray-600 mt-1">Az időpontban részt veszek.</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Az időpontban részt veszek.</p>
             </button>
             <button
               type="button"
@@ -312,14 +312,14 @@ export default function ConsiliumRsvpPageClient() {
               onClick={() => setChoice('late')}
               className={`rounded-lg border px-4 py-3 text-left transition disabled:opacity-50 ${
                 choice === 'late'
-                  ? 'border-amber-500 bg-amber-50 ring-2 ring-amber-200'
-                  : 'border-gray-200 hover:border-amber-300 bg-white'
+                  ? 'border-amber-500 bg-amber-50 dark:bg-amber-950/40 ring-2 ring-amber-200'
+                  : 'border-gray-200 dark:border-gray-800 hover:border-amber-300 bg-white dark:bg-gray-900'
               }`}
             >
-              <p className="text-sm font-semibold text-amber-800 inline-flex items-center gap-1.5">
+              <p className="text-sm font-semibold text-amber-800 dark:text-amber-300 inline-flex items-center gap-1.5">
                 <Clock className="w-4 h-4" /> Kések
               </p>
-              <p className="text-xs text-gray-600 mt-1">Ott leszek, csak később érek be.</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Ott leszek, csak később érek be.</p>
             </button>
             <button
               type="button"
@@ -327,21 +327,21 @@ export default function ConsiliumRsvpPageClient() {
               onClick={() => setChoice('reschedule')}
               className={`rounded-lg border px-4 py-3 text-left transition disabled:opacity-50 ${
                 choice === 'reschedule'
-                  ? 'border-indigo-500 bg-indigo-50 ring-2 ring-indigo-200'
-                  : 'border-gray-200 hover:border-indigo-300 bg-white'
+                  ? 'border-indigo-500 bg-indigo-50 dark:bg-indigo-950/40 ring-2 ring-indigo-200'
+                  : 'border-gray-200 dark:border-gray-800 hover:border-indigo-300 bg-white dark:bg-gray-900'
               }`}
             >
-              <p className="text-sm font-semibold text-indigo-800 inline-flex items-center gap-1.5">
+              <p className="text-sm font-semibold text-indigo-800 dark:text-indigo-300 inline-flex items-center gap-1.5">
                 <CalendarClock className="w-4 h-4" /> Máskor lenne jó
               </p>
-              <p className="text-xs text-gray-600 mt-1">Más időpontot javasolok.</p>
+              <p className="text-xs text-gray-600 dark:text-gray-400 mt-1">Más időpontot javasolok.</p>
             </button>
           </div>
 
           {choice === 'reschedule' && (
-            <div className="space-y-2 rounded-md border border-indigo-100 bg-indigo-50/40 p-3">
+            <div className="space-y-2 rounded-md border border-indigo-100 dark:border-indigo-800 bg-indigo-50/40 dark:bg-indigo-950/40 p-3">
               <div>
-                <label className="text-xs font-medium text-gray-700">Javasolt időpont</label>
+                <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Javasolt időpont</label>
                 <input
                   type="datetime-local"
                   className="form-input mt-1 w-full"
@@ -349,12 +349,12 @@ export default function ConsiliumRsvpPageClient() {
                   disabled={sessionClosed}
                   onChange={(e) => setProposedLocal(e.target.value)}
                 />
-                <p className="text-[11px] text-gray-500 mt-1">
+                <p className="text-[11px] text-gray-500 dark:text-gray-400 mt-1">
                   A javasolt időpontot a szervező látja — végleges időpontváltozást ő kezdeményez.
                 </p>
               </div>
               <div>
-                <label className="text-xs font-medium text-gray-700">Megjegyzés (opcionális)</label>
+                <label className="text-xs font-medium text-gray-700 dark:text-gray-300">Megjegyzés (opcionális)</label>
                 <textarea
                   className="form-input mt-1 w-full min-h-[72px] text-sm"
                   placeholder="Pl. délután után jobban megfelelne…"
@@ -363,7 +363,7 @@ export default function ConsiliumRsvpPageClient() {
                   disabled={sessionClosed}
                   onChange={(e) => setProposedNote(e.target.value)}
                 />
-                <p className="text-[11px] text-gray-400 text-right mt-0.5">
+                <p className="text-[11px] text-gray-400 dark:text-gray-500 text-right mt-0.5">
                   {proposedNote.length}/1000
                 </p>
               </div>
@@ -371,12 +371,12 @@ export default function ConsiliumRsvpPageClient() {
           )}
 
           {submitError && (
-            <p className="text-sm text-red-700 bg-red-50 border border-red-100 rounded px-2 py-1.5">
+            <p className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-100 dark:border-red-800 rounded px-2 py-1.5">
               {submitError}
             </p>
           )}
 
-          <div className="flex justify-end pt-2 border-t border-gray-100">
+          <div className="flex justify-end pt-2 border-t border-gray-100 dark:border-gray-800">
             <button
               type="button"
               disabled={!canSubmit}
@@ -395,7 +395,7 @@ export default function ConsiliumRsvpPageClient() {
         </section>
       )}
 
-      <p className="text-[11px] text-gray-400 text-center">
+      <p className="text-[11px] text-gray-400 dark:text-gray-500 text-center">
         Ezt a linket a szervező adta ki neked. Bárki, aki a linket megkapta, válaszolhat — kérjük, ne továbbítsd.
       </p>
     </div>,

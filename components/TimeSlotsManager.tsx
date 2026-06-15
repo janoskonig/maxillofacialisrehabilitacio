@@ -17,18 +17,18 @@ const PURPOSE_LABELS: Record<string, string> = {
 };
 
 const PURPOSE_COLORS: Record<string, string> = {
-  consult: 'bg-blue-100 text-blue-800',
-  work: 'bg-purple-100 text-purple-800',
-  control: 'bg-teal-100 text-teal-800',
-  flexible: 'bg-yellow-100 text-yellow-800',
+  consult: 'bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300',
+  work: 'bg-purple-100 dark:bg-purple-950/50 text-purple-800 dark:text-purple-300',
+  control: 'bg-teal-100 dark:bg-teal-950/50 text-teal-800 dark:text-teal-300',
+  flexible: 'bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300',
 };
 
 function SlotPurposeBadge({ purpose }: { purpose?: SlotPurpose | null }) {
   if (!purpose) {
-    return <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 text-gray-500">(nincs)</span>;
+    return <span className="px-2 py-0.5 text-xs rounded-full bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400">(nincs)</span>;
   }
   return (
-    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${PURPOSE_COLORS[purpose] || 'bg-gray-100 text-gray-500'}`}>
+    <span className={`px-2 py-0.5 text-xs font-medium rounded-full ${PURPOSE_COLORS[purpose] || 'bg-gray-100 dark:bg-gray-800 text-gray-500 dark:text-gray-400'}`}>
       {PURPOSE_LABELS[purpose] || purpose}
     </span>
   );
@@ -37,14 +37,14 @@ function SlotPurposeBadge({ purpose }: { purpose?: SlotPurpose | null }) {
 function SlotSourceBadge({ source }: { source?: string | null }) {
   if (source === 'google_calendar') {
     return (
-      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-emerald-50 text-emerald-700">
+      <span className="inline-flex items-center gap-1 px-2 py-0.5 text-xs rounded-full bg-emerald-50 dark:bg-emerald-950/40 text-emerald-700 dark:text-emerald-300">
         <Globe className="w-3 h-3" />
         Google
       </span>
     );
   }
   return (
-    <span className="px-2 py-0.5 text-xs rounded-full bg-gray-50 text-gray-500">
+    <span className="px-2 py-0.5 text-xs rounded-full bg-gray-50 dark:bg-gray-800/60 text-gray-500 dark:text-gray-400">
       Manuális
     </span>
   );
@@ -157,15 +157,15 @@ export function TimeSlotsManager() {
 
     return (
       <th
-        className={`px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase cursor-pointer hover:bg-gray-100 select-none ${
-          isActive ? 'bg-gray-100' : ''
+        className={`px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 select-none ${
+          isActive ? 'bg-gray-100 dark:bg-gray-800' : ''
         } ${className || ''}`}
         onClick={() => ts.handleSort(field)}
       >
         <div className="flex items-center gap-1">
           <span>{label}</span>
           {SortIcon && (
-            <SortIcon className="w-3 h-3 text-blue-600" />
+            <SortIcon className="w-3 h-3 text-blue-600 dark:text-blue-300" />
           )}
         </div>
       </th>
@@ -177,7 +177,7 @@ export function TimeSlotsManager() {
   if (ts.loading) {
     return (
       <div className="card text-center py-8">
-        <p className="text-gray-500">Betöltés...</p>
+        <p className="text-gray-500 dark:text-gray-400">Betöltés...</p>
       </div>
     );
   }
@@ -195,7 +195,7 @@ export function TimeSlotsManager() {
 
     const renderTableHeader = () => (
       <>
-        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase w-12">
+        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase w-12">
           {bookedSlotsInTable.length > 0 && (
             <input
               type="checkbox"
@@ -207,16 +207,16 @@ export function TimeSlotsManager() {
           )}
         </th>
         {renderSortableHeader('Időpont', 'startTime')}
-        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Cél</th>
-        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 uppercase">Forrás</th>
+        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Cél</th>
+        <th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Forrás</th>
         {renderSortableHeader('Cím', 'cim')}
         {renderSortableHeader('Teremszám', 'teremszam')}
         {renderSortableHeader('Fogpótlástanász', 'dentistName')}
         {renderSortableHeader('Státusz', 'status')}
-        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 uppercase">
+        <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
           Lefoglalva
         </th>
-        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 uppercase">
+        <th className="px-6 py-3 text-right text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">
           Műveletek
         </th>
       </>
@@ -241,8 +241,8 @@ export function TimeSlotsManager() {
           </td>
           <td className="px-6 py-4 whitespace-nowrap">
             <div className="flex items-center">
-              <Clock className={`w-4 h-4 mr-2 ${isPast ? 'text-gray-400' : 'text-gray-400'}`} />
-              <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-900'}`}>
+              <Clock className={`w-4 h-4 mr-2 ${isPast ? 'text-gray-400 dark:text-gray-500' : 'text-gray-400 dark:text-gray-500'}`} />
+              <span className={`text-sm ${isPast ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'}`}>
                 {formatDateTime(slot.startTime)}
               </span>
             </div>
@@ -255,7 +255,7 @@ export function TimeSlotsManager() {
                   const val = e.target.value as SlotPurpose | '';
                   ts.updateSlotPurpose(slot.id, val || null);
                 }}
-                className="text-xs border border-gray-200 rounded px-1.5 py-0.5 bg-white focus:ring-1 focus:ring-blue-400"
+                className="text-xs border border-gray-200 dark:border-gray-800 rounded px-1.5 py-0.5 bg-white dark:bg-gray-900 focus:ring-1 focus:ring-blue-400"
               >
                 <option value="">(nincs)</option>
                 <option value="consult">Konzultáció</option>
@@ -271,17 +271,17 @@ export function TimeSlotsManager() {
             <SlotSourceBadge source={slot.source} />
           </td>
           <td className="px-6 py-4">
-            <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
+            <span className={`text-sm ${isPast ? 'text-gray-500 dark:text-gray-400' : 'text-gray-600 dark:text-gray-400'}`}>
               {slot.cim || '1088 Budapest, Szentkirályi utca 47'}
             </span>
           </td>
           <td className="px-6 py-4 whitespace-nowrap">
-            <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
+            <span className={`text-sm ${isPast ? 'text-gray-500 dark:text-gray-400' : 'text-gray-600 dark:text-gray-400'}`}>
               {slot.teremszam || '-'}
             </span>
           </td>
           <td className="px-6 py-4 whitespace-nowrap">
-            <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-600'}`}>
+            <span className={`text-sm ${isPast ? 'text-gray-500 dark:text-gray-400' : 'text-gray-600 dark:text-gray-400'}`}>
               {slot.dentistName || slot.userEmail || '-'}
             </span>
           </td>
@@ -290,11 +290,11 @@ export function TimeSlotsManager() {
               className={`px-2 py-1 text-xs font-medium rounded-full ${
                 slot.status === 'available'
                   ? isPast
-                    ? 'bg-gray-200 text-gray-600'
-                    : 'bg-green-100 text-green-800'
+                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                    : 'bg-green-100 dark:bg-green-950/50 text-green-800 dark:text-green-300'
                   : isPast
-                    ? 'bg-gray-200 text-gray-600'
-                    : 'bg-red-100 text-red-800'
+                    ? 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                    : 'bg-red-100 dark:bg-red-950/50 text-red-800 dark:text-red-300'
               }`}
             >
               {slot.status === 'available' ? 'Szabad' : 'Lefoglalva'}
@@ -302,28 +302,28 @@ export function TimeSlotsManager() {
           </td>
           <td className="px-6 py-4">
             {appointment ? (
-              <div className={`text-sm space-y-1 ${isPast ? 'text-gray-500' : ''}`}>
+              <div className={`text-sm space-y-1 ${isPast ? 'text-gray-500 dark:text-gray-400' : ''}`}>
                 <div>
-                  <span className="text-xs font-medium text-gray-500 uppercase">Beteg:</span>
-                  <div className={`font-medium mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-900'}`}>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Beteg:</span>
+                  <div className={`font-medium mt-0.5 ${isPast ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'}`}>
                     {appointment.patientName || 'Név nélküli beteg'}
                   </div>
                   {appointment.patientTaj && (
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
                       TAJ: {appointment.patientTaj}
                     </div>
                   )}
                 </div>
-                <div className="pt-1 border-t border-gray-200">
-                  <span className="text-xs font-medium text-gray-500 uppercase">Foglalta:</span>
-                  <div className={`text-xs mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-700'}`}>
+                <div className="pt-1 border-t border-gray-200 dark:border-gray-800">
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Foglalta:</span>
+                  <div className={`text-xs mt-0.5 ${isPast ? 'text-gray-500 dark:text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>
                     {appointment.bookedBy}
                   </div>
                 </div>
                 {appointment.appointmentType && (
-                  <div className="pt-1 border-t border-gray-200">
-                    <span className="text-xs font-medium text-gray-500 uppercase">Típus:</span>
-                    <div className={`text-xs mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-700'}`}>
+                  <div className="pt-1 border-t border-gray-200 dark:border-gray-800">
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Típus:</span>
+                    <div className={`text-xs mt-0.5 ${isPast ? 'text-gray-500 dark:text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>
                       {appointment.appointmentType === 'elso_konzultacio' && 'Első konzultáció'}
                       {appointment.appointmentType === 'munkafazis' && 'Munkafázis'}
                       {appointment.appointmentType === 'kontroll' && 'Kontroll'}
@@ -332,9 +332,9 @@ export function TimeSlotsManager() {
                 )}
               </div>
             ) : slot.status === 'booked' ? (
-              <span className={`text-sm ${isPast ? 'text-gray-500' : 'text-gray-500'}`}>Lefoglalva (adatok betöltése...)</span>
+              <span className={`text-sm ${isPast ? 'text-gray-500 dark:text-gray-400' : 'text-gray-500 dark:text-gray-400'}`}>Lefoglalva (adatok betöltése...)</span>
             ) : (
-              <span className={`text-sm ${isPast ? 'text-gray-400' : 'text-gray-400'}`}>-</span>
+              <span className={`text-sm ${isPast ? 'text-gray-400 dark:text-gray-500' : 'text-gray-400 dark:text-gray-500'}`}>-</span>
             )}
           </td>
           <td className="px-6 py-4 whitespace-nowrap text-right text-sm font-medium">
@@ -342,7 +342,7 @@ export function TimeSlotsManager() {
               {slot.status === 'available' && (
                 <button
                   onClick={() => ts.deleteTimeSlot(slot.id)}
-                  className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-red-600 hover:text-red-900'} mobile-touch-target`}
+                  className={`${isPast ? 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200' : 'text-red-600 dark:text-red-300 hover:text-red-900'} mobile-touch-target`}
                   title="Törlés"
                 >
                   <Trash2 className="w-4 h-4" />
@@ -355,7 +355,7 @@ export function TimeSlotsManager() {
                       setEditingAppointmentType({ appointmentId: appointment.id, currentType: appointment.appointmentType || null });
                       setNewAppointmentType(appointment.appointmentType || null);
                     }}
-                    className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-blue-600 hover:text-blue-900'} flex items-center gap-1 text-xs mobile-touch-target`}
+                    className={`${isPast ? 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200' : 'text-blue-600 dark:text-blue-300 hover:text-blue-900'} flex items-center gap-1 text-xs mobile-touch-target`}
                     title="Időpont típusa módosítása"
                   >
                     <Edit2 className="w-3 h-3" />
@@ -366,7 +366,7 @@ export function TimeSlotsManager() {
                       setModifyingAppointment({ appointmentId: appointment.id, timeSlotId: slot.id, startTime: slot.startTime });
                       setNewTimeSlotId('');
                     }}
-                    className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-amber-600 hover:text-amber-900'} flex items-center gap-1 mobile-touch-target`}
+                    className={`${isPast ? 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200' : 'text-amber-600 dark:text-amber-300 hover:text-amber-900'} flex items-center gap-1 mobile-touch-target`}
                     title="Időpont módosítása"
                   >
                     <Edit2 className="w-4 h-4" />
@@ -374,7 +374,7 @@ export function TimeSlotsManager() {
                   </button>
                   <button
                     onClick={() => ts.cancelAppointment(appointment.id)}
-                    className={`${isPast ? 'text-gray-500 hover:text-gray-700' : 'text-red-600 hover:text-red-900'} flex items-center gap-1 mobile-touch-target`}
+                    className={`${isPast ? 'text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-200' : 'text-red-600 dark:text-red-300 hover:text-red-900'} flex items-center gap-1 mobile-touch-target`}
                     title="Időpont lemondása"
                   >
                     <Trash2 className="w-4 h-4" />
@@ -395,11 +395,11 @@ export function TimeSlotsManager() {
           className={`px-2 py-1 text-xs font-medium rounded-full ${
             slot.status === 'available'
               ? isPast
-                ? 'bg-gray-200 text-gray-600'
-                : 'bg-green-100 text-green-800'
+                ? 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                : 'bg-green-100 dark:bg-green-950/50 text-green-800 dark:text-green-300'
               : isPast
-                ? 'bg-gray-200 text-gray-600'
-                : 'bg-red-100 text-red-800'
+                ? 'bg-gray-200 dark:bg-gray-700 text-gray-600 dark:text-gray-400'
+                : 'bg-red-100 dark:bg-red-950/50 text-red-800 dark:text-red-300'
           }`}
         >
           {slot.status === 'available' ? 'Szabad' : 'Lefoglalva'}
@@ -407,11 +407,11 @@ export function TimeSlotsManager() {
       );
 
       return (
-        <div className={`mobile-card ${isPast ? 'opacity-60' : ''} ${slot.status === 'booked' ? 'bg-red-50' : ''}`}>
+        <div className={`mobile-card ${isPast ? 'opacity-60' : ''} ${slot.status === 'booked' ? 'bg-red-50 dark:bg-red-950/40' : ''}`}>
           <div className="flex items-center justify-between mb-3">
             <div className="flex items-center gap-2 flex-1 min-w-0">
-              <Clock className={`w-4 h-4 flex-shrink-0 ${isPast ? 'text-gray-400' : 'text-gray-400'}`} />
-              <h3 className={`text-base font-semibold ${isPast ? 'text-gray-500' : 'text-gray-900'} truncate`}>
+              <Clock className={`w-4 h-4 flex-shrink-0 ${isPast ? 'text-gray-400 dark:text-gray-500' : 'text-gray-400 dark:text-gray-500'}`} />
+              <h3 className={`text-base font-semibold ${isPast ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'} truncate`}>
                 {formatDateTime(slot.startTime)}
               </h3>
             </div>
@@ -435,29 +435,29 @@ export function TimeSlotsManager() {
           />
 
           {appointment && (
-            <div className={`mb-3 p-3 bg-gray-50 rounded-lg ${isPast ? 'text-gray-500' : ''}`}>
+            <div className={`mb-3 p-3 bg-gray-50 dark:bg-gray-800/60 rounded-lg ${isPast ? 'text-gray-500 dark:text-gray-400' : ''}`}>
               <div className="text-sm space-y-2">
                 <div>
-                  <span className="text-xs font-medium text-gray-500 uppercase">Beteg:</span>
-                  <div className={`font-medium mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-900'}`}>
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Beteg:</span>
+                  <div className={`font-medium mt-0.5 ${isPast ? 'text-gray-500 dark:text-gray-400' : 'text-gray-900 dark:text-gray-100'}`}>
                     {appointment.patientName || 'Név nélküli beteg'}
                   </div>
                   {appointment.patientTaj && (
-                    <div className="text-xs text-gray-500">
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
                       TAJ: {appointment.patientTaj}
                     </div>
                   )}
                 </div>
-                <div className="pt-1 border-t border-gray-200">
-                  <span className="text-xs font-medium text-gray-500 uppercase">Foglalta:</span>
-                  <div className={`text-xs mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-700'}`}>
+                <div className="pt-1 border-t border-gray-200 dark:border-gray-800">
+                  <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Foglalta:</span>
+                  <div className={`text-xs mt-0.5 ${isPast ? 'text-gray-500 dark:text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>
                     {appointment.bookedBy}
                   </div>
                 </div>
                 {appointment.appointmentType && (
-                  <div className="pt-1 border-t border-gray-200">
-                    <span className="text-xs font-medium text-gray-500 uppercase">Típus:</span>
-                    <div className={`text-xs mt-0.5 ${isPast ? 'text-gray-500' : 'text-gray-700'}`}>
+                  <div className="pt-1 border-t border-gray-200 dark:border-gray-800">
+                    <span className="text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Típus:</span>
+                    <div className={`text-xs mt-0.5 ${isPast ? 'text-gray-500 dark:text-gray-400' : 'text-gray-700 dark:text-gray-300'}`}>
                       {appointment.appointmentType === 'elso_konzultacio' && 'Első konzultáció'}
                       {appointment.appointmentType === 'munkafazis' && 'Munkafázis'}
                       {appointment.appointmentType === 'kontroll' && 'Kontroll'}
@@ -468,12 +468,12 @@ export function TimeSlotsManager() {
             </div>
           )}
 
-          <div className="pt-3 border-t border-gray-200 flex flex-col gap-2">
+          <div className="pt-3 border-t border-gray-200 dark:border-gray-800 flex flex-col gap-2">
             {slot.status === 'available' && (
               <button
                 onClick={() => ts.deleteTimeSlot(slot.id)}
                 className={`w-full btn-secondary flex items-center justify-center gap-2 mobile-touch-target ${
-                  isPast ? 'text-gray-500' : 'text-red-600'
+                  isPast ? 'text-gray-500 dark:text-gray-400' : 'text-red-600 dark:text-red-300'
                 }`}
               >
                 <Trash2 className="w-4 h-4" />
@@ -488,7 +488,7 @@ export function TimeSlotsManager() {
                     setNewAppointmentType(appointment.appointmentType || null);
                   }}
                   className={`w-full btn-secondary flex items-center justify-center gap-2 mobile-touch-target ${
-                    isPast ? 'text-gray-500' : 'text-blue-600'
+                    isPast ? 'text-gray-500 dark:text-gray-400' : 'text-blue-600 dark:text-blue-300'
                   }`}
                 >
                   <Edit2 className="w-4 h-4" />
@@ -500,7 +500,7 @@ export function TimeSlotsManager() {
                     setNewTimeSlotId('');
                   }}
                   className={`w-full btn-secondary flex items-center justify-center gap-2 mobile-touch-target ${
-                    isPast ? 'text-gray-500' : 'text-amber-600'
+                    isPast ? 'text-gray-500 dark:text-gray-400' : 'text-amber-600 dark:text-amber-300'
                   }`}
                 >
                   <Edit2 className="w-4 h-4" />
@@ -509,7 +509,7 @@ export function TimeSlotsManager() {
                 <button
                   onClick={() => ts.cancelAppointment(appointment.id)}
                   className={`w-full btn-secondary flex items-center justify-center gap-2 mobile-touch-target ${
-                    isPast ? 'text-gray-500' : 'text-red-600'
+                    isPast ? 'text-gray-500 dark:text-gray-400' : 'text-red-600 dark:text-red-300'
                   }`}
                 >
                   <Trash2 className="w-4 h-4" />
@@ -523,7 +523,7 @@ export function TimeSlotsManager() {
     };
 
     const getRowClassName = (slot: TimeSlot) => {
-      return `${isPast ? 'opacity-60' : ''} ${slot.status === 'booked' ? 'bg-red-50' : ''}`;
+      return `${isPast ? 'opacity-60' : ''} ${slot.status === 'booked' ? 'bg-red-50 dark:bg-red-950/40' : ''}`;
     };
 
     return (
@@ -545,27 +545,27 @@ export function TimeSlotsManager() {
       {/* Bulk Edit Modal */}
       {showBulkEditModal && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <div className="bg-white dark:bg-gray-900 rounded-lg p-6 max-w-md w-full mx-4">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-gray-900">Tömeges módosítás</h3>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Tömeges módosítás</h3>
               <button
                 onClick={() => {
                   setShowBulkEditModal(false);
                   setBulkAppointmentType(null);
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="space-y-4">
               <div>
-                <p className="text-sm text-gray-600 mb-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                   <strong>{ts.selectedAppointmentIds.size} időpont</strong> kijelölve
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Időpont típusa
                 </label>
                 <select
@@ -605,22 +605,22 @@ export function TimeSlotsManager() {
       {/* Appointment Type Edit Modal */}
       {editingAppointmentType && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <div className="bg-white dark:bg-gray-900 rounded-lg p-6 max-w-md w-full mx-4">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-gray-900">Időpont típusa módosítása</h3>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Időpont típusa módosítása</h3>
               <button
                 onClick={() => {
                   setEditingAppointmentType(null);
                   setNewAppointmentType(null);
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="space-y-4">
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Időpont típusa
                 </label>
                 <select
@@ -658,27 +658,27 @@ export function TimeSlotsManager() {
       {/* Modification Modal */}
       {modifyingAppointment && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
-          <div className="bg-white rounded-lg p-6 max-w-md w-full mx-4">
+          <div className="bg-white dark:bg-gray-900 rounded-lg p-6 max-w-md w-full mx-4">
             <div className="flex justify-between items-center mb-4">
-              <h3 className="text-xl font-bold text-gray-900">Időpont módosítása</h3>
+              <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Időpont módosítása</h3>
               <button
                 onClick={() => {
                   setModifyingAppointment(null);
                   setNewTimeSlotId('');
                 }}
-                className="text-gray-400 hover:text-gray-600"
+                className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300"
               >
                 <X className="w-5 h-5" />
               </button>
             </div>
             <div className="space-y-4">
               <div>
-                <p className="text-sm text-gray-600 mb-4">
+                <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
                   <strong>Jelenlegi időpont:</strong> {formatDateTime(modifyingAppointment.startTime)}
                 </p>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Új időpont
                 </label>
                 <select
@@ -694,7 +694,7 @@ export function TimeSlotsManager() {
                   ))}
                 </select>
                 {availableSlotsForModification.length === 0 && (
-                  <p className="text-sm text-gray-500 mt-2">
+                  <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">
                     Jelenleg nincs elérhető szabad időpont.
                   </p>
                 )}
@@ -722,7 +722,7 @@ export function TimeSlotsManager() {
         </div>
       )}
       <div className="flex justify-between items-center">
-        <h3 className="text-xl font-bold text-gray-900">Szabad időpontok kezelése</h3>
+        <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Szabad időpontok kezelése</h3>
         <button
           onClick={() => {
             setEditingSlot(null);
@@ -740,7 +740,7 @@ export function TimeSlotsManager() {
       {/* Szűrők */}
       <div className="grid grid-cols-1 md:grid-cols-5 gap-4">
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Cím
           </label>
           <select
@@ -755,7 +755,7 @@ export function TimeSlotsManager() {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Teremszám
           </label>
           <select
@@ -770,7 +770,7 @@ export function TimeSlotsManager() {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Fogpótlástanász
           </label>
           <select
@@ -785,7 +785,7 @@ export function TimeSlotsManager() {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Státusz
           </label>
           <select
@@ -799,7 +799,7 @@ export function TimeSlotsManager() {
           </select>
         </div>
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-2">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
             Időpont típusa
           </label>
           <select
@@ -825,7 +825,7 @@ export function TimeSlotsManager() {
 
       {/* Eredmények száma és törlés gomb */}
       <div className="flex justify-between items-center">
-        <div className="text-sm text-gray-600">
+        <div className="text-sm text-gray-600 dark:text-gray-400">
           Összesen: {ts.filteredAndSortedSlots.length} időpont
           {ts.filteredAndSortedSlots.length !== ts.timeSlots.length && (
             <span> (szűrve: {ts.timeSlots.length} összesből)</span>
@@ -834,7 +834,7 @@ export function TimeSlotsManager() {
         {ts.hasActiveFilters && (
           <button
             onClick={ts.clearFilters}
-            className="text-sm text-blue-600 hover:text-blue-800"
+            className="text-sm text-blue-600 dark:text-blue-300 hover:text-blue-800"
           >
             Szűrők törlése
           </button>
@@ -849,7 +849,7 @@ export function TimeSlotsManager() {
           <div className="space-y-4">
             {ts.userRole === 'admin' && (
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Felhasználó
                 </label>
                 <select
@@ -879,7 +879,7 @@ export function TimeSlotsManager() {
                 </div>
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Teremszám
                 </label>
                 <input
@@ -891,7 +891,7 @@ export function TimeSlotsManager() {
                 />
               </div>
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Slot célja
                 </label>
                 <select
@@ -939,7 +939,7 @@ export function TimeSlotsManager() {
             <h4 className="text-lg font-semibold">Jövőbeli időpontok</h4>
             {ts.selectedAppointmentIds.size > 0 && (
               <div className="flex items-center gap-3">
-                <span className="text-sm text-gray-600">
+                <span className="text-sm text-gray-600 dark:text-gray-400">
                   {ts.selectedAppointmentIds.size} időpont kijelölve
                 </span>
                 <button
@@ -963,8 +963,8 @@ export function TimeSlotsManager() {
           </div>
           {ts.futureSlots.length === 0 ? (
             <div className="text-center py-8">
-              <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-              <p className="text-gray-500">Nincs jövőbeli időpont.</p>
+              <Calendar className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+              <p className="text-gray-500 dark:text-gray-400">Nincs jövőbeli időpont.</p>
             </div>
           ) : (
             renderTimeSlotTable(ts.futureSlots, false)
@@ -979,21 +979,21 @@ export function TimeSlotsManager() {
             onClick={() => ts.setShowPastSlots(!ts.showPastSlots)}
             className="flex items-center justify-between w-full mb-4 text-left"
           >
-            <h4 className="text-lg font-semibold text-gray-600">
+            <h4 className="text-lg font-semibold text-gray-600 dark:text-gray-400">
               Elmúlt időpontok ({ts.allPastSlots.length})
             </h4>
             {ts.showPastSlots ? (
-              <ChevronUp className="w-5 h-5 text-gray-400" />
+              <ChevronUp className="w-5 h-5 text-gray-400 dark:text-gray-500" />
             ) : (
-              <ChevronDown className="w-5 h-5 text-gray-400" />
+              <ChevronDown className="w-5 h-5 text-gray-400 dark:text-gray-500" />
             )}
           </button>
           {ts.showPastSlots && (
             <>
               {ts.pastSlots.length === 0 ? (
                 <div className="text-center py-8">
-                  <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-                  <p className="text-gray-500">Nincs elmúlt időpont ezen az oldalon.</p>
+                  <Calendar className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+                  <p className="text-gray-500 dark:text-gray-400">Nincs elmúlt időpont ezen az oldalon.</p>
                 </div>
               ) : (
                 renderTimeSlotTable(ts.pastSlots, true)
@@ -1001,7 +1001,7 @@ export function TimeSlotsManager() {
               {/* Pagináció elmúlt időpontokhoz */}
               {ts.pastTotalPages > 1 && (
                 <div className="mt-6 flex items-center justify-between">
-                  <div className="text-sm text-gray-600">
+                  <div className="text-sm text-gray-600 dark:text-gray-400">
                     Oldal {ts.currentPage} / {ts.pastTotalPages} (összesen {ts.allPastSlots.length} elmúlt időpont)
                   </div>
                   <div className="flex items-center gap-2">
@@ -1010,8 +1010,8 @@ export function TimeSlotsManager() {
                       disabled={ts.currentPage === 1}
                       className={`px-3 py-2 rounded-md text-sm font-medium ${
                         ts.currentPage === 1
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                          ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                          : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 border border-gray-300 dark:border-gray-700'
                       }`}
                     >
                       <ChevronLeft className="w-4 h-4" />
@@ -1035,7 +1035,7 @@ export function TimeSlotsManager() {
                             className={`px-3 py-2 rounded-md text-sm font-medium ${
                               ts.currentPage === pageNum
                                 ? 'bg-blue-600 text-white'
-                                : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                                : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 border border-gray-300 dark:border-gray-700'
                             }`}
                           >
                             {pageNum}
@@ -1048,8 +1048,8 @@ export function TimeSlotsManager() {
                       disabled={ts.currentPage === ts.pastTotalPages}
                       className={`px-3 py-2 rounded-md text-sm font-medium ${
                         ts.currentPage === ts.pastTotalPages
-                          ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                          : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                          ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                          : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 border border-gray-300 dark:border-gray-700'
                       }`}
                     >
                       <ChevronRight className="w-4 h-4" />
@@ -1065,7 +1065,7 @@ export function TimeSlotsManager() {
       {/* Pagináció - csak jövőbeli időpontokra */}
       {ts.futureTotalPages > 1 && (
         <div className="mt-6 flex items-center justify-between">
-          <div className="text-sm text-gray-600">
+          <div className="text-sm text-gray-600 dark:text-gray-400">
             Oldal {ts.currentPage} / {ts.futureTotalPages} (összesen {ts.allFutureSlots.length} jövőbeli időpont)
           </div>
           <div className="flex items-center gap-2">
@@ -1074,8 +1074,8 @@ export function TimeSlotsManager() {
               disabled={ts.currentPage === 1}
               className={`px-3 py-2 rounded-md text-sm font-medium ${
                 ts.currentPage === 1
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                  : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 border border-gray-300 dark:border-gray-700'
               }`}
             >
               <ChevronLeft className="w-4 h-4" />
@@ -1099,7 +1099,7 @@ export function TimeSlotsManager() {
                     className={`px-3 py-2 rounded-md text-sm font-medium ${
                       ts.currentPage === pageNum
                         ? 'bg-blue-600 text-white'
-                        : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                        : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 border border-gray-300 dark:border-gray-700'
                     }`}
                   >
                     {pageNum}
@@ -1112,8 +1112,8 @@ export function TimeSlotsManager() {
               disabled={ts.currentPage === ts.futureTotalPages}
               className={`px-3 py-2 rounded-md text-sm font-medium ${
                 ts.currentPage === ts.futureTotalPages
-                  ? 'bg-gray-100 text-gray-400 cursor-not-allowed'
-                  : 'bg-white text-gray-700 hover:bg-gray-50 border border-gray-300'
+                  ? 'bg-gray-100 dark:bg-gray-800 text-gray-400 dark:text-gray-500 cursor-not-allowed'
+                  : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50 border border-gray-300 dark:border-gray-700'
               }`}
             >
               <ChevronRight className="w-4 h-4" />
@@ -1125,8 +1125,8 @@ export function TimeSlotsManager() {
       {ts.timeSlots.length === 0 && (
         <div className="card">
           <div className="text-center py-8">
-            <Calendar className="w-12 h-12 text-gray-400 mx-auto mb-4" />
-            <p className="text-gray-500">Még nincs létrehozva időpont.</p>
+            <Calendar className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
+            <p className="text-gray-500 dark:text-gray-400">Még nincs létrehozva időpont.</p>
           </div>
         </div>
       )}

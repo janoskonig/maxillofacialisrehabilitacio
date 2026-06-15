@@ -226,8 +226,8 @@ export function EpisodePathwayEditor({
 
   if (loadingLists) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <div className="flex items-center gap-2 text-gray-500">
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+        <div className="flex items-center gap-2 text-gray-500 dark:text-gray-400">
           <Loader2 className="w-4 h-4 animate-spin" />
           <span className="text-sm">Betöltés…</span>
         </div>
@@ -237,8 +237,8 @@ export function EpisodePathwayEditor({
 
   if (error && episodePathways.length === 0 && !providerDirty) {
     return (
-      <div className="bg-white rounded-lg border border-gray-200 p-4">
-        <p className="text-sm text-red-600">{error}</p>
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+        <p className="text-sm text-red-600 dark:text-red-300">{error}</p>
         <button
           onClick={loadLists}
           className="mt-2 text-sm text-medical-primary hover:underline"
@@ -251,14 +251,14 @@ export function EpisodePathwayEditor({
 
   return (
     <div
-      className={`bg-white rounded-lg border border-gray-200 ${compact ? 'p-3' : 'p-4'}`}
+      className={`bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 ${compact ? 'p-3' : 'p-4'}`}
       role="region"
       aria-labelledby="episode-pathway-heading"
     >
-      <h3 id="episode-pathway-heading" className={`font-semibold text-gray-900 ${compact ? 'text-sm mb-2' : 'text-base mb-3'}`}>
+      <h3 id="episode-pathway-heading" className={`font-semibold text-gray-900 dark:text-gray-100 ${compact ? 'text-sm mb-2' : 'text-base mb-3'}`}>
         Kezelési utak és felelős orvos
       </h3>
-      <p className="text-sm text-gray-600 mb-3">
+      <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
         Ehhez az epizódhoz tartozó beállítások: add hozzá a <strong>kezelési utakat</strong> (lépéssor: konzultáció → munka → kontroll) és válaszd ki a <strong>felelős orvost</strong>. Egy epizódhoz több kezelési út is rendelhető — lépéseik összefésülve jelennek meg.
       </p>
 
@@ -266,27 +266,27 @@ export function EpisodePathwayEditor({
         {/* Assigned pathways list */}
         {episodePathways.length > 0 && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1.5">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
               Hozzárendelt kezelési utak
             </label>
             <ul className="space-y-1.5">
               {episodePathways.map((ep) => (
-                <li key={ep.id} className="flex items-center justify-between gap-2 px-3 py-2 bg-gray-50 rounded-lg border border-gray-200">
+                <li key={ep.id} className="flex items-center justify-between gap-2 px-3 py-2 bg-gray-50 dark:bg-gray-800/60 rounded-lg border border-gray-200 dark:border-gray-800">
                   <div className="flex items-center gap-2 min-w-0">
-                    <span className="text-sm font-medium text-gray-900 truncate">{ep.pathwayName}</span>
+                    <span className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{ep.pathwayName}</span>
                     {ep.jaw && (
-                      <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-indigo-100 text-indigo-700 shrink-0">
+                      <span className="px-1.5 py-0.5 text-[10px] font-semibold rounded bg-indigo-100 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300 shrink-0">
                         {JAW_LABELS[ep.jaw] ?? ep.jaw}
                       </span>
                     )}
-                    <span className="text-xs text-gray-500 shrink-0">
+                    <span className="text-xs text-gray-500 dark:text-gray-400 shrink-0">
                       {ep.workPhaseCount ?? ep.stepCount} munkafázis
                     </span>
                   </div>
                   <button
                     onClick={() => handleRemovePathway(ep.id)}
                     disabled={removingPathwayId === ep.id}
-                    className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 bg-red-50 rounded hover:bg-red-100 disabled:opacity-50 transition-colors shrink-0"
+                    className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-950/40 rounded hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50 transition-colors shrink-0"
                     title="Kezelési út eltávolítása"
                   >
                     {removingPathwayId === ep.id ? (
@@ -305,7 +305,7 @@ export function EpisodePathwayEditor({
         {/* Add pathway */}
         {availablePathways.length > 0 && (
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="episode-add-pathway-select">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" htmlFor="episode-add-pathway-select">
               Kezelési út hozzáadása
             </label>
             <div className="flex items-center gap-2 flex-wrap">
@@ -313,7 +313,7 @@ export function EpisodePathwayEditor({
                 id="episode-add-pathway-select"
                 value={newPathwayId}
                 onChange={(e) => setNewPathwayId(e.target.value)}
-                className="flex-1 min-w-[180px] rounded-md border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
+                className="flex-1 min-w-[180px] rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm disabled:opacity-50"
                 disabled={addingPathway}
               >
                 <option value="">— Válassz kezelési utat</option>
@@ -330,7 +330,7 @@ export function EpisodePathwayEditor({
                 id="episode-add-jaw-select"
                 value={newJaw}
                 onChange={(e) => setNewJaw(e.target.value as 'felso' | 'also')}
-                className="rounded-md border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
+                className="rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm disabled:opacity-50"
                 disabled={addingPathway}
               >
                 <option value="felso">Felső állcsont</option>
@@ -354,7 +354,7 @@ export function EpisodePathwayEditor({
 
         {/* Provider */}
         <div>
-          <label className="block text-sm font-medium text-gray-700 mb-1" htmlFor="episode-provider-select">
+          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" htmlFor="episode-provider-select">
             Felelős orvos
           </label>
           <div className="flex items-center gap-2">
@@ -365,7 +365,7 @@ export function EpisodePathwayEditor({
                 setSelectedProviderId(e.target.value);
                 setProviderDirty(true);
               }}
-              className="flex-1 rounded-md border border-gray-300 px-3 py-2 text-sm disabled:opacity-50"
+              className="flex-1 rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm disabled:opacity-50"
               disabled={savingProvider}
             >
               <option value="">— Nincs beállítva</option>
@@ -390,18 +390,18 @@ export function EpisodePathwayEditor({
 
         {/* Guard: both pathway + provider needed */}
         {episodePathways.length > 0 && !selectedProviderId && (
-          <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded">
+          <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-2 rounded">
             Felelős orvos kiválasztása szükséges a worklist foglaláshoz.
           </p>
         )}
         {episodePathways.length === 0 && (
-          <p className="text-xs text-amber-700 bg-amber-50 p-2 rounded">
+          <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-2 rounded">
             Adj hozzá legalább egy kezelési utat, hogy a lépések generálhatók legyenek.
           </p>
         )}
 
         {error && (
-          <p className="text-xs text-red-600 bg-red-50 p-2 rounded">{error}</p>
+          <p className="text-xs text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-950/40 p-2 rounded">{error}</p>
         )}
       </div>
     </div>

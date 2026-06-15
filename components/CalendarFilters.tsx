@@ -28,7 +28,7 @@ export function CalendarFilters({
       <button
         onClick={() => setIsOpen(!isOpen)}
         className={`btn-secondary flex items-center gap-2 text-sm px-3 py-1.5 ${
-          hasActiveFilters ? 'bg-blue-50 border-blue-300' : ''
+          hasActiveFilters ? 'bg-blue-50 dark:bg-blue-950/40 border-blue-300 dark:border-blue-700' : ''
         }`}
       >
         <Filter className="w-3.5 h-3.5" />
@@ -46,16 +46,16 @@ export function CalendarFilters({
             className="fixed inset-0 z-40"
             onClick={() => setIsOpen(false)}
           />
-          <div className="absolute right-0 mt-2 w-64 bg-white rounded-lg shadow-lg border z-50 p-4">
+          <div className="absolute right-0 mt-2 w-64 max-w-[calc(100vw-2rem)] bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 z-50 p-4">
             <div className="flex items-center justify-between mb-4">
-              <h3 className="font-semibold text-gray-900">Szűrők</h3>
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">Szűrők</h3>
               {hasActiveFilters && (
                 <button
                   onClick={() => {
                     onClear();
                     setIsOpen(false);
                   }}
-                  className="text-xs text-blue-600 hover:text-blue-800 flex items-center gap-1"
+                  className="text-xs text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300 flex items-center gap-1"
                 >
                   <X className="w-3 h-3" />
                   Törlés
@@ -66,7 +66,7 @@ export function CalendarFilters({
             <div className="space-y-4">
               {/* Dentist Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Fogpótlástanász
                 </label>
                 <select
@@ -85,7 +85,7 @@ export function CalendarFilters({
 
               {/* Status Filter */}
               <div>
-                <label className="block text-sm font-medium text-gray-700 mb-2">
+                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
                   Státusz
                 </label>
                 <select

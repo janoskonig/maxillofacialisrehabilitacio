@@ -72,7 +72,7 @@ export function AlapadatokSection({
               placeholder="Teljes név"
               readOnly={isViewOnly}
             />
-            {errors.nev && <p className="text-red-500 text-sm mt-1">{errors.nev.message}</p>}
+            {errors.nev && <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.nev.message}</p>}
           </div>
           {!isTechnikus && (
             <>
@@ -86,20 +86,20 @@ export function AlapadatokSection({
                   readOnly={isViewOnly}
                 />
                 {errors.taj ? (
-                  <p className="text-red-500 text-sm mt-1">{errors.taj.message}</p>
+                  <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.taj.message}</p>
                 ) : tajChecksumWarning ? (
-                  <p className="text-amber-600 text-xs mt-1 flex items-center gap-1">
+                  <p className="text-amber-600 dark:text-amber-300 text-xs mt-1 flex items-center gap-1">
                     <AlertTriangle className="w-3 h-3 flex-shrink-0" />
                     Az ellenőrző számjegy nem megfelelő. Kérjük, ellenőrizze a TAJ számot.
                   </p>
                 ) : (
-                  <p className="text-gray-500 text-xs mt-1">Formátum: XXX-XXX-XXX (9 számjegy)</p>
+                  <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">Formátum: XXX-XXX-XXX (9 számjegy)</p>
                 )}
               </div>
               <div>
                 <label className="form-label">
                   Telefonszám
-                  {minimalNewPatient && <span className="font-normal text-gray-500"> (opcionális)</span>}
+                  {minimalNewPatient && <span className="font-normal text-gray-500 dark:text-gray-400"> (opcionális)</span>}
                 </label>
                 <input
                   {...register('telefonszam')}
@@ -109,13 +109,13 @@ export function AlapadatokSection({
                   readOnly={isViewOnly}
                 />
                 {errors.telefonszam && (
-                  <p className="text-red-500 text-sm mt-1">{errors.telefonszam.message}</p>
+                  <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.telefonszam.message}</p>
                 )}
               </div>
               <div>
                 <label className={`form-label ${req('email') ? 'form-label-required' : ''}`}>
                   Email
-                  {minimalNewPatient && <span className="font-normal text-gray-500"> (opcionális)</span>}
+                  {minimalNewPatient && <span className="font-normal text-gray-500 dark:text-gray-400"> (opcionális)</span>}
                 </label>
                 <input
                   {...register('email')}
@@ -124,7 +124,7 @@ export function AlapadatokSection({
                   placeholder="nev@example.com"
                   readOnly={isViewOnly}
                 />
-                {errors.email && <p className="text-red-500 text-sm mt-1">{errors.email.message}</p>}
+                {errors.email && <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.email.message}</p>}
               </div>
             </>
           )}

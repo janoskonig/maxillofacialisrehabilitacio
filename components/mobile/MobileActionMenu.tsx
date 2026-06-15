@@ -50,7 +50,7 @@ export function MobileActionMenu({ items, trigger }: MobileActionMenuProps) {
       <>
         <button
           onClick={() => setIsOpen(true)}
-          className="p-2 text-gray-600 hover:text-gray-900 transition-colors mobile-touch-target"
+          className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 transition-colors mobile-touch-target"
           aria-label="További műveletek"
         >
           {trigger || <MoreVertical className="w-5 h-5" />}
@@ -61,7 +61,7 @@ export function MobileActionMenu({ items, trigger }: MobileActionMenuProps) {
           onOpenChange={setIsOpen}
           type="action"
         >
-          <div className="divide-y divide-gray-200">
+          <div className="divide-y divide-gray-200 dark:divide-gray-800">
             {items.map((item, index) => (
               <button
                 key={index}
@@ -70,13 +70,13 @@ export function MobileActionMenu({ items, trigger }: MobileActionMenuProps) {
                 className={`
                   w-full px-4 py-3 text-left flex items-center gap-3
                   transition-colors mobile-touch-target
-                  ${item.disabled 
-                    ? 'opacity-50 cursor-not-allowed' 
-                    : 'hover:bg-gray-50'
+                  ${item.disabled
+                    ? 'opacity-50 cursor-not-allowed'
+                    : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
                   }
-                  ${item.destructive 
-                    ? 'text-red-600 hover:text-red-700 hover:bg-red-50' 
-                    : 'text-gray-900'
+                  ${item.destructive
+                    ? 'text-red-600 dark:text-red-300 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40'
+                    : 'text-gray-900 dark:text-gray-100'
                   }
                 `}
               >
@@ -86,7 +86,7 @@ export function MobileActionMenu({ items, trigger }: MobileActionMenuProps) {
                 <div className="flex-1">
                   <div className="font-medium text-sm">{item.label}</div>
                   {item.hint && (
-                    <div className="text-xs text-gray-500 mt-0.5">{item.hint}</div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{item.hint}</div>
                   )}
                 </div>
               </button>
@@ -103,7 +103,7 @@ export function MobileActionMenu({ items, trigger }: MobileActionMenuProps) {
     <div className="relative">
       <button
         onClick={() => setIsDropdownOpen(!isDropdownOpen)}
-        className="p-2 text-gray-600 hover:text-gray-900 hover:bg-gray-100 rounded transition-colors"
+        className="p-2 text-gray-600 dark:text-gray-400 hover:text-gray-900 dark:hover:text-gray-100 hover:bg-gray-100 dark:hover:bg-gray-700 rounded transition-colors"
         aria-label="További műveletek"
         aria-expanded={isDropdownOpen}
       >
@@ -119,7 +119,7 @@ export function MobileActionMenu({ items, trigger }: MobileActionMenuProps) {
           />
           
           {/* Dropdown */}
-          <div className="absolute right-0 mt-2 w-56 bg-white rounded-lg shadow-lg border border-gray-200 z-50">
+          <div className="absolute right-0 mt-2 w-56 bg-white dark:bg-gray-900 rounded-lg shadow-lg border border-gray-200 dark:border-gray-800 z-50">
             <div className="py-1">
               {items.map((item, index) => (
                 <button
@@ -129,13 +129,13 @@ export function MobileActionMenu({ items, trigger }: MobileActionMenuProps) {
                   className={`
                     w-full px-4 py-2 text-left flex items-center gap-3
                     transition-colors
-                    ${item.disabled 
-                      ? 'opacity-50 cursor-not-allowed' 
-                      : 'hover:bg-gray-50'
+                    ${item.disabled
+                      ? 'opacity-50 cursor-not-allowed'
+                      : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
                     }
-                    ${item.destructive 
-                      ? 'text-red-600 hover:text-red-700 hover:bg-red-50' 
-                      : 'text-gray-900'
+                    ${item.destructive
+                      ? 'text-red-600 dark:text-red-300 hover:text-red-700 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40'
+                      : 'text-gray-900 dark:text-gray-100'
                     }
                   `}
                 >
@@ -145,7 +145,7 @@ export function MobileActionMenu({ items, trigger }: MobileActionMenuProps) {
                   <div className="flex-1">
                     <div className="font-medium text-sm">{item.label}</div>
                     {item.hint && (
-                      <div className="text-xs text-gray-500 mt-0.5">{item.hint}</div>
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">{item.hint}</div>
                     )}
                   </div>
                 </button>

@@ -153,7 +153,7 @@ export default function DevMessagingBubblePage() {
     <main className="max-w-3xl mx-auto p-4 space-y-6">
       <header>
         <h1 className="text-xl font-semibold">Messaging UI demo (Szelet 0.4)</h1>
-        <p className="text-sm text-gray-600">
+        <p className="text-sm text-gray-600 dark:text-gray-400">
           Közös <code>ChatMessageBubble</code>, <code>MessageQuoteBlock</code>,
           <code> ReplyComposerBar</code> és <code>useReplyState</code> hook
           vizuális referenciája. Production buildben 404.
@@ -161,7 +161,7 @@ export default function DevMessagingBubblePage() {
       </header>
 
       <section className="border rounded-lg overflow-hidden">
-        <div ref={listRef} className="p-4 space-y-3 bg-gray-50 max-h-[480px] overflow-y-auto">
+        <div ref={listRef} className="p-4 space-y-3 bg-gray-50 dark:bg-gray-800/60 max-h-[480px] overflow-y-auto">
           {messages.map((m) => (
             <ChatMessageBubble
               key={m.id}
@@ -214,7 +214,7 @@ export default function DevMessagingBubblePage() {
             rows={2}
             onKeyDown={onComposerKeyDown}
             placeholder="Írj üzenetet… (Esc = reply lemondása)"
-            className="flex-1 border border-gray-200 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
+            className="flex-1 border border-gray-200 dark:border-gray-800 rounded px-3 py-2 text-sm focus:outline-none focus:ring-2 focus:ring-blue-300"
           />
           <button
             type="submit"
@@ -225,13 +225,13 @@ export default function DevMessagingBubblePage() {
         </form>
       </section>
 
-      <section className="border rounded-lg p-4 bg-white space-y-3">
-        <h2 className="text-sm font-semibold text-gray-700">Quote variánsok izoláltan</h2>
+      <section className="border rounded-lg p-4 bg-white dark:bg-gray-900 space-y-3">
+        <h2 className="text-sm font-semibold text-gray-700 dark:text-gray-300">Quote variánsok izoláltan</h2>
         <div className="grid sm:grid-cols-3 gap-3">
           <div className="rounded-md p-3 bg-blue-600">
             <MessageQuoteBlock quote={baseQuote} variant="bubble-own" />
           </div>
-          <div className="rounded-md p-3 bg-white border">
+          <div className="rounded-md p-3 bg-white dark:bg-gray-900 border">
             <MessageQuoteBlock quote={baseQuote} variant="bubble-other" />
           </div>
           <div>

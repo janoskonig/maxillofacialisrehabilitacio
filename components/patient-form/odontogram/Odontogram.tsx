@@ -121,7 +121,7 @@ export function Odontogram({ fogak, setFogak, editing, isViewOnly }: OdontogramP
         />
         <div className="flex items-center gap-2 my-2">
           <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-          <span className="text-[10px] text-gray-400">jobb · bal</span>
+          <span className="text-[10px] text-gray-400 dark:text-gray-500">jobb · bal</span>
           <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
         </div>
         <Arch
@@ -153,14 +153,14 @@ export function Odontogram({ fogak, setFogak, editing, isViewOnly }: OdontogramP
             <button
               type="button"
               onClick={() => setArchMissing(setFogak, UPPER_TEETH)}
-              className="px-3 py-1.5 text-xs rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700"
+              className="px-3 py-1.5 text-xs rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-800/50"
             >
               Felső teljes fogatlanság
             </button>
             <button
               type="button"
               onClick={() => setArchMissing(setFogak, LOWER_TEETH)}
-              className="px-3 py-1.5 text-xs rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700"
+              className="px-3 py-1.5 text-xs rounded border border-gray-300 bg-white text-gray-700 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-800/50"
             >
               Alsó teljes fogatlanság
             </button>
@@ -171,17 +171,17 @@ export function Odontogram({ fogak, setFogak, editing, isViewOnly }: OdontogramP
               <div className="flex items-center gap-2 mb-3">
                 <Tooth fdi={selected} conditions={sel} size={22} showNumber={false} />
                 <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{selected}. fog</span>
-                <span className="text-xs text-gray-400">({BASE_LABELS[sel.base]})</span>
+                <span className="text-xs text-gray-400 dark:text-gray-500">({BASE_LABELS[sel.base]})</span>
                 <button
                   type="button"
                   onClick={() => setSelected(null)}
-                  className="ml-auto text-xs text-gray-500 hover:text-gray-700"
+                  className="ml-auto text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                 >
                   Bezárás
                 </button>
               </div>
 
-              <div className="text-xs text-gray-500 mb-1">Állapot</div>
+              <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Állapot</div>
               <div className="flex flex-wrap gap-1.5 mb-3">
                 {BASE_OPTIONS.map((b) => (
                   <button
@@ -191,7 +191,7 @@ export function Odontogram({ fogak, setFogak, editing, isViewOnly }: OdontogramP
                     className={`px-2.5 py-1 text-xs rounded-full border transition-colors ${
                       sel.base === b
                         ? 'bg-medical-primary text-white border-medical-primary'
-                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700'
+                        : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-800/50'
                     }`}
                   >
                     {BASE_LABELS[b]}
@@ -205,7 +205,7 @@ export function Odontogram({ fogak, setFogak, editing, isViewOnly }: OdontogramP
                     type="checkbox"
                     checked={sel.caries}
                     onChange={(e) => applyTooth(setFogak, selected, { caries: e.target.checked })}
-                    className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+                    className="rounded border-gray-300 dark:border-gray-700 text-medical-primary focus:ring-medical-primary"
                   />
                   Szuvas
                 </label>
@@ -214,7 +214,7 @@ export function Odontogram({ fogak, setFogak, editing, isViewOnly }: OdontogramP
                     type="checkbox"
                     checked={sel.periapical}
                     onChange={(e) => applyTooth(setFogak, selected, { periapical: e.target.checked })}
-                    className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary"
+                    className="rounded border-gray-300 dark:border-gray-700 text-medical-primary focus:ring-medical-primary"
                   />
                   Gyökércsúcsi gyulladás
                 </label>
@@ -228,7 +228,7 @@ export function Odontogram({ fogak, setFogak, editing, isViewOnly }: OdontogramP
                       className={`w-7 h-7 text-xs rounded border ${
                         sel.mobility === m
                           ? 'bg-medical-primary text-white border-medical-primary'
-                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700'
+                          : 'bg-white text-gray-700 border-gray-300 hover:bg-gray-50 dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700 dark:hover:bg-gray-800/50'
                       }`}
                     >
                       {m === 0 ? '–' : ['', 'I', 'II', 'III'][m]}
@@ -238,7 +238,7 @@ export function Odontogram({ fogak, setFogak, editing, isViewOnly }: OdontogramP
               </div>
 
               <div className="mt-3">
-                <label className="text-xs text-gray-500 block mb-1">Megjegyzés (típus, gyári szám, stb.)</label>
+                <label className="text-xs text-gray-500 dark:text-gray-400 block mb-1">Megjegyzés (típus, gyári szám, stb.)</label>
                 <input
                   type="text"
                   value={sel.description ?? ''}

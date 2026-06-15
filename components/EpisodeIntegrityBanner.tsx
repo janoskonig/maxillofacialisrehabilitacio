@@ -161,16 +161,16 @@ export function EpisodeIntegrityBanner({
   if (episodesWithViolations.length === 0) {
     if (lastRepairSummary) {
       return (
-        <div className="flex items-start gap-2 p-2 bg-green-50 border border-green-200 rounded text-sm">
-          <CheckCircle2 className="w-4 h-4 text-green-700 flex-shrink-0 mt-0.5" />
+        <div className="flex items-start gap-2 p-2 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded text-sm">
+          <CheckCircle2 className="w-4 h-4 text-green-700 dark:text-green-300 flex-shrink-0 mt-0.5" />
           <div className="flex-1">
-            <div className="font-medium text-green-900">Integritás rendben</div>
-            <div className="text-xs text-green-800">{lastRepairSummary}</div>
+            <div className="font-medium text-green-900 dark:text-green-200">Integritás rendben</div>
+            <div className="text-xs text-green-800 dark:text-green-300">{lastRepairSummary}</div>
           </div>
           <button
             type="button"
             onClick={() => setLastRepairSummary(null)}
-            className="text-xs text-green-700 hover:underline"
+            className="text-xs text-green-700 dark:text-green-300 hover:underline"
           >
             bezár
           </button>
@@ -181,14 +181,14 @@ export function EpisodeIntegrityBanner({
   }
 
   return (
-    <div className="p-3 bg-amber-50 border border-amber-200 rounded text-sm space-y-2">
+    <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded text-sm space-y-2">
       <div className="flex items-start gap-2">
-        <ShieldAlert className="w-5 h-5 text-amber-700 flex-shrink-0 mt-0.5" />
+        <ShieldAlert className="w-5 h-5 text-amber-700 dark:text-amber-300 flex-shrink-0 mt-0.5" />
         <div className="flex-1">
-          <div className="font-medium text-amber-900">
+          <div className="font-medium text-amber-900 dark:text-amber-200">
             Integritás-figyelmeztetés — {totalCount} ügy {episodesWithViolations.length} epizódban
           </div>
-          <div className="text-xs text-amber-900/80 mt-0.5">
+          <div className="text-xs text-amber-900/80 dark:text-amber-300/80 mt-0.5">
             Az adatban inkonzisztencia maradt (pl. stale foglalás-hivatkozás vagy
             step-kód eltérés). A „Javítás" gomb biztonságosan rendbe teszi
             (nem nyúl a slothoz és a foglalás státuszához).
@@ -197,14 +197,14 @@ export function EpisodeIntegrityBanner({
         <button
           type="button"
           onClick={() => setExpanded((v) => !v)}
-          className="text-xs text-amber-900 hover:underline"
+          className="text-xs text-amber-900 dark:text-amber-200 hover:underline"
         >
           {expanded ? 'összecsuk' : 'részletek'}
         </button>
       </div>
 
       {repairError && (
-        <div className="text-xs text-red-700 bg-red-50 border border-red-200 rounded p-2">
+        <div className="text-xs text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded p-2">
           {repairError}
         </div>
       )}
@@ -217,12 +217,12 @@ export function EpisodeIntegrityBanner({
             return (
               <div
                 key={ep.episodeId}
-                className="border border-amber-200 bg-white/60 rounded p-2"
+                className="border border-amber-200 dark:border-amber-800 bg-white/60 dark:bg-gray-900/60 rounded p-2"
               >
                 <div className="flex items-center justify-between gap-2">
-                  <div className="text-xs text-gray-600">
+                  <div className="text-xs text-gray-600 dark:text-gray-400">
                     Epizód{' '}
-                    <code className="text-gray-800">
+                    <code className="text-gray-800 dark:text-gray-200">
                       {ep.episodeId.slice(0, 8)}
                     </code>
                   </div>
@@ -245,16 +245,16 @@ export function EpisodeIntegrityBanner({
                   {ep.violations.map((v, idx) => (
                     <li
                       key={`${v.kind}-${idx}`}
-                      className="text-xs text-amber-900"
+                      className="text-xs text-amber-900 dark:text-amber-200"
                     >
                       <span className="font-medium">
                         {VIOLATION_LABELS[v.kind] ?? v.kind}:
                       </span>{' '}
                       {v.message}
                       {v.details && v.details.length > 0 && (
-                        <ul className="ml-4 mt-0.5 list-disc marker:text-amber-600">
+                        <ul className="ml-4 mt-0.5 list-disc marker:text-amber-600 dark:marker:text-amber-300">
                           {v.details.map((d, i) => (
-                            <li key={i} className="font-mono text-[11px] text-amber-900/80">
+                            <li key={i} className="font-mono text-[11px] text-amber-900/80 dark:text-amber-300/80">
                               {JSON.stringify(d)}
                             </li>
                           ))}

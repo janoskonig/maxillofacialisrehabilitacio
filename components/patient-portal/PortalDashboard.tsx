@@ -188,7 +188,7 @@ export function PortalDashboard() {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-medical-primary"></div>
-        <span className="ml-3 text-gray-600">Betöltés...</span>
+        <span className="ml-3 text-gray-600 dark:text-gray-400">Betöltés...</span>
       </div>
     );
   }
@@ -197,7 +197,7 @@ export function PortalDashboard() {
   const getStatusBadge = (appointment: Appointment) => {
     if (appointment.approvalStatus === 'pending') {
       return (
-        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-orange-100 text-orange-700 rounded">
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-orange-100 dark:bg-orange-950/50 text-orange-700 dark:text-orange-300 rounded">
           <AlertCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
           <span className="hidden xs:inline">Jóváhagyásra vár</span>
           <span className="xs:hidden">Vár</span>
@@ -206,7 +206,7 @@ export function PortalDashboard() {
     }
     if (appointment.approvalStatus === 'rejected') {
       return (
-        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-red-100 text-red-700 rounded">
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-red-100 dark:bg-red-950/50 text-red-700 dark:text-red-300 rounded">
           <XCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
           <span className="hidden xs:inline">Elutasítva</span>
           <span className="xs:hidden">Elutas.</span>
@@ -215,7 +215,7 @@ export function PortalDashboard() {
     }
     if (appointment.approvalStatus === 'approved') {
       return (
-        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-green-100 text-green-700 rounded">
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-300 rounded">
           <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
           <span className="hidden xs:inline">Jóváhagyva</span>
           <span className="xs:hidden">OK</span>
@@ -224,7 +224,7 @@ export function PortalDashboard() {
     }
     if (appointment.appointmentStatus === 'completed') {
       return (
-        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-blue-100 text-blue-700 rounded">
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 rounded">
           <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
           <span className="hidden xs:inline">Lezárva</span>
           <span className="xs:hidden">Lezárva</span>
@@ -233,7 +233,7 @@ export function PortalDashboard() {
     }
     if (appointment.appointmentStatus === 'cancelled_by_doctor' || appointment.appointmentStatus === 'cancelled_by_patient') {
       return (
-        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-gray-100 text-gray-700 rounded">
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded">
           <XCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
           <span className="hidden xs:inline">Lemondva</span>
           <span className="xs:hidden">Lemondva</span>
@@ -242,7 +242,7 @@ export function PortalDashboard() {
     }
     if (appointment.approvalStatus === 'approved' && !appointment.appointmentStatus) {
       return (
-        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-green-100 text-green-700 rounded">
+        <span className="inline-flex items-center gap-0.5 sm:gap-1 px-1.5 sm:px-2 py-0.5 sm:py-1 text-[10px] sm:text-xs font-medium bg-green-100 dark:bg-green-950/50 text-green-700 dark:text-green-300 rounded">
           <CheckCircle className="w-2.5 h-2.5 sm:w-3 sm:h-3" />
           <span className="hidden xs:inline">Élő</span>
           <span className="xs:hidden">Élő</span>
@@ -265,23 +265,23 @@ export function PortalDashboard() {
     <div className="space-y-4 sm:space-y-6">
       {/* Welcome */}
       <div>
-        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900">
+        <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-gray-100">
           Üdvözöljük, {patient?.nev || 'Páciens'}!
         </h1>
-        <p className="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2">
+        <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mt-1 sm:mt-2">
           Itt találhatja az időpontjait, dokumentumait és egyéb információit.
         </p>
       </div>
 
       {/* Feladataim összefoglaló */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
         <div className="flex flex-col sm:flex-row sm:items-center sm:justify-between gap-3">
           <div>
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5 text-medical-primary" />
               Feladataim
             </h2>
-            <p className="text-sm text-gray-600 mt-1">
+            <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
               {openTaskCount === null
                 ? 'Dokumentumkérések és OHIP teendők egy listában.'
                 : openTaskCount === 0
@@ -300,44 +300,44 @@ export function PortalDashboard() {
       </div>
 
       {/* Patient Basic Info */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
-        <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-4 flex items-center gap-2">
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center gap-2">
           <User className="w-4 h-4 sm:w-5 sm:h-5 text-medical-primary" />
           Alapadatok
         </h2>
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
           <div>
-            <p className="text-xs sm:text-sm text-gray-600 mb-1">Név</p>
-            <p className="text-sm sm:text-base font-semibold text-gray-900">{patient?.nev || '-'}</p>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">Név</p>
+            <p className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100">{patient?.nev || '-'}</p>
           </div>
           <div>
-            <p className="text-xs sm:text-sm text-gray-600 mb-1 flex items-center gap-1">
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1 flex items-center gap-1">
               <Mail className="w-3.5 h-3.5" />
               Email cím
             </p>
-            <p className="text-sm sm:text-base font-semibold text-gray-900">{patient?.email || '-'}</p>
+            <p className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100">{patient?.email || '-'}</p>
           </div>
           <div>
-            <p className="text-xs sm:text-sm text-gray-600 mb-1">TAJ szám</p>
-            <p className="text-sm sm:text-base font-semibold text-gray-900">{patient?.taj || '-'}</p>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-1">TAJ szám</p>
+            <p className="text-sm sm:text-base font-semibold text-gray-900 dark:text-gray-100">{patient?.taj || '-'}</p>
           </div>
         </div>
       </div>
 
       {/* Next Appointment Card */}
-      <div className="bg-white rounded-lg border border-gray-200 p-3 sm:p-4">
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-3 sm:p-4">
         <div className="flex items-center gap-2 sm:gap-3">
-          <div className="p-1.5 sm:p-2 bg-blue-50 rounded-lg flex-shrink-0">
-            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-blue-600" />
+          <div className="p-1.5 sm:p-2 bg-blue-50 dark:bg-blue-950/40 rounded-lg flex-shrink-0">
+            <Calendar className="w-4 h-4 sm:w-5 sm:h-5 lg:w-6 lg:h-6 text-blue-600 dark:text-blue-300" />
           </div>
           <div className="min-w-0">
-            <p className="text-xs sm:text-sm text-gray-600 truncate">Következő időpont</p>
+            <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 truncate">Következő időpont</p>
             {nextAppointment ? (
-              <p className="text-sm sm:text-base lg:text-lg font-bold text-gray-900 truncate">
+              <p className="text-sm sm:text-base lg:text-lg font-bold text-gray-900 dark:text-gray-100 truncate">
                 {format(new Date(nextAppointment.startTime), 'MMM d.', { locale: hu })}
               </p>
             ) : (
-              <p className="text-sm sm:text-base text-gray-500 truncate">Nincs</p>
+              <p className="text-sm sm:text-base text-gray-500 dark:text-gray-400 truncate">Nincs</p>
             )}
           </div>
         </div>
@@ -345,9 +345,9 @@ export function PortalDashboard() {
 
       {/* Next Appointment - Detailed */}
       {nextAppointment && (
-        <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+        <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
           <div className="flex items-center justify-between mb-3 sm:mb-4">
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center gap-2">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
               <Calendar className="w-4 h-4 sm:w-5 sm:h-5 text-medical-primary" />
               Következő időpont
             </h2>
@@ -359,23 +359,23 @@ export function PortalDashboard() {
             </a>
           </div>
 
-          <div className="p-4 rounded-lg border border-gray-200 bg-gray-50">
+          <div className="p-4 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60">
             <div className="flex items-start justify-between gap-2">
               <div className="flex-1 min-w-0">
                 <div className="flex items-center gap-1.5 sm:gap-2 mb-2 flex-wrap">
-                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 flex-shrink-0" />
-                  <span className="font-semibold text-base sm:text-lg text-gray-900">
+                  <Clock className="w-4 h-4 sm:w-5 sm:h-5 text-gray-500 dark:text-gray-400 flex-shrink-0" />
+                  <span className="font-semibold text-base sm:text-lg text-gray-900 dark:text-gray-100">
                     {format(new Date(nextAppointment.startTime), 'yyyy. MMMM d. EEEE, HH:mm', { locale: hu })}
                   </span>
                   {getStatusBadge(nextAppointment)}
                 </div>
                 {nextAppointment.dentistName && (
-                  <p className="text-sm sm:text-base text-gray-700 mb-1">
+                  <p className="text-sm sm:text-base text-gray-700 dark:text-gray-300 mb-1">
                     <span className="font-medium">Orvos:</span> {nextAppointment.dentistName}
                   </p>
                 )}
                 {(nextAppointment.cim || nextAppointment.teremszam) && (
-                  <div className="flex items-center gap-1 text-sm sm:text-base text-gray-600">
+                  <div className="flex items-center gap-1 text-sm sm:text-base text-gray-600 dark:text-gray-400">
                     <MapPin className="w-4 h-4 flex-shrink-0" />
                     <span>
                       {nextAppointment.cim}
@@ -384,7 +384,7 @@ export function PortalDashboard() {
                   </div>
                 )}
                 {nextAppointment.approvalStatus === 'pending' && (
-                  <div className="mt-3 pt-3 border-t border-gray-300 flex flex-col sm:flex-row gap-2">
+                  <div className="mt-3 pt-3 border-t border-gray-300 dark:border-gray-700 flex flex-col sm:flex-row gap-2">
                     <button
                       onClick={() => handleApproveAppointment(nextAppointment.id)}
                       disabled={processingAppointment === nextAppointment.id}
@@ -412,7 +412,7 @@ export function PortalDashboard() {
       {/* Messages Card */}
       <div className="mobile-card">
         <div className="flex items-center justify-between mb-3">
-          <h2 className="text-base sm:text-lg font-semibold text-gray-900 flex items-center gap-2">
+          <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <MessageCircle className="w-4 h-4 sm:w-5 sm:h-5 text-medical-primary" />
             Üzenetek
           </h2>
@@ -422,7 +422,7 @@ export function PortalDashboard() {
             </span>
           )}
         </div>
-        <p className="text-sm sm:text-base text-gray-600 mb-4">
+        <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mb-4">
           {unreadMessageCount > 0
             ? `${unreadMessageCount} olvasatlan üzenet`
             : 'Nincs olvasatlan üzenet'}
@@ -440,16 +440,16 @@ export function PortalDashboard() {
       <div className="mobile-card">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 flex items-center gap-2">
               <ClipboardList className="w-4 h-4 sm:w-5 sm:h-5 text-medical-primary" />
               OHIP-14 Kérdőív
             </h2>
             {ohipPending ? (
-              <p className="text-sm sm:text-base text-amber-700 font-medium">
+              <p className="text-sm sm:text-base text-amber-700 dark:text-amber-300 font-medium">
                 Kitöltendő kérdőív: {ohipTimepointLabel}
               </p>
             ) : (
-              <p className="text-sm sm:text-base text-gray-600">
+              <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
                 Jelenleg nincs kitöltendő kérdőív
               </p>
             )}
@@ -470,11 +470,11 @@ export function PortalDashboard() {
       <div className="mobile-card">
         <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-4">
           <div>
-            <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-1 flex items-center gap-2">
+            <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-1 flex items-center gap-2">
               <FileText className="w-4 h-4 sm:w-5 sm:h-5 text-medical-primary" />
               Dokumentumok
             </h2>
-            <p className="text-sm sm:text-base text-gray-600">
+            <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400">
               Töltse fel a szükséges dokumentumokat (OP, önarckép, zárójelentés, ambuláns lap)
             </p>
           </div>

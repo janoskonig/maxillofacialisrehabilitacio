@@ -350,7 +350,7 @@ export function FotoImageViewer({ patientId, patientName, isOpen, onClose }: Fot
               >
                 <ZoomIn className="w-5 h-5" />
               </button>
-              <div className="w-px h-6 bg-white bg-opacity-30"></div>
+              <div className="w-px h-6 bg-white dark:bg-gray-900 bg-opacity-30"></div>
               <button
                 onClick={handleRotate}
                 className="p-2 hover:bg-white hover:bg-opacity-20 rounded transition-colors"
@@ -358,7 +358,7 @@ export function FotoImageViewer({ patientId, patientName, isOpen, onClose }: Fot
               >
                 <RotateCw className="w-5 h-5" />
               </button>
-              <div className="w-px h-6 bg-white bg-opacity-30"></div>
+              <div className="w-px h-6 bg-white dark:bg-gray-900 bg-opacity-30"></div>
               <button
                 onClick={() => handleDownload(currentDocument)}
                 className="p-2 hover:bg-white hover:bg-opacity-20 rounded transition-colors"

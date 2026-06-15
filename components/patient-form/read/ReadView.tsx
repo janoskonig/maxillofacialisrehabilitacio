@@ -46,7 +46,7 @@ export function ReadField({ label, value, missing, required, full, accent }: Rea
     >
       <div className="text-xs text-gray-500 dark:text-gray-400 mb-0.5">
         {label}
-        {required && <span className="text-red-500"> *</span>}
+        {required && <span className="text-red-500 dark:text-red-400"> *</span>}
       </div>
       {isMissing ? (
         required ? (

@@ -175,12 +175,12 @@ export function AnamnezisSection({
                   ))}
                 </select>
               </div>
-              <div className="mt-6 pt-6 border-t border-gray-200">
-                <h5 className="text-md font-semibold text-gray-900 mb-4">Adjuváns terápiák</h5>
+              <div className="mt-6 pt-6 border-t border-gray-200 dark:border-gray-800">
+                <h5 className="text-md font-semibold text-gray-900 dark:text-gray-100 mb-4">Adjuváns terápiák</h5>
                 <div className="space-y-4">
                   <div className="flex items-center">
-                    <input {...register('radioterapia')} type="checkbox" className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary" disabled={isViewOnly} />
-                    <label className="ml-2 text-sm text-gray-700">Radioterápia</label>
+                    <input {...register('radioterapia')} type="checkbox" className="rounded border-gray-300 dark:border-gray-700 text-medical-primary focus:ring-medical-primary" disabled={isViewOnly} />
+                    <label className="ml-2 text-sm text-gray-700 dark:text-gray-300">Radioterápia</label>
                   </div>
                   {radioterapia && (
                     <div className="grid grid-cols-1 md:grid-cols-2 gap-4 ml-6">
@@ -195,8 +195,8 @@ export function AnamnezisSection({
                     </div>
                   )}
                   <div className="flex items-center">
-                    <input {...register('chemoterapia')} type="checkbox" className="rounded border-gray-300 text-medical-primary focus:ring-medical-primary" disabled={isViewOnly} />
-                    <label className="ml-2 text-sm text-gray-700">Kemoterápia</label>
+                    <input {...register('chemoterapia')} type="checkbox" className="rounded border-gray-300 dark:border-gray-700 text-medical-primary focus:ring-medical-primary" disabled={isViewOnly} />
+                    <label className="ml-2 text-sm text-gray-700 dark:text-gray-300">Kemoterápia</label>
                   </div>
                   {chemoterapia && (
                     <div className="ml-6">

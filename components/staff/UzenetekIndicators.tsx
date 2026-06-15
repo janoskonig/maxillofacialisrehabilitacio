@@ -40,8 +40,8 @@ export function UzenetekIndicators({ patientUnread, doctorUnread, variant = 'cor
       <span
         className={
           isInline
-            ? `${baseInline} bg-amber-100 text-amber-900 font-semibold border border-amber-300`
-            : `${baseCorner} bg-amber-100 text-amber-900 font-semibold border border-amber-300`
+            ? `${baseInline} bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 font-semibold border border-amber-300 dark:border-amber-700`
+            : `${baseCorner} bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 font-semibold border border-amber-300 dark:border-amber-700`
         }
         aria-hidden
       >

@@ -199,7 +199,7 @@ export function PatientProfileView() {
     return (
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-medical-primary"></div>
-        <span className="ml-3 text-gray-600">Betöltés...</span>
+        <span className="ml-3 text-gray-600 dark:text-gray-400">Betöltés...</span>
       </div>
     );
   }
@@ -207,7 +207,7 @@ export function PatientProfileView() {
   if (!patient) {
     return (
       <div className="text-center py-12">
-        <p className="text-gray-600">Nem sikerült betölteni az adatokat</p>
+        <p className="text-gray-600 dark:text-gray-400">Nem sikerült betölteni az adatokat</p>
       </div>
     );
   }
@@ -216,11 +216,11 @@ export function PatientProfileView() {
     <div className="space-y-4 sm:space-y-6">
       <div className="flex flex-col sm:flex-row items-start sm:items-center justify-between gap-3 sm:gap-4">
         <div className="flex-1 min-w-0">
-          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 flex items-center gap-2">
+          <h1 className="text-xl sm:text-2xl lg:text-3xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             <User className="w-5 h-5 sm:w-6 sm:h-6 lg:w-8 lg:h-8 text-medical-primary flex-shrink-0" />
             Adataim
           </h1>
-          <p className="text-sm sm:text-base text-gray-600 mt-1 sm:mt-2">
+          <p className="text-sm sm:text-base text-gray-600 dark:text-gray-400 mt-1 sm:mt-2">
             {editing ? 'Módosítsa személyes adatait' : 'Itt találhatja személyes adatait.'}
           </p>
         </div>
@@ -235,13 +235,13 @@ export function PatientProfileView() {
         )}
       </div>
 
-      <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
         <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
           {/* Name */}
           <div>
             <label className="form-label flex items-center gap-2">
               <User className="w-4 h-4" />
-              Név <span className="text-red-500">*</span>
+              Név <span className="text-red-500 dark:text-red-400">*</span>
             </label>
             {editing ? (
               <input
@@ -254,7 +254,7 @@ export function PatientProfileView() {
                 disabled={saving}
               />
             ) : (
-              <p className="text-gray-900 font-medium">{patient.nev || '-'}</p>
+              <p className="text-gray-900 dark:text-gray-100 font-medium">{patient.nev || '-'}</p>
             )}
           </div>
 
@@ -264,8 +264,8 @@ export function PatientProfileView() {
               <CreditCard className="w-4 h-4" />
               TAJ szám
             </label>
-            <p className="text-gray-900 font-medium">{patient.taj || '-'}</p>
-            <p className="text-xs text-gray-500 mt-1">Nem módosítható</p>
+            <p className="text-gray-900 dark:text-gray-100 font-medium">{patient.taj || '-'}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Nem módosítható</p>
           </div>
 
           {/* Email - Read only */}
@@ -274,8 +274,8 @@ export function PatientProfileView() {
               <Mail className="w-4 h-4" />
               Email cím
             </label>
-            <p className="text-gray-900 font-medium">{patient.email || '-'}</p>
-            <p className="text-xs text-gray-500 mt-1">Nem módosítható</p>
+            <p className="text-gray-900 dark:text-gray-100 font-medium">{patient.email || '-'}</p>
+            <p className="text-xs text-gray-500 dark:text-gray-400 mt-1">Nem módosítható</p>
           </div>
 
           {/* Phone */}
@@ -294,7 +294,7 @@ export function PatientProfileView() {
                 disabled={saving}
               />
             ) : (
-              <p className="text-gray-900 font-medium">{patient.telefonszam || '-'}</p>
+              <p className="text-gray-900 dark:text-gray-100 font-medium">{patient.telefonszam || '-'}</p>
             )}
           </div>
 
@@ -302,7 +302,7 @@ export function PatientProfileView() {
           <div>
             <label className="form-label flex items-center gap-2">
               <Calendar className="w-4 h-4" />
-              Születési dátum <span className="text-red-500">*</span>
+              Születési dátum <span className="text-red-500 dark:text-red-400">*</span>
             </label>
             {editing ? (
               <input
@@ -315,7 +315,7 @@ export function PatientProfileView() {
                 max={new Date().toISOString().split('T')[0]}
               />
             ) : (
-              <p className="text-gray-900 font-medium">
+              <p className="text-gray-900 dark:text-gray-100 font-medium">
                 {patient.szuletesiDatum
                   ? format(new Date(patient.szuletesiDatum), 'yyyy. MMMM d.', { locale: hu })
                   : '-'}
@@ -327,7 +327,7 @@ export function PatientProfileView() {
           <div>
             <label className="form-label flex items-center gap-2">
               <User className="w-4 h-4" />
-              Nem <span className="text-red-500">*</span>
+              Nem <span className="text-red-500 dark:text-red-400">*</span>
             </label>
             {editing ? (
               <select
@@ -343,7 +343,7 @@ export function PatientProfileView() {
                 <option value="nem_ismert">Nem ismert</option>
               </select>
             ) : (
-              <p className="text-gray-900 font-medium">
+              <p className="text-gray-900 dark:text-gray-100 font-medium">
                 {patient.nem === 'ferfi' ? 'Férfi' : patient.nem === 'no' ? 'Nő' : patient.nem || '-'}
               </p>
             )}
@@ -365,7 +365,7 @@ export function PatientProfileView() {
                 disabled={saving}
               />
             ) : (
-              <p className="text-gray-900 font-medium">{patient.cim || '-'}</p>
+              <p className="text-gray-900 dark:text-gray-100 font-medium">{patient.cim || '-'}</p>
             )}
           </div>
 
@@ -382,7 +382,7 @@ export function PatientProfileView() {
                 disabled={saving}
               />
             ) : (
-              <p className="text-gray-900 font-medium">{patient.varos || '-'}</p>
+              <p className="text-gray-900 dark:text-gray-100 font-medium">{patient.varos || '-'}</p>
             )}
           </div>
 
@@ -400,7 +400,7 @@ export function PatientProfileView() {
                 maxLength={10}
               />
             ) : (
-              <p className="text-gray-900 font-medium">{patient.iranyitoszam || '-'}</p>
+              <p className="text-gray-900 dark:text-gray-100 font-medium">{patient.iranyitoszam || '-'}</p>
             )}
           </div>
 
@@ -411,7 +411,7 @@ export function PatientProfileView() {
                 <Calendar className="w-4 h-4" />
                 Felvétel dátuma
               </label>
-              <p className="text-gray-900 font-medium">
+              <p className="text-gray-900 dark:text-gray-100 font-medium">
                 {format(new Date(patient.felvetelDatuma), 'yyyy. MMMM d.', { locale: hu })}
               </p>
             </div>
@@ -420,7 +420,7 @@ export function PatientProfileView() {
 
         {/* Referral Section */}
         <div className="mt-4 sm:mt-6 pt-4 sm:pt-6 border-t">
-          <h3 className="text-xs sm:text-sm font-semibold text-gray-700 mb-3 sm:mb-4">Beutaló adatok</h3>
+          <h3 className="text-xs sm:text-sm font-semibold text-gray-700 dark:text-gray-300 mb-3 sm:mb-4">Beutaló adatok</h3>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 sm:gap-6">
             {/* Referring Doctor */}
             <div>
@@ -438,7 +438,7 @@ export function PatientProfileView() {
                   disabled={saving}
                 />
               ) : (
-                <p className="text-gray-900 font-medium">{patient.beutaloOrvos || '-'}</p>
+                <p className="text-gray-900 dark:text-gray-100 font-medium">{patient.beutaloOrvos || '-'}</p>
               )}
             </div>
 
@@ -458,7 +458,7 @@ export function PatientProfileView() {
                   disabled={saving}
                 />
               ) : (
-                <p className="text-gray-900 font-medium whitespace-pre-wrap">
+                <p className="text-gray-900 dark:text-gray-100 font-medium whitespace-pre-wrap">
                   {patient.beutaloIndokolas || '-'}
                 </p>
               )}
@@ -502,9 +502,9 @@ export function PatientProfileView() {
       <ResearchConsentCard />
 
       {/* GDPR Data Rights Section */}
-      <div className="bg-white rounded-lg border border-gray-200 p-4 sm:p-6">
-        <h2 className="text-base sm:text-lg font-semibold text-gray-900 mb-3 sm:mb-4">Adatvédelmi jogok</h2>
-        <p className="text-xs sm:text-sm text-gray-600 mb-4">
+      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
+        <h2 className="text-base sm:text-lg font-semibold text-gray-900 dark:text-gray-100 mb-3 sm:mb-4">Adatvédelmi jogok</h2>
+        <p className="text-xs sm:text-sm text-gray-600 dark:text-gray-400 mb-4">
           A GDPR és a magyar adatvédelmi törvények szerint Önnek joga van az adataihoz hozzáférni, 
           azokat exportálni, valamint kérni azok törlését.{' '}
           <Link href="/privacy-hu" className="text-medical-primary hover:underline">
@@ -533,7 +533,7 @@ export function PatientProfileView() {
 
           <button
             onClick={() => setShowDeleteConfirm(true)}
-            className="flex items-center justify-center gap-2 text-sm py-2 px-4 border border-red-300 text-red-600 rounded-md hover:bg-red-50 transition-colors"
+            className="flex items-center justify-center gap-2 text-sm py-2 px-4 border border-red-300 dark:border-red-700 text-red-600 dark:text-red-300 rounded-md hover:bg-red-50 dark:hover:bg-red-950/40 transition-colors"
           >
             <Trash2 className="w-4 h-4" />
             Fiók törlése
@@ -541,16 +541,16 @@ export function PatientProfileView() {
         </div>
 
         {showDeleteConfirm && (
-          <div className="mt-4 p-4 bg-red-50 border border-red-200 rounded-lg">
+          <div className="mt-4 p-4 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-lg">
             <div className="flex items-start gap-3">
-              <AlertTriangle className="w-5 h-5 text-red-500 flex-shrink-0 mt-0.5" />
+              <AlertTriangle className="w-5 h-5 text-red-500 dark:text-red-400 flex-shrink-0 mt-0.5" />
               <div className="flex-1">
-                <h3 className="text-sm font-semibold text-red-800">Fiók törlése</h3>
-                <p className="text-xs sm:text-sm text-red-700 mt-1">
+                <h3 className="text-sm font-semibold text-red-800 dark:text-red-300">Fiók törlése</h3>
+                <p className="text-xs sm:text-sm text-red-700 dark:text-red-300 mt-1">
                   A fiók törlésével a személyes adatai (email, telefon, cím) anonimizálva lesznek, 
                   és a jövőbeli időpontjai törlésre kerülnek. 
                 </p>
-                <p className="text-xs sm:text-sm text-red-700 mt-2 font-medium">
+                <p className="text-xs sm:text-sm text-red-700 dark:text-red-300 mt-2 font-medium">
                   A magyar egészségügyi törvény (1997. évi CLIV. tv.) szerint az egészségügyi 
                   nyilvántartásokat az utolsó kezeléstől számított 30 évig meg kell őrizni. 
                   Ezek az adatok korlátozott hozzáféréssel megőrzésre kerülnek.
@@ -566,7 +566,7 @@ export function PatientProfileView() {
                   <button
                     onClick={() => setShowDeleteConfirm(false)}
                     disabled={deleting}
-                    className="text-sm py-1.5 px-4 border border-gray-300 text-gray-700 rounded-md hover:bg-gray-100 transition-colors"
+                    className="text-sm py-1.5 px-4 border border-gray-300 dark:border-gray-700 text-gray-700 dark:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors"
                   >
                     Mégse
                   </button>

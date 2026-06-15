@@ -71,18 +71,18 @@ export function RevertUnsuccessfulModal({
       aria-modal="true"
       aria-labelledby="revert-unsuccessful-modal-title"
     >
-      <div className="bg-white rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
+      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
         <div className="flex items-center justify-between p-4 border-b">
           <h2
             id="revert-unsuccessful-modal-title"
-            className="text-lg font-semibold text-gray-900 flex items-center gap-2"
+            className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2"
           >
-            <Undo2 className="w-5 h-5 text-gray-600" />
+            <Undo2 className="w-5 h-5 text-gray-600 dark:text-gray-400" />
             Sikertelen-jelölés visszavonása
           </h2>
           <button
             onClick={onClose}
-            className="text-gray-500 hover:text-gray-700 p-1"
+            className="text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300 p-1"
             aria-label="Bezárás"
             type="button"
           >
@@ -91,17 +91,17 @@ export function RevertUnsuccessfulModal({
         </div>
 
         <div className="p-4 space-y-3">
-          <div className="text-sm text-gray-700 bg-gray-50 border border-gray-200 p-3 rounded">
-            <div className="font-medium text-gray-900">
+          <div className="text-sm text-gray-700 dark:text-gray-300 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 p-3 rounded">
+            <div className="font-medium text-gray-900 dark:text-gray-100">
               {stepLabel ?? 'Munkafázis'}
               {attemptNumber != null && (
-                <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-gray-200 text-gray-700 align-middle">
+                <span className="ml-2 text-xs px-1.5 py-0.5 rounded bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 align-middle">
                   {attemptNumber}. próba
                 </span>
               )}
             </div>
             {appointmentStart && (
-              <div className="text-xs text-gray-600 mt-1">
+              <div className="text-xs text-gray-600 dark:text-gray-400 mt-1">
                 {new Date(appointmentStart).toLocaleString('hu-HU', {
                   year: 'numeric',
                   month: 'short',
@@ -112,23 +112,23 @@ export function RevertUnsuccessfulModal({
               </div>
             )}
             {originalFailedReason && (
-              <div className="text-xs text-gray-700 mt-2 italic">
+              <div className="text-xs text-gray-700 dark:text-gray-300 mt-2 italic">
                 Eredeti indok: „{originalFailedReason}"
               </div>
             )}
-            <div className="text-xs text-gray-500 mt-1 font-mono opacity-70 break-all">
+            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1 font-mono opacity-70 break-all">
               ID: {appointmentId}
             </div>
           </div>
 
-          <div className="text-xs text-amber-800 bg-amber-50 border border-amber-200 p-2 rounded">
+          <div className="text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-2 rounded">
             A visszavonás után a próba újra <strong>pending</strong> állapotba
             kerül; ha közben már lefoglaltad a következő próbát, a sorszámok
             ahhoz képest értelmeződnek (újrahúzza a worklist a frissítés után).
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 mb-1">
+            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">
               Indok (min {MIN_REASON_LENGTH} karakter) *
             </label>
             <textarea
@@ -140,7 +140,7 @@ export function RevertUnsuccessfulModal({
               maxLength={500}
               autoFocus
             />
-            <div className="flex justify-between text-xs text-gray-500 mt-1">
+            <div className="flex justify-between text-xs text-gray-500 dark:text-gray-400 mt-1">
               <span>
                 {trimmed.length < MIN_REASON_LENGTH
                   ? `Még ${MIN_REASON_LENGTH - trimmed.length} karakter szükséges`
@@ -151,7 +151,7 @@ export function RevertUnsuccessfulModal({
           </div>
 
           {error && (
-            <div className="text-sm text-red-700 bg-red-50 border border-red-200 p-2 rounded">
+            <div className="text-sm text-red-700 dark:text-red-300 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 p-2 rounded">
               {error}
             </div>
           )}
