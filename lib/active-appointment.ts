@@ -176,8 +176,12 @@ export async function probeAppointmentsWorkPhaseIdColumn(
        ) AS exists`
     );
     appointmentsWorkPhaseIdColumnExists = res.rows[0]?.exists === true;
+    return appointmentsWorkPhaseIdColumnExists;
   } catch {
-    appointmentsWorkPhaseIdColumnExists = false;
+    // Transient probe failure (e.g. connection-pool saturation): do NOT cache a
+    // negative result — caching `false` would disable work_phase_id (and the
+    // one-active-per-work-phase double-booking guard) process-wide until restart.
+    // Leave the cache unset so a later call can determine the real answer.
+    return false;
   }
-  return appointmentsWorkPhaseIdColumnExists;
 }

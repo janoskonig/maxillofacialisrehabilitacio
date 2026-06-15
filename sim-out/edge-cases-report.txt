@@ -1,0 +1,24 @@
+22 passed, 0 failed
+
+PASS	exactly 1 of 5 concurrent bookings succeeds	got 1
+PASS	exactly 1 appointment row on the slot	got 1
+PASS	slot ends in state=booked	got booked
+PASS	try_in_1 before its prerequisites → blocked	code=STEP_PREREQUISITE_NOT_MET
+PASS	out-of-order booking with override → succeeds	
+PASS	override is audited	audit rows=1
+PASS	try_in_1 allowed when earlier phases are skipped	
+PASS	past slot → rejected	
+PASS	first-bookable returns kind=none (no crash)	kind=none
+PASS	80-char code: projection does not throw	
+PASS	80-char code: intents projected	projected=2
+PASS	length guard flags the 81-char code	offenders=4
+PASS	orphaned held slot is freed	state=free
+PASS	legitimately-held slot is preserved	state=held
+PASS	reaper reported freeing the orphan	
+PASS	nextRequiredStep does not throw without a pathway	
+PASS	returns a blocked/consult fallback (not undefined)	{"work_phase_code":"consult_1","label":"Első konzultáció","pool":"consult","duration_minutes":30,"earliest_date":"2026-0
+PASS	08:00 local detected in summer and winter alike	summer=8 winter=8
+PASS	control-only pathway yields a bookable next step	kind=slot
+PASS	only one concurrent booking of the same phase succeeds	got 1
+PASS	at most one active appointment for the work phase	got 1
+PASS	generate + project handle duplicate codes without throwing	
