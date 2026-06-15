@@ -144,7 +144,10 @@ async function getForecastProgressInputs(
   pool: Awaited<ReturnType<typeof getDbPool>>,
   episodeId: string
 ): Promise<{ completedVisits: number; remainingSteps: number | null }> {
-  const mergedFilter = await getMergedFilterFragment(pool, 'episode_work_phases');
+  // Az alias a lenti query-ben `ewp` — a fragmentnek is ezt kell hivatkoznia,
+  // különben `42P01 invalid reference to FROM-clause entry for table
+  // "episode_work_phases"` (ugyanaz a hiba, mint a plan-validation route-ban volt).
+  const mergedFilter = await getMergedFilterFragment(pool, 'ewp');
   const [apptRes, stepRes] = await Promise.all([
     pool.query(
       `SELECT COUNT(*)::int AS c FROM appointments WHERE episode_id = $1 AND appointment_status = 'completed'`,

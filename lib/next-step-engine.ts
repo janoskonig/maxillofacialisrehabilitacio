@@ -260,7 +260,26 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
   // When episode_work_phases exist, use them as SSOT (handles both pathway and tooth-treatment phases).
   if (episodeWorkPhases) {
     const resolvedSteps = episodeWorkPhases.filter((s) => s.status === 'completed' || s.status === 'skipped');
-    const pendingStep = episodeWorkPhases.find((s) => s.status === 'pending' || s.status === 'scheduled');
+
+    // A már LEFOGLALT (jövőbeli időponttal bíró) lépéseket nem ajánljuk újra
+    // „következő lépésként" — különben a forecast az első, már befoglalt fázist
+    // adná vissza (gyakran múltbeli ablakkal), ellentmondva az idővonalnak.
+    // A foglalásokat step_code szerint nézzük, ahogy az allPendingSteps is.
+    const bookedByCode = new Map<string, Date>();
+    try {
+      const bookedRes = await pool.query(sqlBookedFutureAppointmentsWithEffectiveStep(), [[episodeId]]);
+      for (const row of bookedRes.rows as Array<{ step_code: string | null; effective_start: Date | string }>) {
+        if (row.step_code) bookedByCode.set(row.step_code, new Date(row.effective_start));
+      }
+    } catch {
+      /* tolerate — foglalás-infó nélkül a korábbi viselkedésre esünk vissza */
+    }
+
+    const pendingCandidates = episodeWorkPhases.filter((s) => s.status === 'pending' || s.status === 'scheduled');
+    // Első olyan pending lépés, amelyhez még NINCS jövőbeli foglalás. Ha minden
+    // hátralévő lépés már foglalt, a régi viselkedésre esünk vissza (első pending).
+    const pendingStep =
+      pendingCandidates.find((s) => !bookedByCode.has(s.work_phase_code)) ?? pendingCandidates[0];
     if (!pendingStep) {
       const lastStep = pathwayWorkPhases?.[pathwayWorkPhases.length - 1];
       const sentinel = lastStep ?? episodeWorkPhaseAsPathwayTemplate(episodeWorkPhases[episodeWorkPhases.length - 1]);

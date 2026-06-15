@@ -20,7 +20,10 @@ async function loadPlanSteps(
   pool: Awaited<ReturnType<typeof getDbPool>>,
   episodeId: string
 ): Promise<PlanStepInput[]> {
-  const mergedFilter = await getMergedFilterFragment(pool, 'episode_work_phases');
+  // Az alias a lenti query-ben `ewp` — a fragmentnek is ezt kell hivatkoznia,
+  // különben `42P01 invalid reference to FROM-clause entry for table
+  // "episode_work_phases"` (a teljes táblanév aliasolás után nem hivatkozható).
+  const mergedFilter = await getMergedFilterFragment(pool, 'ewp');
   const r = await pool.query(
     `SELECT work_phase_code, pool, duration_minutes, status, custom_label
      FROM episode_work_phases ewp
