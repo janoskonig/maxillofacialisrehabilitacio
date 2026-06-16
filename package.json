@@ -110,6 +110,7 @@
     "eslint": "^8",
     "eslint-config-next": "14.2.28",
     "happy-dom": "^20.7.0",
+    "puppeteer-core": "^23.11.1",
     "sharp": "^0.34.5",
     "tsx": "^4.7.0",
     "vitest": "^4.0.18"
