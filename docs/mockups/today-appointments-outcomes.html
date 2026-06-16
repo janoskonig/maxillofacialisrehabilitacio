@@ -1,0 +1,258 @@
+<!doctype html>
+<html lang="hu">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mockup – Mai időpontok + kimenetek</title>
+<style>
+  :root{
+    --primary:#0d9488; --primary-bg:#0d948814;
+    --ink:#0f172a; --muted:#64748b; --line:#e2e8f0; --card:#ffffff; --bg:#f1f5f9;
+    --green:#16a34a; --greenbg:#f0fdf4; --amber:#d97706; --amberbg:#fffbeb;
+    --red:#dc2626; --redbg:#fef2f2; --blue:#2563eb; --bluebg:#eff6ff;
+    --purple:#7c3aed; --purplebg:#f5f3ff; --teal:#0891b2; --tealbg:#ecfeff;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Inter,Roboto,sans-serif;color:var(--ink);padding:28px}
+  h1{font-size:20px;margin:0 0 4px}
+  .sub{color:var(--muted);font-size:13px;margin-bottom:22px}
+  .cols{display:flex;gap:22px;align-items:flex-start;flex-wrap:wrap}
+  .widget{background:var(--card);border:1px solid var(--line);border-radius:14px;box-shadow:0 1px 3px #0000000d;width:430px;overflow:hidden}
+  .whead{display:flex;align-items:center;gap:8px;padding:13px 16px;border-bottom:1px solid var(--line);font-weight:700;font-size:14px}
+  .whead .ic{width:26px;height:26px;border-radius:7px;background:var(--primary-bg);color:var(--primary);display:flex;align-items:center;justify-content:center;font-size:14px}
+  .wbody{padding:10px;display:flex;flex-direction:column;gap:9px}
+  .optlabel{display:inline-block;font-size:11px;font-weight:700;letter-spacing:.04em;text-transform:uppercase;color:var(--primary);background:var(--primary-bg);padding:3px 9px;border-radius:999px;margin-bottom:8px}
+
+  .row{border:1px solid var(--line);border-radius:11px;padding:11px 12px;position:relative}
+  .row.up{border-color:#0d948840;background:linear-gradient(180deg,#0d94880a,#7c3aed08)}
+  .row.attn{border-color:#d9770655;background:var(--amberbg)}
+  .toprow{display:flex;align-items:center;gap:8px;margin-bottom:6px}
+  .time{font-weight:800;font-size:15px;font-variant-numeric:tabular-nums}
+  .chip{font-size:11px;font-weight:700;padding:2px 8px;border-radius:999px;display:inline-flex;gap:4px;align-items:center;white-space:nowrap}
+  .c-munka{color:var(--blue);background:var(--bluebg)}
+  .c-konz{color:var(--purple);background:var(--purplebg)}
+  .c-kontroll{color:var(--teal);background:var(--tealbg)}
+  .c-recall{color:#be185d;background:#fdf2f8}
+  .c-egyeb{color:var(--muted);background:#f1f5f9;border:1px dashed #cbd5e1}
+  .name{font-weight:700;font-size:14px}
+  .meta{color:var(--muted);font-size:12px;margin-top:2px;display:flex;gap:10px;flex-wrap:wrap}
+  .step{font-size:12px;color:#334155;margin-top:3px}
+  .step b{color:var(--ink)}
+  .spacer{flex:1}
+
+  .outcomes{display:flex;gap:6px;margin-top:9px;flex-wrap:wrap}
+  .btn{font-size:11.5px;font-weight:700;padding:5px 9px;border-radius:8px;border:1px solid;cursor:default;display:inline-flex;align-items:center;gap:4px}
+  .b-done{color:var(--green);background:var(--greenbg);border-color:#16a34a33}
+  .b-retry{color:var(--amber);background:var(--amberbg);border-color:#d9770633}
+  .b-noshow{color:var(--red);background:var(--redbg);border-color:#dc262633}
+  .b-cancel{color:#475569;background:#f8fafc;border-color:var(--line)}
+
+  .statusbadge{font-size:11px;font-weight:700;padding:3px 9px;border-radius:999px;display:inline-flex;gap:5px;align-items:center}
+  .s-done{color:var(--green);background:var(--greenbg)}
+  .s-noshow{color:var(--red);background:var(--redbg)}
+  .note{font-size:12px;color:#334155;background:#f8fafc;border:1px solid var(--line);border-radius:8px;padding:6px 8px;margin-top:8px}
+
+  .rebook{margin-top:9px;border-top:1px dashed #d9770655;padding-top:9px;display:flex;align-items:center;gap:10px}
+  .rebook .lbl{font-size:12px;font-weight:700;color:var(--amber);display:flex;align-items:center;gap:6px}
+  .rebook .go{margin-left:auto;font-size:12px;font-weight:800;color:#fff;background:var(--primary);padding:6px 12px;border-radius:8px}
+
+  /* edit form mock */
+  .form{margin-top:10px;border-top:1px solid var(--line);padding-top:9px;display:flex;flex-direction:column;gap:8px}
+  .form label{font-size:11px;font-weight:700;color:var(--muted)}
+  .sel,.ta{width:100%;border:1px solid var(--line);border-radius:8px;padding:7px 8px;font-size:12px;background:#fff;color:var(--ink)}
+  .ta{resize:none}
+  .req{color:var(--red)}
+  .formbtns{display:flex;gap:8px;justify-content:flex-end}
+  .ghost{font-size:12px;font-weight:700;padding:6px 12px;border-radius:8px;border:1px solid var(--line);background:#fff;color:#475569}
+  .save{font-size:12px;font-weight:800;padding:6px 12px;border-radius:8px;background:var(--primary);color:#fff;border:none}
+
+  /* Option B board */
+  .board{width:560px}
+  .bsection{padding:8px 10px}
+  .bhead{display:flex;align-items:center;gap:8px;font-size:12px;font-weight:800;letter-spacing:.03em;text-transform:uppercase;color:var(--muted);margin:6px 4px 8px}
+  .bcount{background:#e2e8f0;color:#334155;border-radius:999px;font-size:11px;padding:1px 8px}
+  .bcount.attn{background:#fde68a;color:#92400e}
+  .legend{font-size:12px;color:var(--muted);margin-top:18px;max-width:1010px;line-height:1.7}
+  .legend b{color:var(--ink)}
+  .legend code{background:#e2e8f0;border-radius:5px;padding:1px 6px;font-size:11px}
+  .divider{height:1px;background:var(--line);margin:2px 0}
+</style>
+</head>
+<body>
+  <h1>Mockup — „Mai időpontok” + kimenetek (kimenet → újrafoglalás összekötve)</h1>
+  <div class="sub">A meglévő <b>TodaysAppointmentsWidget</b> kibővítése: típus-címke · 4 kimenet · automatikus „újrafoglalás szükséges” jelzés. Két elrendezési változat.</div>
+
+  <div class="cols">
+
+    <!-- ============ OPTION A ============ -->
+    <div class="widget">
+      <div class="whead"><span class="ic">📅</span> Mai időpontok <span class="spacer"></span><span style="font-size:12px;color:var(--muted);font-weight:600">2026-06-15 · 6 db</span></div>
+      <div class="wbody">
+        <span class="optlabel">A változat — soron belüli kibővítés</span>
+
+        <!-- upcoming, treatment phase -->
+        <div class="row up">
+          <div class="toprow">
+            <span class="time">09:30</span>
+            <span class="chip c-munka">🦷 Munkafázis</span>
+            <span class="spacer"></span>
+            <span style="font-size:11px;color:var(--muted)">Dr. Kovács · 2. terem</span>
+          </div>
+          <div class="name">Nagy Béla</div>
+          <div class="step">Lépés: <b>Lenyomatvétel</b> · 1/5 · 1. próba</div>
+          <div class="outcomes">
+            <span class="btn b-done">✓ Teljesült</span>
+            <span class="btn b-retry">↻ Sikertelen – újra kell</span>
+            <span class="btn b-noshow">✗ Nem jött el</span>
+            <span class="btn b-cancel">⊘ Lemondás</span>
+          </div>
+        </div>
+
+        <!-- consultation upcoming -->
+        <div class="row up">
+          <div class="toprow">
+            <span class="time">10:15</span>
+            <span class="chip c-konz">💬 Konzultáció</span>
+            <span class="spacer"></span>
+            <span style="font-size:11px;color:var(--muted)">Dr. Szabó · 1. terem</span>
+          </div>
+          <div class="name">Kiss Anna</div>
+          <div class="step" style="color:var(--muted)">Nem terv-lépés — első konzultáció</div>
+          <div class="outcomes">
+            <span class="btn b-done">✓ Teljesült</span>
+            <span class="btn b-noshow">✗ Nem jött el</span>
+            <span class="btn b-cancel">⊘ Lemondás</span>
+          </div>
+        </div>
+
+        <!-- recall with free-text flag -->
+        <div class="row up">
+          <div class="toprow">
+            <span class="time">11:00</span>
+            <span class="chip c-recall">🔁 Recall</span>
+            <span class="chip c-egyeb">✎ „implantátum kontroll 6h”</span>
+          </div>
+          <div class="name">Tóth Géza</div>
+          <div class="outcomes">
+            <span class="btn b-done">✓ Teljesült</span>
+            <span class="btn b-noshow">✗ Nem jött el</span>
+            <span class="btn b-cancel">⊘ Lemondás</span>
+          </div>
+        </div>
+
+        <div class="divider"></div>
+
+        <!-- completed -->
+        <div class="row">
+          <div class="toprow">
+            <span class="time">08:00</span>
+            <span class="chip c-munka">🦷 Munkafázis</span>
+            <span class="spacer"></span>
+            <span class="statusbadge s-done">✓ Sikeresen teljesült</span>
+          </div>
+          <div class="name">Horváth Eszter</div>
+          <div class="step">Lépés: <b>Próba (try-in)</b> · 3/5</div>
+          <div class="note">„Próba rendben, kis korrekció a 24-en. Következő: véglegesítés.”</div>
+        </div>
+
+        <!-- NO SHOW -> rebook needed (the PR connection) -->
+        <div class="row attn">
+          <div class="toprow">
+            <span class="time">08:45</span>
+            <span class="chip c-munka">🦷 Munkafázis</span>
+            <span class="spacer"></span>
+            <span class="statusbadge s-noshow">✗ Nem jött el</span>
+          </div>
+          <div class="name">Varga Imre</div>
+          <div class="step">Lépés: <b>Lenyomatvétel</b> · 1/4 · 2. próba</div>
+          <div class="rebook">
+            <span class="lbl">⚠ Újrafoglalás szükséges <span style="color:var(--muted);font-weight:600">— a lépés visszanyílt</span></span>
+            <span class="go">Újrafoglalás →</span>
+          </div>
+        </div>
+
+        <!-- unsuccessful (retry) edit form open -->
+        <div class="row attn">
+          <div class="toprow">
+            <span class="time">09:00</span>
+            <span class="chip c-munka">🦷 Munkafázis</span>
+          </div>
+          <div class="name">Balogh Réka</div>
+          <div class="step">Lépés: <b>Véglegesítés</b> · 5/5</div>
+          <div class="form">
+            <div>
+              <label>Kimenet</label>
+              <div class="sel">↻ Sikertelen – újrafoglalás kell</div>
+            </div>
+            <div>
+              <label>Indok <span class="req">*</span> <span style="color:var(--muted);font-weight:600">(kötelező — attempt-outcome)</span></label>
+              <div class="ta" style="min-height:34px;color:var(--muted)">pl. „rossz illeszkedés, új lenyomat kell”…</div>
+            </div>
+            <div class="formbtns"><span class="ghost">Mégse</span><span class="save">Mentés → újrafoglalás</span></div>
+          </div>
+        </div>
+
+      </div>
+    </div>
+
+    <!-- ============ OPTION B ============ -->
+    <div class="widget board">
+      <div class="whead"><span class="ic">📅</span> Mai tábla — állapot szerint <span class="spacer"></span><span style="font-size:12px;color:var(--muted);font-weight:600">2026-06-15</span></div>
+      <div class="wbody" style="gap:4px">
+        <span class="optlabel">B változat — „mai tábla”, teendő szerint csoportosítva</span>
+
+        <!-- group 1 -->
+        <div class="bhead">Hátralévő ma <span class="bcount">3</span></div>
+        <div class="row up">
+          <div class="toprow"><span class="time">09:30</span><span class="chip c-munka">🦷 Munkafázis</span><span class="spacer"></span><span style="font-size:12px;font-weight:700">Nagy Béla</span></div>
+          <div class="meta"><span>Lenyomatvétel · 1/5</span><span>Dr. Kovács · 2. terem</span></div>
+        </div>
+        <div class="row up">
+          <div class="toprow"><span class="time">10:15</span><span class="chip c-konz">💬 Konzultáció</span><span class="spacer"></span><span style="font-size:12px;font-weight:700">Kiss Anna</span></div>
+          <div class="meta"><span>Első konzultáció</span><span>Dr. Szabó · 1. terem</span></div>
+        </div>
+        <div class="row up">
+          <div class="toprow"><span class="time">11:00</span><span class="chip c-recall">🔁 Recall</span><span class="chip c-egyeb">✎ „6h kontroll”</span><span class="spacer"></span><span style="font-size:12px;font-weight:700">Tóth Géza</span></div>
+        </div>
+
+        <!-- group 2 -->
+        <div class="bhead">Lezárandó — kimenet kell <span class="bcount attn">2</span></div>
+        <div class="row">
+          <div class="toprow"><span class="time">08:00</span><span class="chip c-munka">🦷 Munkafázis</span><span class="spacer"></span><span style="font-size:12px;font-weight:700">Horváth Eszter</span></div>
+          <div class="outcomes" style="margin-top:7px">
+            <span class="btn b-done">✓ Teljesült</span><span class="btn b-retry">↻ Sikertelen</span><span class="btn b-noshow">✗ Nem jött el</span><span class="btn b-cancel">⊘ Lemondás</span>
+          </div>
+        </div>
+        <div class="row">
+          <div class="toprow"><span class="time">09:00</span><span class="chip c-konz">💬 Konzultáció</span><span class="spacer"></span><span style="font-size:12px;font-weight:700">Balogh Réka</span></div>
+          <div class="outcomes" style="margin-top:7px">
+            <span class="btn b-done">✓ Teljesült</span><span class="btn b-noshow">✗ Nem jött el</span><span class="btn b-cancel">⊘ Lemondás</span>
+          </div>
+        </div>
+
+        <!-- group 3: rebook -->
+        <div class="bhead">Újrafoglalandó <span class="bcount attn">2</span></div>
+        <div class="row attn">
+          <div class="toprow"><span class="time">08:45</span><span class="chip c-munka">🦷 Munkafázis</span><span class="spacer"></span><span class="statusbadge s-noshow">✗ Nem jött el</span></div>
+          <div class="rebook"><span class="lbl">⚠ Lenyomatvétel · visszanyílt</span><span class="go">Újrafoglalás →</span></div>
+        </div>
+        <div class="row attn">
+          <div class="toprow"><span class="time">07:30</span><span class="chip c-munka">🦷 Munkafázis</span><span class="spacer"></span><span class="statusbadge s-noshow" style="color:#475569;background:#f1f5f9">⊘ Beteg lemondta</span></div>
+          <div class="rebook"><span class="lbl">⚠ Próba · slot felszabadult</span><span class="go">Újrafoglalás →</span></div>
+        </div>
+      </div>
+    </div>
+
+  </div>
+
+  <div class="legend">
+    <b>Típus-címke (flag):</b> a meglévő <code>appointment_type</code> jeleníti meg (<code>elso_konzultacio</code> → 💬 Konzultáció, <code>munkafazis</code> → 🦷 Munkafázis, <code>kontroll</code> → 🔁 Kontroll). Bővítés: <code>recall</code> (a STAGE_6 recall-okhoz) és szabad szöveges <code>type_label</code> mező a „✎” catch-all címkéhez (Egyéb).<br>
+    <b>Kimenetek és mit indítanak (a PR logikája szerint):</b>
+    <b style="color:var(--green)">Teljesült</b> → lépés lezárul (kötelező „mi történt?”).
+    <b style="color:var(--amber)">Sikertelen</b> → <code>attempt-outcome</code> (kötelező indok), lépés visszanyílik → <b>Újrafoglalás szükséges</b>.
+    <b style="color:var(--red)">Nem jött el</b> → slot elhasználva, lépés visszanyílik → <b>Újrafoglalás szükséges</b>.
+    <b style="color:#475569">Lemondás</b> → slot felszabadul, lépés visszanyílik → <b>Újrafoglalás szükséges</b>.
+    Nem-terv időpontnál (konzultáció/recall) nincs visszanyíló lépés — csak a kimenet rögzül.
+  </div>
+</body>
+</html>
