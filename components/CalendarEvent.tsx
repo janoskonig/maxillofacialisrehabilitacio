@@ -1,6 +1,6 @@
 'use client';
 
-import { CheckCircle2, XCircle, AlertCircle, Clock as ClockIcon } from 'lucide-react';
+import { getAppointmentStatusDisplay } from '@/lib/appointment-status-display';
 
 interface CalendarEventProps {
   appointment: {
@@ -20,62 +20,8 @@ interface CalendarEventProps {
 }
 
 export function CalendarEvent({ appointment, onClick, compact = false }: CalendarEventProps) {
-  const getStatusInfo = () => {
-    if (appointment.isLate) {
-      return {
-        label: 'Késett',
-        color: 'text-orange-600 dark:text-orange-300',
-        bgColor: 'bg-orange-50 dark:bg-orange-950/40',
-        borderColor: 'border-orange-300 dark:border-orange-700',
-        icon: ClockIcon
-      };
-    }
-    switch (appointment.appointmentStatus) {
-      case 'cancelled_by_doctor':
-        return {
-          label: 'Lemondva (orvos)',
-          color: 'text-red-600 dark:text-red-300',
-          bgColor: 'bg-red-50 dark:bg-red-950/40',
-          borderColor: 'border-red-300 dark:border-red-700',
-          icon: XCircle
-        };
-      case 'cancelled_by_patient':
-        return {
-          label: 'Lemondva (beteg)',
-          color: 'text-orange-600 dark:text-orange-300',
-          bgColor: 'bg-orange-50 dark:bg-orange-950/40',
-          borderColor: 'border-orange-300 dark:border-orange-700',
-          icon: XCircle
-        };
-      case 'completed':
-        return {
-          label: 'Teljesült',
-          color: 'text-green-600 dark:text-green-300',
-          bgColor: 'bg-green-50 dark:bg-green-950/40',
-          borderColor: 'border-green-300 dark:border-green-700',
-          icon: CheckCircle2
-        };
-      case 'no_show':
-        return {
-          label: 'Nem jelent meg',
-          color: 'text-red-700 dark:text-red-300',
-          bgColor: 'bg-red-100 dark:bg-red-950/60',
-          borderColor: 'border-red-400 dark:border-red-600',
-          icon: AlertCircle
-        };
-      default:
-        return {
-          label: 'Várható',
-          color: 'text-blue-600 dark:text-blue-300',
-          bgColor: 'bg-blue-50 dark:bg-blue-950/40',
-          borderColor: 'border-blue-300 dark:border-blue-700',
-          icon: null
-        };
-    }
-  };
-
-  const statusInfo = getStatusInfo();
-  const StatusIcon = statusInfo.icon;
+  const statusInfo = getAppointmentStatusDisplay(appointment.appointmentStatus, appointment.isLate);
+  const StatusIcon = statusInfo.Icon;
   const startTime = new Date(appointment.startTime);
   const timeString = startTime.toLocaleTimeString('hu-HU', { 
     hour: '2-digit', 

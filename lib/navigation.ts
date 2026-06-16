@@ -10,6 +10,7 @@ import {
   Activity,
   Layers,
   CalendarDays,
+  CalendarCheck,
   CalendarClock,
   Hourglass,
   Gauge,
@@ -52,6 +53,7 @@ export const NAV_GROUPS: NavGroup[] = [
     label: 'Áttekintés',
     items: [
       { id: 'home', label: 'Főoldal', path: '/', icon: Home, roles: 'all', match: (p) => p === '/', mobilePrimary: true },
+      { id: 'today', label: 'Mai időpontok', path: '/today', icon: CalendarCheck, roles: 'all', match: startsWith('/today') },
     ],
   },
   {

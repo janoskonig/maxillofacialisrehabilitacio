@@ -103,6 +103,25 @@ export default function AdminPage() {
           </div>
         ) : effectiveTab === 'folyamatok' ? (
           <div className="space-y-8">
+            {/* Alszekció-választó — ugró hivatkozások a folyamat-szerkesztőkhöz */}
+            <nav className="sticky top-2 z-10 card !p-2 flex flex-wrap gap-1.5" aria-label="Folyamat-szekciók">
+              {[
+                ['#section-treatment-types', '1. Kezeléstípusok'],
+                ['#section-care-pathways', '2. Kezelési utak'],
+                ['#section-step-catalog', '3. Részlépések'],
+                ['#section-stage-catalog', '4. Stádiumok'],
+                ['#section-tooth-treatment-catalog', '5. Fog-szintű típusok'],
+              ].map(([href, label]) => (
+                <a
+                  key={href}
+                  href={href}
+                  className="px-3 py-1.5 rounded-full text-xs font-semibold text-gray-600 dark:text-gray-300 bg-gray-100 dark:bg-gray-800 hover:bg-medical-primary/10 hover:text-medical-primary transition-colors"
+                >
+                  {label}
+                </a>
+              ))}
+            </nav>
+
             <div className="card border-l-4 border-blue-500 bg-blue-50/40 dark:bg-blue-950/40">
               <div className="flex items-start gap-3">
                 <ListOrdered className="w-5 h-5 text-blue-600 dark:text-blue-300 shrink-0 mt-0.5" />

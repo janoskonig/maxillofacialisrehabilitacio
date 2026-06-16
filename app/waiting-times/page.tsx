@@ -3,10 +3,11 @@
 import { useEffect, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
-import { Clock, Calendar, User } from 'lucide-react';
+import { Clock, Calendar, User, TrendingUp, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { AppShell } from '@/components/layout/AppShell';
+import { StatCard } from '@/components/ui/StatCard';
 import { MobileTable } from '@/components/mobile/MobileTable';
 import { MobileKeyValueGrid } from '@/components/mobile/MobileKeyValueGrid';
 
@@ -126,6 +127,10 @@ export default function WaitingTimesPage() {
   }
 
   const currentData = activeTab === 'elso_konzultacio' ? elsoKonzultacioData : munkafazisData;
+  const days = currentData.map((d) => d.waitingTimeDays).filter((n) => typeof n === 'number');
+  const avgDays = days.length ? days.reduce((a, b) => a + b, 0) / days.length : 0;
+  const maxDays = days.length ? Math.max(...days) : 0;
+  const over30 = days.filter((n) => n > 31).length;
 
   return (
     <AppShell title="Várakozási idők" backTo="/" maxWidth="xl">
@@ -167,6 +172,21 @@ export default function WaitingTimesPage() {
             </button>
           </nav>
         </div>
+
+        {/* KPI-k */}
+        {!loadingData && currentData.length > 0 && (
+          <div className="grid grid-cols-1 sm:grid-cols-3 gap-3 mb-5">
+            <StatCard label="Átlagos várakozás" value={`${avgDays.toFixed(1)} nap`} icon={Clock} tone="primary" />
+            <StatCard label="Leghosszabb" value={`${maxDays.toFixed(1)} nap`} icon={TrendingUp} tone="warning" />
+            <StatCard
+              label="30+ nap óta vár"
+              value={over30}
+              icon={AlertTriangle}
+              tone={over30 > 0 ? 'error' : 'neutral'}
+              delta={over30 > 0 ? 'figyelmet igényel' : undefined}
+            />
+          </div>
+        )}
 
         {/* Content */}
         {loadingData ? (
