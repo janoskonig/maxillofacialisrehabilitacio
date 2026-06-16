@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { sendConditionalAppointmentRequestToPatient, sendConditionalAppointmentNotificationToAdmin } from '@/lib/email';
+import { translateUniqueViolation } from '@/lib/appointment-constraint-errors';
 import { logger } from '@/lib/logger';
 import { randomBytes } from 'crypto';
 
@@ -122,6 +123,27 @@ export const POST = roleHandler(['admin'], async (req, { auth }) => {
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    // Re-lock the slot inside the transaction and re-check its canonical `state`
+    // (not just the legacy `status`) to prevent a concurrent booking from racing
+    // in between the pre-check above and the INSERT below.
+    const lockedSlot = await client.query(
+      `SELECT id, state, status FROM available_time_slots WHERE id = $1 FOR UPDATE`,
+      [timeSlotId],
+    );
+    if (lockedSlot.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return NextResponse.json({ error: 'Időpont nem található' }, { status: 404 });
+    }
+    const lockedState = lockedSlot.rows[0].state ?? (lockedSlot.rows[0].status === 'available' ? 'free' : 'booked');
+    if (lockedState !== 'free') {
+      await client.query('ROLLBACK');
+      return NextResponse.json(
+        { error: 'Ezt az időpontot időközben más foglalta le.', code: 'SLOT_ALREADY_BOOKED' },
+        { status: 409 },
+      );
+    }
+
     const alternativeIdsJson = JSON.stringify(alternativeIds);
     const appointmentResult = await client.query(
       `INSERT INTO appointments (patient_id, time_slot_id, created_by, dentist_email, approval_status, approval_token, alternative_time_slot_ids, current_alternative_index, appointment_type)
@@ -143,9 +165,11 @@ export const POST = roleHandler(['admin'], async (req, { auth }) => {
 
     const appointment = appointmentResult.rows[0];
 
+    // Keep legacy `status` and canonical `state` in sync (the booking paths only
+    // consume slots where `state='free'`, so leaving `state` stale would diverge).
     await client.query(
-      'UPDATE available_time_slots SET status = $1 WHERE id = $2',
-      ['booked', timeSlotId]
+      "UPDATE available_time_slots SET status = 'booked', state = 'booked' WHERE id = $1",
+      [timeSlotId]
     );
 
     await client.query('COMMIT');
@@ -216,6 +240,15 @@ export const POST = roleHandler(['admin'], async (req, { auth }) => {
     }, { status: 201 });
   } catch (error) {
     await client.query('ROLLBACK').catch(() => {});
+    // A concurrent booking that beats us to the UNIQUE(time_slot_id) constraint
+    // surfaces as a friendly 409 instead of a raw 500.
+    const translated = translateUniqueViolation(error);
+    if (translated) {
+      return NextResponse.json(
+        { error: translated.error, code: translated.code, hint: translated.hint },
+        { status: translated.status },
+      );
+    }
     throw error;
   } finally {
     client.release();

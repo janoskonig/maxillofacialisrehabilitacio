@@ -20,11 +20,12 @@ describe('isAppointmentActive', () => {
     expect(isAppointmentActive('in_progress')).toBe(true);
   });
 
-  it('keeps no_show ACTIVE (matches the unique-index predicate)', () => {
-    // The plan deliberately keeps no_show "active" in this layer so the
-    // worklist guard matches `idx_appointments_unique_pending_step` semantics.
-    // No-show requires an explicit cancel before re-booking the slot.
-    expect(isAppointmentActive('no_show')).toBe(true);
+  it('treats no_show as step-releasing (migration 059)', () => {
+    // A no-show is a consumed past attempt (the patient missed the visit), like
+    // `unsuccessful`. It releases the work phase for a new attempt on a fresh
+    // slot — matching the attempt-counting semantics — while the slot itself
+    // stays consumed. Mirrors the post-059 unique-index predicate.
+    expect(isAppointmentActive('no_show')).toBe(false);
   });
 
   it('treats cancelled statuses as inactive', () => {
@@ -70,11 +71,11 @@ describe('isAppointmentUnsuccessful', () => {
 });
 
 describe('canonical SQL fragments', () => {
-  it('ACTIVE fragment includes cancelled + unsuccessful but excludes no_show', () => {
+  it('ACTIVE fragment lists cancelled + unsuccessful + no_show as releasing (post-059)', () => {
     expect(SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT).toContain('cancelled_by_doctor');
     expect(SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT).toContain('cancelled_by_patient');
     expect(SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT).toContain("'unsuccessful'");
-    expect(SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT).not.toContain("'no_show'");
+    expect(SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT).toContain("'no_show'");
   });
 
   it('VISIBLE fragment includes no_show + unsuccessful in the hidden list', () => {

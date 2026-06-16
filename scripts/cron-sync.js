@@ -231,6 +231,13 @@ async function callEndpoint(path, label) {
       await callEndpoint('/api/feedback/summary/cron', 'Feedback summary');
     }
 
+    // Stuck-slot reaper — 5 percenként. Felszabadítja a jövőbeli, 'held'/'offered'
+    // állapotban ragadt (élő hold nélküli) slotokat, hogy újra foglalhatók legyenek.
+    // A művelet idempotens és csak orphan slotokat érint, így a tág ablak biztonságos.
+    if (minute % 5 === 0) {
+      await callEndpoint('/api/scheduling/stuck-slot-reaper', 'Stuck-slot reaper');
+    }
+
     // Admin összegyűjtő email: minden cron futáskor hívjuk; a szerver max. ADMIN_NOTIFICATION_BATCH_INTERVAL_HOURS (alap 3) szerint küld.
     await callEndpoint('/api/admin/daily-summary', 'Admin notification batch summary');
 

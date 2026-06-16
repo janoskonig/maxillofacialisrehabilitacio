@@ -19,6 +19,7 @@ import {
   type UnsuccessfulAttemptConfirmPayload,
 } from './UnsuccessfulAttemptModal';
 import { RevertUnsuccessfulModal } from './RevertUnsuccessfulModal';
+import { formatApiErrorParts } from '@/lib/extract-api-error';
 import {
   MarkCompletedRetroModal,
   type MarkCompletedRetroPayload,
@@ -192,7 +193,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
       });
       if (!patchRes.ok) {
         const data = await patchRes.json();
-        throw new Error(data.error ?? 'Hiba történt');
+        throw new Error(formatApiErrorParts(data, patchRes, 'Hiba történt'));
       }
       await fetchWorklist();
     } finally {
@@ -291,7 +292,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
         return;
       }
 
-      throw new Error(data.error ?? 'Hiba történt');
+      throw new Error(formatApiErrorParts(data, res, 'Hiba történt'));
     } catch (e) {
       setLocal((prev) => {
         const next = { ...prev };
@@ -639,7 +640,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
     });
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data?.error ?? 'Sikertelen-jelölés nem sikerült.');
+      throw new Error(formatApiErrorParts(data, res, 'Sikertelen-jelölés nem sikerült.'));
     }
 
     // Frissítjük a worklist-et — most a step pending lesz, és a most-sikertelen
@@ -676,7 +677,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
     });
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data?.error ?? 'Visszavonás nem sikerült.');
+      throw new Error(formatApiErrorParts(data, res, 'Visszavonás nem sikerült.'));
     }
     await fetchWorklist();
   };

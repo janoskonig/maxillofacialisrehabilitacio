@@ -44,7 +44,7 @@ export function Toast({ message, type = 'info', isVisible, onClose, duration = 3
     <div className="animate-slide-up">
       <div className={`${colorClass} border rounded-lg shadow-lg p-4 min-w-[300px] max-w-[500px] flex items-start gap-3`}>
         <Icon className="w-5 h-5 flex-shrink-0 mt-0.5" />
-        <div className="flex-1 text-sm font-medium">{message}</div>
+        <div className="flex-1 text-sm font-medium whitespace-pre-line break-words">{message}</div>
         <button
           onClick={onClose}
           className="flex-shrink-0 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"

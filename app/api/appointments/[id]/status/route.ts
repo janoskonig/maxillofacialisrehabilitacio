@@ -36,7 +36,7 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
 
   if (normalisedStatus === 'completed' && (!completionNotes || completionNotes.trim() === '')) {
     return NextResponse.json(
-      { error: 'A "mi történt?" mező kitöltése kötelező sikeresen teljesült időpont esetén' },
+      { error: 'A "mi történt?" mező kitöltése kötelező sikeresen teljesült időpont esetén', code: 'COMPLETION_NOTES_REQUIRED' },
       { status: 400 }
     );
   }
@@ -76,7 +76,7 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
     if (appointmentResult.rows.length === 0) {
       await client.query('ROLLBACK');
       return NextResponse.json(
-        { error: 'Időpont nem található' },
+        { error: 'Időpont nem található', code: 'APPOINTMENT_NOT_FOUND' },
         { status: 404 }
       );
     }
@@ -181,14 +181,17 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
       normalisedStatus === 'no_show';
 
     if (isCancelOrNoShow) {
-      // Ha az időpont korábban `completed` volt, és az EWP ehhez az appointmenthez
-      // kötődött (completed vagy scheduled + appointment_id), a fázist visszanyitjuk
-      // `pending`-re — különben „completed” fázis + lemondott időpont inkonzisztencia.
-      if (
-        oldStatus === 'completed' &&
-        episodeIdForEwp &&
-        stepCodeForEwp
-      ) {
+      // Ezen a ponton már `isCancelOrNoShow` (cancelled_by_doctor /
+      // cancelled_by_patient / no_show). MINDEGYIK esetben vissza kell nyitni a
+      // kezelési fázist `pending`-re és leoldani a foglalás-linket, ha az EWP
+      // erre az appointmentre mutatott (completed VAGY scheduled státuszból):
+      //   • completed → cancel/no_show: a korábban lezárt fázis újranyílik.
+      //   • scheduled → cancel/no_show: a befoglalt fázis újra foglalhatóvá válik.
+      // Enélkül az EWP `scheduled` maradna a halott (lemondott / meg-nem-jelent)
+      // foglaláshoz láncolva, a worklist nem mutatná újra-foglalandóként, és
+      // `EWP_DANGLING_APPOINTMENT_LINK` integritás-sértés keletkezne. A no_show
+      // slotja elhasználva marad (lásd lentebb), a cancelled slotja felszabadul.
+      if (episodeIdForEwp && stepCodeForEwp) {
         const ewp = await findEwpForAppointmentRevert(client, {
           episodeId: episodeIdForEwp,
           stepCode: stepCodeForEwp,

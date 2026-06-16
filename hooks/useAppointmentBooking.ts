@@ -3,6 +3,7 @@
 import { useState, useEffect } from 'react';
 import { getCurrentUser } from '@/lib/auth';
 import { toLocalISOString } from '@/lib/dateUtils';
+import { toUserMessage } from '@/lib/extract-api-error';
 
 export type AppointmentType = 'elso_konzultacio' | 'munkafazis' | 'kontroll';
 export type AppointmentStatus =
@@ -306,11 +307,12 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
         return { success: true };
       }
 
-      const data = await response.json();
-      return { success: false, error: data.error || 'Hiba történt az időpont foglalásakor' };
+      // A visszaadott `error` a szerver valódi üzenetét + a [KÓD · correlationId]
+      // nyomonkövetési címkét tartalmazza, hogy a hiba forrása mindig kiderüljön.
+      return { success: false, error: await toUserMessage(response, 'Hiba történt az időpont foglalásakor') };
     } catch (error) {
       console.error('Error booking appointment:', error);
-      return { success: false, error: 'Hiba történt az időpont foglalásakor' };
+      return { success: false, error: 'Hiba történt az időpont foglalásakor (hálózati hiba)' };
     }
   };
 
@@ -326,11 +328,10 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
         return { success: true };
       }
 
-      const data = await response.json();
-      return { success: false, error: data.error || 'Hiba történt az időpont lemondásakor' };
+      return { success: false, error: await toUserMessage(response, 'Hiba történt az időpont lemondásakor') };
     } catch (error) {
       console.error('Error cancelling appointment:', error);
-      return { success: false, error: 'Hiba történt az időpont lemondásakor' };
+      return { success: false, error: 'Hiba történt az időpont lemondásakor (hálózati hiba)' };
     }
   };
 
@@ -354,11 +355,10 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
         return { success: true };
       }
 
-      const data = await response.json();
-      return { success: false, error: data.error || 'Hiba történt az időpont módosításakor' };
+      return { success: false, error: await toUserMessage(response, 'Hiba történt az időpont módosításakor') };
     } catch (error) {
       console.error('Error modifying appointment:', error);
-      return { success: false, error: 'Hiba történt az időpont módosításakor' };
+      return { success: false, error: 'Hiba történt az időpont módosításakor (hálózati hiba)' };
     }
   };
 
@@ -381,11 +381,10 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
         return { success: true };
       }
 
-      const data = await response.json();
-      return { success: false, error: data.error || 'Hiba történt az időpont státuszának frissítésekor' };
+      return { success: false, error: await toUserMessage(response, 'Hiba történt az időpont státuszának frissítésekor') };
     } catch (error) {
       console.error('Error updating appointment status:', error);
-      return { success: false, error: 'Hiba történt az időpont státuszának frissítésekor' };
+      return { success: false, error: 'Hiba történt az időpont státuszának frissítésekor (hálózati hiba)' };
     }
   };
 
@@ -406,14 +405,13 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
         return { success: true };
       }
 
-      const data = await response.json();
       return {
         success: false,
-        error: data.error || 'A sikertelen-jelölés nem sikerült',
+        error: await toUserMessage(response, 'A sikertelen-jelölés nem sikerült'),
       };
     } catch (error) {
       console.error('Error marking appointment unsuccessful:', error);
-      return { success: false, error: 'A sikertelen-jelölés nem sikerült' };
+      return { success: false, error: 'A sikertelen-jelölés nem sikerült (hálózati hiba)' };
     }
   };
 
@@ -434,14 +432,13 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
         return { success: true };
       }
 
-      const data = await response.json();
       return {
         success: false,
-        error: data.error || 'A visszavonás nem sikerült',
+        error: await toUserMessage(response, 'A visszavonás nem sikerült'),
       };
     } catch (error) {
       console.error('Error reverting unsuccessful appointment:', error);
-      return { success: false, error: 'A visszavonás nem sikerült' };
+      return { success: false, error: 'A visszavonás nem sikerült (hálózati hiba)' };
     }
   };
 

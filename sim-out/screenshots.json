@@ -1,0 +1,50 @@
+[
+  {
+    "name": "01-login",
+    "url": "/login",
+    "file": "sim-out/01-login.png",
+    "ok": true
+  },
+  {
+    "name": "02-dashboard",
+    "url": "/",
+    "file": "sim-out/02-dashboard.png",
+    "ok": true
+  },
+  {
+    "name": "03-treatment-plans",
+    "url": "/treatment-plans",
+    "file": "sim-out/03-treatment-plans.png",
+    "ok": true
+  },
+  {
+    "name": "04-episode-stages",
+    "url": "/patients/abc3a966-b4f1-423c-aee1-f139868af274/stages",
+    "file": "sim-out/04-episode-stages.png",
+    "ok": true
+  },
+  {
+    "name": "05-gantt-timeline",
+    "url": "/patients/stages/gantt",
+    "file": "sim-out/05-gantt-timeline.png",
+    "ok": true
+  },
+  {
+    "name": "06-calendar",
+    "url": "/calendar",
+    "file": "sim-out/06-calendar.png",
+    "ok": true
+  },
+  {
+    "name": "07-pipeline",
+    "url": "/patients/pipeline",
+    "file": "sim-out/07-pipeline.png",
+    "ok": true
+  },
+  {
+    "name": "08-tasks-worklist",
+    "url": "/tasks/overview",
+    "file": "sim-out/08-tasks-worklist.png",
+    "ok": true
+  }
+]

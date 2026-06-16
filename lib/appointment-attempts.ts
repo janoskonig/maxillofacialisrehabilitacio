@@ -97,8 +97,12 @@ export async function probeAttemptColumns(db: InformationSchemaQueryable): Promi
        ) AS exists`
     );
     attemptColumnsExist = res.rows[0]?.exists === true;
+    return attemptColumnsExist;
   } catch {
-    attemptColumnsExist = false;
+    // Átmeneti probe-hiba (pl. pool-telítettség): NEM cache-elünk negatív
+    // eredményt — egy `false` itt a folyamat újraindításáig kikapcsolná az
+    // attempt-számlálást és a sikertelen-próba előzményt. Hagyjuk a cache-t
+    // beállítatlanul, hogy egy későbbi hívás meghatározhassa a valódi értéket.
+    return false;
   }
-  return attemptColumnsExist;
 }

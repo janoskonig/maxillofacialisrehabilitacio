@@ -106,12 +106,19 @@ export function mapServerErrorToUiAction(err: {
     };
   }
 
-  // No code (proxy HTML, fetch fail)
+  // No code (proxy HTML, fetch fail). Still prefer the server's actual message
+  // when it's a sane, short string — losing it would hide the real cause and
+  // leave the user (and support) guessing. Fall back to the generic text only
+  // when there's no usable message (e.g. an HTML error page or empty body).
   if (!err.code) {
+    const serverMessage =
+      typeof err.error === 'string' && err.error.trim().length > 0 && err.error.length < 300
+        ? err.error
+        : null;
     return {
       kind: 'toast_copy_details',
       code: BOOKING_ERROR_CODES.UNKNOWN_SERVER_ERROR,
-      userMessage: 'Hiba történt. Próbáld újra.',
+      userMessage: serverMessage ?? 'Hiba történt. Próbáld újra.',
       retryable: true,
       debugId,
       reason: 'missing_code',

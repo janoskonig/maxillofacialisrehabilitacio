@@ -30,8 +30,9 @@ export const NON_VISIBLE_APPOINTMENT_STATUSES = ['cancelled_by_doctor', 'cancell
  *
  *   • Cancelled: slot freed, step freed.
  *   • Unsuccessful: slot consumed, step freed for a new `attempt_number`.
- *   • No_show: slot consumed, step still "held" (the worklist treats no-show
- *     as needing an explicit cancel before a re-book).
+ *   • No_show: slot consumed, step freed for a new `attempt_number` (migration
+ *     059) — the patient missed the visit, so the phase must be re-booked on a
+ *     fresh slot, while the no-show stays in history as a counted attempt.
  *   • Completed / NULL: both held — step is done or currently booked.
  *
  * Anything in this set is treated as "non-active" by the booking guards (so a
@@ -42,6 +43,7 @@ export const STEP_RELEASING_APPOINTMENT_STATUSES = [
   'cancelled_by_doctor',
   'cancelled_by_patient',
   'unsuccessful',
+  'no_show',
 ] as const;
 
 /**
@@ -52,23 +54,31 @@ export const STEP_RELEASING_APPOINTMENT_STATUSES = [
  * `idx_appointments_unique_pending_step` partial unique index miatt.
  *
  * Cancelled state-ek (cancelled_by_doctor, cancelled_by_patient) szabaddá teszik
- * a step-et — és a 029 óta a `'unsuccessful'` is, hogy új próba foglalható
- * legyen ugyanarra a step_code-ra (`attempt_number + 1`). A `no_show` jelenleg
- * AKTÍV-nak számít — ezt a viselkedést megőrizzük; a no-show explicit
- * cancellt igényel mielőtt új foglalás létrejöhet.
+ * a step-et — a 029 óta a `'unsuccessful'`, a 059 óta pedig a `'no_show'` is,
+ * hogy új próba foglalható legyen ugyanarra a step_code-ra (`attempt_number + 1`).
+ * A `no_show` slotja elhasználva marad (a beteg ideje "elkelt"), de a kezelési
+ * lépés felszabadul egy új próbára — összhangban az attempt-számlálással, amely
+ * a no_show-t valós próbaként tartja nyilván.
  */
 export const SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT = `(
   a.appointment_status IS NULL
-  OR a.appointment_status NOT IN ('cancelled_by_doctor', 'cancelled_by_patient', 'unsuccessful')
+  OR a.appointment_status NOT IN ('cancelled_by_doctor', 'cancelled_by_patient', 'no_show', 'unsuccessful')
 )`;
 
 /**
  * "Visible future" = jövőbeli, megjelenítendő foglalás.
  *
- * Ez kicsit szigorúbb az aktívnál: ide a `no_show` és `unsuccessful` is
- * kihullik, mert egy múltbeli meg-nem-jelenést / sikertelen próbát nem akarunk
- * "jövőbeli foglalás"-ként mutatni. (Az `unsuccessful` a múltbeli próba-
- * történet része — külön renderelt, nem "future booking" listán.)
+ * Történetileg ez SZIGORÚBB volt az aktívnál (a `no_show`/`unsuccessful` itt is
+ * kihullt, az "aktív"-nál viszont nem). A 029 (`unsuccessful`) és a 059
+ * (`no_show`) óta az "aktív" halmaz is kizárja ezt a kettőt, így a két fragment
+ * MOST AZONOS — egy meg-nem-jelenést / sikertelen próbát sem aktív foglalásként,
+ * sem "jövőbeli foglalás"-ként nem mutatunk (az `unsuccessful`/`no_show` a
+ * múltbeli próba-történet része, külön renderelve).
+ *
+ * Külön nevesített konstansként tartjuk meg a kettőt, mert KÜLÖN szemantikát
+ * fejeznek ki (booking-guard vs. listamegjelenítés), és külön is fejlődhetnek;
+ * a work-phase-index-parity tesztek őrzik, hogy a halmazok szándék szerint
+ * mozogjanak, ne véletlenül.
  */
 export const SQL_APPOINTMENT_VISIBLE_STATUS_FRAGMENT = `(
   a.appointment_status IS NULL
@@ -176,8 +186,12 @@ export async function probeAppointmentsWorkPhaseIdColumn(
        ) AS exists`
     );
     appointmentsWorkPhaseIdColumnExists = res.rows[0]?.exists === true;
+    return appointmentsWorkPhaseIdColumnExists;
   } catch {
-    appointmentsWorkPhaseIdColumnExists = false;
+    // Transient probe failure (e.g. connection-pool saturation): do NOT cache a
+    // negative result — caching `false` would disable work_phase_id (and the
+    // one-active-per-work-phase double-booking guard) process-wide until restart.
+    // Leave the cache unset so a later call can determine the real answer.
+    return false;
   }
-  return appointmentsWorkPhaseIdColumnExists;
 }

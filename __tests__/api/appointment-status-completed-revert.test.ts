@@ -19,8 +19,11 @@ describe('PATCH /api/appointments/[id]/status — completed → cancel / no_show
     expect(SRC).toMatch(/SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT/);
   });
 
-  it('completed régi státusz + cancel/no_show esetén EWP pending + appointment_id NULL', () => {
-    expect(SRC).toMatch(/oldStatus === 'completed'/);
+  it('cancel/no_show esetén EWP pending + appointment_id NULL (completed is részhalmaz)', () => {
+    // A reopen-ág már NEM `oldStatus === 'completed'`-re szűkül: bármely
+    // cancel/no_show átmenetnél lefut (a completed eset is ezen belül van).
+    // A completed↔scheduled megkülönböztetést a következő teszt fedi.
+    expect(SRC).toMatch(/if \(episodeIdForEwp && stepCodeForEwp\) \{/);
     // A tényleges UPDATE+audit a `revertWorkPhaseLinkToPending` helper-ben
     // van — itt ellenőrizzük, hogy a route hívja a helpert.
     expect(SRC).toMatch(/revertWorkPhaseLinkToPending/);

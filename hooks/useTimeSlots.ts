@@ -3,6 +3,7 @@
 import { useState, useEffect, useMemo } from 'react';
 import { getCurrentUser } from '@/lib/auth';
 import { toLocalISOString } from '@/lib/dateUtils';
+import { extractApiError } from '@/lib/extract-api-error';
 
 // ── Types ────────────────────────────────────────────────────────────
 
@@ -103,8 +104,21 @@ async function fetchAllPages<T>(
     });
 
     if (!res.ok) {
-      console.error(`Failed to load ${dataKey} (page ${page})`);
-      break;
+      // Korábban itt csendben `break`-eltünk → a hívó RÉSZLEGES listát kapott,
+      // teljesnek látszóként. Most dobunk teljes kontextussal (státusz, endpoint,
+      // oldal, correlationId), hogy a hiba forrása mindig kideríthető legyen és a
+      // lista ne tűnjön hibátlannak, miközben hiányos.
+      const correlationId = res.headers.get('x-correlation-id') ?? 'n/a';
+      let serverMsg = '';
+      try {
+        serverMsg = ((await res.clone().json())?.error as string | undefined) ?? '';
+      } catch {
+        /* non-JSON */
+      }
+      throw new Error(
+        `Lista betöltése sikertelen: ${dataKey} (oldal ${page}, HTTP ${res.status}` +
+          `${serverMsg ? `, ${serverMsg}` : ''}) [correlationId: ${correlationId}]`,
+      );
     }
 
     const json = await res.json();
@@ -515,10 +529,15 @@ export function useTimeSlots() {
     setIsBulkUpdating(true);
     let successCount = 0;
     let errorCount = 0;
+    // Korábban az egyedi hibák csak a konzolra mentek, a felhasználó csak a
+    // darabszámot látta ("5 hiba történt") — nem derült ki, MELYIK és MIÉRT.
+    // Most összegyűjtjük a tényleges okot (kód + correlationId) és megmutatjuk.
+    const failures: string[] = [];
 
     try {
       await Promise.all(
         appointmentIds.map(async (id) => {
+          const shortId = id.slice(0, 8);
           try {
             const res = await fetch(`/api/appointments/${id}/status`, {
               method: 'PATCH',
@@ -530,12 +549,17 @@ export function useTimeSlots() {
               successCount++;
             } else {
               errorCount++;
-              const data = await res.json();
-              console.error(`Error updating appointment ${id}:`, data.error);
+              const e = await extractApiError(res, 'Ismeretlen hiba');
+              failures.push(
+                `#${shortId}: ${e.message}${e.code ? ` [${e.code}]` : ''}${e.correlationId ? ` (${e.correlationId})` : ''}`,
+              );
+              console.error(`Bulk update failed for ${id}:`, e);
             }
           } catch (error) {
             errorCount++;
-            console.error(`Error updating appointment ${id}:`, error);
+            const msg = error instanceof Error ? error.message : 'ismeretlen';
+            failures.push(`#${shortId}: hálózati hiba (${msg})`);
+            console.error(`Bulk update network error for ${id}:`, error);
           }
         }),
       );
@@ -546,7 +570,9 @@ export function useTimeSlots() {
       if (errorCount === 0) {
         alert(`${successCount} időpont típusa sikeresen módosítva!`);
       } else {
-        alert(`${successCount} időpont sikeresen módosítva, ${errorCount} hiba történt.`);
+        const sample = failures.slice(0, 5).join('\n');
+        const more = failures.length > 5 ? `\n…és további ${failures.length - 5} hiba.` : '';
+        alert(`${successCount} sikeres, ${errorCount} hiba:\n${sample}${more}`);
       }
     } catch (error) {
       console.error('Error in bulk update:', error);

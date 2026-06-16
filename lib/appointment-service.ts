@@ -5,7 +5,7 @@ import { createGoogleCalendarEvent, deleteGoogleCalendarEvent } from '@/lib/goog
 import { sendPushNotification } from '@/lib/push-notifications';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
-import { checkOneHardNext, getAppointmentRiskSettings } from '@/lib/scheduling-service';
+import { checkOneHardNext, checkStepPrerequisites, getAppointmentRiskSettings } from '@/lib/scheduling-service';
 import { getSchedulingFeatureFlag } from '@/lib/scheduling-feature-flags';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { logger } from '@/lib/logger';
@@ -144,7 +144,7 @@ export async function createAppointment(
       );
       if (episodeLock.rows.length === 0) {
         await client.query('ROLLBACK');
-        return { ok: false, validationError: { error: 'Epizód nem található', status: 404 } };
+        return { ok: false, validationError: { error: 'Epizód nem található', code: 'EPISODE_NOT_FOUND', status: 404 } };
       }
 
       let hasAnyPathway = !!episodeLock.rows[0].care_pathway_id;
@@ -268,6 +268,38 @@ export async function createAppointment(
             );
           }
         }
+
+        // Step-ordering guard: don't schedule a work phase while an EARLIER
+        // mandatory phase is still pending & unbooked. Normal worklist flow books
+        // the earliest pending step, so this only catches out-of-order manual
+        // bookings. Overridable (with audit) by staff giving a ≥10-char reason.
+        if (typeof stepCode === 'string' && stepCode.length > 0) {
+          const prereq = await checkStepPrerequisites(client, episodeId, stepCode);
+          if (!prereq.allowed) {
+            const mayOverrideOrder =
+              (auth.role === 'admin' || auth.role === 'beutalo_orvos' || auth.role === 'fogpótlástanász') &&
+              typeof overrideReason === 'string' &&
+              overrideReason.trim().length >= 10;
+            if (mayOverrideOrder) {
+              await client.query(
+                `INSERT INTO scheduling_override_audit (episode_id, user_id, override_reason) VALUES ($1, $2, $3)`,
+                [episodeId, auth.userId, `step-order: ${stepCode} before ${prereq.blockingPhaseCode}; ${overrideReason!.trim()}`],
+              );
+            } else {
+              await client.query('ROLLBACK');
+              return {
+                ok: false,
+                validationError: {
+                  error: `Korábbi kezelési lépés (${prereq.blockingLabel}) még nincs lefoglalva vagy elvégezve — ezt a lépést előbb nem lehet ütemezni.`,
+                  code: 'STEP_PREREQUISITE_NOT_MET',
+                  overrideHint:
+                    'Foglald előbb a korábbi lépést a munkalistából, vagy adj override indoklást (min. 10 karakter, admin/beutaló orvos/fogpótlástanász).',
+                  status: 409,
+                },
+              };
+            }
+          }
+        }
       }
     }
 
@@ -283,14 +315,14 @@ export async function createAppointment(
 
     if (timeSlotResult.rows.length === 0) {
       await client.query('ROLLBACK');
-      return { ok: false, validationError: { error: 'Időpont nem található', status: 404 } };
+      return { ok: false, validationError: { error: 'Időpont nem található', code: 'SLOT_NOT_FOUND', status: 404 } };
     }
 
     const timeSlot = timeSlotResult.rows[0];
     const slotState = timeSlot.state ?? (timeSlot.status === 'available' ? 'free' : 'booked');
     if (slotState !== 'free') {
       await client.query('ROLLBACK');
-      return { ok: false, validationError: { error: 'Ez az időpont már le van foglalva', status: 400 } };
+      return { ok: false, validationError: { error: 'Ez az időpont már le van foglalva', code: 'SLOT_ALREADY_BOOKED', status: 400 } };
     }
 
     if (episodeId) {
@@ -303,7 +335,7 @@ export async function createAppointment(
         await client.query('ROLLBACK');
         return {
           ok: false,
-          validationError: { error: 'Csak a kijelölt orvoshoz adható időpont.', status: 403 },
+          validationError: { error: 'Csak a kijelölt orvoshoz adható időpont.', code: 'PROVIDER_MISMATCH', status: 403 },
         };
       }
     }
@@ -311,7 +343,7 @@ export async function createAppointment(
     const startTime = new Date(timeSlot.start_time);
     if (startTime <= now) {
       await client.query('ROLLBACK');
-      return { ok: false, validationError: { error: 'Csak jövőbeli időpontot lehet lefoglalni', status: 400 } };
+      return { ok: false, validationError: { error: 'Csak jövőbeli időpontot lehet lefoglalni', code: 'SLOT_IN_PAST', status: 400 } };
     }
 
     // Refine risk settings with actual start time
@@ -383,13 +415,13 @@ export async function createAppointment(
       );
       if (intentCheck.rows.length === 0) {
         await client.query('ROLLBACK');
-        return { ok: false, validationError: { error: 'Intent nem található vagy már nem open', status: 400 } };
+        return { ok: false, validationError: { error: 'Intent nem található vagy már nem open', code: 'INTENT_NOT_OPEN', status: 400 } };
       }
       if (intentCheck.rows[0].episode_id !== episodeId) {
         await client.query('ROLLBACK');
         return {
           ok: false,
-          validationError: { error: 'Intent episode_id nem egyezik az appointment episode_id-jával', status: 400 },
+          validationError: { error: 'Intent episode_id nem egyezik az appointment episode_id-jával', code: 'INTENT_EPISODE_MISMATCH', status: 400 },
         };
       }
     }

@@ -20,6 +20,7 @@ import {
   type UnsuccessfulAttemptConfirmPayload,
 } from '../UnsuccessfulAttemptModal';
 import { RevertUnsuccessfulModal } from '../RevertUnsuccessfulModal';
+import { formatApiErrorParts } from '@/lib/extract-api-error';
 
 const CAN_SEE_WORKLIST_ROLES = ['admin', 'beutalo_orvos', 'fogpótlástanász'];
 
@@ -139,7 +140,7 @@ export function WorklistWidget() {
       });
       if (!patchRes.ok) {
         const data = await patchRes.json();
-        throw new Error(data.error ?? 'Hiba történt');
+        throw new Error(formatApiErrorParts(data, patchRes, 'Hiba történt'));
       }
       await fetchWorklist();
     } finally {
@@ -199,7 +200,7 @@ export function WorklistWidget() {
     if (res.status === 409 && (data.code === 'SLOT_ALREADY_BOOKED' || data.error?.includes('foglalt'))) {
       return { skip: true };
     }
-    throw new Error(data.error ?? 'Hiba történt');
+    throw new Error(formatApiErrorParts(data, res, 'Hiba történt'));
   };
 
   const handleBatchComplete = (bookedKeys: string[], skippedKeys: string[]) => {
@@ -301,7 +302,7 @@ export function WorklistWidget() {
         return;
       }
 
-      throw new Error(data.error ?? 'Hiba történt');
+      throw new Error(formatApiErrorParts(data, res, 'Hiba történt'));
     } catch (e) {
       setLocal((prev) => {
         const next = { ...prev };
@@ -332,7 +333,7 @@ export function WorklistWidget() {
     });
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data?.error ?? 'Sikertelen-jelölés nem sikerült.');
+      throw new Error(formatApiErrorParts(data, res, 'Sikertelen-jelölés nem sikerült.'));
     }
     await fetchWorklist();
     if (payload.shouldOpenSlotPicker) {
@@ -359,7 +360,7 @@ export function WorklistWidget() {
     });
     const data = await res.json();
     if (!res.ok) {
-      throw new Error(data?.error ?? 'Visszavonás nem sikerült.');
+      throw new Error(formatApiErrorParts(data, res, 'Visszavonás nem sikerült.'));
     }
     await fetchWorklist();
   };
