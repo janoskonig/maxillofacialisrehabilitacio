@@ -122,12 +122,12 @@ export function buildSavePayload(
     beutaloIndokolas: vanBeutaloVal ? formData.beutaloIndokolas : null,
     radioterapia: formData.radioterapia ?? false,
     chemoterapia: formData.chemoterapia ?? false,
-    felsoFogpotlasVan: formData.felsoFogpotlasVan ?? false,
-    felsoFogpotlasElegedett: formData.felsoFogpotlasElegedett ?? true,
-    alsoFogpotlasVan: formData.alsoFogpotlasVan ?? false,
-    alsoFogpotlasElegedett: formData.alsoFogpotlasElegedett ?? true,
+    felsoFogpotlasVan: formData.felsoFogpotlasVan ?? null, // tri-state: őrizzük a „nincs adat" állapotot
+    felsoFogpotlasElegedett: formData.felsoFogpotlasElegedett ?? null, // tri-state
+    alsoFogpotlasVan: formData.alsoFogpotlasVan ?? null, // tri-state: őrizzük a „nincs adat" állapotot
+    alsoFogpotlasElegedett: formData.alsoFogpotlasElegedett ?? null, // tri-state
     nemIsmertPoziciokbanImplantatum: formData.nemIsmertPoziciokbanImplantatum ?? false,
-    maxilladefektusVan: formData.maxilladefektusVan ?? false,
+    maxilladefektusVan: formData.maxilladefektusVan ?? null, // tri-state
     kezelesiTervFelso: formData.kezelesiTervFelso || [],
     kezelesiTervAlso: formData.kezelesiTervAlso || [],
     kezelesiTervArcotErinto: formData.kezelesiTervArcotErinto || [],

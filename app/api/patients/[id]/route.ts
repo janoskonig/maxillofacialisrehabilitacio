@@ -181,11 +181,11 @@ async function executePatientUpdate(
       ),
       client.query(
         `UPDATE patient_anamnesis SET kezelesre_erkezes_indoka=$2, alkoholfogyasztas=$3, dohanyzas_szam=$4, maxilladefektus_van=$5, brown_fuggoleges_osztaly=$6, brown_vizszintes_komponens=$7, mandibuladefektus_van=$8, kovacs_dobak_osztaly=$9, nyelvmozgasok_akadalyozottak=$10, gombocos_beszed=$11, nyalmirigy_allapot=$12, fabian_fejerdy_protetikai_osztaly=$13, fabian_fejerdy_protetikai_osztaly_felso=$14, fabian_fejerdy_protetikai_osztaly_also=$15, radioterapia=$16, radioterapia_dozis=$17, radioterapia_datum_intervallum=$18, chemoterapia=$19, chemoterapia_leiras=$20, tnm_staging=$21, bno=$22, diagnozis=$23, baleset_idopont=$24, baleset_etiologiaja=$25, baleset_egyeb=$26, veleszuletett_rendellenessegek=$27::jsonb, veleszuletett_mutetek_leirasa=$28 WHERE patient_id=$1`,
-        [patientId, patient.kezelesreErkezesIndoka||null, patient.alkoholfogyasztas||null, patient.dohanyzasSzam||null, patient.maxilladefektusVan||false, patient.brownFuggolegesOsztaly||null, patient.brownVizszintesKomponens||null, patient.mandibuladefektusVan||false, patient.kovacsDobakOsztaly||null, patient.nyelvmozgásokAkadályozottak||false, patient.gombocosBeszed||false, patient.nyalmirigyAllapot||null, patient.fabianFejerdyProtetikaiOsztaly||null, patient.fabianFejerdyProtetikaiOsztalyFelso||null, patient.fabianFejerdyProtetikaiOsztalyAlso||null, patient.radioterapia||false, patient.radioterapiaDozis||null, patient.radioterapiaDatumIntervallum||null, patient.chemoterapia||false, patient.chemoterapiaLeiras||null, patient.tnmStaging||null, patient.bno||null, patient.diagnozis||null, patient.balesetIdopont||null, patient.balesetEtiologiaja||null, patient.balesetEgyeb||null, Array.isArray(patient.veleszuletettRendellenessegek) ? JSON.stringify(patient.veleszuletettRendellenessegek) : '[]', patient.veleszuletettMutetekLeirasa||null]
+        [patientId, patient.kezelesreErkezesIndoka||null, patient.alkoholfogyasztas||null, patient.dohanyzasSzam||null, patient.maxilladefektusVan??null, patient.brownFuggolegesOsztaly||null, patient.brownVizszintesKomponens||null, patient.mandibuladefektusVan??null, patient.kovacsDobakOsztaly||null, patient.nyelvmozgásokAkadályozottak??null, patient.gombocosBeszed??null, patient.nyalmirigyAllapot||null, patient.fabianFejerdyProtetikaiOsztaly||null, patient.fabianFejerdyProtetikaiOsztalyFelso||null, patient.fabianFejerdyProtetikaiOsztalyAlso||null, patient.radioterapia||false, patient.radioterapiaDozis||null, patient.radioterapiaDatumIntervallum||null, patient.chemoterapia||false, patient.chemoterapiaLeiras||null, patient.tnmStaging||null, patient.bno||null, patient.diagnozis||null, patient.balesetIdopont||null, patient.balesetEtiologiaja||null, patient.balesetEgyeb||null, Array.isArray(patient.veleszuletettRendellenessegek) ? JSON.stringify(patient.veleszuletettRendellenessegek) : '[]', patient.veleszuletettMutetekLeirasa||null]
       ),
       client.query(
         `UPDATE patient_dental_status SET meglevo_fogak=$2, meglevo_implantatumok=$3, nem_ismert_poziciokban_implantatum=$4, nem_ismert_poziciokban_implantatum_reszletek=$5, felso_fogpotlas_van=$6, felso_fogpotlas_mikor=$7, felso_fogpotlas_keszito=$8, felso_fogpotlas_elegedett=$9, felso_fogpotlas_problema=$10, felso_fogpotlas_tipus=$11, also_fogpotlas_van=$12, also_fogpotlas_mikor=$13, also_fogpotlas_keszito=$14, also_fogpotlas_elegedett=$15, also_fogpotlas_problema=$16, also_fogpotlas_tipus=$17 WHERE patient_id=$1`,
-        [patientId, patient.meglevoFogak ? JSON.parse(JSON.stringify(patient.meglevoFogak)) : {}, patient.meglevoImplantatumok ? JSON.parse(JSON.stringify(patient.meglevoImplantatumok)) : {}, patient.nemIsmertPoziciokbanImplantatum||false, patient.nemIsmertPoziciokbanImplantatumRészletek||null, patient.felsoFogpotlasVan||false, patient.felsoFogpotlasMikor||null, patient.felsoFogpotlasKeszito||null, patient.felsoFogpotlasElegedett??true, patient.felsoFogpotlasProblema||null, patient.felsoFogpotlasTipus||null, patient.alsoFogpotlasVan||false, patient.alsoFogpotlasMikor||null, patient.alsoFogpotlasKeszito||null, patient.alsoFogpotlasElegedett??true, patient.alsoFogpotlasProblema||null, patient.alsoFogpotlasTipus||null]
+        [patientId, patient.meglevoFogak ? JSON.parse(JSON.stringify(patient.meglevoFogak)) : {}, patient.meglevoImplantatumok ? JSON.parse(JSON.stringify(patient.meglevoImplantatumok)) : {}, patient.nemIsmertPoziciokbanImplantatum||false, patient.nemIsmertPoziciokbanImplantatumRészletek||null, patient.felsoFogpotlasVan??null, patient.felsoFogpotlasMikor||null, patient.felsoFogpotlasKeszito||null, patient.felsoFogpotlasElegedett??null, patient.felsoFogpotlasProblema||null, patient.felsoFogpotlasTipus||null, patient.alsoFogpotlasVan??null, patient.alsoFogpotlasMikor||null, patient.alsoFogpotlasKeszito||null, patient.alsoFogpotlasElegedett??null, patient.alsoFogpotlasProblema||null, patient.alsoFogpotlasTipus||null]
       ),
       client.query(
         `UPDATE patient_treatment_plans SET kezelesi_terv_felso=$2::jsonb, kezelesi_terv_also=$3::jsonb, kezelesi_terv_arcot_erinto=$4::jsonb, kortorteneti_osszefoglalo=$5, kezelesi_terv_melleklet=$6, szakorvosi_velemeny=$7 WHERE patient_id=$1`,
@@ -495,15 +495,15 @@ function buildUpdateParams(
     patient.kezeleoorvos || null,
     patient.kezeleoorvosIntezete || null,
     patient.felvetelDatuma || null,
-    patient.felsoFogpotlasVan || false,
+    patient.felsoFogpotlasVan ?? null,
     patient.felsoFogpotlasMikor || null,
     patient.felsoFogpotlasKeszito || null,
-    patient.felsoFogpotlasElegedett ?? true,
+    patient.felsoFogpotlasElegedett ?? null,
     patient.felsoFogpotlasProblema || null,
-    patient.alsoFogpotlasVan || false,
+    patient.alsoFogpotlasVan ?? null,
     patient.alsoFogpotlasMikor || null,
     patient.alsoFogpotlasKeszito || null,
-    patient.alsoFogpotlasElegedett ?? true,
+    patient.alsoFogpotlasElegedett ?? null,
     patient.alsoFogpotlasProblema || null,
     patient.meglevoFogak
       ? JSON.parse(JSON.stringify(patient.meglevoFogak))

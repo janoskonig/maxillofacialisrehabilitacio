@@ -1,6 +1,7 @@
 'use client';
 
 import { Dispatch, SetStateAction, useState } from 'react';
+import type { UseFormRegisterReturn } from 'react-hook-form';
 import type { ToothStatus, ToothBase } from '@/hooks/usePatientAutoSave';
 import { Tooth } from './Tooth';
 import {
@@ -21,6 +22,42 @@ interface OdontogramProps {
   setFogak: Dispatch<SetStateAction<Record<string, ToothStatus>>>;
   editing: boolean;
   isViewOnly: boolean;
+  /** Fábián–Fejérdy protetikai osztály mezők — az ívek köré renderelve, ha megadva. */
+  fabianFelsoField?: UseFormRegisterReturn;
+  fabianAlsoField?: UseFormRegisterReturn;
+  fabianOptions?: readonly string[];
+}
+
+function FabianFejerdyControl({
+  jaw,
+  field,
+  options,
+  isViewOnly,
+}: {
+  jaw: 'felso' | 'also';
+  field?: UseFormRegisterReturn;
+  options?: readonly string[];
+  isViewOnly: boolean;
+}) {
+  if (!field || !options) return null;
+  return (
+    <div className={`flex items-center justify-end gap-2 ${jaw === 'felso' ? 'mb-2' : 'mt-2'}`}>
+      <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">
+        Fábián–Fejérdy · {jaw === 'felso' ? 'felső' : 'alsó'}
+      </span>
+      <select
+        {...field}
+        disabled={isViewOnly}
+        className="text-xs rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-800 dark:text-gray-100 py-1 pl-2 pr-6 focus:ring-medical-primary focus:border-medical-primary disabled:opacity-100 disabled:cursor-default"
+        aria-label={`Fábián–Fejérdy protetikai osztály – ${jaw === 'felso' ? 'felső' : 'alsó'} állcsont`}
+      >
+        <option value="">—</option>
+        {options.map((o) => (
+          <option key={o} value={o}>{o}</option>
+        ))}
+      </select>
+    </div>
+  );
 }
 
 function applyTooth(
@@ -100,7 +137,15 @@ function Arch({
   );
 }
 
-export function Odontogram({ fogak, setFogak, editing, isViewOnly }: OdontogramProps) {
+export function Odontogram({
+  fogak,
+  setFogak,
+  editing,
+  isViewOnly,
+  fabianFelsoField,
+  fabianAlsoField,
+  fabianOptions,
+}: OdontogramProps) {
   const [selected, setSelected] = useState<string | null>(null);
   const canEdit = editing && !isViewOnly;
 
@@ -112,6 +157,7 @@ export function Odontogram({ fogak, setFogak, editing, isViewOnly }: OdontogramP
   return (
     <div>
       <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg p-3 sm:p-4 overflow-x-auto">
+        <FabianFejerdyControl jaw="felso" field={fabianFelsoField} options={fabianOptions} isViewOnly={isViewOnly} />
         <Arch
           teeth={UPPER_ROW}
           fogak={fogak}
@@ -131,6 +177,7 @@ export function Odontogram({ fogak, setFogak, editing, isViewOnly }: OdontogramP
           selected={canEdit ? selected : null}
           onSelect={canEdit ? setSelected : undefined}
         />
+        <FabianFejerdyControl jaw="also" field={fabianAlsoField} options={fabianOptions} isViewOnly={isViewOnly} />
       </div>
 
       {/* Jelmagyarázat + összegzés */}

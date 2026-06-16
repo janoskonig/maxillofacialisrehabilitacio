@@ -8,6 +8,15 @@ function patientBoolean(defaultValue: boolean) {
   );
 }
 
+/**
+ * Háromállapotú boolean: nincs default. `null` = még nincs nyilatkozat (nincs adat),
+ * `false` = aktívan nemleges, `true` = igen. A `nincs adat ≠ nincs` szemantikához.
+ */
+const patientTriStateBoolean = z.preprocess(
+  (v) => (v === undefined ? null : v),
+  z.boolean().nullable()
+);
+
 export const patientSchema = z.object({
   id: z.string().optional(),
   nev: z.string().optional().nullable().or(z.literal('')),
@@ -72,26 +81,26 @@ export const patientSchema = z.object({
   alkoholfogyasztas: z.string().optional().nullable(),
   dohanyzasSzam: z.string().optional().nullable(),
   kezelesreErkezesIndoka: z.enum(['traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot']).optional().nullable().or(z.literal('')),
-  maxilladefektusVan: patientBoolean(false),
+  maxilladefektusVan: patientTriStateBoolean,
   brownFuggolegesOsztaly: z.enum(['1', '2', '3', '4']).optional().nullable().or(z.literal('')),
   brownVizszintesKomponens: z.enum(['a', 'b', 'c']).optional().nullable().or(z.literal('')),
-  mandibuladefektusVan: patientBoolean(false),
+  mandibuladefektusVan: patientTriStateBoolean,
   kovacsDobakOsztaly: z.enum(['1', '2', '3', '4', '5']).optional().nullable().or(z.literal('')),
-  nyelvmozgásokAkadályozottak: patientBoolean(false),
-  gombocosBeszed: patientBoolean(false),
+  nyelvmozgásokAkadályozottak: patientTriStateBoolean,
+  gombocosBeszed: patientTriStateBoolean,
   nyalmirigyAllapot: z.enum(['hiposzaliváció', 'hiperszaliváció', 'Nem számol be eltérésről']).optional().nullable().or(z.literal('')),
   tnmStaging: z.string().optional().nullable(),
 
-  felsoFogpotlasVan: patientBoolean(false),
+  felsoFogpotlasVan: patientTriStateBoolean,
   felsoFogpotlasMikor: z.string().optional().nullable(),
   felsoFogpotlasKeszito: z.string().optional().nullable(),
-  felsoFogpotlasElegedett: patientBoolean(true),
+  felsoFogpotlasElegedett: patientTriStateBoolean,
   felsoFogpotlasProblema: z.string().optional().nullable(),
 
-  alsoFogpotlasVan: patientBoolean(false),
+  alsoFogpotlasVan: patientTriStateBoolean,
   alsoFogpotlasMikor: z.string().optional().nullable(),
   alsoFogpotlasKeszito: z.string().optional().nullable(),
-  alsoFogpotlasElegedett: patientBoolean(true),
+  alsoFogpotlasElegedett: patientTriStateBoolean,
   alsoFogpotlasProblema: z.string().optional().nullable(),
 
   meglevoFogak: z.record(
@@ -247,16 +256,16 @@ export interface PatientDentalStatus {
   meglevoImplantatumok: Record<string, string> | null;
   nemIsmertPoziciokbanImplantatum: boolean;
   nemIsmertPoziciokbanImplantatumRészletek: string | null;
-  felsoFogpotlasVan: boolean;
+  felsoFogpotlasVan: boolean | null;
   felsoFogpotlasMikor: string | null;
   felsoFogpotlasKeszito: string | null;
-  felsoFogpotlasElegedett: boolean;
+  felsoFogpotlasElegedett: boolean | null;
   felsoFogpotlasProblema: string | null;
   felsoFogpotlasTipus: string | null;
-  alsoFogpotlasVan: boolean;
+  alsoFogpotlasVan: boolean | null;
   alsoFogpotlasMikor: string | null;
   alsoFogpotlasKeszito: string | null;
-  alsoFogpotlasElegedett: boolean;
+  alsoFogpotlasElegedett: boolean | null;
   alsoFogpotlasProblema: string | null;
   alsoFogpotlasTipus: string | null;
 }
@@ -267,13 +276,13 @@ export interface PatientAnamnesis {
   kezelesreErkezesIndoka: string | null;
   alkoholfogyasztas: string | null;
   dohanyzasSzam: string | null;
-  maxilladefektusVan: boolean;
+  maxilladefektusVan: boolean | null;
   brownFuggolegesOsztaly: string | null;
   brownVizszintesKomponens: string | null;
-  mandibuladefektusVan: boolean;
+  mandibuladefektusVan: boolean | null;
   kovacsDobakOsztaly: string | null;
-  nyelvmozgásokAkadályozottak: boolean;
-  gombocosBeszed: boolean;
+  nyelvmozgásokAkadályozottak: boolean | null;
+  gombocosBeszed: boolean | null;
   nyalmirigyAllapot: string | null;
   bno: string | null;
   diagnozis: string | null;

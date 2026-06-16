@@ -341,10 +341,10 @@ export function PatientForm({
       radioterapia: false,
       chemoterapia: false,
       nemIsmertPoziciokbanImplantatum: false,
-      felsoFogpotlasVan: false,
-      felsoFogpotlasElegedett: true,
-      alsoFogpotlasVan: false,
-      alsoFogpotlasElegedett: true,
+      felsoFogpotlasVan: null, // tri-state: nincs adat (nem alapból „nincs")
+      felsoFogpotlasElegedett: null, // tri-state: nincs adat
+      alsoFogpotlasVan: null, // tri-state: nincs adat (nem alapból „nincs")
+      alsoFogpotlasElegedett: null,
       kezelesiTervFelso: [],
       kezelesiTervAlso: [],
       kezelesiTervArcotErinto: [],
@@ -442,10 +442,10 @@ export function PatientForm({
           radioterapia: false,
           chemoterapia: false,
           nemIsmertPoziciokbanImplantatum: false,
-          felsoFogpotlasVan: false,
-          felsoFogpotlasElegedett: true,
-          alsoFogpotlasVan: false,
-          alsoFogpotlasElegedett: true,
+          felsoFogpotlasVan: null, // tri-state: nincs adat (nem alapból „nincs")
+          felsoFogpotlasElegedett: null, // tri-state: nincs adat
+          alsoFogpotlasVan: null,
+          alsoFogpotlasElegedett: null,
           kezelesiTervFelso: [],
           kezelesiTervAlso: [],
           kezelesiTervArcotErinto: [],
