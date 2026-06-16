@@ -1,14 +1,15 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { format, startOfMonth, endOfMonth, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, startOfWeek, endOfWeek } from 'date-fns';
+import Link from 'next/link';
+import { format, startOfMonth, endOfMonth, addMonths, subMonths, addWeeks, subWeeks, addDays, subDays, startOfWeek, endOfWeek, eachDayOfInterval, isSameMonth, isToday, isSameDay } from 'date-fns';
 import { hu } from 'date-fns/locale';
-import { Calendar, ChevronLeft, ChevronRight, Calendar as CalendarIcon } from 'lucide-react';
+import { Calendar, ChevronLeft, ChevronRight, Calendar as CalendarIcon, Settings as SettingsIcon } from 'lucide-react';
 import { MonthView } from './MonthView';
 import { WeekView } from './WeekView';
 import { DayView } from './DayView';
 import { CalendarFilters } from './CalendarFilters';
-import { CalendarEvent } from './CalendarEvent';
+import { getAppointmentStatusDisplay } from '@/lib/appointment-status-display';
 
 type ViewType = 'month' | 'week' | 'day';
 
@@ -43,6 +44,14 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
   const [selectedDentist, setSelectedDentist] = useState<string | null>(null);
   const [selectedStatus, setSelectedStatus] = useState<string | null>(null);
   const [includeVirtual, setIncludeVirtual] = useState(false);
+
+  // Mobilon a vízszintesen görgő heti rács helyett a napi agenda-nézet az alapértelmezett
+  // (egymás alatti kártyák, prev/köv nap léptetés). Csak felcsatoláskor egyszer.
+  useEffect(() => {
+    if (typeof window !== 'undefined' && window.matchMedia('(max-width: 767px)').matches) {
+      setViewType('day');
+    }
+  }, []);
 
   // Calculate date range based on view type
   const dateRange = useMemo(() => {
@@ -288,41 +297,149 @@ export function CalendarView({ onAppointmentClick }: CalendarViewProps) {
         </div>
       )}
 
-      {/* Calendar view */}
-      {viewType === 'month' && (
-        <MonthView
-          currentDate={currentDate}
-          appointments={appointments}
-          appointmentsByDate={appointmentsByDate}
-          virtualAppointments={includeVirtual ? virtualAppointments : []}
-          virtualAppointmentsByDate={includeVirtual ? virtualAppointmentsByDate : {}}
-          includeVirtual={includeVirtual}
-          onDateClick={handleDateClick}
-          onAppointmentClick={onAppointmentClick}
-        />
-      )}
+      {/* Bal sáv (asztali) + naptár-nézet */}
+      <div className="lg:grid lg:grid-cols-[248px_minmax(0,1fr)] lg:gap-4 lg:items-start">
+        <aside className="hidden lg:flex lg:flex-col lg:gap-4 lg:sticky lg:top-4">
+          <MiniMonth
+            currentDate={currentDate}
+            appointmentsByDate={appointmentsByDate}
+            onDateClick={handleDateClick}
+          />
+          <CalendarLegend />
+          <Link
+            href="/settings"
+            className="card !p-3 flex items-center gap-2 hover:border-medical-primary/30 transition-colors"
+          >
+            <span className="p-1.5 rounded-md bg-medical-primary/10 text-medical-primary flex-shrink-0">
+              <SettingsIcon className="w-4 h-4" />
+            </span>
+            <span className="text-xs leading-snug text-gray-600 dark:text-gray-400">
+              <span className="font-semibold text-gray-800 dark:text-gray-200">Google Naptár szinkron</span>
+              <br />beállítása a Beállításokban
+            </span>
+          </Link>
+        </aside>
 
-      {viewType === 'week' && (
-        <WeekView
-          currentDate={currentDate}
-          appointments={appointments}
-          appointmentsByDate={appointmentsByDate}
-          virtualAppointmentsByDate={includeVirtual ? virtualAppointmentsByDate : {}}
-          includeVirtual={includeVirtual}
-          onAppointmentClick={onAppointmentClick}
-        />
-      )}
+        <div className="min-w-0">
+          {viewType === 'month' && (
+            <MonthView
+              currentDate={currentDate}
+              appointments={appointments}
+              appointmentsByDate={appointmentsByDate}
+              virtualAppointments={includeVirtual ? virtualAppointments : []}
+              virtualAppointmentsByDate={includeVirtual ? virtualAppointmentsByDate : {}}
+              includeVirtual={includeVirtual}
+              onDateClick={handleDateClick}
+              onAppointmentClick={onAppointmentClick}
+            />
+          )}
 
-      {viewType === 'day' && (
-        <DayView
-          currentDate={currentDate}
-          appointments={appointments}
-          appointmentsByDate={appointmentsByDate}
-          virtualAppointmentsByDate={includeVirtual ? virtualAppointmentsByDate : {}}
-          includeVirtual={includeVirtual}
-          onAppointmentClick={onAppointmentClick}
-        />
-      )}
+          {viewType === 'week' && (
+            <WeekView
+              currentDate={currentDate}
+              appointments={appointments}
+              appointmentsByDate={appointmentsByDate}
+              virtualAppointmentsByDate={includeVirtual ? virtualAppointmentsByDate : {}}
+              includeVirtual={includeVirtual}
+              onAppointmentClick={onAppointmentClick}
+            />
+          )}
+
+          {viewType === 'day' && (
+            <DayView
+              currentDate={currentDate}
+              appointments={appointments}
+              appointmentsByDate={appointmentsByDate}
+              virtualAppointmentsByDate={includeVirtual ? virtualAppointmentsByDate : {}}
+              includeVirtual={includeVirtual}
+              onAppointmentClick={onAppointmentClick}
+            />
+          )}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+// Kompakt hónap-navigátor a bal sávban: a napokon pötty jelzi a foglalást,
+// a mai nap kiemelve, kattintásra az adott nap megnyílik (napi nézet).
+function MiniMonth({
+  currentDate,
+  appointmentsByDate,
+  onDateClick,
+}: {
+  currentDate: Date;
+  appointmentsByDate: Record<string, { id: string }[]>;
+  onDateClick: (date: Date) => void;
+}) {
+  const monthStart = startOfMonth(currentDate);
+  const gridStart = startOfWeek(monthStart, { weekStartsOn: 1 });
+  const gridEnd = endOfWeek(endOfMonth(currentDate), { weekStartsOn: 1 });
+  const days = eachDayOfInterval({ start: gridStart, end: gridEnd });
+  const weekDays = ['H', 'K', 'Sz', 'Cs', 'P', 'Sz', 'V'];
+
+  return (
+    <div className="card !p-3">
+      <p className="text-sm font-bold text-gray-900 dark:text-gray-100 mb-2 capitalize text-center">
+        {format(currentDate, 'yyyy. MMMM', { locale: hu })}
+      </p>
+      <div className="grid grid-cols-7 gap-0.5 mb-1">
+        {weekDays.map((d, i) => (
+          <div key={i} className="text-center text-[10px] font-semibold text-gray-400 dark:text-gray-500">{d}</div>
+        ))}
+      </div>
+      <div className="grid grid-cols-7 gap-0.5">
+        {days.map((day, i) => {
+          const inMonth = isSameMonth(day, currentDate);
+          const today = isToday(day);
+          const selected = isSameDay(day, currentDate);
+          const has = (appointmentsByDate[format(day, 'yyyy-MM-dd')] || []).length > 0;
+          return (
+            <button
+              key={i}
+              onClick={() => onDateClick(day)}
+              className={`relative h-7 rounded-md text-[11px] font-medium transition-colors ${
+                today
+                  ? 'bg-medical-primary text-white'
+                  : selected
+                  ? 'bg-medical-primary/15 text-medical-primary'
+                  : inMonth
+                  ? 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-800'
+                  : 'text-gray-300 dark:text-gray-600 hover:bg-gray-100 dark:hover:bg-gray-800'
+              }`}
+            >
+              {format(day, 'd')}
+              {has && !today && (
+                <span className="absolute bottom-1 left-1/2 -translate-x-1/2 w-1 h-1 rounded-full bg-medical-primary" />
+              )}
+            </button>
+          );
+        })}
+      </div>
+    </div>
+  );
+}
+
+// Státusz-jelmagyarázat a naptár-blokkok színkódjához (az egységes display-helperből).
+function CalendarLegend() {
+  const items = [
+    getAppointmentStatusDisplay(null, false),
+    getAppointmentStatusDisplay('completed'),
+    getAppointmentStatusDisplay(null, true),
+    getAppointmentStatusDisplay('no_show'),
+    getAppointmentStatusDisplay('cancelled_by_doctor'),
+  ];
+  return (
+    <div className="card !p-3">
+      <p className="text-xs font-bold text-gray-700 dark:text-gray-300 mb-2">Jelmagyarázat</p>
+      <ul className="space-y-1.5">
+        {items.map((it) => (
+          <li key={it.key} className="flex items-center gap-2">
+            <span className={`w-3 h-3 rounded-sm border-l-2 ${it.bgColor} ${it.borderColor}`} />
+            <span className="text-xs text-gray-600 dark:text-gray-400">{it.label}</span>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }

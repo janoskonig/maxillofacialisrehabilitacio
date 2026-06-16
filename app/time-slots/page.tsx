@@ -89,33 +89,38 @@ export default function TimeSlotsPage() {
       }
     >
       <div className="space-y-6">
-          {/* Google Calendar Settings Info */}
-          <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg p-4">
-            <div className="flex items-start gap-3">
-              <CalendarDays className="w-5 h-5 text-blue-600 dark:text-blue-300 flex-shrink-0 mt-0.5" />
-              <div className="flex-1">
-                <p className="text-sm text-blue-900 dark:text-blue-200">
-                  A Google Naptár beállítása a{' '}
-                  <button
-                    onClick={() => router.push('/settings')}
-                    className="text-blue-700 dark:text-blue-300 hover:text-blue-900 underline font-medium"
-                  >
-                    Beállítások
-                  </button>
-                  {' '}oldalon érhető el.
-                </p>
-              </div>
+          {/* Google Naptár info — egységes, bal-akcentes infosáv */}
+          <div className="card relative overflow-hidden !p-3 flex items-start gap-3">
+            <span className="absolute left-0 top-0 h-full w-1 bg-medical-primary" aria-hidden />
+            <span className="p-1.5 rounded-md bg-medical-primary/10 text-medical-primary flex-shrink-0">
+              <CalendarDays className="w-4 h-4" />
+            </span>
+            <p className="text-sm text-gray-700 dark:text-gray-300 leading-snug">
+              A Google Naptár szinkron beállítása a{' '}
+              <button
+                onClick={() => router.push('/settings')}
+                className="text-medical-primary hover:underline font-semibold"
+              >
+                Beállítások
+              </button>
+              {' '}oldalon érhető el.
+            </p>
+          </div>
+
+          {/* Időablak-kezelő */}
+          <section className="space-y-3">
+            <h2 className="text-heading-4 text-gray-900 dark:text-gray-100">Foglalható időablakok</h2>
+            <div className="card p-4 md:p-6">
+              <TimeSlotsManager />
             </div>
-          </div>
+          </section>
 
-          {/* Time Slots Manager */}
-          <div className="card p-6">
-            <TimeSlotsManager />
-          </div>
-
-          {/* Capacity Pool Config — admin only */}
+          {/* Kapacitás-pool — csak admin */}
           {userRole === 'admin' && (
-            <CapacityPoolConfigManager />
+            <section className="space-y-3">
+              <h2 className="text-heading-4 text-gray-900 dark:text-gray-100">Kapacitás-pool beállítás</h2>
+              <CapacityPoolConfigManager />
+            </section>
           )}
         </div>
     </AppShell>
