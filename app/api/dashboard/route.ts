@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
 import { fetchQualitySummary } from '@/lib/research-registry/quality-summary';
+import { getStepLabelMap } from '@/lib/step-labels';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +36,8 @@ export const GET = authedHandler(async (req, { auth }) => {
         a.step_code as "stepCode",
         a.work_phase_id as "workPhaseId",
         a.attempt_number as "attemptNumber",
-        COALESCE(ewp.custom_label, ewp.work_phase_code, a.step_code) as "stepLabel",
+        ewp.custom_label as "customLabel",
+        ewp.work_phase_code as "workPhaseCode",
         -- "Rebook needed": a plan-step appointment whose outcome released the
         -- step (no-show / cancel / unsuccessful), the linked work phase is back
         -- to 'pending', and no other active appointment already covers it. This
@@ -121,8 +123,24 @@ export const GET = authedHandler(async (req, { auth }) => {
     fetchQualitySummary(pool),
   ]);
 
+  // Resolve a human-readable step label: custom label → catalog label_hu →
+  // humanized code (snake_case → words) so the UI never shows raw codes like
+  // "teljes_lemez_anat_lenyomat".
+  const stepLabelMap = await getStepLabelMap();
+  const humanizeStepCode = (code: string | null): string | null =>
+    code ? code.replace(/_/g, ' ') : null;
+  const nextAppointments = nextAppointmentsResult.rows.map((row) => {
+    const { customLabel, workPhaseCode, stepCode, ...rest } = row;
+    const stepLabel =
+      customLabel ??
+      (workPhaseCode ? stepLabelMap.get(workPhaseCode) : undefined) ??
+      (stepCode ? stepLabelMap.get(stepCode) : undefined) ??
+      humanizeStepCode(workPhaseCode ?? stepCode);
+    return { ...rest, stepCode, stepLabel };
+  });
+
   return NextResponse.json({
-    nextAppointments: nextAppointmentsResult.rows,
+    nextAppointments,
     pendingAppointments: pendingAppointmentsResult.rows,
     newRegistrations: newRegistrationsResult.rows,
     qualitySummary: qualitySummary.enabled ? qualitySummary : null,
