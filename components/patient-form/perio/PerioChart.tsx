@@ -229,7 +229,7 @@ export function PerioChart({ patientId, isViewOnly }: PerioChartProps) {
   );
 
   const renderArch = (teeth: number[], oralLabel: string) => (
-    <div className="overflow-x-auto pb-2">
+    <div className="overflow-x-auto max-w-full pb-2">
       <div className="min-w-max space-y-1">
         <div className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mt-1 mb-1">Bukkális</div>
         {renderFlagRow(teeth, 'buccal', 'plaque', 'Plakk', '#EF9F27')}
