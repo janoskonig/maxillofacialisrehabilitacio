@@ -9,6 +9,7 @@ import { ConsiliumPrepMessageCard } from './ConsiliumPrepMessageCard';
 import { detectDocumentRequest } from '@/lib/document-request-detector';
 import { parseDocumentLinkMarker } from '@/lib/messaging/document-link-marker';
 import { stripDocumentMarkerIfContextLinked } from '@/lib/messaging/strip-duplicate-document-marker';
+import { buildMentionSegments, type PatientRosterEntry } from '@/lib/patient-name-recognition';
 import type { MessageContextLink } from '@/lib/types/messaging';
 
 interface MessageTextRendererProps {
@@ -21,6 +22,12 @@ interface MessageTextRendererProps {
   onSendMessage?: (messageText: string) => Promise<void>; // Function to send message
   /** Fázis 2.1: ha van strukturált dokumentum-link, a marker ne duplikáljon. */
   contextLinks?: MessageContextLink[] | null;
+  /**
+   * Az üzenethez kötött betegek (id + nev [+ taj]). Ha megadott, a beteg-nevek
+   * és a legacy `@`-jelölések közvetlenül, lekérés nélkül linkelődnek a
+   * profilra (szemben a régi per-pill `/api/patients` fetch-csel).
+   */
+  mentionedPatients?: PatientRosterEntry[] | null;
 }
 
 /**
@@ -39,6 +46,7 @@ export function MessageTextRenderer({
   currentUserId,
   onSendMessage,
   contextLinks,
+  mentionedPatients,
 }: MessageTextRendererProps) {
   const displayText = stripDocumentMarkerIfContextLinked(text, contextLinks);
   const lines = (displayText || '').split(/\r?\n/);
@@ -121,6 +129,29 @@ export function MessageTextRenderer({
           </div>
         ) : null}
       </>
+    );
+  }
+
+  // Gyors út: ha ismerjük az üzenethez kötött betegeket, közvetlenül linkelünk
+  // (beteg-nevek + legacy @-jelölések), per-pill lekérés nélkül.
+  if (mentionedPatients && mentionedPatients.length > 0) {
+    const segments = buildMentionSegments(text, mentionedPatients);
+    return (
+      <span className="whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
+        {segments.map((seg, index) =>
+          seg.type === 'link' && seg.patientId ? (
+            <Link
+              key={index}
+              href={`/patients/${seg.patientId}/view`}
+              className="inline-block px-1.5 py-0.5 bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300 rounded font-medium hover:bg-blue-200 transition-colors cursor-pointer"
+            >
+              {seg.content}
+            </Link>
+          ) : (
+            <span key={index}>{seg.content}</span>
+          ),
+        )}
+      </span>
     );
   }
 

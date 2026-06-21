@@ -20,6 +20,7 @@ import type { ChatBubbleMessage } from './messaging/ChatMessageBubble';
 import { Avatar } from './messaging/Avatar';
 import { MessageThread } from './messaging/MessageThread';
 import { MessageComposer } from './messaging/MessageComposer';
+import { PatientRecognitionBar, type RecognizedPatient } from './messaging/PatientRecognitionBar';
 import { ConversationList, type ConversationVM } from './messaging/ConversationList';
 import { ReplyComposerBar } from './messaging/ReplyComposerBar';
 import { DocumentLinkComposerButton } from './messaging/DocumentLinkComposerButton';
@@ -73,6 +74,8 @@ export function DoctorMessages() {
   // ── UI-only state ───────────────────────────────────────────────────
   const [newMessage, setNewMessage] = useState('');
   const [cursorPosition, setCursorPosition] = useState(0);
+  // Automatikus felismerésből megerősített, az üzenethez kötendő betegek.
+  const [confirmedPatients, setConfirmedPatients] = useState<RecognizedPatient[]>([]);
   const [showCreateGroupModal, setShowCreateGroupModal] = useState(false);
   const [newChatRecipients, setNewChatRecipients] = useState<Array<{ id: string; name: string; email: string; intezmeny: string | null }>>([]);
   const [showNewChat, setShowNewChat] = useState(false);
@@ -188,6 +191,7 @@ export function DoctorMessages() {
 
   useEffect(() => {
     resetThreads();
+    setConfirmedPatients([]);
   }, [conversationKey, resetThreads]);
 
   // ── Bubble adapter (csatorna-független shape) ───────────────────────
@@ -219,6 +223,7 @@ export function DoctorMessages() {
           deliveryStatus: effectiveDeliveryStatus,
           readAt: message.readAt ?? null,
           contextLinks: message.contextLinks ?? [],
+          mentionedPatients: message.mentionedPatients ?? [],
         };
       }),
     [visibleMessages, currentUserId, selectedGroupId, groupParticipants],
@@ -236,7 +241,10 @@ export function DoctorMessages() {
     }
 
     const pendingSnapshot = [...pendingContextLinks];
-    const messageId = await sendMessage(textToSend);
+    // A megerősített betegek csak a fő szerkesztőmező üzenetére vonatkoznak
+    // (a dokumentum-kérés gyors-válaszoknál nincs felismerés).
+    const confirmedForSend = messageText ? undefined : confirmedPatients.map((p) => p.id);
+    const messageId = await sendMessage(textToSend, confirmedForSend);
     if (messageId) {
       if (pendingSnapshot.length > 0) {
         const attached: MessageContextLink[] = [];
@@ -257,6 +265,7 @@ export function DoctorMessages() {
       }
       if (!messageText) {
         setNewMessage('');
+        setConfirmedPatients([]);
       }
       replyState.clearReply();
     }
@@ -589,6 +598,7 @@ export function DoctorMessages() {
             senderId={bubble.senderId}
             currentUserId={currentUserId}
             contextLinks={bubble.contextLinks}
+            mentionedPatients={bubble.mentionedPatients}
             onSendMessage={async (messageText) => {
               await handleSendMessage(messageText);
             }}
@@ -618,7 +628,7 @@ export function DoctorMessages() {
         onCursorChange={setCursorPosition}
         onTyping={notifyTyping}
         onEscape={replyState.isReplying ? replyState.clearReply : undefined}
-        placeholder="Írja be üzenetét... (@ jellel beteget jelölhet)"
+        placeholder="Írja be üzenetét... (a beteg nevét automatikusan felismerjük)"
         replyBar={
           replyState.isReplying && replyState.replyTarget ? (
             <ReplyComposerBar
@@ -633,12 +643,26 @@ export function DoctorMessages() {
           ) : undefined
         }
         pendingBar={
-          pendingContextLinks.length > 0 ? (
-            <PendingContextLinksBar
-              links={pendingContextLinks}
-              onRemove={(i) => setPendingContextLinks((prev) => prev.filter((_, idx) => idx !== i))}
+          <>
+            <PatientRecognitionBar
+              text={newMessage}
+              confirmed={confirmedPatients}
+              onConfirm={(p) =>
+                setConfirmedPatients((prev) =>
+                  prev.some((x) => x.id === p.id) ? prev : [...prev, p],
+                )
+              }
+              onRemove={(id) =>
+                setConfirmedPatients((prev) => prev.filter((x) => x.id !== id))
+              }
             />
-          ) : undefined
+            {pendingContextLinks.length > 0 ? (
+              <PendingContextLinksBar
+                links={pendingContextLinks}
+                onRemove={(i) => setPendingContextLinks((prev) => prev.filter((_, idx) => idx !== i))}
+              />
+            ) : null}
+          </>
         }
         attachSlot={
           <>
