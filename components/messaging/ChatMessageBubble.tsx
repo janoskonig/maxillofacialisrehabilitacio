@@ -43,6 +43,8 @@ export interface ChatBubbleMessage {
   replyCount?: number;
   /** Fázis 2.1: strukturált entitás-linkek. */
   contextLinks?: MessageContextLink[];
+  /** Az üzenethez kötött betegek (id + nev) — a renderer lekérés nélkül linkel. */
+  mentionedPatients?: Array<{ id: string; nev: string; taj?: string | null }>;
 }
 
 interface Props {

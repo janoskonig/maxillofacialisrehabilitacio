@@ -67,7 +67,7 @@ export interface UseDoctorMessagesReturn {
   selectDoctor: (doctorId: string, doctorName: string) => void;
   selectGroup: (groupId: string, groupName: string | null) => void;
   clearSelection: () => void;
-  sendMessage: (text: string) => Promise<string | null>;
+  sendMessage: (text: string, confirmedPatientIds?: string[]) => Promise<string | null>;
   /** Fázis 4.1: sikertelen (429 / hálózat) üzenet újraküldése ugyanazzal a clientMessageId-val. */
   retryMessage: (message: DoctorMessage) => Promise<boolean>;
   createGroupConversation: (participantIds: string[]) => Promise<{ groupId: string } | null>;
@@ -733,7 +733,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     setMessages([]);
   };
 
-  const sendMessage = async (text: string): Promise<string | null> => {
+  const sendMessage = async (text: string, confirmedPatientIds?: string[]): Promise<string | null> => {
     if (!text.trim() || (!selectedDoctorId && !selectedGroupId)) return null;
 
     const replyTargetSnapshot = replyState.replyTarget;
@@ -765,6 +765,8 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
         pending: true,
         replyToMessageId,
         quotedMessage: replyTargetSnapshot ?? null,
+        // Megőrizzük a megerősített beteg-ID-kat, hogy a retry is elküldje őket.
+        mentionedPatientIds: confirmedPatientIds,
       };
 
       setMessages(prev => [...prev, pendingMessage]);
@@ -781,6 +783,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
           message: text,
           replyToMessageId,
           clientMessageId: tempId,
+          confirmedPatientIds: confirmedPatientIds ?? [],
         }),
       });
 
@@ -850,6 +853,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     const text = failedMessage.message;
     const replyToMessageId = failedMessage.replyToMessageId ?? null;
     const clientMessageId = failedMessage.id;
+    const confirmedPatientIds = failedMessage.mentionedPatientIds ?? [];
 
     try {
       setSending(true);
@@ -872,6 +876,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
           message: text,
           replyToMessageId,
           clientMessageId,
+          confirmedPatientIds,
         }),
       });
 

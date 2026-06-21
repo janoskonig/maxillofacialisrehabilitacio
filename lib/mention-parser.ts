@@ -9,7 +9,7 @@ import { getDbPool } from './db';
  * Normalize patient name to mention format
  * This must match exactly the format used in the API
  */
-function normalizeToMentionFormat(name: string): string {
+export function normalizeToMentionFormat(name: string): string {
   return name
     .toLowerCase()
     .normalize('NFD')

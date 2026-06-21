@@ -40,6 +40,8 @@ export interface DoctorMessage {
   readAt: Date | null;
   createdAt: Date;
   mentionedPatientIds?: string[]; // Új mező a megemlített betegek ID-ihoz
+  /** Az említett betegek neve (id + nev), hogy a renderer lekérés nélkül linkelhessen. */
+  mentionedPatients?: Array<{ id: string; nev: string; taj?: string | null }>;
   /** 041_message_replies óta: ha válasz, az eredeti doctor_messages.id. */
   replyToMessageId?: string | null;
   /** Szerver által összerakott előnézet az eredeti üzenetről (csak reply-nál). */
@@ -76,6 +78,12 @@ export interface CreateDoctorMessageInput {
    * nem dobunk hibát. NULL-ra hagyva normál INSERT történik.
    */
   clientMessageId?: string | null;
+  /**
+   * Automatikus beteg-felismerésnél a felhasználó által megerősített beteg
+   * ID-k. A `@`-jelöléssel kinyert ID-kkel egyesítve kerülnek a
+   * `mentioned_patient_ids`-be (ez köti az üzenetet a beteg-profilhoz).
+   */
+  confirmedPatientIds?: string[];
 }
 
 /**
@@ -220,6 +228,44 @@ function effectiveDoctorDeliveryStatus(
   return status;
 }
 
+/** A JSONB `mentioned_patient_ids` oszlop tömbbé alakítása (string vagy array jöhet). */
+function parseMentionedPatientIds(value: unknown): string[] {
+  if (!value) return [];
+  if (typeof value === 'string') {
+    try {
+      const parsed = JSON.parse(value);
+      return Array.isArray(parsed) ? parsed : [];
+    } catch {
+      return [];
+    }
+  }
+  return Array.isArray(value) ? (value as string[]) : [];
+}
+
+/**
+ * Az említett betegek nevének egyszeri, kötegelt betöltése a sorokhoz — így a
+ * renderer közvetlenül linkelhet (nincs per-pill `/api/patients` lekérés).
+ */
+async function loadMentionedPatientsMap(
+  rows: any[],
+): Promise<Map<string, { id: string; nev: string; taj: string | null }>> {
+  const ids = new Set<string>();
+  for (const row of rows) {
+    for (const id of parseMentionedPatientIds(row.mentioned_patient_ids)) ids.add(id);
+  }
+  const map = new Map<string, { id: string; nev: string; taj: string | null }>();
+  if (ids.size === 0) return map;
+  const pool = getDbPool();
+  const result = await pool.query(
+    `SELECT id, nev, taj FROM patients WHERE id = ANY($1::uuid[])`,
+    [Array.from(ids)],
+  );
+  for (const r of result.rows) {
+    map.set(r.id, { id: r.id, nev: r.nev, taj: r.taj ?? null });
+  }
+  return map;
+}
+
 async function mapDoctorMessageRows(
   rows: any[],
   viewerUserId: string,
@@ -240,25 +286,33 @@ async function mapDoctorMessageRows(
   );
   const quoteMap = await loadDoctorQuotePreviewMap(parentIds);
   const replyCountMap = await batchDoctorMessageReplyCounts(messageIds);
+  const mentionedPatientsMap = await loadMentionedPatientsMap(rows);
 
-  const mapped = rows.map((row) => ({
-    id: row.id,
-    senderId: row.sender_id,
-    recipientId: row.recipient_id || null,
-    groupId: row.group_id || null,
-    senderEmail: row.sender_email,
-    senderName: row.sender_name,
-    subject: row.subject,
-    message: row.message,
-    readAt: row.read_at ? new Date(row.read_at) : null,
-    createdAt: new Date(row.created_at),
-    replyToMessageId: row.reply_to_message_id ?? null,
-    quotedMessage: row.reply_to_message_id
-      ? quoteMap.get(row.reply_to_message_id) ?? null
-      : null,
-    readBy: row.group_id ? readByMap.get(row.id) || [] : undefined,
-    deliveryStatus: effectiveDoctorDeliveryStatus(row, viewerUserId),
-  }));
+  const mapped = rows.map((row) => {
+    const mentionedPatientIds = parseMentionedPatientIds(row.mentioned_patient_ids);
+    return {
+      id: row.id,
+      senderId: row.sender_id,
+      recipientId: row.recipient_id || null,
+      groupId: row.group_id || null,
+      senderEmail: row.sender_email,
+      senderName: row.sender_name,
+      subject: row.subject,
+      message: row.message,
+      readAt: row.read_at ? new Date(row.read_at) : null,
+      createdAt: new Date(row.created_at),
+      replyToMessageId: row.reply_to_message_id ?? null,
+      quotedMessage: row.reply_to_message_id
+        ? quoteMap.get(row.reply_to_message_id) ?? null
+        : null,
+      readBy: row.group_id ? readByMap.get(row.id) || [] : undefined,
+      deliveryStatus: effectiveDoctorDeliveryStatus(row, viewerUserId),
+      mentionedPatientIds,
+      mentionedPatients: mentionedPatientIds
+        .map((id) => mentionedPatientsMap.get(id))
+        .filter((p): p is { id: string; nev: string; taj: string | null } => Boolean(p)),
+    };
+  });
 
   return attachReplyCounts(mapped, replyCountMap);
 }
@@ -285,11 +339,38 @@ async function enrichDoctorMessagesWithContextLinks(
  *  - Sikeres válasz esetén a visszaadott `DoctorMessage`-be belekerül a
  *    `quotedMessage` preview is, hogy a kliensnek ne kelljen külön roundtrip.
  */
+const UUID_RE = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+
+/**
+ * Megerősített beteg ID-k szűrése: csak az érvényes UUID-formátumú, ténylegesen
+ * létező beteg-ID-k maradnak (védelem hamis/elavult kliens-adat ellen).
+ */
+async function validatePatientIds(
+  pool: ReturnType<typeof getDbPool>,
+  ids: string[] | undefined,
+): Promise<string[]> {
+  const candidates = Array.from(
+    new Set((ids ?? []).filter((id) => typeof id === 'string' && UUID_RE.test(id))),
+  );
+  if (candidates.length === 0) return [];
+  const result = await pool.query(
+    `SELECT id FROM patients WHERE id = ANY($1::uuid[])`,
+    [candidates],
+  );
+  return result.rows.map((r: any) => r.id);
+}
+
 export async function sendDoctorMessage(input: CreateDoctorMessageInput): Promise<DoctorMessage> {
   const pool = getDbPool();
 
-  // Extract patient mentions from message text
-  const mentionedPatientIds = await extractPatientMentions(input.message);
+  // Beteg-hivatkozások: a legacy `@`-jelölésből kinyert ID-k egyesítve a
+  // (szabad-szöveges felismerésből) megerősített ID-kkal. Ez a tömb köti az
+  // üzenetet a beteg-profilhoz (`mentioned_patient_ids`).
+  const mentionedFromText = await extractPatientMentions(input.message);
+  const confirmedIds = await validatePatientIds(pool, input.confirmedPatientIds);
+  const mentionedPatientIds = Array.from(
+    new Set([...mentionedFromText, ...confirmedIds]),
+  );
 
   // Reply target normalizálás + scope ACL ellenőrzés (Szelet 0.2)
   const normalizedReplyToId = parseReplyToMessageId(input.replyToMessageId);
@@ -411,7 +492,7 @@ export async function getDoctorMessages(
   const pool = getDbPool();
 
   let query = `
-    SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at, reply_to_message_id, delivery_status
+    SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at, reply_to_message_id, delivery_status, mentioned_patient_ids
     FROM doctor_messages
     WHERE (sender_id = $1 OR recipient_id = $1)
   `;
@@ -1048,7 +1129,7 @@ export async function getGroupMessages(
   }
 
   let query = `
-    SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at, reply_to_message_id, delivery_status
+    SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at, reply_to_message_id, delivery_status, mentioned_patient_ids
     FROM doctor_messages
     WHERE group_id = $1
     ORDER BY created_at ASC

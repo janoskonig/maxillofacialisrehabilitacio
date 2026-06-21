@@ -108,7 +108,7 @@ export function DoctorMessagesForPatient({ patientId, patientName }: DoctorMessa
             <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300 dark:text-gray-600" />
             <p>Még nincsenek orvos-orvos üzenetek ebben a betegben</p>
             <p className="text-sm mt-1 text-gray-400 dark:text-gray-500">
-              Az orvosok közötti üzenetek, amelyekben erre a betegre hivatkoznak (@mention), itt jelennek meg.
+              Az orvosok közötti üzenetek, amelyekben erre a betegre hivatkoznak (név vagy @mention alapján), itt jelennek meg.
             </p>
           </div>
         ) : (
@@ -165,7 +165,12 @@ export function DoctorMessagesForPatient({ patientId, patientName }: DoctorMessa
 
                     {/* Üzenet szövege */}
                     <div className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-                      <MessageTextRenderer text={message.message} />
+                      <MessageTextRenderer
+                        text={message.message}
+                        mentionedPatients={
+                          patientName ? [{ id: patientId, nev: patientName }] : undefined
+                        }
+                      />
                     </div>
 
                     {/* Időbélyeg */}

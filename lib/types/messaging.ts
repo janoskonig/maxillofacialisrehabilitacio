@@ -56,6 +56,8 @@ export interface DoctorMessage {
   createdAt: Date;
   pending?: boolean;
   mentionedPatientIds?: string[];
+  /** Az említett betegek neve (id + nev), hogy a renderer lekérés nélkül linkelhessen. */
+  mentionedPatients?: Array<{ id: string; nev: string; taj?: string | null }>;
   /** 041_message_replies óta: ha válasz, az eredeti doctor_messages.id. */
   replyToMessageId?: string | null;
   /**
