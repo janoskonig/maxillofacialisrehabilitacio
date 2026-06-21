@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useContext, createContext, useCallback, useEffect } from 'react';
+import { useState, useContext, createContext, useCallback, useEffect, useRef } from 'react';
 import type { ToothStatus, ToothBase } from '@/hooks/usePatientAutoSave';
 import { isToothTreatmentPathwayDone } from '@/lib/tooth-treatment-pathway';
 import { Tooth } from './patient-form/odontogram/Tooth';
@@ -150,6 +150,51 @@ function Arch({
   );
 }
 
+/**
+ * Az egész fogív-blokkot egységesen leskálázza, hogy beférjen a rendelkezésre álló
+ * szélességbe (mobil). A skálázás a teljes részfát érinti, így a fogankénti, abszolút
+ * pozicionált badge-ek pixelpontosan a helyükön maradnak. Desktopon (ha elfér) scale=1,
+ * és a blokk vízszintesen középre kerül.
+ */
+function ScaleToFit({ children }: { children: React.ReactNode }) {
+  const outerRef = useRef<HTMLDivElement>(null);
+  const innerRef = useRef<HTMLDivElement>(null);
+  const [scale, setScale] = useState(1);
+  const [marginLeft, setMarginLeft] = useState(0);
+  const [height, setHeight] = useState<number | undefined>(undefined);
+
+  useEffect(() => {
+    const outer = outerRef.current;
+    const inner = innerRef.current;
+    if (!outer || !inner) return;
+    const recompute = () => {
+      const avail = outer.clientWidth;
+      const natural = inner.scrollWidth;
+      if (!avail || !natural) return;
+      const s = Math.min(1, avail / natural);
+      setScale(s);
+      setMarginLeft(Math.max(0, (avail - natural * s) / 2));
+      setHeight(inner.offsetHeight * s);
+    };
+    recompute();
+    const ro = new ResizeObserver(recompute);
+    ro.observe(outer);
+    ro.observe(inner);
+    return () => ro.disconnect();
+  }, []);
+
+  return (
+    <div ref={outerRef} className="overflow-hidden" style={{ height }}>
+      <div
+        ref={innerRef}
+        style={{ width: 'max-content', marginLeft, transform: `scale(${scale})`, transformOrigin: 'top left' }}
+      >
+        {children}
+      </div>
+    </div>
+  );
+}
+
 const LEGEND: Array<{ base: ToothBase; label: string }> = [
   { base: 'sound', label: 'Ép' },
   { base: 'missing', label: 'Hiányzó' },
@@ -180,18 +225,20 @@ export function ZsigmondyCrossStages({ patientId, patientName, meglevoFogak }: Z
       <OPInlinePreview patientId={patientId} patientName={patientName} />
 
       <TreatmentSummaryProvider patientId={patientId}>
-        <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg p-3 sm:p-4 overflow-x-auto">
-          <Arch teeth={UPPER_ROW} fogak={meglevoFogak} numberPosition="below" selectedTooth={selectedTooth} onSelect={handleSelect} />
-          <div className="flex items-center gap-2 my-2">
-            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-            <span className="text-[10px] text-gray-400 dark:text-gray-500">jobb · bal</span>
-            <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
-          </div>
-          <Arch teeth={LOWER_ROW} fogak={meglevoFogak} numberPosition="above" selectedTooth={selectedTooth} onSelect={handleSelect} />
+        <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg p-3 sm:p-4 overflow-x-clip">
+          <ScaleToFit>
+            <Arch teeth={UPPER_ROW} fogak={meglevoFogak} numberPosition="below" selectedTooth={selectedTooth} onSelect={handleSelect} />
+            <div className="flex items-center gap-2 my-2">
+              <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+              <span className="text-[10px] text-gray-400 dark:text-gray-500">jobb · bal</span>
+              <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
+            </div>
+            <Arch teeth={LOWER_ROW} fogak={meglevoFogak} numberPosition="above" selectedTooth={selectedTooth} onSelect={handleSelect} />
+          </ScaleToFit>
         </div>
       </TreatmentSummaryProvider>
 
-      <div className="flex items-center gap-x-4 gap-y-1 flex-wrap mt-3 text-xs text-gray-600 dark:text-gray-300">
+      <div className="flex items-center gap-x-4 gap-y-1 flex-wrap mt-3 text-xs text-gray-600 dark:text-gray-300 max-w-full min-w-0">
         {LEGEND.map((l) => (
           <span key={l.base} className="inline-flex items-center gap-1.5">
             <Tooth fdi={11} conditions={{ base: l.base, caries: false, periapical: false, mobility: 0 }} size={16} showNumber={false} />

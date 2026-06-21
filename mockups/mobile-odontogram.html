@@ -1,0 +1,250 @@
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+<meta charset="utf-8" />
+<meta name="viewport" content="width=device-width, initial-scale=1" />
+<title>Mobil odontogram — before / after mockup</title>
+<style>
+  :root{
+    --primary:#2563eb; --primary-dark:#1e40af; --primary-soft:#eff6ff;
+    --ink:#111827; --muted:#6b7280; --line:#e5e7eb; --bg:#f3f4f6;
+    --green:#16a34a; --amber:#d97706; --amber-soft:#fef3c7;
+    --sound:#e5e7eb; --crown:#fde68a; --implant:#bae6fd;
+  }
+  *{box-sizing:border-box}
+  body{margin:0;background:var(--bg);color:var(--ink);
+    font-family:-apple-system,BlinkMacSystemFont,"Segoe UI",Roboto,Helvetica,Arial,sans-serif;
+    font-size:15px;line-height:1.5;padding:0 0 60px}
+  .ribbon{background:var(--primary-dark);color:#fff;text-align:center;font-size:13px;padding:8px;letter-spacing:.02em}
+  h1{font-size:20px;margin:24px 20px 4px}
+  .lead{color:var(--muted);font-size:14px;margin:0 20px 20px;max-width:760px}
+  .pair{display:flex;flex-wrap:wrap;gap:24px;padding:0 20px;align-items:flex-start}
+  .case{flex:1 1 320px;max-width:420px}
+  .case > h2{font-size:15px;margin:18px 0 8px;display:flex;align-items:center;gap:8px}
+  .tag{font-size:11px;font-weight:700;text-transform:uppercase;letter-spacing:.04em;border-radius:999px;padding:3px 9px}
+  .tag.bad{background:#fee2e2;color:#b91c1c}
+  .tag.good{background:#dcfce7;color:#15803d}
+
+  /* phone frame — fixed 375px viewport */
+  .phone{width:375px;max-width:100%;border:10px solid #111827;border-radius:32px;overflow:hidden;
+    background:#fff;box-shadow:0 10px 30px rgba(0,0,0,.18)}
+  .phone .status{height:26px;background:#111827}
+  .phone .scroll{height:430px;overflow-y:auto;overflow-x:clip}     /* mimic body{overflow-x:clip} */
+  .phone.scrollx .scroll{overflow-x:auto}                          /* the BAD case: widget forces x-scroll */
+  .screen{padding:14px}
+
+  .ptitle{font-size:13px;font-weight:600;display:flex;align-items:center;gap:6px;margin:0 0 2px}
+  .pmeta{font-size:11px;color:var(--muted);margin:0 0 12px}
+  .planban{background:#fffbeb;border:1px solid #fde68a;border-radius:10px;padding:8px 10px;margin-bottom:12px}
+  .planban .k{font-size:10px;font-weight:700;text-transform:uppercase;color:#b45309;letter-spacing:.04em}
+  .planban .v{font-size:12px;color:#92400e}
+
+  /* odontogram */
+  .archwrap{background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:12px}
+  .archwrap.scrollx{overflow-x:auto}                 /* before: 560px arch scrolls inside box */
+  .arch{display:flex;justify-content:center;gap:3px}
+  .arch.fixed{min-width:560px}                       /* BEFORE: forced desktop width */
+  .arch.fit{width:100%}                               /* AFTER: scales to fit */
+  .arch.fit .tooth{flex:1 1 0;min-width:0}
+  .tooth{position:relative;display:flex;flex-direction:column;align-items:center;width:30px}
+  .arch.fit .tooth .glyph{width:100%}
+  .glyph{width:22px;height:30px;border-radius:6px 6px 9px 9px;background:var(--sound);
+    border:1px solid #cbd5e1}
+  .glyph.crown{background:var(--crown);border-color:#f59e0b}
+  .glyph.implant{background:var(--implant);border-color:#38bdf8}
+  .glyph.missing{background:repeating-linear-gradient(45deg,#f3f4f6,#f3f4f6 3px,#e5e7eb 3px,#e5e7eb 6px)}
+  .num{font-size:9px;color:#9ca3af;line-height:1;margin-top:3px}
+  .badge{position:absolute;top:-5px;right:-3px;min-width:15px;height:15px;border-radius:999px;color:#fff;
+    font-size:9px;font-weight:700;display:grid;place-items:center;padding:0 3px;z-index:2}
+  .b-need{background:var(--amber)} .b-done{background:var(--green)}
+  .midline{display:flex;align-items:center;gap:8px;margin:7px 0;color:#9ca3af;font-size:10px}
+  .midline .ln{flex:1;height:1px;background:var(--line)}
+
+  /* legend + summary row */
+  .legend{display:flex;flex-wrap:wrap;gap:10px 14px;margin-top:12px;font-size:11px;color:#4b5563;align-items:center}
+  .legend .sw{display:inline-flex;align-items:center;gap:5px}
+  .dot{width:11px;height:11px;border-radius:3px;display:inline-block;border:1px solid #cbd5e1}
+  /* BEFORE: summary pinned right + nowrap → widens card → clipped */
+  .legend.bad .summary{margin-left:auto;white-space:nowrap;color:var(--muted)}
+  /* AFTER: summary drops to its own wrapping line on mobile */
+  .legend.good .summary{flex-basis:100%;min-width:0;color:var(--muted)}
+
+  .note{font-size:11px;border-radius:8px;padding:7px 9px;margin-top:10px}
+  .note.bad{background:#fef2f2;border:1px solid #fecaca;color:#991b1b}
+  .note.good{background:#ecfdf5;border:1px solid #a7f3d0;color:#065f46}
+
+  /* implant grid */
+  .implwrap{background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:12px}
+  .implwrap.scrollx{overflow-x:auto}
+  .implrow{display:flex;justify-content:space-between}
+  .implrow.fixed{min-width:560px}
+  .implrow.wrap{flex-wrap:wrap;gap:8px;justify-content:center}
+  .quad{display:flex;gap:4px}
+  .chk{width:30px;height:34px;border:1px solid #cbd5e1;border-radius:6px;display:grid;place-items:center;
+    font-size:9px;color:#9ca3af;background:#fff}
+
+  /* perio (stays scrollable — intentional) */
+  .perio{background:#f8fafc;border:1px solid var(--line);border-radius:12px;padding:12px;overflow-x:auto;max-width:100%}
+  .periorow{display:flex;align-items:center;min-width:760px}
+  .periorow .lbl{width:64px;flex:0 0 auto;font-size:10px;color:var(--muted);text-align:right;padding-right:6px}
+  .pcell{width:84px;flex:0 0 auto;display:flex;gap:3px;justify-content:center}
+  .pcell input{width:22px;height:22px;border:1px solid #cbd5e1;border-radius:4px;text-align:center;font-size:11px}
+  .scrollhint{font-size:10px;color:var(--muted);margin-top:6px;text-align:center}
+</style>
+</head>
+<body>
+<div class="ribbon">MOCKUP — mobil odontogram / kezelési terv javítás · 375px · csak terv, nem éles</div>
+
+<h1>Mobil fogtérkép — jelenlegi vs. javított</h1>
+<p class="lead">A bal oldali („JELENLEG") telefonkeret a hibát mutatja: a fogív és az összegző sor túllóg a
+képernyőn és levágódik, a fogtérképek vízszintes görgetést kívánnak. A jobb oldali („JAVÍTOTT") keret
+a célállapot: minden befér 375px-en, vízszintes görgetés nélkül — kivéve a sűrű parodontális rácsot,
+ami szándékosan marad saját, körülhatárolt görgethető dobozban.</p>
+
+<!-- ===== CASE 1: TIMELINE PROJECTION ODONTOGRAM ===== -->
+<div class="pair">
+  <div class="case">
+    <h2><span class="tag bad">Jelenleg</span> Kezelési terv — vetített odontogram</h2>
+    <div class="phone scrollx"><div class="status"></div><div class="scroll"><div class="screen">
+      <p class="ptitle">🦷 Kezelési terv <span style="font-size:10px;color:#b45309">VETÍTÉS</span></p>
+      <p class="pmeta">2026-06-19/terv</p>
+      <div class="planban"><div class="k">Kezelési terv · 2026.06.19.</div>
+        <div class="v">A nyitott kezelési igények teljesülése utáni célállapot (vetített)</div></div>
+      <div class="archwrap scrollx">
+        <div class="arch fixed" data-row="upper"></div>
+        <div class="midline"><span class="ln"></span><span>jobb · bal</span><span class="ln"></span></div>
+        <div class="arch fixed" data-row="lower"></div>
+      </div>
+      <div class="legend bad" data-legend>
+        <span class="summary">Felső: 16 megvan · 0 hiányzó · Alsó: 16 megvan · 0 hiányzó</span>
+      </div>
+      <div class="note bad">A fogív 560px-re kényszerítve + az összegző sor jobbra rögzítve és nem törhet
+        → a kártya túllóg, a jobb széle levágódik (a body overflow-x:clip miatt görgetni sem lehet).</div>
+    </div></div></div>
+  </div>
+  <div class="case">
+    <h2><span class="tag good">Javított</span> Kezelési terv — vetített odontogram</h2>
+    <div class="phone"><div class="status"></div><div class="scroll"><div class="screen">
+      <p class="ptitle">🦷 Kezelési terv <span style="font-size:10px;color:#b45309">VETÍTÉS</span></p>
+      <p class="pmeta">2026-06-19/terv</p>
+      <div class="planban"><div class="k">Kezelési terv · 2026.06.19.</div>
+        <div class="v">A nyitott kezelési igények teljesülése utáni célállapot (vetített)</div></div>
+      <div class="archwrap">
+        <div class="arch fit" data-row="upper"></div>
+        <div class="midline"><span class="ln"></span><span>jobb · bal</span><span class="ln"></span></div>
+        <div class="arch fit" data-row="lower"></div>
+      </div>
+      <div class="legend good" data-legend>
+        <span class="summary">Felső: 16 megvan · 0 hiányzó · Alsó: 16 megvan · 0 hiányzó</span>
+      </div>
+      <div class="note good">A fogív SVG-je a kártya szélességéhez igazodik (fit-to-width), az összegző
+        sor mobilon külön, törhető sorba kerül → semmi sem lóg túl, nincs vízszintes görgetés.</div>
+    </div></div></div>
+  </div>
+</div>
+
+<!-- ===== CASE 2: ZSIGMONDY FOGTÉRKÉP (with badges) ===== -->
+<div class="pair">
+  <div class="case">
+    <h2><span class="tag bad">Jelenleg</span> Zsigmondy-kereszt (badge-ekkel)</h2>
+    <div class="phone scrollx"><div class="status"></div><div class="scroll"><div class="screen">
+      <p class="ptitle">🦷 Zsigmondy-kereszt — fogankénti kezelési igények</p>
+      <div class="archwrap scrollx">
+        <div class="arch fixed" data-row="upper" data-badges="1"></div>
+        <div class="midline"><span class="ln"></span><span>jobb · bal</span><span class="ln"></span></div>
+        <div class="arch fixed" data-row="lower" data-badges="1"></div>
+      </div>
+      <div class="note bad">560px-es fogív a dobozban → belső vízszintes görgetés, a bal felső kvadráns
+        sosem látszik teljesen.</div>
+    </div></div></div>
+  </div>
+  <div class="case">
+    <h2><span class="tag good">Javított</span> Zsigmondy-kereszt (badge-ekkel)</h2>
+    <div class="phone"><div class="status"></div><div class="scroll"><div class="screen">
+      <p class="ptitle">🦷 Zsigmondy-kereszt — fogankénti kezelési igények</p>
+      <div class="archwrap">
+        <div class="arch fit" data-row="upper" data-badges="1"></div>
+        <div class="midline"><span class="ln"></span><span>jobb · bal</span><span class="ln"></span></div>
+        <div class="arch fit" data-row="lower" data-badges="1"></div>
+      </div>
+      <div class="note good">Az egész fogív-blokk egységesen leskálázódik a képernyőre (a fogankénti
+        amber/zöld badge-ek pixelpontosan a helyükön maradnak). Nincs görgetés.</div>
+    </div></div></div>
+  </div>
+</div>
+
+<!-- ===== CASE 3: IMPLANT GRID ===== -->
+<div class="pair">
+  <div class="case">
+    <h2><span class="tag bad">Jelenleg</span> Meglévő implantátumok</h2>
+    <div class="phone scrollx"><div class="status"></div><div class="scroll"><div class="screen">
+      <p class="ptitle">⊙ Meglévő implantátumok</p>
+      <div class="implwrap scrollx"><div class="implrow fixed" data-impl></div></div>
+      <div class="note bad">600px-es jelölősor → vízszintes görgetés a beviteli űrlapon.</div>
+    </div></div></div>
+  </div>
+  <div class="case">
+    <h2><span class="tag good">Javított</span> Meglévő implantátumok</h2>
+    <div class="phone"><div class="status"></div><div class="scroll"><div class="screen">
+      <p class="ptitle">⊙ Meglévő implantátumok</p>
+      <div class="implwrap"><div class="implrow wrap" data-impl></div></div>
+      <div class="note good">A kvadránsok mobilon tördelődnek (sm-től egymás mellett), minden befér.</div>
+    </div></div></div>
+  </div>
+</div>
+
+<!-- ===== CASE 4: PERIO (intentionally scrollable) ===== -->
+<div class="pair">
+  <div class="case">
+    <h2><span class="tag good">Változatlan</span> Parodontális rács — szándékos belső görgetés</h2>
+    <div class="phone"><div class="status"></div><div class="scroll"><div class="screen">
+      <p class="ptitle">📊 Parodontális státusz</p>
+      <div class="perio">
+        <div class="periorow"><span class="lbl">PD bukkális</span>
+          <span class="pcell"><input value="3"><input value="2"><input value="3"></span>
+          <span class="pcell"><input value="2"><input value="2"><input value="4"></span>
+          <span class="pcell"><input value="3"><input value="3"><input value="2"></span>
+          <span class="pcell"><input value="2"><input value="3"><input value="3"></span>
+          <span class="pcell"><input value="3"><input value="2"><input value="2"></span></div>
+        <div class="periorow"><span class="lbl">CAL bukkális</span>
+          <span class="pcell"><input value="1"><input value="0"><input value="1"></span>
+          <span class="pcell"><input value="0"><input value="1"><input value="2"></span>
+          <span class="pcell"><input value="1"><input value="1"><input value="0"></span>
+          <span class="pcell"><input value="0"><input value="1"><input value="1"></span>
+          <span class="pcell"><input value="1"><input value="0"><input value="0"></span></div>
+      </div>
+      <div class="scrollhint">← a sűrű rács (16 fog × 3 mérés) saját körülhatárolt dobozban görgethető →</div>
+      <div class="note good">Ezt nem érdemes a képernyőre zsúfolni — marad a saját görgethető dobozában,
+        de a lapot már nem szélesíti.</div>
+    </div></div></div>
+  </div>
+</div>
+
+<script>
+  // FDI rows used by the real app (UPPER_ROW / LOWER_ROW)
+  const UPPER=[18,17,16,15,14,13,12,11,21,22,23,24,25,26,27,28];
+  const LOWER=[48,47,46,45,44,43,42,41,31,32,33,34,35,36,37,38];
+  const STYLES={11:'crown',21:'crown',36:'implant',46:'implant',24:'missing'};
+  const NEED={16:2,36:1}, DONE={46:1};
+  function build(el){
+    const teeth=el.dataset.row==='upper'?UPPER:LOWER;
+    const withBadges=el.dataset.badges==='1';
+    el.innerHTML=teeth.map((t,i)=>{
+      const kind=STYLES[t]||'sound';
+      const mr=i===7?'margin-right:9px':'';
+      let badge='';
+      if(withBadges&&NEED[t]) badge=`<span class="badge b-need">${NEED[t]}</span>`;
+      else if(withBadges&&DONE[t]) badge=`<span class="badge b-done">✓</span>`;
+      const num=el.dataset.row==='upper'?`<span class="num">${t}</span>`:'';
+      const numTop=el.dataset.row==='lower'?`<span class="num">${t}</span>`:'';
+      return `<div class="tooth" style="${mr}">${numTop}<div class="glyph ${kind}"></div>${num}${badge}</div>`;
+    }).join('');
+  }
+  document.querySelectorAll('.arch[data-row]').forEach(build);
+  document.querySelectorAll('[data-impl]').forEach(el=>{
+    const groups=[[18,17,16,15,14,13,12,11],[21,22,23,24,25,26,27,28]];
+    el.innerHTML=groups.map(g=>`<div class="quad">${g.map(t=>`<div class="chk">${t}</div>`).join('')}</div>`).join('');
+  });
+</script>
+</body>
+</html>

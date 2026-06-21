@@ -305,8 +305,8 @@ export function Odontogram({
 
   return (
     <div>
-      <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg p-3 sm:p-4">
-        <div className="max-w-xl mx-auto">
+      <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg p-3 sm:p-4 overflow-x-clip">
+        <div className="max-w-xl mx-auto min-w-0">
           <FabianFejerdyControl jaw="felso" field={fabianFelsoField} options={fabianOptions} isViewOnly={isViewOnly} />
           {isMobile ? <PinchPan>{archBlock}</PinchPan> : archBlock}
           <FabianFejerdyControl jaw="also" field={fabianAlsoField} options={fabianOptions} isViewOnly={isViewOnly} />
@@ -314,14 +314,14 @@ export function Odontogram({
       </div>
 
       {/* Jelmagyarázat + összegzés */}
-      <div className="flex items-center gap-x-4 gap-y-1 flex-wrap mt-3 text-xs text-gray-600 dark:text-gray-300">
+      <div className="flex items-center gap-x-4 gap-y-1 flex-wrap mt-3 text-xs text-gray-600 dark:text-gray-300 max-w-full min-w-0">
         {LEGEND.map((l) => (
           <span key={l.base} className="inline-flex items-center gap-1.5">
             <Tooth fdi={11} conditions={{ base: l.base, caries: false, periapical: false, mobility: 0 }} size={16} showNumber={false} />
             {l.label}
           </span>
         ))}
-        <span className="ml-auto text-gray-500 dark:text-gray-400">
+        <span className="basis-full sm:basis-auto sm:ml-auto min-w-0 text-gray-500 dark:text-gray-400">
           Felső: {upper.present} megvan · {upper.missing} hiányzó · Alsó: {lower.present} megvan · {lower.missing} hiányzó
         </span>
       </div>

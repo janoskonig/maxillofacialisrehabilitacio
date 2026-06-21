@@ -41,9 +41,9 @@ export function ImplantatumokSection({
   const hasAny = positions.length > 0 || !!nemIsmertPoziciokbanImplantatum;
 
   const renderRow = (groups: number[][]) => (
-    <div className="flex justify-between min-w-[600px] sm:min-w-0">
+    <div className="flex flex-wrap justify-center gap-y-2 sm:flex-nowrap sm:justify-between">
       {groups.map((group, gi) => (
-        <div key={gi} className="flex gap-1">
+        <div key={gi} className="flex flex-wrap justify-center gap-1">
           {group.map(tooth => {
             const toothStr = tooth.toString();
             const implantValue = toothStr in implantatumok
@@ -77,7 +77,7 @@ export function ImplantatumokSection({
       {editing ? (
         <>
           <div className="mb-6">
-            <div className="bg-gray-50 dark:bg-gray-800/60 p-3 sm:p-4 rounded-lg overflow-x-auto">
+            <div className="bg-gray-50 dark:bg-gray-800/60 p-3 sm:p-4 rounded-lg overflow-x-clip">
               <div className="mb-2">{renderRow(UPPER)}</div>
               {renderRow(LOWER)}
             </div>
