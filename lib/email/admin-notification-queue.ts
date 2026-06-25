@@ -94,6 +94,9 @@ const NOTIFICATION_TYPE_LABELS: Record<string, string> = {
   ohip14_updated: 'OHIP-14 módosítva',
   ohip14_reminder_sent: 'OHIP-14 emlékeztető (páciensnek kiküldve)',
   communication_log_created: 'Érintkezési napló bejegyzés',
+  missing_data_reminder_sent: 'Hiányzó betegadat emlékeztető (kezelőorvosnak)',
+  missing_data_escalated: 'Hiányzó betegadat eszkaláció (adminhoz)',
+  missing_data_no_owner: 'Hiányos beteg kezelőorvos nélkül (admin teendő)',
 };
 
 let queueSchemaReady: Promise<void> | null = null;

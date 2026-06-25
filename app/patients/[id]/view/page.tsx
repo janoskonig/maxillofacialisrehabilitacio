@@ -248,6 +248,7 @@ export default function PatientViewPage() {
         patient={patient}
         currentStage={currentStage}
         canSeeNextStep
+        canAssignDoctor={userRole === 'admin' || userRole === 'fogpótlástanász'}
         onGoToScheduling={() => handleTabChange('terv_idopont')}
       />
 

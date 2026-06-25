@@ -21,5 +21,8 @@ export const GET = authedHandler(async (_req, { params }) => {
     clinicalMissing: row.clinicalMissing.length,
     researchMissing: row.researchMissing.length,
     clinicalComplete: row.clinicalComplete,
+    // Tételes hiánylista a betegkartonon megjelenő, deep-linkelhető checklisthez.
+    clinicalMissingItems: row.clinicalMissing.map((m) => ({ key: m.key, label: m.label })),
+    researchMissingItems: row.researchMissing.map((m) => ({ key: m.key, label: m.label })),
   });
 });

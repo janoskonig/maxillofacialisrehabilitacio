@@ -4,7 +4,15 @@ import { useEffect, useState } from 'react';
 import { Patient, patientStageOptions, PatientStageEntry } from '@/lib/types';
 import type { WorklistItemBackend } from '@/lib/worklist-types';
 import { calculateAge } from '@/lib/dateUtils';
-import { Phone, CalendarPlus, ArrowRight } from 'lucide-react';
+import { Phone, CalendarPlus, ArrowRight, ChevronDown } from 'lucide-react';
+import Link from 'next/link';
+import { completenessEditHref } from '@/lib/completeness-deeplinks';
+import { KezeloorvosDelegationWidget } from '@/components/KezeloorvosDelegationWidget';
+
+interface MissingItemLite {
+  key: string;
+  label: string;
+}
 
 interface PatientHeaderBarProps {
   patient: Patient;
@@ -13,6 +21,8 @@ interface PatientHeaderBarProps {
   onGoToScheduling?: () => void;
   /** A „következő lépés” kiírásához van-e jogosultság (technikus nem lát munkalistát). */
   canSeeNextStep?: boolean;
+  /** Admin / fogpótlástanász delegálhat kezelőorvost. */
+  canAssignDoctor?: boolean;
 }
 
 const STAGE_BADGE_COLORS: Record<string, string> = {
@@ -47,12 +57,16 @@ export function PatientHeaderBar({
   currentStage,
   onGoToScheduling,
   canSeeNextStep = true,
+  canAssignDoctor = false,
 }: PatientHeaderBarProps) {
   const [nextStepLabel, setNextStepLabel] = useState<string | null>(null);
+  const [checklistOpen, setChecklistOpen] = useState(false);
   const [completeness, setCompleteness] = useState<{
     score: number;
     clinicalMissing: number;
     researchMissing: number;
+    clinicalMissingItems: MissingItemLite[];
+    researchMissingItems: MissingItemLite[];
   } | null>(null);
 
   useEffect(() => {
@@ -70,6 +84,8 @@ export function PatientHeaderBar({
             score: data.score,
             clinicalMissing: data.clinicalMissing ?? 0,
             researchMissing: data.researchMissing ?? 0,
+            clinicalMissingItems: data.clinicalMissingItems ?? [],
+            researchMissingItems: data.researchMissingItems ?? [],
           });
         }
       } catch {
@@ -129,10 +145,11 @@ export function PatientHeaderBar({
       : completeness.score >= 70
       ? 'bg-amber-500'
       : 'bg-red-500';
+  const totalMissing = completeness ? completeness.clinicalMissing + completeness.researchMissing : 0;
   const completenessTitle =
     completeness == null
       ? ''
-      : completeness.clinicalMissing + completeness.researchMissing === 0
+      : totalMissing === 0
       ? 'Adatteljesség: minden értelmezhető adat megvan'
       : `Adatteljesség — ${completeness.clinicalMissing} klinikai · ${completeness.researchMissing} kutatási hiányzó adat`;
 
@@ -170,16 +187,62 @@ export function PatientHeaderBar({
                 {patient.telefonszam}
               </a>
             )}
+            <span className="text-gray-300 dark:text-gray-600">·</span>
+            <KezeloorvosDelegationWidget patientId={patient.id!} canAssign={canAssignDoctor} />
             {completeness && (
-              <span
-                className="inline-flex items-center gap-1 text-gray-400 dark:text-gray-500"
-                title={completenessTitle}
-              >
-                <span className={`w-1.5 h-1.5 rounded-full ${completenessDot}`} />
-                Adatteljesség {completeness.score}%
-              </span>
+              totalMissing > 0 ? (
+                <button
+                  type="button"
+                  onClick={() => setChecklistOpen((v) => !v)}
+                  className="inline-flex items-center gap-1 text-gray-500 dark:text-gray-400 hover:text-medical-primary"
+                  title={completenessTitle}
+                  aria-expanded={checklistOpen}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${completenessDot}`} />
+                  Adatteljesség {completeness.score}%
+                  <ChevronDown
+                    className={`w-3 h-3 transition-transform ${checklistOpen ? 'rotate-180' : ''}`}
+                  />
+                </button>
+              ) : (
+                <span
+                  className="inline-flex items-center gap-1 text-gray-400 dark:text-gray-500"
+                  title={completenessTitle}
+                >
+                  <span className={`w-1.5 h-1.5 rounded-full ${completenessDot}`} />
+                  Adatteljesség {completeness.score}%
+                </span>
+              )
             )}
           </div>
+
+          {/* Kattintható hiány-checklist: deep-link a betegűrlap megfelelő füléhez */}
+          {completeness && checklistOpen && totalMissing > 0 && (
+            <div className="mt-2 rounded-md border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 p-2">
+              <div className="text-[11px] font-medium text-gray-500 dark:text-gray-400 mb-1">
+                Hiányzó adatok – kattintson a pótláshoz
+              </div>
+              <ul className="flex flex-wrap gap-1.5">
+                {[
+                  ...completeness.clinicalMissingItems.map((m) => ({ ...m, group: 'clinical' as const })),
+                  ...completeness.researchMissingItems.map((m) => ({ ...m, group: 'research' as const })),
+                ].map((m) => (
+                  <li key={`${m.group}:${m.key}`}>
+                    <Link
+                      href={completenessEditHref(patient.id!, m.key)}
+                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors ${
+                        m.group === 'clinical'
+                          ? 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-950/60'
+                          : 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/60'
+                      }`}
+                    >
+                      {m.label}
+                    </Link>
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
         </div>
 
         {/* Következő lépés + CTA */}

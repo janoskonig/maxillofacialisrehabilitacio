@@ -106,9 +106,12 @@ export const GET = authedHandler(async (req, { auth, correlationId }) => {
 
   const sortParam = searchParams.get('sort');
   const directionParam = searchParams.get('direction');
-  const ALLOWED_SORT_COLUMNS: Record<string, string> = { nev: 'nev', createdAt: 'created_at' };
+  const ALLOWED_SORT_COLUMNS: Record<string, string> = { nev: 'nev', createdAt: 'created_at', kezeleoorvos: 'kezeleoorvos' };
   const sortColumn = (sortParam && ALLOWED_SORT_COLUMNS[sortParam]) || 'created_at';
   const sortDir = directionParam === 'asc' ? 'ASC' : 'DESC';
+  // Kezelőorvos szerinti rendezésnél a kijelöletlen (NULL) betegek mindig a
+  // lista végére kerüljenek, iránytól függetlenül.
+  const nullsClause = sortColumn === 'kezeleoorvos' ? ' NULLS LAST' : '';
 
   const role = auth?.role || null;
   const userEmail = auth?.email || null;
@@ -193,7 +196,7 @@ export const GET = authedHandler(async (req, { auth, correlationId }) => {
       `SELECT ${selectFields}
        ${fromClause}
        WHERE ${searchCondition}
-       ORDER BY ${orderBy} ${sortDir}${limitOffset}`,
+       ORDER BY ${orderBy} ${sortDir}${nullsClause}${limitOffset}`,
       dataQueryParams
     );
   } else {
@@ -219,7 +222,7 @@ export const GET = authedHandler(async (req, { auth, correlationId }) => {
       `SELECT ${selectFields}
        ${fromClause}
        ${whereClause}
-       ORDER BY ${orderBy} ${sortDir}${limitOffset}`,
+       ORDER BY ${orderBy} ${sortDir}${nullsClause}${limitOffset}`,
       dataQueryParams
     );
   }

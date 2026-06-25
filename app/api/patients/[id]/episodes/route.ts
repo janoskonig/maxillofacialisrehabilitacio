@@ -5,6 +5,7 @@ import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import type { PatientEpisode } from '@/lib/types';
 import { logActivity } from '@/lib/activity';
 import { createOpenEpisodeWithInitialStageZero, EPISODE_REASON_VALUES } from '@/lib/patient-episode-create';
+import { checkClinicalGate } from '@/lib/completeness-gate';
 
 const REASON_VALUES = [...EPISODE_REASON_VALUES];
 const REASON_SET = new Set<string>(REASON_VALUES);
@@ -173,6 +174,20 @@ export const POST = roleHandler(
         { error: 'Cím / ok (chiefComplaint) kötelező' },
         { status: 400 }
       );
+    }
+
+    // KAPU: kötelező klinikai minimum (hiányos klinikai adat → blokk; kezelőorvos
+    // / admin felülbírálhatja `force` + `overrideReason`-nal, naplózva).
+    const gate = await checkClinicalGate({
+      patientId,
+      gate: 'new_episode',
+      role: auth.role,
+      userId: auth.userId,
+      force: body.force === true,
+      overrideReason: body.overrideReason,
+    });
+    if (!gate.ok) {
+      return NextResponse.json(gate.body, { status: gate.status });
     }
 
     let episode: PatientEpisode;

@@ -31,7 +31,7 @@ interface ListState {
   totalPatients: number;
   searchQuery: string;
   selectedView: 'all' | 'neak_pending' | 'missing_docs';
-  sortField: 'nev' | 'idopont' | 'createdAt' | null;
+  sortField: 'nev' | 'idopont' | 'createdAt' | 'kezeleoorvos' | null;
   sortDirection: 'asc' | 'desc';
   page: number;
   refreshKey: number;
@@ -41,7 +41,7 @@ type ListAction =
   | { type: 'SEARCH_RESULTS'; patients: Patient[]; total: number }
   | { type: 'SET_SEARCH'; query: string }
   | { type: 'SET_VIEW'; view: ListState['selectedView'] }
-  | { type: 'TOGGLE_SORT'; field: 'nev' | 'idopont' | 'createdAt' }
+  | { type: 'TOGGLE_SORT'; field: 'nev' | 'idopont' | 'createdAt' | 'kezeleoorvos' }
   | { type: 'SET_PAGE'; page: number }
   | { type: 'REFRESH' };
 
@@ -254,7 +254,7 @@ export default function Home() {
     router.push(`/patients/${patient.id}/view`);
   };
 
-  const handleSort = useCallback((field: 'nev' | 'idopont' | 'createdAt') => {
+  const handleSort = useCallback((field: 'nev' | 'idopont' | 'createdAt' | 'kezeleoorvos') => {
     dispatch({ type: 'TOGGLE_SORT', field });
   }, []);
 

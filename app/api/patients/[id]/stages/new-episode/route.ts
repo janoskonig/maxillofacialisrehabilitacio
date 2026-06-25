@@ -6,12 +6,18 @@ import {
   createOpenEpisodeWithInitialStageZero,
   EPISODE_REASON_VALUES,
 } from '@/lib/patient-episode-create';
+import { checkClinicalGate } from '@/lib/completeness-gate';
 
 /**
  * Új ellátási epizód (ugyanaz, mint POST /api/patients/[id]/episodes).
  * POST /api/patients/[id]/stages/new-episode
- * Body: { reason?, chiefComplaint?, caseTitle?, notes?, parentEpisodeId?, triggerType?, treatmentTypeId? }
+ * Body: { reason?, chiefComplaint?, caseTitle?, notes?, parentEpisodeId?, triggerType?, treatmentTypeId?,
+ *         force?, overrideReason? }
  * Ha reason/chiefComplaint hiányzik: anamnesis + notes alapú feltöltés (API-kompatibilitás).
+ *
+ * KAPU: a kötelező klinikai minimum (8 mező + OP-röntgen) hiányában az epizód
+ * indítása blokkol (422). Kezelőorvos / admin `force: true` + `overrideReason`
+ * megadásával felülbírálhatja — a felülbírálás naplózódik (completeness_gate_override).
  */
 export const dynamic = 'force-dynamic';
 
@@ -32,6 +38,21 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   }
 
   const body = await req.json();
+
+  // KAPU: kötelező klinikai minimum (hiányos klinikai adat → blokk; kezelőorvos
+  // / admin felülbírálhatja indokkal, naplózva).
+  const gate = await checkClinicalGate({
+    patientId,
+    gate: 'new_episode',
+    role: auth.role,
+    userId: auth.userId,
+    force: body.force === true,
+    overrideReason: body.overrideReason,
+  });
+  if (!gate.ok) {
+    return NextResponse.json(gate.body, { status: gate.status });
+  }
+
   const allowedReasons = new Set<string>(EPISODE_REASON_VALUES);
   let reason = body.reason as string | undefined;
   let chiefComplaint = (body.chiefComplaint as string)?.trim?.() || '';

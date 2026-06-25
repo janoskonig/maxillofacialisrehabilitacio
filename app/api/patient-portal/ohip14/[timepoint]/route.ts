@@ -9,6 +9,7 @@ import {
   getOhipPatientContext,
 } from '@/lib/ohip14-stage';
 import { getTimepointAvailability } from '@/lib/ohip14-timepoint-stage';
+import { closeOpenOhipPatientTasksSilent } from '@/lib/ohip14-patient-tasks';
 import { apiHandler } from '@/lib/api/route-handler';
 
 export const dynamic = 'force-dynamic';
@@ -279,6 +280,9 @@ export const POST = apiHandler(async (req, { correlationId, params }) => {
     ]
   );
 
+  // Kitöltés után a nyitott in-app OHIP-feladat azonnal lezárul (nem várunk a cronra).
+  closeOpenOhipPatientTasksSilent(patientId);
+
   return NextResponse.json(
     {
       response: mapRowToResponse(insertResult.rows[0]),
@@ -444,6 +448,9 @@ export const PUT = apiHandler(async (req, { correlationId, params }) => {
       body.notes || null,
     ]
   );
+
+  // Kitöltés/frissítés után a nyitott in-app OHIP-feladat azonnal lezárul.
+  closeOpenOhipPatientTasksSilent(patientId);
 
   return NextResponse.json(
     {

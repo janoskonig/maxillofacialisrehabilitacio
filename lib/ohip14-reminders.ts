@@ -3,6 +3,12 @@ import { sendOhipReminderEmail } from '@/lib/email';
 import { queueAdminNotification } from '@/lib/email/admin-notification-queue';
 import { getOhipPatientContext } from '@/lib/ohip14-stage';
 import { getTimepointAvailability, type TimepointAvailability } from '@/lib/ohip14-timepoint-stage';
+import {
+  ensurePatientOhipTask,
+  pushPatientOhipReminder,
+  escalateOhipToKezeloorvos,
+  closeOpenOhipPatientTasks,
+} from '@/lib/ohip14-patient-tasks';
 import type { OHIP14Timepoint } from '@/lib/types';
 
 const ALL_TIMEPOINTS: OHIP14Timepoint[] = ['T0', 'T1', 'T2', 'T3'];
@@ -12,6 +18,10 @@ interface ReminderResult {
   sent: number;
   skipped: number;
   errors: number;
+  /** Új in-app beteg-feladatok száma. */
+  tasksCreated: number;
+  /** Kezelőorvoshoz eszkalált esetek száma. */
+  escalated: number;
 }
 
 /**
@@ -21,7 +31,7 @@ interface ReminderResult {
  */
 export async function sendOhipReminders(): Promise<ReminderResult> {
   const pool = getDbPool();
-  const result: ReminderResult = { sent: 0, skipped: 0, errors: 0 };
+  const result: ReminderResult = { sent: 0, skipped: 0, errors: 0, tasksCreated: 0, escalated: 0 };
   const envUrl = process.env.NEXT_PUBLIC_BASE_URL || '';
   const baseUrl = envUrl && !envUrl.includes('localhost') ? envUrl : 'https://rehabilitacios-protetika.hu';
 
@@ -73,8 +83,28 @@ export async function sendOhipReminders(): Promise<ReminderResult> {
       }
 
       if (!pendingTp || !pendingAvail) {
+        // Nincs nyitott, kitöltendő időpont → a nyitott in-app feladatot lezárjuk.
+        await closeOpenOhipPatientTasks(patient_id);
         result.skipped++;
         continue;
+      }
+
+      // In-app feladat + Web Push a betegnek — a heti e-mail cooldown-tól
+      // FÜGGETLENÜL, hogy a portálon mindig látható maradjon a teendő.
+      const taskCreated = await ensurePatientOhipTask(pool, patient_id, pendingTp);
+      if (taskCreated) {
+        result.tasksCreated++;
+        await pushPatientOhipReminder(pool, patient_id, pendingTp);
+      }
+
+      // Eszkaláció a kezelőorvoshoz, ha a beteg több emlékeztető után sem töltött ki.
+      const priorCountRes = await pool.query(
+        `SELECT count(*)::int AS c FROM ohip_reminder_log WHERE patient_id = $1 AND timepoint = $2`,
+        [patient_id, pendingTp]
+      );
+      const priorCount = (priorCountRes.rows[0]?.c as number) ?? 0;
+      if (await escalateOhipToKezeloorvos(pool, patient_id, nev, pendingTp, priorCount)) {
+        result.escalated++;
       }
 
       // Check cooldown (already sent in last 7 days?)

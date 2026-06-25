@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
 import { validateUUID } from '@/lib/validation';
+import { getPatientDataCompleteness } from '@/lib/patient-data-completeness';
 
 export const dynamic = 'force-dynamic';
 
@@ -71,23 +72,67 @@ export const GET = authedHandler(async (req, { auth }) => {
     params
   );
 
-  const patients = res.rows.map((r: any) => ({
-    id: r.id,
-    nev: r.nev,
-    doctorId: r.doctorId,
-    doctorName: r.doctorName ?? null,
-    intezmeny: r.intezmeny ?? null,
-    assignedAt: r.assignedAt ?? null,
-    assignedByName: r.assignedByName ?? null,
-    openEpisodes: r.openEpisodes ?? 0,
-    nextAppt: r.nextAppt ?? null,
-    lastAppt: r.lastAppt ?? null,
-    // „Elakadt": nyitott epizód van, de nincs jövőbeli időpont → kell vele tenni.
-    stalled: (r.openEpisodes ?? 0) > 0 && r.nextAppt == null,
-  }));
+  // Adat-teljesség betegenként: a teljes riportot EGYSZER kérjük le és map-eljük
+  // (a számonkérés ezzel köthető a kezelőorvoshoz). Hiba esetén a pontszám null.
+  const completenessByPatient = new Map<string, { score: number; clinicalComplete: boolean; missing: number }>();
+  try {
+    const report = await getPatientDataCompleteness();
+    for (const row of report.patients) {
+      completenessByPatient.set(row.patientId, {
+        score: row.completenessScore,
+        clinicalComplete: row.clinicalComplete,
+        missing: row.clinicalMissing.length + row.researchMissing.length,
+      });
+    }
+  } catch {
+    /* a pontszám opcionális — hiányában a UI egyszerűen nem mutatja */
+  }
+
+  const patients = res.rows.map((r: any) => {
+    const comp = completenessByPatient.get(r.id) ?? null;
+    return {
+      id: r.id,
+      nev: r.nev,
+      doctorId: r.doctorId,
+      doctorName: r.doctorName ?? null,
+      intezmeny: r.intezmeny ?? null,
+      assignedAt: r.assignedAt ?? null,
+      assignedByName: r.assignedByName ?? null,
+      openEpisodes: r.openEpisodes ?? 0,
+      nextAppt: r.nextAppt ?? null,
+      lastAppt: r.lastAppt ?? null,
+      // „Elakadt": nyitott epizód van, de nincs jövőbeli időpont → kell vele tenni.
+      stalled: (r.openEpisodes ?? 0) > 0 && r.nextAppt == null,
+      completenessScore: comp?.score ?? null,
+      clinicalIncomplete: comp ? !comp.clinicalComplete : false,
+    };
+  });
+
+  // Admin, teljes nézet: a kezelőorvos NÉLKÜLI, klinikailag hiányos betegek külön
+  // szekciója — ez maga elszámoltathatósági hiba (kezelőorvost kell kijelölni).
+  let noOwner: Array<{ id: string; nev: string | null; completenessScore: number | null; missing: number }> = [];
+  if (!doctorId && role === 'admin') {
+    const noOwnerRes = await pool.query(
+      `SELECT p.id, p.nev FROM patients p WHERE p.kezeleoorvos_user_id IS NULL`,
+    );
+    noOwner = noOwnerRes.rows
+      .map((r: any) => {
+        const comp = completenessByPatient.get(r.id);
+        return { id: r.id as string, nev: (r.nev as string) ?? null, comp };
+      })
+      .filter((x) => x.comp && !x.comp.clinicalComplete)
+      .map((x) => ({
+        id: x.id,
+        nev: x.nev,
+        completenessScore: x.comp!.score,
+        missing: x.comp!.missing,
+      }))
+      .sort((a, b) => (a.completenessScore ?? 0) - (b.completenessScore ?? 0));
+  }
 
   return NextResponse.json({
     patients,
+    noOwner,
     scope: doctorId ? (role === 'admin' ? 'doctor' : 'self') : 'all',
   });
 });
