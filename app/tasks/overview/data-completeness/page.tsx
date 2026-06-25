@@ -4,6 +4,7 @@ import { useCallback, useEffect, useMemo, useState } from 'react';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth';
+import { completenessEditHref } from '@/lib/completeness-deeplinks';
 import { AppShell } from '@/components/layout/AppShell';
 import {
   Loader2,
@@ -97,29 +98,7 @@ const GROUP_LABELS: Record<GroupFilter, string> = {
   all: 'Mind',
 };
 
-/** Hiányzó mező → a betegűrlap megfelelő füle + szekció-horgonya. */
-const FIELD_TARGET: Record<string, { tab: string; anchor: string }> = {
-  nev: { tab: 'alapadatok', anchor: 'section-alapadatok' },
-  nem: { tab: 'alapadatok', anchor: 'section-alapadatok' },
-  szuletesiDatum: { tab: 'alapadatok', anchor: 'section-alapadatok' },
-  taj: { tab: 'alapadatok', anchor: 'section-alapadatok' },
-  email: { tab: 'alapadatok', anchor: 'section-alapadatok' },
-  'doc:op': { tab: 'adminisztracio', anchor: 'section-adminisztracio' },
-  kezelesreErkezesIndoka: { tab: 'anamnezis', anchor: 'section-anamnezis' },
-  diagnozis: { tab: 'anamnezis', anchor: 'section-anamnezis' },
-  meglevoFogak: { tab: 'anamnezis', anchor: 'section-betegvizsgalat' },
-  ohipT0: { tab: 'anamnezis', anchor: 'section-ohip14' },
-  tnmStaging: { tab: 'anamnezis', anchor: 'section-anamnezis' },
-  brownFuggoleges: { tab: 'anamnezis', anchor: 'section-anamnezis' },
-  brownVizszintes: { tab: 'anamnezis', anchor: 'section-anamnezis' },
-  kovacsDobak: { tab: 'anamnezis', anchor: 'section-anamnezis' },
-  radioterapiaDozis: { tab: 'anamnezis', anchor: 'section-anamnezis' },
-};
-
-function editHref(patientId: string, fieldKey: string): string {
-  const target = FIELD_TARGET[fieldKey] ?? { tab: 'anamnezis', anchor: 'section-anamnezis' };
-  return `/patients/${patientId}/view?tab=${target.tab}#${target.anchor}`;
-}
+const editHref = completenessEditHref;
 
 export default function DataCompletenessPage() {
   const router = useRouter();

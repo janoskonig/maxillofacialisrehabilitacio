@@ -3,9 +3,11 @@ import {
   dedupeRecipients,
   formatMissingSummary,
   doctorActionableMissing,
+  resolvePrimaryRecipients,
   PATIENT_FILLABLE_KEYS,
   shouldEscalate,
   ESCALATION_AFTER,
+  type Recipient,
 } from '@/lib/missing-data-reminders';
 import type { MissingItem, PatientCompletenessRow } from '@/lib/patient-data-completeness';
 
@@ -49,6 +51,47 @@ describe('dedupeRecipients', () => {
 
   it('returns empty for all-null input', () => {
     expect(dedupeRecipients([null, null])).toEqual([]);
+  });
+});
+
+describe('resolvePrimaryRecipients', () => {
+  const kezeloorvos: Recipient = {
+    userId: 'doc1',
+    email: 'kezelo@example.com',
+    name: 'Dr. Kezelő',
+    role: 'kezeloorvos',
+  };
+  const referrer: Recipient = {
+    userId: 'ref1',
+    email: 'ref@example.com',
+    name: 'Dr. Beutaló',
+    role: 'beutalo_orvos',
+  };
+  const prosthodontist: Recipient = {
+    userId: 'fog1',
+    email: 'fog@example.com',
+    name: 'Dr. Fogpótlás',
+    role: 'fogpótlástanász',
+  };
+
+  it('kezelőorvos is the single recipient when assigned (no fallback, not no-owner)', () => {
+    const { recipients, noOwner } = resolvePrimaryRecipients(kezeloorvos, [referrer, prosthodontist]);
+    expect(noOwner).toBe(false);
+    expect(recipients).toHaveLength(1);
+    expect(recipients[0].userId).toBe('doc1');
+    expect(recipients[0].role).toBe('kezeloorvos');
+  });
+
+  it('falls back to referrer + prosthodontist and flags no-owner when unassigned', () => {
+    const { recipients, noOwner } = resolvePrimaryRecipients(null, [referrer, prosthodontist]);
+    expect(noOwner).toBe(true);
+    expect(recipients.map((r) => r.userId).sort()).toEqual(['fog1', 'ref1']);
+  });
+
+  it('no kezelőorvos and no resolvable fallback → no-owner with empty recipients', () => {
+    const { recipients, noOwner } = resolvePrimaryRecipients(null, [null, null]);
+    expect(noOwner).toBe(true);
+    expect(recipients).toEqual([]);
   });
 });
 

@@ -27,6 +27,12 @@ import { logger } from '@/lib/logger';
 const REMINDER_COOLDOWN_DAYS = 7;
 const PROSTHODONTIST_ROLE = 'fogpótlástanász';
 const REFERRER_ROLE = 'beutalo_orvos';
+/**
+ * A kezelőorvos a betegadat-teljességért felelős EGYETLEN személy. Ez nem
+ * DB-szerep, hanem címzett-címke: a kezelőorvos technikailag fogpótlástanász
+ * vagy admin, de az emlékeztetők szempontjából külön, elsődleges felelős.
+ */
+const KEZELOORVOS_ROLE = 'kezeloorvos';
 
 /**
  * Ennyi (heti) emlékeztető után az érintett orvost már nem nyaggatjuk tovább:
@@ -45,18 +51,37 @@ export interface MissingDataReminderResult {
   tasksCreated: number;
   tasksClosed: number;
   escalations: number;
+  /** Hiányos betegek kijelölt kezelőorvos nélkül (adminhoz jelezve). */
+  noOwner: number;
   skipped: number;
   errors: number;
 }
 
-type RecipientRole = typeof REFERRER_ROLE | typeof PROSTHODONTIST_ROLE | 'admin';
+type RecipientRole =
+  | typeof KEZELOORVOS_ROLE
+  | typeof REFERRER_ROLE
+  | typeof PROSTHODONTIST_ROLE
+  | 'admin';
 
-type Recipient = {
+export type Recipient = {
   userId: string;
   email: string;
   name: string | null;
   role: RecipientRole;
 };
+
+/**
+ * Az elsődleges címzettek eldöntése (tiszta, DB-mentes — így unit-tesztelhető).
+ * A kezelőorvos az EGYETLEN rendes felelős; ha nincs kijelölve, a beutaló orvos
+ * + legutóbbi fogpótlástanász a fallback, és `noOwner=true` (admin-jelzés).
+ */
+export function resolvePrimaryRecipients(
+  kezeloorvos: Recipient | null,
+  fallback: (Recipient | null)[]
+): { recipients: Recipient[]; noOwner: boolean } {
+  if (kezeloorvos) return { recipients: [kezeloorvos], noOwner: false };
+  return { recipients: dedupeRecipients(fallback), noOwner: true };
+}
 
 /** Az érintett orvosok deduplikálása user-id alapján (egy orvos egyszer kap értesítőt). */
 export function dedupeRecipients(recipients: (Recipient | null)[]): Recipient[] {
@@ -98,6 +123,7 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
     tasksCreated: 0,
     tasksClosed: 0,
     escalations: 0,
+    noOwner: 0,
     skipped: 0,
     errors: 0,
   };
@@ -134,10 +160,26 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
       const missingItems = doctorActionableMissing(row);
       const summary = formatMissingSummary(missingItems);
 
-      const recipients = dedupeRecipients([
-        await resolveReferrer(pool, patientId),
-        await resolveLatestProsthodontist(pool, patientId),
-      ]);
+      // A kezelőorvos az elsődleges és EGYETLEN rendes felelős. Ha ki van
+      // jelölve, csak ő kapja az emlékeztetőt (a beutaló orvost / fogpótlás-
+      // tanászt nem nyaggatjuk — egy beteg = egy számon kérhető felelős).
+      // Ha NINCS kezelőorvos, ez maga is elszámoltathatósági hiba: jelezzük az
+      // adminnak (kezelőorvost kell kijelölni), és visszaesünk a beutaló orvosra
+      // + legutóbbi fogpótlástanászra, hogy az adat addig is gazdára találjon.
+      const kezeloorvos = await resolveKezeloorvos(pool, patientId);
+      // A fallback címzetteket csak akkor oldjuk fel, ha nincs kezelőorvos
+      // (rövidre zárás — kezelőorvossal nincs felesleges DB-hívás).
+      const fallback = kezeloorvos
+        ? []
+        : [
+            await resolveReferrer(pool, patientId),
+            await resolveLatestProsthodontist(pool, patientId),
+          ];
+      const { recipients, noOwner } = resolvePrimaryRecipients(kezeloorvos, fallback);
+
+      if (noOwner) {
+        await flagNoOwner(pool, patientId, row.patientName, summary, result);
+      }
 
       if (recipients.length === 0) {
         result.skipped++;
@@ -350,6 +392,81 @@ export function reconcileMissingDataTasksSilent(patientId: string): void {
   reconcileMissingDataTasks(patientId).catch((err) => {
     logger.error(`[missing-data-reminders] reconcile hiba (${patientId}):`, err);
   });
+}
+
+/**
+ * A beteg kijelölt kezelőorvosa (`patients.kezeleoorvos_user_id`) mint elsődleges
+ * felelős. Csak aktív, e-mail-címmel rendelkező felhasználót ad vissza; ha nincs
+ * kijelölve vagy nincs e-mailje, `null` (ekkor a hívó no-owner ágra esik).
+ */
+async function resolveKezeloorvos(
+  pool: ReturnType<typeof getDbPool>,
+  patientId: string
+): Promise<Recipient | null> {
+  const res = await pool.query(
+    `SELECT u.id, u.email, u.doktor_neve
+       FROM patients p
+       JOIN users u
+         ON u.id = p.kezeleoorvos_user_id
+        AND u.active IS NOT FALSE
+      WHERE p.id = $1
+      LIMIT 1`,
+    [patientId]
+  );
+  const r = res.rows[0];
+  if (!r || !r.email) return null;
+  return { userId: r.id, email: r.email, name: r.doktor_neve ?? null, role: KEZELOORVOS_ROLE };
+}
+
+/**
+ * Kezelőorvos nélküli, hiányos beteg jelzése az adminoknak: a napi összegző
+ * digestbe (`missing_data_no_owner`) + nyitott admin-feladatként, hogy a
+ * vezetés kijelölhessen egy felelős kezelőorvost. Idempotens: betegenként és
+ * adminonként legfeljebb egy nyitott no-owner feladat.
+ */
+async function flagNoOwner(
+  pool: ReturnType<typeof getDbPool>,
+  patientId: string,
+  patientName: string | null,
+  summary: string,
+  result: MissingDataReminderResult
+): Promise<void> {
+  result.noOwner++;
+
+  await queueAdminNotification(
+    'missing_data_no_owner',
+    `${patientName ?? 'Beteg'} — nincs kijelölt kezelőorvos (hiányzó adat: ${summary})`,
+    { patientId, missing: summary }
+  ).catch(() => {});
+
+  const betegLabel = patientName?.trim() ? patientName.trim() : 'beteg';
+  const admins = await resolveAdmins(pool);
+  for (const admin of admins) {
+    const existing = await pool.query(
+      `SELECT 1 FROM user_tasks
+        WHERE task_type = 'missing_data'
+          AND status = 'open'
+          AND patient_id = $1
+          AND assignee_user_id = $2
+          AND metadata->>'source' = 'missing_data_no_owner'
+        LIMIT 1`,
+      [patientId, admin.userId]
+    );
+    if (existing.rows.length > 0) continue;
+
+    await insertUserTask({
+      assigneeKind: 'staff',
+      assigneeUserId: admin.userId,
+      assigneePatientId: null,
+      patientId,
+      taskType: 'missing_data',
+      title: `Kezelőorvos kijelölése szükséges – ${betegLabel}`,
+      description: summary ? `Hiányos beteg felelős nélkül. Hiányzó adatok: ${summary}` : 'Hiányos beteg kijelölt kezelőorvos nélkül.',
+      metadata: { source: 'missing_data_no_owner' },
+      createdByUserId: admin.userId,
+    });
+    result.tasksCreated++;
+  }
 }
 
 async function resolveReferrer(

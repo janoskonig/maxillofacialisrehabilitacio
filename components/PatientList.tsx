@@ -20,9 +20,9 @@ interface PatientListProps {
   canEdit?: boolean;
   canDelete?: boolean;
   userRole?: 'admin' | 'fogpótlástanász' | 'technikus' | 'beutalo_orvos';
-  sortField?: 'nev' | 'idopont' | 'createdAt' | null;
+  sortField?: 'nev' | 'idopont' | 'createdAt' | 'kezeleoorvos' | null;
   sortDirection?: 'asc' | 'desc';
-  onSort?: (field: 'nev' | 'idopont' | 'createdAt') => void;
+  onSort?: (field: 'nev' | 'idopont' | 'createdAt' | 'kezeleoorvos') => void;
   searchQuery?: string;
 }
 
@@ -113,7 +113,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
   }, [patients, appointments, sortField, sortDirection]);
 
   // Helper function to render sortable header
-  const renderSortableHeader = (label: string, field: 'nev' | 'idopont' | 'createdAt', className?: string) => {
+  const renderSortableHeader = (label: string, field: 'nev' | 'idopont' | 'createdAt' | 'kezeleoorvos', className?: string) => {
     const isActive = sortField === field;
     const SortIcon = isActive 
       ? (sortDirection === 'asc' ? ArrowUp : ArrowDown)
@@ -154,6 +154,7 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
   const renderTableHeader = () => (
     <>
       {renderSortableHeader(searchQuery.trim() ? 'Keresési eredmény' : 'Beteg', 'nev')}
+      {renderSortableHeader('Kezelőorvos', 'kezeleoorvos', 'w-40')}
       {userRole !== 'technikus' && (
       <>
       <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider w-20">
@@ -251,6 +252,18 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
                       </div>
                     </div>
                   </div>
+                </td>
+                <td className="px-3 py-2 whitespace-nowrap w-40">
+                  {patient.kezeleoorvos ? (
+                    <div className="flex items-center text-xs text-gray-900 dark:text-gray-100 truncate" title={patient.kezeleoorvos}>
+                      <span className="truncate">{patient.kezeleoorvos}</span>
+                    </div>
+                  ) : (
+                    <span className="inline-flex items-center gap-1 text-xs font-medium text-medical-error" title="Nincs kezelőorvos kijelölve – ő felel az adatteljességért">
+                      <AlertCircle className="w-3 h-3 flex-shrink-0" />
+                      Nincs kijelölve
+                    </span>
+                  )}
                 </td>
                 {userRole !== 'technikus' && (
                 <>

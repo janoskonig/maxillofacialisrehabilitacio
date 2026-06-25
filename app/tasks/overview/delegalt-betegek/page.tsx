@@ -27,9 +27,26 @@ type WorklistPatient = {
   nextAppt: string | null;
   lastAppt: string | null;
   stalled: boolean;
+  completenessScore: number | null;
+  clinicalIncomplete: boolean;
+};
+
+type NoOwnerPatient = {
+  id: string;
+  nev: string | null;
+  completenessScore: number | null;
+  missing: number;
 };
 
 type Scope = 'self' | 'doctor' | 'all' | 'none';
+
+/** Teljességi pontszám szín-konvenció (a betegkarton-jelzővel egyezően). */
+function scoreClasses(score: number | null): string {
+  if (score == null) return 'bg-gray-100 text-gray-500 dark:bg-gray-800 dark:text-gray-400';
+  if (score >= 90) return 'bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300';
+  if (score >= 70) return 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300';
+  return 'bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300';
+}
 
 function fmtDate(iso: string | null): string {
   if (!iso) return '—';
@@ -44,12 +61,14 @@ export default function DelegaltBetegekPage() {
   const [authorized, setAuthorized] = useState<boolean | null>(null);
   const [scope, setScope] = useState<Scope>('none');
   const [patients, setPatients] = useState<WorklistPatient[]>([]);
+  const [noOwner, setNoOwner] = useState<NoOwnerPatient[]>([]);
 
   const load = useCallback(async () => {
     const res = await fetch('/api/worklists/delegated-patients', { credentials: 'include' });
     if (!res.ok) throw new Error('Betöltés sikertelen');
     const data = await res.json();
     setPatients(data.patients ?? []);
+    setNoOwner(data.noOwner ?? []);
     setScope(data.scope ?? 'none');
   }, []);
 
@@ -85,7 +104,16 @@ export default function DelegaltBetegekPage() {
       if (!map.has(key)) map.set(key, { doctorName: p.doctorName ?? 'Ismeretlen orvos', rows: [] });
       map.get(key)!.rows.push(p);
     }
-    return Array.from(map.values()).sort((a, b) => a.doctorName.localeCompare(b.doctorName, 'hu'));
+    return Array.from(map.values())
+      .map((g) => {
+        const scored = g.rows.filter((r) => r.completenessScore != null);
+        const avgScore = scored.length
+          ? Math.round(scored.reduce((s, r) => s + (r.completenessScore ?? 0), 0) / scored.length)
+          : null;
+        const incompleteCount = g.rows.filter((r) => r.clinicalIncomplete).length;
+        return { ...g, avgScore, incompleteCount };
+      })
+      .sort((a, b) => a.doctorName.localeCompare(b.doctorName, 'hu'));
   }, [patients]);
 
   const stalledCount = useMemo(() => patients.filter((p) => p.stalled).length, [patients]);
@@ -160,6 +188,56 @@ export default function DelegaltBetegekPage() {
           )}
         </div>
 
+        {/* Kezelőorvos nélküli, klinikailag hiányos betegek — elszámoltathatósági hiba */}
+        {scope === 'all' && noOwner.length > 0 && (
+          <section className="card overflow-hidden border-red-200 dark:border-red-900">
+            <div className="px-4 py-3 bg-red-50 dark:bg-red-950/40 border-b border-red-200 dark:border-red-900 flex items-center gap-2">
+              <AlertTriangle className="w-4 h-4 text-medical-error" />
+              <h2 className="font-semibold text-red-800 dark:text-red-300">
+                Kezelőorvos nélküli, hiányos betegek
+              </h2>
+              <span className="text-sm text-red-600 dark:text-red-400">({noOwner.length})</span>
+            </div>
+            <p className="px-4 pt-3 text-xs text-gray-500 dark:text-gray-400">
+              Ezeknek a hiányos betegeknek nincs felelős kezelőorvosuk. Jelöljön ki egyet a beteg
+              kartonján, hogy legyen ki számon kérhető az adatteljességért.
+            </p>
+            <div className="overflow-x-auto p-2">
+              <table className="w-full text-sm">
+                <thead>
+                  <tr className="text-left text-gray-500 dark:text-gray-400 border-b">
+                    <th className="px-4 py-2 font-medium">Beteg</th>
+                    <th className="px-4 py-2 font-medium">Teljesség</th>
+                    <th className="px-4 py-2 font-medium">Hiányzó adat</th>
+                    <th className="px-4 py-2"></th>
+                  </tr>
+                </thead>
+                <tbody>
+                  {noOwner.map((p) => (
+                    <tr key={p.id} className="border-b last:border-0">
+                      <td className="px-4 py-2 font-medium text-gray-900 dark:text-gray-100">{p.nev ?? 'Név nélkül'}</td>
+                      <td className="px-4 py-2">
+                        <span className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${scoreClasses(p.completenessScore)}`}>
+                          {p.completenessScore != null ? `${p.completenessScore}%` : '—'}
+                        </span>
+                      </td>
+                      <td className="px-4 py-2 text-gray-700 dark:text-gray-300">{p.missing} tétel</td>
+                      <td className="px-4 py-2 text-right">
+                        <Link
+                          href={`/patients/${p.id}/view`}
+                          className="inline-flex items-center gap-1 text-medical-primary hover:underline"
+                        >
+                          Kezelőorvos kijelölése <ExternalLink className="w-3 h-3 opacity-60" />
+                        </Link>
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
+          </section>
+        )}
+
         {patients.length === 0 && (
           <div className="card p-8 text-center text-gray-500 dark:text-gray-400">
             Nincs delegált beteg.
@@ -169,10 +247,20 @@ export default function DelegaltBetegekPage() {
         {groups.map((g) => (
           <section key={g.doctorName} className="card overflow-hidden">
             {scope === 'all' && (
-              <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/60 border-b flex items-center gap-2">
+              <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/60 border-b flex items-center gap-2 flex-wrap">
                 <Stethoscope className="w-4 h-4 text-medical-primary" />
                 <h2 className="font-semibold text-gray-900 dark:text-gray-100">{g.doctorName}</h2>
                 <span className="text-sm text-gray-500 dark:text-gray-400">({g.rows.length})</span>
+                {g.avgScore != null && (
+                  <span className={`ml-1 px-2 py-0.5 rounded-full text-xs font-medium ${scoreClasses(g.avgScore)}`}>
+                    Átlag teljesség {g.avgScore}%
+                  </span>
+                )}
+                {g.incompleteCount > 0 && (
+                  <span className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-950/40 dark:text-red-300">
+                    {g.incompleteCount} klinikailag hiányos
+                  </span>
+                )}
               </div>
             )}
             <div className="overflow-x-auto">
@@ -180,6 +268,7 @@ export default function DelegaltBetegekPage() {
                 <thead>
                   <tr className="text-left text-gray-500 dark:text-gray-400 border-b">
                     <th className="px-4 py-2 font-medium">Beteg</th>
+                    <th className="px-4 py-2 font-medium">Teljesség</th>
                     <th className="px-4 py-2 font-medium">Nyitott epizód</th>
                     <th className="px-4 py-2 font-medium">Köv. időpont</th>
                     <th className="px-4 py-2 font-medium">Utolsó találkozás</th>
@@ -199,6 +288,18 @@ export default function DelegaltBetegekPage() {
                           <span className="font-medium text-gray-900 dark:text-gray-100">{p.nev ?? 'Név nélkül'}</span>
                         </div>
                         {p.intezmeny && <div className="text-xs text-gray-400 dark:text-gray-500">{p.intezmeny}</div>}
+                      </td>
+                      <td className="px-4 py-2">
+                        {p.completenessScore != null ? (
+                          <span
+                            className={`inline-flex items-center px-2 py-0.5 rounded-full text-xs font-medium ${scoreClasses(p.completenessScore)}`}
+                            title={p.clinicalIncomplete ? 'Klinikailag hiányos' : 'Klinikailag teljes'}
+                          >
+                            {p.completenessScore}%
+                          </span>
+                        ) : (
+                          <span className="text-xs text-gray-400">—</span>
+                        )}
                       </td>
                       <td className="px-4 py-2 text-gray-700 dark:text-gray-300">{p.openEpisodes}</td>
                       <td className="px-4 py-2">
