@@ -39,6 +39,10 @@ export function useTimelineData({ status, providerId, searchDebounced }: UseTime
         const q = new URLSearchParams();
         q.set('status', status);
         q.set('limit', '200');
+        // Egyesített „betegút" nézet: aktív kezelések (gondozás kizárva),
+        // a kezelés kezdete szerint növekvő sorrendben.
+        q.set('activeOnly', '1');
+        q.set('ordering', 'start_asc');
         if (providerId) q.set('providerId', providerId);
         const s = searchDebounced.trim();
         if (s) q.set('search', s);

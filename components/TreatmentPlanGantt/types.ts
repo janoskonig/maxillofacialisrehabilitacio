@@ -18,6 +18,22 @@ export interface TimelineStep {
   planItemId?: string | null;
 }
 
+export interface StageInterval {
+  stageCode: string;
+  /** stage_catalog label_hu (code+reason szerint). */
+  label?: string;
+  start: string;
+  end: string;
+}
+
+export interface StageLegendEntry {
+  code: string;
+  label: string;
+}
+
+/** Az egyesített idővonal nézetmódjai: stádium-sáv, kezelési lépések, vagy mindkettő. */
+export type TimelineViewMode = 'stage' | 'steps' | 'merged';
+
 export interface TimelineEpisode {
   episodeId: string;
   patientId: string;
@@ -25,10 +41,19 @@ export interface TimelineEpisode {
   reason: string;
   status: string;
   openedAt: string;
+  /** COALESCE(plan_start_date, opened_at) — a kezelés tényleges kezdete. */
+  started?: string;
+  closedAt?: string | null;
   carePathwayName: string | null;
   assignedProviderId?: string | null;
   assignedProviderName: string | null;
   treatmentTypeLabel: string | null;
+  /** A legutóbbi stádium kódja (STAGE_0..STAGE_7); STAGE_7 = gondozás alatt. */
+  currentStageCode?: string | null;
+  /** A legutóbbi stádium neve a stage_catalog-ból. */
+  currentStageLabel?: string | null;
+  /** Stádium-intervallumok a háttérsávhoz. */
+  stageIntervals?: StageInterval[];
   steps: TimelineStep[];
   etaHeuristic: string | null;
 }
@@ -44,6 +69,7 @@ export interface TimelineMeta {
   timezone: string;
   ordering: string;
   readPlanItemsEnabled?: boolean;
+  stageLegend?: StageLegendEntry[];
   counts?: TimelineMetaCounts;
 }
 

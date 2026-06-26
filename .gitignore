@@ -68,3 +68,6 @@ presentation/
 
 # Kutatási anyagok (témavezetői akkreditáció — nem verziózott)
 /kutatas/
+
+# Throwaway simulation DB env (contains DB credential)
+.env.sim

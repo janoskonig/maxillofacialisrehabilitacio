@@ -16,6 +16,19 @@ export function computeAutoRange(episodes: TimelineEpisode[], nowMs: number): Ti
       const e = new Date(ep.etaHeuristic).getTime();
       if (!Number.isNaN(e)) maxT = Math.max(maxT, e + 14 * DAY_MS);
     }
+    // Az egyesített nézet stádium-sávjához: a kezelés kezdete (sokszor hónapokkal
+    // ezelőtt) és a stádium-intervallumok is feszítsék ki az auto-tartományt.
+    const startStr = ep.started ?? ep.openedAt;
+    if (startStr) {
+      const t = new Date(startStr).getTime();
+      if (!Number.isNaN(t)) minT = Math.min(minT, t - 3 * DAY_MS);
+    }
+    for (const iv of ep.stageIntervals ?? []) {
+      const s = new Date(iv.start).getTime();
+      const e = new Date(iv.end).getTime();
+      if (!Number.isNaN(s)) minT = Math.min(minT, s - 3 * DAY_MS);
+      if (!Number.isNaN(e)) maxT = Math.max(maxT, e + 3 * DAY_MS);
+    }
     for (const s of ep.steps) {
       const candidates = [s.appointmentStart, s.windowStart, s.windowEnd].filter(Boolean) as string[];
       for (const c of candidates) {
