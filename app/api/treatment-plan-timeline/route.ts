@@ -31,6 +31,14 @@ interface TimelineStep {
   planItemId?: string | null;
 }
 
+interface StageInterval {
+  stageCode: string;
+  /** A stage_catalog label_hu-ja (code+reason szerint); fallback: a kód. */
+  label: string;
+  start: string;
+  end: string;
+}
+
 interface TimelineEpisode {
   episodeId: string;
   patientId: string;
@@ -38,10 +46,19 @@ interface TimelineEpisode {
   reason: string;
   status: string;
   openedAt: string;
+  /** COALESCE(plan_start_date, opened_at) — a kezelés tényleges kezdete (rendezéshez). */
+  started: string;
+  closedAt: string | null;
   carePathwayName: string | null;
   assignedProviderId: string | null;
   assignedProviderName: string | null;
   treatmentTypeLabel: string | null;
+  /** A legutóbbi stádium kódja (STAGE_0..STAGE_7); STAGE_7 = gondozás alatt. */
+  currentStageCode: string | null;
+  /** A legutóbbi stádium emberi neve a stage_catalog-ból (reason szerint). */
+  currentStageLabel: string | null;
+  /** Stádium-intervallumok az egyesített idővonal háttérsávjához. */
+  stageIntervals: StageInterval[];
   steps: TimelineStep[];
   etaHeuristic: string | null;
 }
@@ -55,6 +72,11 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
   const searchRaw = searchParams.get('search')?.trim() ?? '';
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '50', 10), 200);
   const offset = parseInt(searchParams.get('offset') ?? '0', 10);
+  // Egyesített „betegút" nézet: aktív kezelések (a legutóbbi stádium ≠ STAGE_7
+  // „gondozás alatt"), a kezelés kezdete szerint növekvő sorrendben.
+  const activeOnly = searchParams.get('activeOnly') === '1';
+  const ordering = searchParams.get('ordering') === 'start_asc' ? 'start_asc' : 'eta_asc';
+  const GONDOZAS_STAGE = 'STAGE_7';
 
   const pool = getDbPool();
   const now = new Date();
@@ -86,6 +108,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
   params.push(limit, offset);
   const episodesResult = await pool.query(
     `SELECT pe.id as episode_id, pe.patient_id, pe.reason, pe.status, pe.opened_at,
+            pe.plan_start_date, pe.closed_at,
             pe.assigned_provider_id,
             p.nev as patient_name,
             cp.name as care_pathway_name, cp.work_phases_json, cp.steps_json,
@@ -187,10 +210,10 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
       episodeIdsParam
     );
     stagesResult = await client.query(
-      `SELECT DISTINCT ON (episode_id) episode_id, stage_code
+      `SELECT episode_id, stage_code, at
        FROM stage_events
        WHERE episode_id = ANY($1)
-       ORDER BY episode_id, at DESC`,
+       ORDER BY episode_id, at ASC`,
       episodeIdsParam
     );
     episodeStepsResult = await client.query(
@@ -211,9 +234,58 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
     ? await loadPlanItemLinksByLegacyEwp(pool, episodeIds)
     : new Map();
 
+  const nowIso = now.toISOString();
+  const toIso = (v: string | Date | null | undefined): string | null =>
+    v == null ? null : v instanceof Date ? v.toISOString() : new Date(v).toISOString();
+
+  // A stage_events most ASC sorrendben jön → a ciklus végén a legutóbbi stádium
+  // marad a `stageByEpisode`-ban, és egyúttal felépítjük a stádium-intervallumokat
+  // (egy stádium az `at`-tól a következő stádium `at`-jáig, az utolsó a lezárásig
+  // / mostig) az egyesített idővonal háttérsávjához.
+  const closedByEpisode = new Map<string, string | null>();
+  for (const ep of episodesResult.rows) {
+    closedByEpisode.set(ep.episode_id, toIso(ep.closed_at));
+  }
   const stageByEpisode = new Map<string, string>();
-  for (const row of stagesResult.rows as { episode_id: string; stage_code: string }[]) {
+  const stageEventsByEpisode = new Map<string, { stageCode: string; at: string }[]>();
+  for (const row of stagesResult.rows as { episode_id: string; stage_code: string; at: string | Date }[]) {
+    const at = toIso(row.at) ?? nowIso;
     stageByEpisode.set(row.episode_id, row.stage_code);
+    const arr = stageEventsByEpisode.get(row.episode_id) ?? [];
+    arr.push({ stageCode: row.stage_code, at });
+    stageEventsByEpisode.set(row.episode_id, arr);
+  }
+  // Stádium-címkék a stage_catalog-ból: (code, reason) → label_hu. A label-t
+  // a kliens NEM találja ki — innen jön (reason-specifikus). A legendhez egy
+  // kód → label térkép (order_index szerint rendezve).
+  const catalogRows = (
+    await pool
+      .query(`SELECT code, reason, label_hu, order_index FROM stage_catalog`)
+      .catch(() => ({ rows: [] as { code: string; reason: string; label_hu: string; order_index: number }[] }))
+  ).rows as { code: string; reason: string; label_hu: string; order_index: number }[];
+  const labelByCodeReason = new Map<string, string>();
+  const legendByCode = new Map<string, { code: string; label: string; order: number }>();
+  for (const r of catalogRows) {
+    labelByCodeReason.set(`${r.code}|${r.reason}`, r.label_hu);
+    if (!legendByCode.has(r.code)) legendByCode.set(r.code, { code: r.code, label: r.label_hu, order: r.order_index ?? 0 });
+  }
+  const labelFor = (code: string | null, reason: string): string | null =>
+    code ? (labelByCodeReason.get(`${code}|${reason}`) ?? code) : null;
+
+  const stageIntervalsByEpisode = new Map<string, StageInterval[]>();
+  for (const [epId, evs] of Array.from(stageEventsByEpisode.entries())) {
+    const closed = closedByEpisode.get(epId) ?? null;
+    const reason = (episodesResult.rows.find((r) => r.episode_id === epId)?.reason as string) ?? '';
+    const intervals: StageInterval[] = [];
+    for (let i = 0; i < evs.length; i++) {
+      intervals.push({
+        stageCode: evs[i].stageCode,
+        label: labelFor(evs[i].stageCode, reason) ?? evs[i].stageCode,
+        start: evs[i].at,
+        end: i < evs.length - 1 ? evs[i + 1].at : (closed ?? nowIso),
+      });
+    }
+    stageIntervalsByEpisode.set(epId, intervals);
   }
 
   const apptsByEpisode = new Map<string, typeof apptsResult.rows>();
@@ -406,20 +478,43 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
       patientName: ep.patient_name,
       reason: ep.reason,
       status: ep.status,
-      openedAt: ep.opened_at,
+      openedAt: toIso(ep.opened_at) ?? nowIso,
+      started: toIso(ep.plan_start_date) ?? toIso(ep.opened_at) ?? nowIso,
+      closedAt: toIso(ep.closed_at),
       carePathwayName: resolvedPathwayName,
       assignedProviderId: ep.assigned_provider_id ?? null,
       assignedProviderName: ep.assigned_provider_name,
       treatmentTypeLabel: ep.treatment_type_label,
+      currentStageCode: currentStage,
+      currentStageLabel: labelFor(currentStage, ep.reason as string),
+      stageIntervals: stageIntervalsByEpisode.get(ep.episode_id) ?? [],
       steps,
       etaHeuristic,
     });
   }
 
+  // Aktív szűrő: a gondozás alatt (STAGE_7) lévő kezeléseket kihagyjuk az
+  // egyesített nézetből (a beteg ott akár évekig is lehet — nem aktív kezelés).
+  const visibleEpisodes = activeOnly
+    ? episodes.filter((e) => e.currentStageCode !== GONDOZAS_STAGE)
+    : episodes;
+
+  // Jelmagyarázat: csak azok a stádiumok, amik ténylegesen előfordulnak a
+  // látható kezeléseknél (rendezve order_index szerint).
+  const presentStageCodes = new Set<string>();
+  for (const e of visibleEpisodes) {
+    if (e.currentStageCode) presentStageCodes.add(e.currentStageCode);
+    for (const iv of e.stageIntervals) presentStageCodes.add(iv.stageCode);
+  }
+  const stageLegend = Array.from(legendByCode.values())
+    .filter((e) => presentStageCodes.has(e.code))
+    .sort((a, b) => a.order - b.order)
+    .map(({ code, label }) => ({ code, label }));
+
   const nowMs = now.getTime();
   const horizonMs = nowMs + 7 * 24 * 60 * 60 * 1000;
   let actionNeededIn7d = 0;
-  for (const ep of episodes) {
+  for (const ep of visibleEpisodes) {
     let needsAttention7d = false;
     for (const s of ep.steps) {
       const refStart = s.appointmentStart || s.windowStart;
@@ -447,23 +542,31 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
     if (needsAttention7d) actionNeededIn7d++;
   }
 
-  episodes.sort((a, b) => {
-    if (!a.etaHeuristic && !b.etaHeuristic) return 0;
-    if (!a.etaHeuristic) return 1;
-    if (!b.etaHeuristic) return -1;
-    return new Date(a.etaHeuristic).getTime() - new Date(b.etaHeuristic).getTime();
-  });
+  if (ordering === 'start_asc') {
+    // Legkorábban kezdett aktív kezelés elöl, legkésőbb kezdett alul.
+    visibleEpisodes.sort(
+      (a, b) => new Date(a.started).getTime() - new Date(b.started).getTime()
+    );
+  } else {
+    visibleEpisodes.sort((a, b) => {
+      if (!a.etaHeuristic && !b.etaHeuristic) return 0;
+      if (!a.etaHeuristic) return 1;
+      if (!b.etaHeuristic) return -1;
+      return new Date(a.etaHeuristic).getTime() - new Date(b.etaHeuristic).getTime();
+    });
+  }
 
   return NextResponse.json({
-    episodes,
+    episodes: visibleEpisodes,
     meta: {
       serverNow: now.toISOString(),
       fetchedAt: now.toISOString(),
       timezone: 'Europe/Budapest',
-      ordering: 'eta_asc',
+      ordering,
       readPlanItemsEnabled: readPlanItems,
+      stageLegend,
       counts: {
-        totalEpisodes: episodes.length,
+        totalEpisodes: visibleEpisodes.length,
         actionNeededIn7d,
       },
     },

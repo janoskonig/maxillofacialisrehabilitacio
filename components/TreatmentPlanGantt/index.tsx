@@ -4,7 +4,7 @@ import { useMemo, useState, useEffect, useCallback, useRef } from 'react';
 import { useSearchParams, usePathname, useRouter } from 'next/navigation';
 import { useVirtualizer } from '@tanstack/react-virtual';
 import { Calendar, Loader2 } from 'lucide-react';
-import type { EpisodeStatusFilter, ZoomPreset, TimelineEpisode, TimelineStep } from './types';
+import type { EpisodeStatusFilter, ZoomPreset, TimelineEpisode, TimelineStep, TimelineViewMode } from './types';
 import { useTimelineData } from './useTimelineData';
 import { useTimelineRange } from './useTimelineRange';
 import { minTrackWidthPx } from './timeline-math';
@@ -15,12 +15,20 @@ import { FiltersBar } from './FiltersBar';
 import { TimelineHeader } from './TimelineHeader';
 import { EpisodeRow } from './EpisodeRow';
 import { Legend } from './Legend';
+import { StageLegend } from './StageLegend';
 import { StepPopover } from './StepPopover';
 import { EMPTY_EPISODES } from './empty-episodes';
 
 function parseZoom(s: string | null): ZoomPreset {
   if (s === '14d' || s === '30d' || s === '90d' || s === 'auto') return s;
-  return '30d';
+  // Az egyesített betegút-nézet alapból a teljes (hónapokat átfogó) stádium-
+  // történetet mutatja → 'auto' tartomány az alapértelmezett.
+  return 'auto';
+}
+
+function parseView(s: string | null): TimelineViewMode {
+  if (s === 'stage' || s === 'steps' || s === 'merged') return s;
+  return 'merged';
 }
 
 function parseStatus(s: string | null): EpisodeStatusFilter {
@@ -54,6 +62,9 @@ export function TreatmentPlanGantt() {
 
   const zoom = parseZoom(sp.get('tplan_zoom'));
   const setZoom = (z: ZoomPreset) => mergeParams({ tplan_zoom: z });
+
+  const viewMode = parseView(sp.get('tplan_view'));
+  const setViewMode = (v: TimelineViewMode) => mergeParams({ tplan_view: v });
 
   const treatmentType = sp.get('tplan_type') ?? '';
   const setTreatmentType = (v: string) => mergeParams({ tplan_type: v || null });
@@ -161,6 +172,7 @@ export function TreatmentPlanGantt() {
       toPercent={axis.toPercent}
       todayPercent={axis.todayPercent}
       trackMinWidth={trackW}
+      viewMode={viewMode}
       onStepSelect={handleStepSelect}
     />
   );
@@ -183,14 +195,42 @@ export function TreatmentPlanGantt() {
         onZoom={setZoom}
       />
 
-      <div className="flex flex-wrap gap-2 text-xs">
-        <span className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
-          {filtered.length} megjelenítve / {episodes.length} betöltve
-        </span>
-        <span className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300">{counts.actionNeededIn7d} figyelmet igényel</span>
+      <div className="flex flex-wrap items-center gap-3">
+        <div className="inline-flex rounded-lg border border-gray-200 dark:border-gray-800 overflow-hidden text-xs" role="group" aria-label="Idővonal nézetmód">
+          {(
+            [
+              ['stage', 'Stádium'],
+              ['steps', 'Lépések'],
+              ['merged', 'Egyesített'],
+            ] as [TimelineViewMode, string][]
+          ).map(([v, label]) => (
+            <button
+              key={v}
+              type="button"
+              onClick={() => setViewMode(v)}
+              aria-pressed={viewMode === v}
+              className={`px-3 py-1.5 transition-colors ${
+                viewMode === v
+                  ? 'bg-medical-primary text-white'
+                  : 'text-gray-600 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
+              }`}
+            >
+              {label}
+            </button>
+          ))}
+        </div>
+        <div className="flex flex-wrap gap-2 text-xs">
+          <span className="px-2 py-1 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
+            {filtered.length} aktív kezelés
+          </span>
+          <span className="px-2 py-1 rounded bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300">{counts.actionNeededIn7d} figyelmet igényel</span>
+        </div>
       </div>
 
-      <Legend />
+      <div className="flex flex-col gap-2">
+        {viewMode !== 'stage' && <Legend />}
+        {viewMode !== 'steps' && <StageLegend entries={meta?.stageLegend} />}
+      </div>
 
       {loading && (
         <div className="flex items-center justify-center py-12">
