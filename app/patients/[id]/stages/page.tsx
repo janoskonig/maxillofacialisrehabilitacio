@@ -166,7 +166,41 @@ export default function PatientStagesPage() {
       </div>
 
       <div className="space-y-6">
-          {/* 1) Stádium — legfelülre, egy kattintással módosítható */}
+          {/* 0) Ellátási epizódok — legfelülre: előbb az epizód, aztán a többi */}
+          {episodes.length > 0 && (
+            <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
+              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">Ellátási epizódok</h3>
+              <ul className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
+                {episodes.slice(0, 10).map((ep) => (
+                  <li key={ep.id} className="flex items-center gap-2 flex-wrap">
+                    <span className={ep.status === 'open' ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-500 dark:text-gray-400'}>
+                      {ep.status === 'open' ? '● Aktív' : '○ Zárt'}
+                    </span>
+                    <span>{ep.chiefComplaint}</span>
+                    <span className="text-gray-400 dark:text-gray-500">
+                      {new Date(ep.openedAt).toLocaleDateString('hu-HU')}
+                    </span>
+                    {(ep.carePathwayName || ep.assignedProviderName) && (
+                      <span className="text-gray-500 dark:text-gray-400 text-xs">
+                        {[ep.carePathwayName, ep.assignedProviderName].filter(Boolean).join(' · ')}
+                      </span>
+                    )}
+                  </li>
+                ))}
+              </ul>
+            </div>
+          )}
+
+          {/* Új ellátási epizód indítása */}
+          {(userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász') && (
+            <PatientEpisodeForm
+              patientId={patientId}
+              patientReason={patientReason}
+              onEpisodeCreated={() => refreshStagesAndEpisodes()}
+            />
+          )}
+
+          {/* 1) Stádium — egy kattintással módosítható */}
           {(userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász') && (
             <PatientStageSelector
               patientId={patientId}
@@ -266,40 +300,6 @@ export default function PatientStagesPage() {
 
           {/* Nincs aktív epizód: feladatok így is láthatók */}
           {!activeEpisode && <PatientQuickTaskBlock patientId={patientId} />}
-
-          {/* Ellátási epizódok listája + új epizód indítása */}
-          {episodes.length > 0 && (
-            <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
-              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-2">Ellátási epizódok</h3>
-              <ul className="space-y-1 text-sm text-gray-700 dark:text-gray-300">
-                {episodes.slice(0, 10).map((ep) => (
-                  <li key={ep.id} className="flex items-center gap-2 flex-wrap">
-                    <span className={ep.status === 'open' ? 'text-green-600 dark:text-green-400 font-medium' : 'text-gray-500 dark:text-gray-400'}>
-                      {ep.status === 'open' ? '● Aktív' : '○ Zárt'}
-                    </span>
-                    <span>{ep.chiefComplaint}</span>
-                    <span className="text-gray-400 dark:text-gray-500">
-                      {new Date(ep.openedAt).toLocaleDateString('hu-HU')}
-                    </span>
-                    {(ep.carePathwayName || ep.assignedProviderName) && (
-                      <span className="text-gray-500 dark:text-gray-400 text-xs">
-                        {[ep.carePathwayName, ep.assignedProviderName].filter(Boolean).join(' · ')}
-                      </span>
-                    )}
-                  </li>
-                ))}
-              </ul>
-            </div>
-          )}
-
-          {/* Új ellátási epizód indítása */}
-          {(userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász') && (
-            <PatientEpisodeForm
-              patientId={patientId}
-              patientReason={patientReason}
-              onEpisodeCreated={() => refreshStagesAndEpisodes()}
-            />
-          )}
 
           {/* 4) Előzmények (teljes timeline) — alapból lecsukva */}
           <details className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 group">
