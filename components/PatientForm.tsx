@@ -1979,8 +1979,13 @@ export function PatientForm({
               showToast('Hiba az adatok frissítésekor', 'error');
               return;
             }
-            await refreshResponse.json();
-            
+            const refreshed = await refreshResponse.json();
+            // A friss szerver-verzió updatedAt-jét KELL If-Match-ként küldeni,
+            // különben a felülírás megint elavult tokennel megy és újra 409-et
+            // dob. A buildSavePayload a form updatedAt-jét (a régit) vinné, ezért
+            // felülírjuk a frissen lekért szerver-verzióval.
+            const freshUpdatedAt = (refreshed?.patient ?? refreshed)?.updatedAt;
+
             const currentFormData = getValues();
             const payload = buildSavePayload(
               currentFormData,
@@ -1989,7 +1994,8 @@ export function PatientForm({
               vanBeutaloRef.current,
               patientId
             );
-            
+            if (freshUpdatedAt) payload.updatedAt = freshUpdatedAt;
+
             const saved = await savePatient(payload, { source: 'manual' });
             updateCurrentPatient(saved);
             conflict.dismissModal();

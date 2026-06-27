@@ -176,19 +176,27 @@ async function executePatientUpdate(
         [patientId, patient.nev, patient.taj||null, patient.telefonszam||null, patient.szuletesiDatum||null, patient.nem||null, patient.email||null, patient.cim||null, patient.varos||null, patient.iranyitoszam||null, patient.kezeleoorvos||null, patient.kezeleoorvosIntezete||null, patient.felvetelDatuma||null, patient.halalDatum||null, userEmail]
       ),
       client.query(
-        `UPDATE patient_referral SET beutalo_orvos=$2, beutalo_intezmeny=$3, beutalo_indokolas=$4, primer_mutet_leirasa=$5, mutet_ideje=$6, szovettani_diagnozis=$7, nyaki_blokkdisszekcio=$8 WHERE patient_id=$1`,
+        `INSERT INTO patient_referral (patient_id, beutalo_orvos, beutalo_intezmeny, beutalo_indokolas, primer_mutet_leirasa, mutet_ideje, szovettani_diagnozis, nyaki_blokkdisszekcio)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
+         ON CONFLICT (patient_id) DO UPDATE SET beutalo_orvos=EXCLUDED.beutalo_orvos, beutalo_intezmeny=EXCLUDED.beutalo_intezmeny, beutalo_indokolas=EXCLUDED.beutalo_indokolas, primer_mutet_leirasa=EXCLUDED.primer_mutet_leirasa, mutet_ideje=EXCLUDED.mutet_ideje, szovettani_diagnozis=EXCLUDED.szovettani_diagnozis, nyaki_blokkdisszekcio=EXCLUDED.nyaki_blokkdisszekcio`,
         [patientId, patient.beutaloOrvos||null, patient.beutaloIntezmeny||null, patient.beutaloIndokolas||null, patient.primerMutetLeirasa||null, patient.mutetIdeje||null, patient.szovettaniDiagnozis||null, patient.nyakiBlokkdisszekcio||null]
       ),
       client.query(
-        `UPDATE patient_anamnesis SET kezelesre_erkezes_indoka=$2, alkoholfogyasztas=$3, dohanyzas_szam=$4, maxilladefektus_van=$5, brown_fuggoleges_osztaly=$6, brown_vizszintes_komponens=$7, mandibuladefektus_van=$8, kovacs_dobak_osztaly=$9, nyelvmozgasok_akadalyozottak=$10, gombocos_beszed=$11, nyalmirigy_allapot=$12, fabian_fejerdy_protetikai_osztaly=$13, fabian_fejerdy_protetikai_osztaly_felso=$14, fabian_fejerdy_protetikai_osztaly_also=$15, radioterapia=$16, radioterapia_dozis=$17, radioterapia_datum_intervallum=$18, chemoterapia=$19, chemoterapia_leiras=$20, tnm_staging=$21, bno=$22, diagnozis=$23, baleset_idopont=$24, baleset_etiologiaja=$25, baleset_egyeb=$26, veleszuletett_rendellenessegek=$27::jsonb, veleszuletett_mutetek_leirasa=$28 WHERE patient_id=$1`,
+        `INSERT INTO patient_anamnesis (patient_id, kezelesre_erkezes_indoka, alkoholfogyasztas, dohanyzas_szam, maxilladefektus_van, brown_fuggoleges_osztaly, brown_vizszintes_komponens, mandibuladefektus_van, kovacs_dobak_osztaly, nyelvmozgasok_akadalyozottak, gombocos_beszed, nyalmirigy_allapot, fabian_fejerdy_protetikai_osztaly, fabian_fejerdy_protetikai_osztaly_felso, fabian_fejerdy_protetikai_osztaly_also, radioterapia, radioterapia_dozis, radioterapia_datum_intervallum, chemoterapia, chemoterapia_leiras, tnm_staging, bno, diagnozis, baleset_idopont, baleset_etiologiaja, baleset_egyeb, veleszuletett_rendellenessegek, veleszuletett_mutetek_leirasa)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27::jsonb,$28)
+         ON CONFLICT (patient_id) DO UPDATE SET kezelesre_erkezes_indoka=EXCLUDED.kezelesre_erkezes_indoka, alkoholfogyasztas=EXCLUDED.alkoholfogyasztas, dohanyzas_szam=EXCLUDED.dohanyzas_szam, maxilladefektus_van=EXCLUDED.maxilladefektus_van, brown_fuggoleges_osztaly=EXCLUDED.brown_fuggoleges_osztaly, brown_vizszintes_komponens=EXCLUDED.brown_vizszintes_komponens, mandibuladefektus_van=EXCLUDED.mandibuladefektus_van, kovacs_dobak_osztaly=EXCLUDED.kovacs_dobak_osztaly, nyelvmozgasok_akadalyozottak=EXCLUDED.nyelvmozgasok_akadalyozottak, gombocos_beszed=EXCLUDED.gombocos_beszed, nyalmirigy_allapot=EXCLUDED.nyalmirigy_allapot, fabian_fejerdy_protetikai_osztaly=EXCLUDED.fabian_fejerdy_protetikai_osztaly, fabian_fejerdy_protetikai_osztaly_felso=EXCLUDED.fabian_fejerdy_protetikai_osztaly_felso, fabian_fejerdy_protetikai_osztaly_also=EXCLUDED.fabian_fejerdy_protetikai_osztaly_also, radioterapia=EXCLUDED.radioterapia, radioterapia_dozis=EXCLUDED.radioterapia_dozis, radioterapia_datum_intervallum=EXCLUDED.radioterapia_datum_intervallum, chemoterapia=EXCLUDED.chemoterapia, chemoterapia_leiras=EXCLUDED.chemoterapia_leiras, tnm_staging=EXCLUDED.tnm_staging, bno=EXCLUDED.bno, diagnozis=EXCLUDED.diagnozis, baleset_idopont=EXCLUDED.baleset_idopont, baleset_etiologiaja=EXCLUDED.baleset_etiologiaja, baleset_egyeb=EXCLUDED.baleset_egyeb, veleszuletett_rendellenessegek=EXCLUDED.veleszuletett_rendellenessegek, veleszuletett_mutetek_leirasa=EXCLUDED.veleszuletett_mutetek_leirasa`,
         [patientId, patient.kezelesreErkezesIndoka||null, patient.alkoholfogyasztas||null, patient.dohanyzasSzam||null, patient.maxilladefektusVan??null, patient.brownFuggolegesOsztaly||null, patient.brownVizszintesKomponens||null, patient.mandibuladefektusVan??null, patient.kovacsDobakOsztaly||null, patient.nyelvmozgásokAkadályozottak??null, patient.gombocosBeszed??null, patient.nyalmirigyAllapot||null, patient.fabianFejerdyProtetikaiOsztaly||null, patient.fabianFejerdyProtetikaiOsztalyFelso||null, patient.fabianFejerdyProtetikaiOsztalyAlso||null, patient.radioterapia||false, patient.radioterapiaDozis||null, patient.radioterapiaDatumIntervallum||null, patient.chemoterapia||false, patient.chemoterapiaLeiras||null, patient.tnmStaging||null, patient.bno||null, patient.diagnozis||null, patient.balesetIdopont||null, patient.balesetEtiologiaja||null, patient.balesetEgyeb||null, Array.isArray(patient.veleszuletettRendellenessegek) ? JSON.stringify(patient.veleszuletettRendellenessegek) : '[]', patient.veleszuletettMutetekLeirasa||null]
       ),
       client.query(
-        `UPDATE patient_dental_status SET meglevo_fogak=$2, meglevo_implantatumok=$3, nem_ismert_poziciokban_implantatum=$4, nem_ismert_poziciokban_implantatum_reszletek=$5, felso_fogpotlas_van=$6, felso_fogpotlas_mikor=$7, felso_fogpotlas_keszito=$8, felso_fogpotlas_elegedett=$9, felso_fogpotlas_problema=$10, felso_fogpotlas_tipus=$11, also_fogpotlas_van=$12, also_fogpotlas_mikor=$13, also_fogpotlas_keszito=$14, also_fogpotlas_elegedett=$15, also_fogpotlas_problema=$16, also_fogpotlas_tipus=$17 WHERE patient_id=$1`,
+        `INSERT INTO patient_dental_status (patient_id, meglevo_fogak, meglevo_implantatumok, nem_ismert_poziciokban_implantatum, nem_ismert_poziciokban_implantatum_reszletek, felso_fogpotlas_van, felso_fogpotlas_mikor, felso_fogpotlas_keszito, felso_fogpotlas_elegedett, felso_fogpotlas_problema, felso_fogpotlas_tipus, also_fogpotlas_van, also_fogpotlas_mikor, also_fogpotlas_keszito, also_fogpotlas_elegedett, also_fogpotlas_problema, also_fogpotlas_tipus)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17)
+         ON CONFLICT (patient_id) DO UPDATE SET meglevo_fogak=EXCLUDED.meglevo_fogak, meglevo_implantatumok=EXCLUDED.meglevo_implantatumok, nem_ismert_poziciokban_implantatum=EXCLUDED.nem_ismert_poziciokban_implantatum, nem_ismert_poziciokban_implantatum_reszletek=EXCLUDED.nem_ismert_poziciokban_implantatum_reszletek, felso_fogpotlas_van=EXCLUDED.felso_fogpotlas_van, felso_fogpotlas_mikor=EXCLUDED.felso_fogpotlas_mikor, felso_fogpotlas_keszito=EXCLUDED.felso_fogpotlas_keszito, felso_fogpotlas_elegedett=EXCLUDED.felso_fogpotlas_elegedett, felso_fogpotlas_problema=EXCLUDED.felso_fogpotlas_problema, felso_fogpotlas_tipus=EXCLUDED.felso_fogpotlas_tipus, also_fogpotlas_van=EXCLUDED.also_fogpotlas_van, also_fogpotlas_mikor=EXCLUDED.also_fogpotlas_mikor, also_fogpotlas_keszito=EXCLUDED.also_fogpotlas_keszito, also_fogpotlas_elegedett=EXCLUDED.also_fogpotlas_elegedett, also_fogpotlas_problema=EXCLUDED.also_fogpotlas_problema, also_fogpotlas_tipus=EXCLUDED.also_fogpotlas_tipus`,
         [patientId, patient.meglevoFogak ? JSON.parse(JSON.stringify(patient.meglevoFogak)) : {}, patient.meglevoImplantatumok ? JSON.parse(JSON.stringify(patient.meglevoImplantatumok)) : {}, patient.nemIsmertPoziciokbanImplantatum||false, patient.nemIsmertPoziciokbanImplantatumRészletek||null, patient.felsoFogpotlasVan??null, patient.felsoFogpotlasMikor||null, patient.felsoFogpotlasKeszito||null, patient.felsoFogpotlasElegedett??null, patient.felsoFogpotlasProblema||null, patient.felsoFogpotlasTipus||null, patient.alsoFogpotlasVan??null, patient.alsoFogpotlasMikor||null, patient.alsoFogpotlasKeszito||null, patient.alsoFogpotlasElegedett??null, patient.alsoFogpotlasProblema||null, patient.alsoFogpotlasTipus||null]
       ),
       client.query(
-        `UPDATE patient_treatment_plans SET kezelesi_terv_felso=$2::jsonb, kezelesi_terv_also=$3::jsonb, kezelesi_terv_arcot_erinto=$4::jsonb, kortorteneti_osszefoglalo=$5, kezelesi_terv_melleklet=$6, szakorvosi_velemeny=$7 WHERE patient_id=$1`,
+        `INSERT INTO patient_treatment_plans (patient_id, kezelesi_terv_felso, kezelesi_terv_also, kezelesi_terv_arcot_erinto, kortorteneti_osszefoglalo, kezelesi_terv_melleklet, szakorvosi_velemeny)
+         VALUES ($1,$2::jsonb,$3::jsonb,$4::jsonb,$5,$6,$7)
+         ON CONFLICT (patient_id) DO UPDATE SET kezelesi_terv_felso=EXCLUDED.kezelesi_terv_felso, kezelesi_terv_also=EXCLUDED.kezelesi_terv_also, kezelesi_terv_arcot_erinto=EXCLUDED.kezelesi_terv_arcot_erinto, kortorteneti_osszefoglalo=EXCLUDED.kortorteneti_osszefoglalo, kezelesi_terv_melleklet=EXCLUDED.kezelesi_terv_melleklet, szakorvosi_velemeny=EXCLUDED.szakorvosi_velemeny`,
         [patientId, Array.isArray(patient.kezelesiTervFelso) ? JSON.stringify(patient.kezelesiTervFelso) : '[]', Array.isArray(patient.kezelesiTervAlso) ? JSON.stringify(patient.kezelesiTervAlso) : '[]', Array.isArray(patient.kezelesiTervArcotErinto) ? JSON.stringify(patient.kezelesiTervArcotErinto) : '[]', patient.kortortenetiOsszefoglalo||null, patient.kezelesiTervMelleklet||null, patient.szakorvosiVelemény||null]
       ),
     ]);
@@ -747,7 +755,7 @@ export const PUT = authedHandler(async (req, { auth, params, correlationId }) =>
     if (tajResponse) return tajResponse;
 
     // 6. Execute per-table updates in a transaction
-    const newPatient = await executePatientUpdate(pool, patientId, validatedPatient, userEmail);
+    let newPatient = await executePatientUpdate(pool, patientId, validatedPatient, userEmail);
 
     if (!newPatient) {
       return NextResponse.json(
@@ -767,13 +775,35 @@ export const PUT = authedHandler(async (req, { auth, params, correlationId }) =>
     //     (ragadós) hozzárendelést rögzítünk, amit a recompute nem ír felül.
     //     Üres név → lekapcsolás (a recompute újra seedelhet). Ismeretlen név →
     //     a fenti UPDATE szabad szövege marad, nincs sticky bélyeg.
+    let kezeleoorvosTouchedPatients = false;
     try {
       const assign = await applyKezeleoorvosFromForm(patientId, validatedPatient.kezeleoorvos, userId, pool);
+      kezeleoorvosTouchedPatients = true;
       if (!assign.resolved) {
         logger.warn(`Kezelőorvos név nem feloldható ismert orvosra (beteg ${patientId}): "${validatedPatient.kezeleoorvos}"`);
       }
     } catch (assignErr) {
       logger.error('Kezelőorvos hozzárendelés sikertelen (update):', assignErr);
+    }
+
+    // 7c. KRITIKUS: az applyKezeleoorvosFromForm egy MÁSODIK `UPDATE patients`-et
+    //     futtat, amit az `update_patients_updated_at` BEFORE UPDATE trigger
+    //     újabb `updated_at`-re bumpol — a fenti `newPatient` viszont még a
+    //     korábbi (T1) verziót tartalmazza. Ha ezt a stale verziót küldjük
+    //     vissza, a kliens If-Match-e azonnal elavul, és a KÖVETKEZŐ mentése
+    //     409 STALE_WRITE-tal bukik (önkonfliktus minden 2. mentésnél). Ezért a
+    //     kezelőorvos-szinkron UTÁN újraolvassuk a beteget a végleges
+    //     updated_at-tel (és a friss kezelőorvos-mezőkkel).
+    if (kezeleoorvosTouchedPatients) {
+      try {
+        const fresh = await pool.query(
+          `SELECT ${PATIENT_SELECT_FIELDS} FROM patients_full WHERE id = $1`,
+          [patientId]
+        );
+        if (fresh.rows[0]) newPatient = fresh.rows[0];
+      } catch (rereadErr) {
+        logger.error('Failed to re-read patient after kezelőorvos sync:', rereadErr);
+      }
     }
 
     // 8. Create snapshot for manual saves
