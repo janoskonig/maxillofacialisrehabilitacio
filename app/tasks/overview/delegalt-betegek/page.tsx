@@ -11,9 +11,9 @@ import {
   AlertTriangle,
   CalendarClock,
   CalendarCheck,
-  Stethoscope,
   ExternalLink,
 } from 'lucide-react';
+import { ToothIcon } from '@/components/icons/ToothIcon';
 
 type WorklistPatient = {
   id: string;
@@ -179,7 +179,7 @@ export default function DelegaltBetegekPage() {
           </div>
           {scope === 'all' && (
             <div className="card p-4 flex items-center gap-3">
-              <Stethoscope className="w-8 h-8 text-medical-primary" />
+              <ToothIcon className="w-8 h-8 text-medical-primary" />
               <div>
                 <p className="text-2xl font-bold text-gray-900 dark:text-gray-100">{groups.length}</p>
                 <p className="text-sm text-gray-500 dark:text-gray-400">Orvos</p>
@@ -248,7 +248,7 @@ export default function DelegaltBetegekPage() {
           <section key={g.doctorName} className="card overflow-hidden">
             {scope === 'all' && (
               <div className="px-4 py-3 bg-gray-50 dark:bg-gray-800/60 border-b flex items-center gap-2 flex-wrap">
-                <Stethoscope className="w-4 h-4 text-medical-primary" />
+                <ToothIcon className="w-4 h-4 text-medical-primary" />
                 <h2 className="font-semibold text-gray-900 dark:text-gray-100">{g.doctorName}</h2>
                 <span className="text-sm text-gray-500 dark:text-gray-400">({g.rows.length})</span>
                 {g.avgScore != null && (

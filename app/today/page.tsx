@@ -4,7 +4,8 @@ import { useEffect, useState, useCallback, useMemo } from 'react';
 import { useRouter } from 'next/navigation';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
-import { CalendarCheck, CheckCircle2, Clock, AlertCircle, Stethoscope } from 'lucide-react';
+import { CalendarCheck, CheckCircle2, Clock, AlertCircle } from 'lucide-react';
+import { ToothIcon } from '@/components/icons/ToothIcon';
 import { getCurrentUser } from '@/lib/auth';
 import { AppShell } from '@/components/layout/AppShell';
 import { StatCard } from '@/components/ui/StatCard';
@@ -95,7 +96,7 @@ export default function TodaysAppointmentsPage() {
           <p className="text-body-sm text-gray-500 dark:text-gray-400 capitalize">{today}</p>
           {doctors.length > 1 && (
             <label className="flex items-center gap-2 text-sm">
-              <Stethoscope className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
+              <ToothIcon className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
               <span className="text-gray-500 dark:text-gray-400 font-medium hidden sm:inline">Orvos:</span>
               <select
                 value={selectedDentist ?? ''}

@@ -1,7 +1,8 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { Stethoscope, AlertCircle, Pencil, X, Check, Loader2 } from 'lucide-react';
+import { AlertCircle, Pencil, X, Check, Loader2 } from 'lucide-react';
+import { ToothIcon } from '@/components/icons/ToothIcon';
 
 interface KezeloorvosInfo {
   userId: string | null;
@@ -119,7 +120,7 @@ export function KezeloorvosDelegationWidget({ patientId, canAssign = false, onCh
               : `Kezelőorvos: ${info?.name}`
           }
         >
-          <Stethoscope className="w-3.5 h-3.5 shrink-0" />
+          <ToothIcon className="w-3.5 h-3.5 shrink-0" />
           <span className="truncate max-w-[14rem]">{info?.name}</span>
           {canAssign && <Pencil className="w-3 h-3 opacity-60" />}
         </button>

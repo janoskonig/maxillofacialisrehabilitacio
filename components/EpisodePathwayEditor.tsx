@@ -74,6 +74,11 @@ export function EpisodePathwayEditor({
   const [providerDirty, setProviderDirty] = useState(false);
   const [savingProvider, setSavingProvider] = useState(false);
 
+  // Felajánlás: ha a betegnek még nincs kezelőorvosa, a frissen mentett felelős
+  // orvost egy kattintással kezelőorvosnak is be lehet állítani.
+  const [kezeleoorvosOffer, setKezeleoorvosOffer] = useState<{ userId: string; name: string } | null>(null);
+  const [assigningKezeleoorvos, setAssigningKezeleoorvos] = useState(false);
+
   const loadLists = useCallback(async () => {
     setLoadingLists(true);
     setError(null);
@@ -211,12 +216,53 @@ export function EpisodePathwayEditor({
       setProviderDirty(false);
       showToast('Felelős orvos mentve', 'success');
       await onSaved?.();
+
+      // Ha van patientId + választott orvos, és a betegnek még nincs
+      // kezelőorvosa, ajánljuk fel a beállítást (b opció).
+      if (patientId && selectedProviderId) {
+        try {
+          const kRes = await fetch(`/api/patients/${patientId}/kezeleoorvos`, { credentials: 'include' });
+          if (kRes.ok) {
+            const kData = await kRes.json();
+            if (!kData.kezeleoorvos?.userId) {
+              const doc = doctors.find((d) => d.id === selectedProviderId);
+              setKezeleoorvosOffer({ userId: selectedProviderId, name: doc?.name ?? 'a kiválasztott orvos' });
+            }
+          }
+        } catch {
+          /* a felajánlás nem kritikus — csendben kihagyjuk */
+        }
+      }
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Hiba';
       setError(msg);
       showToast(msg, 'error');
     } finally {
       setSavingProvider(false);
+    }
+  };
+
+  const handleAssignKezeleoorvos = async () => {
+    if (!kezeleoorvosOffer || !patientId || assigningKezeleoorvos) return;
+    setAssigningKezeleoorvos(true);
+    try {
+      const res = await fetch(`/api/patients/${patientId}/kezeleoorvos`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ userId: kezeleoorvosOffer.userId }),
+      });
+      const data = await res.json();
+      if (!res.ok) {
+        throw new Error(data.error ?? 'Hiba a kezelőorvos beállításakor');
+      }
+      showToast('Kezelőorvos beállítva', 'success');
+      setKezeleoorvosOffer(null);
+      await onSaved?.();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Hiba', 'error');
+    } finally {
+      setAssigningKezeleoorvos(false);
     }
   };
 
@@ -386,6 +432,34 @@ export function EpisodePathwayEditor({
               </button>
             )}
           </div>
+
+          {/* Felajánlás: legyen ő a kezelőorvos is (ha a betegnek még nincs) */}
+          {kezeleoorvosOffer && (
+            <div className="mt-2 rounded-md border border-medical-primary/30 bg-medical-primary/5 dark:bg-medical-primary/10 p-3 text-sm">
+              <p className="text-gray-700 dark:text-gray-200">
+                Ennek a betegnek még nincs <strong>kezelőorvosa</strong>. Beállítsuk{' '}
+                <strong>{kezeleoorvosOffer.name}</strong>-t kezelőorvosnak is? Ez jelenik meg a
+                főoldalon, és ő felel a beteg adatteljességéért.
+              </p>
+              <div className="mt-2 flex items-center gap-2">
+                <button
+                  onClick={handleAssignKezeleoorvos}
+                  disabled={assigningKezeleoorvos}
+                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-medical-primary text-white rounded-md hover:bg-medical-primary-dark disabled:opacity-50 text-sm"
+                >
+                  {assigningKezeleoorvos && <Loader2 className="w-4 h-4 animate-spin" />}
+                  Igen, legyen kezelőorvos
+                </button>
+                <button
+                  onClick={() => setKezeleoorvosOffer(null)}
+                  disabled={assigningKezeleoorvos}
+                  className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:underline disabled:opacity-50"
+                >
+                  Most nem
+                </button>
+              </div>
+            </div>
+          )}
         </div>
 
         {/* Guard: both pathway + provider needed */}
