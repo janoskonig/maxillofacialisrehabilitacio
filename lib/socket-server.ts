@@ -330,6 +330,41 @@ export function emitNewDoctorMessage(opts: {
 }
 
 /**
+ * 064 — kétértelmű beteg-említés feloldva egy elküldött üzeneten. Minden
+ * résztvevő frissüljön: a most linkelt beteg neve linkké válik, és eltűnik a
+ * feloldott „Melyik beteg?” választó.
+ *
+ *  - csoport: a `doctor-group:{groupId}` szobába,
+ *  - 1:1: a feladó ÉS a címzett `user:{id}` szobájába (bárki feloldhatta).
+ */
+export function emitDoctorMessageMentionResolved(opts: {
+  messageId: string;
+  groupId: string | null;
+  recipientUserIds: string[];
+  mentionedPatients: Array<{ id: string; nev: string; taj?: string | null }>;
+  unresolvedMentions: unknown;
+}): void {
+  const socketIO = getSocketIO();
+  if (!socketIO) return;
+
+  const { messageId, groupId, recipientUserIds, mentionedPatients, unresolvedMentions } = opts;
+  const payload = { messageId, groupId, mentionedPatients, unresolvedMentions };
+
+  if (groupId) {
+    const room = `doctor-group:${groupId}`;
+    socketIO.to(room).emit('doctor-message-mention-resolved', payload);
+    console.log(`[Socket] Emitted doctor-message-mention-resolved to ${room}`);
+    return;
+  }
+
+  for (const userId of recipientUserIds) {
+    const room = `user:${userId}`;
+    socketIO.to(room).emit('doctor-message-mention-resolved', payload);
+    console.log(`[Socket] Emitted doctor-message-mention-resolved to ${room}`);
+  }
+}
+
+/**
  * Slice 0.7 — orvos üzenet 1:1 olvasott esemény: a feladónak küldjük,
  * hogy az ő UI-jában frissüljön a pipa-status. A group eset továbbra is
  * az `emitDoctorMessageRead`-en megy.

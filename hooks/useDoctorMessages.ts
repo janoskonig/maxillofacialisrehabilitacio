@@ -70,6 +70,8 @@ export interface UseDoctorMessagesReturn {
   sendMessage: (text: string, confirmedPatientIds?: string[]) => Promise<string | null>;
   /** Fázis 4.1: sikertelen (429 / hálózat) üzenet újraküldése ugyanazzal a clientMessageId-val. */
   retryMessage: (message: DoctorMessage) => Promise<boolean>;
+  /** 064: egy kétértelmű beteg-említés feloldása egy elküldött üzeneten. */
+  resolveMention: (messageId: string, matchedText: string, patientId: string) => Promise<void>;
   createGroupConversation: (participantIds: string[]) => Promise<{ groupId: string } | null>;
   renameGroup: (newName: string) => Promise<boolean>;
   deleteGroup: () => Promise<boolean>;
@@ -683,6 +685,36 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [socket, isConnected, selectedGroupId, selectedDoctorId, currentUserId]);
 
+  // 064: realtime — kétértelmű beteg-említés feloldva egy üzeneten. Minden
+  // résztvevő frissül (a most linkelt beteg neve linkké válik, a választó eltűnik).
+  useEffect(() => {
+    if (!socket || !isConnected) return;
+
+    const handleMentionResolved = (data: {
+      messageId: string;
+      groupId: string | null;
+      mentionedPatients?: Array<{ id: string; nev: string; taj?: string | null }>;
+      unresolvedMentions?: DoctorMessage['unresolvedMentions'];
+    }) => {
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === data.messageId
+            ? {
+                ...m,
+                mentionedPatients: data.mentionedPatients ?? m.mentionedPatients,
+                unresolvedMentions: data.unresolvedMentions ?? [],
+              }
+            : m,
+        ),
+      );
+    };
+
+    socket.on('doctor-message-mention-resolved', handleMentionResolved);
+    return () => {
+      socket.off('doctor-message-mention-resolved', handleMentionResolved);
+    };
+  }, [socket, isConnected]);
+
   // Fázis 2: realtime deliveryStatus (delivered / read) a küldő bubble-ön.
   useEffect(() => {
     if (!socket || !isConnected) return;
@@ -920,6 +952,47 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     }
   };
 
+  // 064: egy kétértelmű beteg-említés feloldása az elküldött üzeneten. A választott
+  // beteg bekerül a hivatkozottak közé; a szerver realtime is szétküldi a többi
+  // résztvevőnek, itt a hívó kliensét azonnal frissítjük az API-válaszból.
+  const resolveMention = async (
+    messageId: string,
+    matchedText: string,
+    patientId: string,
+  ): Promise<void> => {
+    try {
+      const response = await fetch(`/api/doctor-messages/${messageId}/resolve-mention`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ matchedText, patientId }),
+      });
+
+      if (!response.ok) {
+        const error = await response.json().catch(() => ({}));
+        throw new Error(error.error || 'Hiba a beteg hozzárendelésekor');
+      }
+
+      const data = await response.json();
+      setMessages(prev =>
+        prev.map(m =>
+          m.id === messageId
+            ? {
+                ...m,
+                mentionedPatientIds: data.mentionedPatientIds ?? m.mentionedPatientIds,
+                mentionedPatients: data.mentionedPatients ?? m.mentionedPatients,
+                unresolvedMentions: data.unresolvedMentions ?? [],
+              }
+            : m,
+        ),
+      );
+      showToast('Beteg hozzárendelve az üzenethez', 'success');
+    } catch (error: any) {
+      console.error('Hiba a beteg-említés feloldásakor:', error);
+      showToast(error.message || 'Hiba a beteg hozzárendelésekor', 'error');
+    }
+  };
+
   const createGroupConversation = async (participantIds: string[]): Promise<{ groupId: string } | null> => {
     try {
       setLoading(true);
@@ -1039,6 +1112,7 @@ export function useDoctorMessages({ socket, isConnected }: UseDoctorMessagesOpti
     clearSelection,
     sendMessage,
     retryMessage,
+    resolveMention,
     createGroupConversation,
     renameGroup,
     deleteGroup,
