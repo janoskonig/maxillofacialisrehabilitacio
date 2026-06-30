@@ -274,8 +274,17 @@ export function usePatientAutoSave(
     lastSaveErrorRef.current = null;
   }, [patientId, lastSaveErrorRef]);
 
+  // Serializes ALL saves so a new one never starts before the previous has
+  // fully settled. Without this, two overlapping saves (e.g. typing a beutaló
+  // orvos név that triggers the auto-fill setValue('beutaloIntezmeny')) both
+  // read the same `updatedAt` from currentPatientRef and send the same
+  // If-Match: the first commits → server bumps updated_at → the second hits a
+  // self-inflicted 409 STALE_WRITE. Chaining guarantees each save reads the
+  // fresh updatedAt the previous save wrote back via updateCurrentPatient().
+  const saveChainRef = useRef<Promise<unknown>>(Promise.resolve());
+
   // ----- Unified save function -----
-  const performSave = useCallback(
+  const performSaveInner = useCallback(
     async (
       source: 'auto' | 'manual',
       formData: Patient,
@@ -354,7 +363,11 @@ export function usePatientAutoSave(
 
         // Update state
         updateCurrentPatient(saved);
-        setVanBeutalo(!!(saved.beutaloOrvos || saved.beutaloIntezmeny));
+        // Csak BEkapcsoljuk a „Van beutaló?" togglet, ha mentett adat van —
+        // soha nem kapcsoljuk KI automatikusan, különben egy üres mezővel
+        // lefutó mentés összecsukná a szekciót, és a felhasználó épp begépelt
+        // értéke eltűnne. A kikapcsolás csak kézi (onVanBeutaloChange) lehet.
+        setVanBeutalo(prev => prev || !!(saved.beutaloOrvos || saved.beutaloIntezmeny));
         if (saved.meglevoImplantatumok) setImplantatumok(saved.meglevoImplantatumok);
         if (saved.meglevoFogak)
           setFogak(saved.meglevoFogak as Record<string, ToothStatus>);
@@ -446,9 +459,9 @@ export function usePatientAutoSave(
           await new Promise((r) => setTimeout(r, delay));
 
           if (source === 'auto') {
-            return performSave('auto', getValues(), retryCount + 1);
+            return performSaveInner('auto', getValues(), retryCount + 1);
           }
-          return performSave('manual', formData, retryCount + 1);
+          return performSaveInner('manual', formData, retryCount + 1);
         }
 
         // Final failure telemetry
@@ -526,6 +539,30 @@ export function usePatientAutoSave(
       trigger,
       updateCurrentPatient,
     ]
+  );
+
+  // Public entry point. Every save (auto AND manual) is chained one-after-
+  // another so each reads the freshest `updatedAt` and can never collide with
+  // its predecessor. A manual save additionally aborts any in-flight auto-save
+  // up front so the chain drains immediately (the user shouldn't wait on a
+  // background autosave).
+  const performSave = useCallback(
+    (
+      source: 'auto' | 'manual',
+      formData: Patient,
+      retryCount = 0
+    ): Promise<Patient | null> => {
+      if (source === 'manual' && autoSaveAbortRef.current) {
+        autoSaveAbortRef.current.abort();
+        autoSaveAbortRef.current = null;
+      }
+      const next = saveChainRef.current
+        .catch(() => {})
+        .then(() => performSaveInner(source, formData, retryCount));
+      saveChainRef.current = next.catch(() => {});
+      return next;
+    },
+    [performSaveInner]
   );
 
   // ----- Auto-save debounce effect -----

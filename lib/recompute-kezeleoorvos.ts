@@ -158,12 +158,17 @@ export async function recomputeKezeleoorvos(
   // hogy a `users.doktor_neve` időközben változott — ezért külön nézzük.
   const needsUserIdUpdate = previousUserId !== candidateUserId;
 
+  // A `set_config('app.skip_updated_at','on',true)` a WHERE-ágban megőrzi a
+  // beteg optimista zár tokenjét (updated_at): ez szerver-kezelte mellék-írás
+  // (időpont/epizód hatására), nem szabad 409-cel kizárnia egy nyitott űrlapot.
+  // Lásd database/migrations/062.
   if (needsUserIdUpdate) {
     await queryable.query(
       `UPDATE patients
           SET kezeleoorvos_user_id = $1,
               kezeleoorvos = $2
-        WHERE id = $3`,
+        WHERE id = $3
+          AND set_config('app.skip_updated_at','on',true) IS NOT NULL`,
       [candidateUserId, candidateName, validatedPatientId]
     );
   } else {
@@ -171,7 +176,8 @@ export async function recomputeKezeleoorvos(
     await queryable.query(
       `UPDATE patients
           SET kezeleoorvos = $1
-        WHERE id = $2 AND COALESCE(kezeleoorvos, '') <> COALESCE($1, '')`,
+        WHERE id = $2 AND COALESCE(kezeleoorvos, '') <> COALESCE($1, '')
+          AND set_config('app.skip_updated_at','on',true) IS NOT NULL`,
       [candidateName, validatedPatientId]
     );
   }

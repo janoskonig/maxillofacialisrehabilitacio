@@ -29,11 +29,13 @@ export async function recordConsentWithdrawal(
 ): Promise<void> {
   const db = pool ?? getDbPool();
   await db.query(
+    // set_config(...): hozzájárulás-visszavonás szerver/portál-kezelt mellék-írás
+    // → őrizze meg a beteg optimista zár tokenjét. Lásd database/migrations/062.
     `UPDATE patients
      SET consent_status = 'withdrawn',
          consent_withdrawn_at = CURRENT_TIMESTAMP,
          research_usable_until = CURRENT_TIMESTAMP
-     WHERE id = $1`,
+     WHERE id = $1 AND set_config('app.skip_updated_at','on',true) IS NOT NULL`,
     [patientId]
   );
 

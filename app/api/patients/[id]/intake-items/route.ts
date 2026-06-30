@@ -151,7 +151,11 @@ export const PATCH = authedHandler(async (req, { auth, params }) => {
   }
 
   await pool.query(
-    `UPDATE patients SET intake_status = $1 WHERE id = $2`,
+    // set_config(...): az intake FSM léptetése szerver-kezelt mellék-írás →
+    // őrizze meg a beteg optimista zár tokenjét (updated_at), ne 409-eltessen
+    // egy nyitva tartott űrlapot. Lásd database/migrations/062.
+    `UPDATE patients SET intake_status = $1
+      WHERE id = $2 AND set_config('app.skip_updated_at','on',true) IS NOT NULL`,
     [targetStatus, patientId]
   );
 

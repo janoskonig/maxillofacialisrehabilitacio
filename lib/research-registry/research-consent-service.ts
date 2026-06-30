@@ -208,7 +208,11 @@ export async function markConsentPending(
 
   const version = await getActiveConsentVersion(db);
   await db.query(
-    `UPDATE patients SET consent_status = 'pending' WHERE id = $1`,
+    // set_config(...): a hozzájárulás szerver/portál-kezelt mellék-írás → őrizze
+    // meg a beteg optimista zár tokenjét (updated_at), ne 409-eltessen egy
+    // nyitva tartott staff-űrlapot. Lásd database/migrations/062.
+    `UPDATE patients SET consent_status = 'pending'
+      WHERE id = $1 AND set_config('app.skip_updated_at','on',true) IS NOT NULL`,
     [patientId]
   );
 
@@ -302,7 +306,7 @@ export async function grantResearchConsent(
        consent_granted_at = CURRENT_TIMESTAMP,
        consent_withdrawn_at = NULL,
        legacy_compliance_status = 'VERIFIED'
-     WHERE id = $1`,
+     WHERE id = $1 AND set_config('app.skip_updated_at','on',true) IS NOT NULL`,
     [patientId, active.id]
   );
 
@@ -369,7 +373,8 @@ export async function declineResearchConsent(
 
   const version = await getActiveConsentVersion(db);
   await db.query(
-    `UPDATE patients SET consent_status = 'declined' WHERE id = $1`,
+    `UPDATE patients SET consent_status = 'declined'
+      WHERE id = $1 AND set_config('app.skip_updated_at','on',true) IS NOT NULL`,
     [patientId]
   );
 

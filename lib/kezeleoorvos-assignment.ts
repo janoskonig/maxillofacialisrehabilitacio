@@ -94,7 +94,8 @@ export async function assignKezeleoorvos(
               kezeleoorvos_intezete = NULL,
               kezeleoorvos_assigned_at = NULL,
               kezeleoorvos_assigned_by = NULL
-        WHERE id = $1`,
+        WHERE id = $1
+          AND set_config('app.skip_updated_at','on',true) IS NOT NULL`,
       [validatedPatientId]
     );
     return { changed: previousUserId !== null, userId: null, name: null, intezmeny: null };
@@ -121,7 +122,8 @@ export async function assignKezeleoorvos(
               kezeleoorvos_intezete = $3,
               kezeleoorvos_assigned_at = NOW(),
               kezeleoorvos_assigned_by = $4
-        WHERE id = $5`,
+        WHERE id = $5
+          AND set_config('app.skip_updated_at','on',true) IS NOT NULL`,
       [validatedUserId, name, intezmeny, assignedBy, validatedPatientId]
     );
   } else {
@@ -135,7 +137,8 @@ export async function assignKezeleoorvos(
               kezeleoorvos_intezete = $2,
               kezeleoorvos_assigned_at = COALESCE(kezeleoorvos_assigned_at, NOW()),
               kezeleoorvos_assigned_by = COALESCE(kezeleoorvos_assigned_by, $3)
-        WHERE id = $4`,
+        WHERE id = $4
+          AND set_config('app.skip_updated_at','on',true) IS NOT NULL`,
       [name, intezmeny, assignedBy, validatedPatientId]
     );
   }
