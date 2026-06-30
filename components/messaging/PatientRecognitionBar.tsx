@@ -1,6 +1,6 @@
 'use client';
 
-import { useEffect, useRef, useState } from 'react';
+import { useEffect, useLayoutEffect, useRef, useState } from 'react';
 import { UserPlus, X, Check } from 'lucide-react';
 import type { PatientDetection } from '@/lib/patient-name-recognition';
 
@@ -29,10 +29,12 @@ function detectionKey(d: PatientDetection): string {
 }
 
 /**
- * Automatikus beteg-felismerés megerősítő sávja. A szabad szövegben felismert
- * betegeket ("Megbeszéltem Kovács Jánossal…") jeleníti meg; a felhasználó egy
- * koppintással hozzáköti őket az üzenethez (a klinikai adat miatt sosem köt
- * automatikusan). Azonos nevű betegeknél a TAJ alapján lehet egyértelműsíteni.
+ * Automatikus beteg-felismerés sávja. A szabad szövegben felismert betegeket
+ * ("Megbeszéltem Kovács Jánossal…") egyértelmű találat esetén automatikusan
+ * hozzáköti az üzenethez — nincs külön "okézás", csak egy törölhető kék chip
+ * jelenik meg. Azonos nevű (kétértelmű) betegeknél viszont nem tippelünk: ott
+ * marad a TAJ alapú választás, mert a klinikai hivatkozást nem köthetjük rossz
+ * beteghez.
  */
 export function PatientRecognitionBar({
   text,
@@ -43,12 +45,17 @@ export function PatientRecognitionBar({
   const [detections, setDetections] = useState<PatientDetection[]>([]);
   const [dismissed, setDismissed] = useState<Set<string>>(new Set());
   const abortRef = useRef<AbortController | null>(null);
+  // Már automatikusan megerősített (vagy onConfirm-mal kezelt) detektálás-kulcsok.
+  // Megakadályozza, hogy egy felhasználó által eltávolított találatot azonnal
+  // újra felvegyünk. Új üzenetnél (üres szöveg) nullázódik.
+  const autoConfirmedRef = useRef<Set<string>>(new Set());
 
   // Debounce-olt felismerés a szöveg változására.
   useEffect(() => {
     if (!text.trim()) {
       setDetections([]);
       setDismissed(new Set());
+      autoConfirmedRef.current = new Set();
       return;
     }
 
@@ -79,9 +86,31 @@ export function PatientRecognitionBar({
 
   const confirmedIds = new Set(confirmed.map((p) => p.id));
 
-  // Megjeleníthető javaslatok: nincs még megerősítve és nincs elvetve.
+  // Egyértelmű találatok automatikus hozzákötése — nincs külön megerősítés.
+  // Kétértelmű (azonos nevű) betegeket sosem kötünk automatikusan. A már egyszer
+  // kezelt kulcsokat kihagyjuk, így a felhasználó által törölt találat nem ugrik
+  // vissza, és a kézzel elvetett javaslatot is tiszteletben tartjuk.
+  useLayoutEffect(() => {
+    for (const d of detections) {
+      if (d.ambiguous || d.candidates.length !== 1) continue;
+      const key = detectionKey(d);
+      if (autoConfirmedRef.current.has(key) || dismissed.has(key)) continue;
+      const c = d.candidates[0];
+      if (confirmedIds.has(c.id)) continue;
+      autoConfirmedRef.current.add(key);
+      onConfirm(c);
+    }
+    // confirmedIds/onConfirm szándékosan kimarad: a guard (autoConfirmedRef) miatt
+    // csak a detektálások változására kell lefutnia.
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [detections, dismissed]);
+
+  // Megjeleníthető javaslatok: csak a kézi döntést igénylő (kétértelmű) találatok.
+  // Az egyértelműeket az auto-megerősítés kezeli (autoConfirmedRef), ezért — akár
+  // megerősítve, akár a felhasználó által törölve — nem jelennek meg javaslatként.
   const suggestions = detections.filter((d) => {
-    if (dismissed.has(detectionKey(d))) return false;
+    const key = detectionKey(d);
+    if (dismissed.has(key) || autoConfirmedRef.current.has(key)) return false;
     return !d.candidates.every((c) => confirmedIds.has(c.id));
   });
 
