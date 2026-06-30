@@ -71,3 +71,5 @@ presentation/
 
 # Throwaway simulation DB env (contains DB credential)
 .env.sim
+
+sim-out/
