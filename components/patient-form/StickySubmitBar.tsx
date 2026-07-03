@@ -12,6 +12,14 @@ interface StickySubmitBarProps {
   setActiveSectionId: (id: string) => void;
   handleCancel: () => void;
   isSaving?: boolean;
+  /** Automatikus mentés fut éppen (a kézi mentést az isSaving jelzi). */
+  isAutoSaving?: boolean;
+  /** Utolsó sikeres mentés időpontja — „Utoljára mentve HH:MM”. */
+  lastSavedAt?: Date | null;
+}
+
+function formatSavedTime(date: Date): string {
+  return date.toLocaleTimeString('hu-HU', { hour: '2-digit', minute: '2-digit' });
 }
 
 export function StickySubmitBar({
@@ -22,7 +30,15 @@ export function StickySubmitBar({
   setActiveSectionId,
   handleCancel,
   isSaving = false,
+  isAutoSaving = false,
+  lastSavedAt = null,
 }: StickySubmitBarProps) {
+  const saveStatus = isSaving || isAutoSaving
+    ? 'Mentés folyamatban…'
+    : lastSavedAt
+      ? `Utoljára mentve ${formatSavedTime(lastSavedAt)}`
+      : null;
+
   return (
     <div
       className="fixed left-0 right-0 z-[55] bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-800 shadow-[0_-4px_12px_-2px_rgba(0,0,0,0.06)] px-3 sm:px-6 md:px-8 max-md:bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] md:bottom-0 pb-[env(safe-area-inset-bottom,0px)]"
@@ -62,6 +78,14 @@ export function StickySubmitBar({
           </button>
         )}
         
+        {/* Mentés állapota — képernyőolvasónak is bejelentve */}
+        <p
+          aria-live="polite"
+          className="hidden sm:flex items-center text-xs text-gray-500 dark:text-gray-400 order-3 sm:order-1 sm:mr-auto"
+        >
+          {saveStatus}
+        </p>
+
         {/* Right: Cancel and Save buttons */}
         <div className="flex gap-2 sm:gap-3 w-full sm:w-auto order-1 sm:order-2 ml-auto">
           <button

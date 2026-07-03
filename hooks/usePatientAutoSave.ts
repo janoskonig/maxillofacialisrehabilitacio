@@ -197,6 +197,8 @@ export interface UsePatientAutoSaveOptions {
 
 export interface UsePatientAutoSaveReturn {
   savingSource: 'auto' | 'manual' | null;
+  /** Utolsó sikeres mentés időpontja — a mentés-visszajelzéshez („Utoljára mentve HH:MM”). */
+  lastSavedAt: Date | null;
   performSave: (
     source: 'auto' | 'manual',
     formData: Patient,
@@ -241,6 +243,7 @@ export function usePatientAutoSave(
 
   // ----- State -----
   const [savingSource, setSavingSource] = useState<'auto' | 'manual' | null>(null);
+  const [lastSavedAt, setLastSavedAt] = useState<Date | null>(null);
 
   // ----- Sequencing & abort refs -----
   const saveSequenceRef = useRef(0);
@@ -375,6 +378,7 @@ export function usePatientAutoSave(
         // Update hash
         lastSavedHashRef.current = stableStringify(validatedPayload);
         lastSaveSourceRef.current = source;
+        setLastSavedAt(new Date());
 
         // Telemetry
         const durationMs = Date.now() - startTime;
@@ -609,6 +613,7 @@ export function usePatientAutoSave(
 
   return {
     savingSource,
+    lastSavedAt,
     performSave,
     fogakRef,
     implantatumokRef,

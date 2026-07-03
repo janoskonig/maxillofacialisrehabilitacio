@@ -8,6 +8,7 @@ import { useFeedback } from '@/components/FeedbackContext';
 import { useStaffTaskSummary } from '@/hooks/useStaffTaskSummary';
 import { useStaffInboxSummary } from '@/hooks/useStaffInboxSummary';
 import { Sidebar } from './Sidebar';
+import { SkipLink } from './SkipLink';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { PageHeader } from '@/components/ui/PageHeader';
 
@@ -60,7 +61,7 @@ export function AppShell({ title, backTo, actions, maxWidth = 'lg', children }: 
   };
 
   const content = (
-    <main className="flex-1 pb-mobile-nav-staff md:pb-6">
+    <main id="main-content" tabIndex={-1} className="flex-1 pb-mobile-nav-staff md:pb-6 outline-none">
       <div className={`${MAX_WIDTH_CLASS[maxWidth]} mx-auto w-full px-4 py-6`}>{children}</div>
     </main>
   );
@@ -69,6 +70,7 @@ export function AppShell({ title, backTo, actions, maxWidth = 'lg', children }: 
   if (!user) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col">
+        <SkipLink />
         <PageHeader title={title} backTo={backTo} actions={actions} />
         {content}
         <MobileBottomNav />
@@ -78,6 +80,7 @@ export function AppShell({ title, backTo, actions, maxWidth = 'lg', children }: 
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 md:flex">
+      <SkipLink />
       <Sidebar
         user={user}
         taskSummary={taskSummary}

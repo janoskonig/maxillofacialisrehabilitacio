@@ -9,4 +9,5 @@ export { MeltanyossagiSection } from './MeltanyossagiSection';
 export { ArajanlatkeroSection } from './ArajanlatkeroSection';
 export { ResearchConsentSection } from './ResearchConsentSection';
 export { ConflictModal } from './ConflictModal';
+export { DuplicateWarningCard } from './DuplicateWarningCard';
 export { StickySubmitBar } from './StickySubmitBar';

@@ -1,7 +1,7 @@
 'use client';
 
 import { useState, useEffect, useRef, useCallback, useMemo } from 'react';
-import { useForm, useWatch } from 'react-hook-form';
+import { useForm, useWatch, type FieldErrors } from 'react-hook-form';
 import { zodResolver } from '@hookform/resolvers/zod';
 import { Patient, patientQuickIntakeSchema, patientSchema } from '@/lib/types';
 import { formatDateForInput } from '@/lib/dateUtils';
@@ -17,6 +17,7 @@ import {
   ArajanlatkeroSection,
   ResearchConsentSection,
   ConflictModal,
+  DuplicateWarningCard,
   StickySubmitBar,
   getToothState,
 } from './patient-form';
@@ -27,6 +28,7 @@ import { ChainBookingCallout } from './ChainBookingCallout';
 import { getCurrentUser } from '@/lib/auth';
 import { savePatient, ApiError } from '@/lib/storage';
 import { tajHasChecksumError } from '@/lib/taj-validation';
+import { isSearchableTaj, type DuplicateMatch } from '@/lib/patient-duplicate-check';
 import { usePatientAutoSave, normalizeToothData, buildSavePayload, type ToothStatus } from '@/hooks/usePatientAutoSave';
 import { usePatientConflictResolution } from '@/hooks/usePatientConflictResolution';
 import { PatientDocuments } from './PatientDocuments';
@@ -405,6 +407,7 @@ export function PatientForm({
   // ----- Auto-save hook -----
   const {
     savingSource,
+    lastSavedAt,
     performSave,
     fogakRef,
     implantatumokRef,
@@ -543,6 +546,48 @@ export function PatientForm({
   const kezeleoorvosIntezeteValue = watch('kezeleoorvosIntezete');
   const felvetelDatumaValue = watch('felvetelDatuma');
   const kezelesreErkezesIndokaValue = watch('kezelesreErkezesIndoka');
+
+  // ----- Proaktív duplikátum-ellenőrzés (csak új, még nem mentett betegnél) -----
+  const [duplicateMatches, setDuplicateMatches] = useState<DuplicateMatch[]>([]);
+  useEffect(() => {
+    if (patientId || isViewOnly) {
+      setDuplicateMatches([]);
+      return;
+    }
+    const taj = tajValue ?? '';
+    const nev = nevValue ?? '';
+    const szuletesiDatum = szuletesiDatumValue ?? '';
+    const tajSearchable = isSearchableTaj(taj);
+    const nameSearchable = nev.trim().length >= 3 && /^\d{4}-\d{2}-\d{2}$/.test(szuletesiDatum);
+    if (!tajSearchable && !nameSearchable) {
+      setDuplicateMatches([]);
+      return;
+    }
+    const controller = new AbortController();
+    const timer = window.setTimeout(async () => {
+      try {
+        const params = new URLSearchParams();
+        if (tajSearchable) params.set('taj', taj);
+        if (nameSearchable) {
+          params.set('nev', nev);
+          params.set('szuletesiDatum', szuletesiDatum);
+        }
+        const res = await fetch(`/api/patients/duplicate-check?${params.toString()}`, {
+          credentials: 'include',
+          signal: controller.signal,
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        setDuplicateMatches(Array.isArray(data.matches) ? data.matches : []);
+      } catch {
+        // Hálózati hiba: a felvételt nem zavarjuk, a mentéskori 409 továbbra is véd.
+      }
+    }, 600);
+    return () => {
+      controller.abort();
+      window.clearTimeout(timer);
+    };
+  }, [patientId, isViewOnly, nevValue, tajValue, szuletesiDatumValue]);
 
 
 
@@ -774,6 +819,20 @@ export function PatientForm({
     });
   };
 
+  // Képernyőolvasónak szánt hibaösszegzés (aria-live) sikertelen mentésnél.
+  const [errorAnnouncement, setErrorAnnouncement] = useState('');
+
+  const announceFormErrors = useCallback((formErrors: FieldErrors<Patient>) => {
+    const keys = Object.keys(formErrors);
+    if (keys.length === 0) return;
+    const messages = keys
+      .map(key => (formErrors as Record<string, { message?: unknown } | undefined>)[key]?.message)
+      .filter((m): m is string => typeof m === 'string');
+    setErrorAnnouncement(
+      `A mentés nem sikerült: ${keys.length} hibás mező. ${messages.join(' ')}`
+    );
+  }, []);
+
   // Manual submit - használja a RHF data paramétert
   const onSubmit = async (data: Patient) => {
     // Check for validation errors before submitting
@@ -781,15 +840,25 @@ export function PatientForm({
     if (hasErrors) {
       // Scroll to first invalid field
       scrollToFirstInvalid();
+      announceFormErrors(errors);
       showToast('Kérjük, javítsa ki a hibákat az űrlapban', 'error');
       return;
     }
 
+    setErrorAnnouncement('');
     try {
       await performSave('manual', data);
     } catch (error) {
       // Error already handled in performSave
     }
+  };
+
+  // Zod-validáció bukásakor a handleSubmit nem hívja az onSubmit-ot —
+  // e nélkül a sikertelen mentés némán elhalna (se görgetés, se visszajelzés).
+  const onInvalidSubmit = (formErrors: FieldErrors<Patient>) => {
+    scrollToFirstInvalid();
+    announceFormErrors(formErrors);
+    showToast('Kérjük, javítsa ki a hibákat az űrlapban', 'error');
   };
 
   // Save patient silently (without alert) - used for document upload
@@ -1700,7 +1769,12 @@ export function PatientForm({
 
 
 
-      <form id="patient-form" onSubmit={handleSubmit(onSubmit)} className="space-y-8">
+      {/* Sikertelen mentés hibaösszegzése képernyőolvasónak */}
+      <div aria-live="assertive" role="alert" className="sr-only">
+        {errorAnnouncement}
+      </div>
+
+      <form id="patient-form" onSubmit={handleSubmit(onSubmit, onInvalidSubmit)} className="space-y-8">
         {!isViewOnly && minimalNewPatient && (
           <div className="bg-yellow-50 dark:bg-yellow-950/40 border-l-4 border-yellow-400 p-4 rounded-md">
             <div className="flex items-start">
@@ -1715,6 +1789,9 @@ export function PatientForm({
             </div>
           </div>
         )}
+
+        {/* LEHETSÉGES DUPLIKÁTUM (csak új betegnél) */}
+        {!isViewOnly && !patientId && <DuplicateWarningCard matches={duplicateMatches} />}
 
         {/* ALAPADATOK */}
         {shouldShowSection('alapadatok') && (
@@ -2018,6 +2095,8 @@ export function PatientForm({
           setActiveSectionId={setActiveSectionId}
           handleCancel={handleCancel}
           isSaving={savingSource === 'manual'}
+          isAutoSaving={savingSource === 'auto'}
+          lastSavedAt={lastSavedAt}
         />
       )}
     </div>

@@ -6,6 +6,7 @@ import { Logo } from '@/components/Logo';
 import { LogOut, LayoutDashboard, Calendar, FileText, User, MessageCircle, ClipboardList, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 import { PortalBottomNav } from './PortalBottomNav';
+import { SkipLink } from '@/components/layout/SkipLink';
 
 interface PortalLayoutProps {
   children: ReactNode;
@@ -116,6 +117,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <SkipLink />
       {/* Header */}
       <header className="bg-white dark:bg-gray-900 shadow-sm border-b sticky top-0 z-30 max-sm:mobile-safe-top">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
@@ -262,7 +264,11 @@ export function PortalLayout({ children }: PortalLayoutProps) {
       )}
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 pb-mobile-nav-portal sm:pb-6">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 pb-mobile-nav-portal sm:pb-6 outline-none"
+      >
         {children}
       </main>
 
