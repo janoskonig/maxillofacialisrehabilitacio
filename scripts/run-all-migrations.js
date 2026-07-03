@@ -33,9 +33,13 @@ async function getPool() {
   }
   return new Pool({
     connectionString: process.env.DATABASE_URL,
-    ssl: process.env.DATABASE_URL?.includes('sslmode=') || process.env.DATABASE_URL?.startsWith('postgresql://')
-      ? { rejectUnauthorized: false }
-      : undefined,
+    // sslmode=disable → helyi dev Postgres SSL nélkül; minden más esetben a
+    // korábbi viselkedés marad (SSL laza tanúsítvány-ellenőrzéssel).
+    ssl: process.env.DATABASE_URL?.includes('sslmode=disable')
+      ? false
+      : process.env.DATABASE_URL?.includes('sslmode=') || process.env.DATABASE_URL?.startsWith('postgresql://')
+        ? { rejectUnauthorized: false }
+        : undefined,
   });
 }
 
