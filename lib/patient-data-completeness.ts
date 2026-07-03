@@ -45,6 +45,8 @@ export type MissingItem = {
   key: string;
   label: string;
   group: MissingItemGroup;
+  /** N/A-jelölt tételnél a hiányzás okkódja (lib/field-na-reasons). */
+  reasonCode?: string;
 };
 
 export type PatientCompletenessRow = {
@@ -200,13 +202,15 @@ export async function getPatientDataCompleteness(
           SELECT 1 FROM ohip14_responses o
           WHERE o.patient_id = p.id AND o.timepoint = 'T0'
         ) AS has_ohip_t0,
-        COALESCE(na.keys, ARRAY[]::text[]) AS na_keys
+        COALESCE(na.keys, ARRAY[]::text[]) AS na_keys,
+        COALESCE(na.reason_map, '{}'::json) AS na_reason_map
      FROM patients p
      LEFT JOIN patient_anamnesis a ON a.patient_id = p.id
      LEFT JOIN patient_dental_status d ON d.patient_id = p.id
      LEFT JOIN users ku ON ku.id = p.kezeleoorvos_user_id
      LEFT JOIN LATERAL (
-        SELECT array_agg(field_key) AS keys
+        SELECT array_agg(field_key) AS keys,
+               json_object_agg(field_key, reason_code) AS reason_map
         FROM patient_field_na
         WHERE patient_id = p.id
      ) na ON true
@@ -265,6 +269,7 @@ export async function getPatientDataCompleteness(
     // --- Kutatási mezők (feltételes) ---
     // Egy mező "rendezett", ha ki van töltve VAGY explicit N/A-ként megjelölt.
     const naKeys = new Set<string>((row.na_keys as string[] | null) ?? []);
+    const naReasonMap = (row.na_reason_map as Record<string, string> | null) ?? {};
     const researchMissing: MissingItem[] = [];
     const naMarked: MissingItem[] = [];
     let researchApplicable = 0;
@@ -272,7 +277,12 @@ export async function getPatientDataCompleteness(
       if (!rule.applicable(row)) continue;
       researchApplicable += 1;
       if (naKeys.has(rule.key)) {
-        naMarked.push({ key: rule.key, label: rule.label, group: 'research' });
+        naMarked.push({
+          key: rule.key,
+          label: rule.label,
+          group: 'research',
+          reasonCode: naReasonMap[rule.key],
+        });
         continue; // N/A → rendezett, nem hiány
       }
       if (rule.missing(row)) {

@@ -74,9 +74,15 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
 
     const patients = await pool.query(`
       SELECT p.id, p.nem, p.szuletesi_datum, p.iranyitoszam, p.domain_revision,
-             p.legacy_compliance_status, a.kezelesre_erkezes_indoka
+             p.legacy_compliance_status, a.kezelesre_erkezes_indoka,
+             COALESCE(na.reason_map, '{}'::json) AS field_na_reasons
       FROM patients p
       LEFT JOIN patient_anamnesis a ON a.patient_id = p.id
+      LEFT JOIN LATERAL (
+        SELECT json_object_agg(field_key, reason_code) AS reason_map
+        FROM patient_field_na
+        WHERE patient_id = p.id
+      ) na ON true
     `);
     const allIds = patients.rows.map((r) => String(r.id));
     const { eligible, excluded } = await filterPatientsEligibleForResearchExport(
