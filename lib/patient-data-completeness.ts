@@ -176,6 +176,32 @@ const RESEARCH_RULES: ResearchRule[] = [
     applicable: (r) => r.radioterapia === true,
     missing: (r) => isBlank(r.radioterapia_dozis),
   },
+  // --- Beteg által önkitölthető mezők (portál-nudge; az orvost nem terheljük) ---
+  // Életmód-adatok: a QoL-elemzések standard zavaró változói (confounderei).
+  {
+    key: 'dohanyzas',
+    label: 'Dohányzási szokások',
+    applicable: () => true,
+    missing: (r) => isBlank(r.dohanyzas_szam),
+  },
+  {
+    key: 'alkohol',
+    label: 'Alkoholfogyasztás',
+    applicable: () => true,
+    missing: (r) => isBlank(r.alkoholfogyasztas),
+  },
+  {
+    key: 'felsoFogpotlasElegedett',
+    label: 'Felső fogpótlás — elégedettség',
+    applicable: (r) => r.felso_fogpotlas_van === true,
+    missing: (r) => r.felso_fogpotlas_elegedett === null || r.felso_fogpotlas_elegedett === undefined,
+  },
+  {
+    key: 'alsoFogpotlasElegedett',
+    label: 'Alsó fogpótlás — elégedettség',
+    applicable: (r) => r.also_fogpotlas_van === true,
+    missing: (r) => r.also_fogpotlas_elegedett === null || r.also_fogpotlas_elegedett === undefined,
+  },
 ];
 
 /**
@@ -218,6 +244,12 @@ export async function getPatientDataCompleteness(
         a.diagnozis,
         a.tnm_staging,
         a.bno,
+        a.alkoholfogyasztas,
+        a.dohanyzas_szam,
+        d.felso_fogpotlas_van,
+        d.felso_fogpotlas_elegedett,
+        d.also_fogpotlas_van,
+        d.also_fogpotlas_elegedett,
         a.brown_fuggoleges_osztaly,
         a.brown_vizszintes_komponens,
         a.kovacs_dobak_osztaly,

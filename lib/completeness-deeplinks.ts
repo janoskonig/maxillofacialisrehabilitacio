@@ -24,6 +24,10 @@ export const FIELD_TARGET: Record<string, { tab: string; anchor: string }> = {
   brownVizszintes: { tab: 'anamnezis', anchor: 'section-anamnezis' },
   kovacsDobak: { tab: 'anamnezis', anchor: 'section-anamnezis' },
   radioterapiaDozis: { tab: 'anamnezis', anchor: 'section-anamnezis' },
+  dohanyzas: { tab: 'anamnezis', anchor: 'section-anamnezis' },
+  alkohol: { tab: 'anamnezis', anchor: 'section-anamnezis' },
+  felsoFogpotlasElegedett: { tab: 'anamnezis', anchor: 'section-betegvizsgalat' },
+  alsoFogpotlasElegedett: { tab: 'anamnezis', anchor: 'section-betegvizsgalat' },
 };
 
 /** A betegűrlap deep-link URL-je egy adott hiányzó mező-kulcshoz. */

@@ -194,6 +194,9 @@ async function callEndpoint(path, label) {
     // so a wider window is safe and avoids missing the slot due to cold-start / sync delays.
     if (isMonday && hour === 8) {
       await callEndpoint('/api/ohip14/reminders', 'OHIP-14 reminders');
+      // Beteg-önkitöltési nudge (életmód-anamnézis stb.) — ugyanabban a heti
+      // ablakban; a patient_selffill_reminder_log heti cooldownt garantál.
+      await callEndpoint('/api/patients/self-fill-reminders', 'Patient self-fill reminders');
     } else {
       console.log(
         `[${new Date().toISOString()}] OHIP-14 reminders skipped (isMonday=${isMonday}, hour=${hour}, expected Monday 8).`
