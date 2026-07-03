@@ -13,6 +13,7 @@ import { IntakeRecommendationBadge } from '@/components/widgets/IntakeRecommenda
 import { getCurrentUser, getUserEmail, getUserRole } from '@/lib/auth';
 import { AppShell } from '@/components/layout/AppShell';
 import { Dashboard } from '@/components/Dashboard';
+import { ReferredPatientsPanel } from '@/components/staff/ReferredPatientsPanel';
 
 const OPImageViewer = dynamic(() => import('@/components/OPImageViewer').then(mod => ({ default: mod.OPImageViewer })), {
   loading: () => <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><p className="text-white">Kép betöltése...</p></div>,
@@ -412,14 +413,21 @@ export default function Home() {
 
           {/* Dashboard Section */}
           <div className="mb-3 md:mb-6">
-            <Dashboard 
-              userRole={userRole} 
+            <Dashboard
+              userRole={userRole}
               onViewPatient={handleViewPatient}
               onEditPatient={handleEditPatient}
               onViewOP={handleViewOP}
               onViewFoto={handleViewFoto}
             />
           </div>
+
+          {/* Beutalt betegeim — csak beutaló orvosnak */}
+          {userRole === 'beutalo_orvos' && (
+            <div className="mb-3 md:mb-6">
+              <ReferredPatientsPanel />
+            </div>
+          )}
 
           {/* Patient Management Section - shown for all roles */}
           <>
