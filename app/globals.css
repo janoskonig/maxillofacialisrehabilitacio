@@ -21,6 +21,19 @@
   html.dark {
     color-scheme: dark;
   }
+
+}
+
+/* Betegportál kényelmi mód: a gyökér font-size emelésével minden rem-alapú
+   méret (szöveg, gomb-padding, érintési célok) arányosan nő. Az osztályt a
+   PortalLayout teszi fel/le (lib/portal-display-scale.ts). Szándékosan a
+   @layer-eken KÍVÜL: a Tailwind a layerbe írt egyedi szabályt tree-shake-eli,
+   ha az osztálynév csak nem-szkennelt fájlban (lib/) fordul elő. */
+html.portal-scale-nagy {
+  font-size: 112.5%;
+}
+html.portal-scale-extra {
+  font-size: 125%;
 }
 
 @layer components {

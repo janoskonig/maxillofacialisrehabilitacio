@@ -9,6 +9,7 @@ import Link from 'next/link';
 import { useToast } from '@/contexts/ToastContext';
 import { ResearchConsentCard } from '@/components/patient-portal/ResearchConsentCard';
 import { PrivacyNoticeCard } from '@/components/patient-portal/PrivacyNoticeCard';
+import { DisplayScaleCard } from '@/components/patient-portal/DisplayScaleCard';
 
 interface Patient {
   id: string;
@@ -496,6 +497,8 @@ export function PatientProfileView() {
           </div>
         )}
       </div>
+
+      <DisplayScaleCard />
 
       <PrivacyNoticeCard />
 
