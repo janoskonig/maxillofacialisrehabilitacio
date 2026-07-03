@@ -138,6 +138,15 @@ const RESEARCH_RULES: ResearchRule[] = [
     missing: (r) => r.has_ohip_t0 !== true,
   },
   {
+    // Kódolt diagnózis: a szabad szöveges `diagnozis` (klinikai minimum)
+    // mellett a BNO-kód a kutatási elemezhetőség feltétele — mindig
+    // alkalmazható, de nem blokkol klinikai kaput.
+    key: 'bno',
+    label: 'BNO kód',
+    applicable: () => true,
+    missing: (r) => isBlank(r.bno),
+  },
+  {
     key: 'tnmStaging',
     label: 'TNM-staging',
     applicable: (r) => r.kezelesre_erkezes_indoka === ONKO,
@@ -208,6 +217,7 @@ export async function getPatientDataCompleteness(
         a.kezelesre_erkezes_indoka,
         a.diagnozis,
         a.tnm_staging,
+        a.bno,
         a.brown_fuggoleges_osztaly,
         a.brown_vizszintes_komponens,
         a.kovacs_dobak_osztaly,

@@ -18,6 +18,7 @@ export const FIELD_TARGET: Record<string, { tab: string; anchor: string }> = {
   diagnozis: { tab: 'anamnezis', anchor: 'section-anamnezis' },
   meglevoFogak: { tab: 'anamnezis', anchor: 'section-betegvizsgalat' },
   ohipT0: { tab: 'anamnezis', anchor: 'section-ohip14' },
+  bno: { tab: 'anamnezis', anchor: 'section-anamnezis' },
   tnmStaging: { tab: 'anamnezis', anchor: 'section-anamnezis' },
   brownFuggoleges: { tab: 'anamnezis', anchor: 'section-anamnezis' },
   brownVizszintes: { tab: 'anamnezis', anchor: 'section-anamnezis' },
