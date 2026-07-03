@@ -40,6 +40,17 @@ export interface QuotedMessagePreview {
   deleted?: boolean;
 }
 
+/**
+ * Egy feloldatlan, kétértelmű beteg-említés egy elküldött üzeneten (064 migráció).
+ * A `matchedText` a szövegben felismert rész ("Kovács János"); a `candidates` a
+ * szóba jövő, azonos nevű betegek (hidratált név + TAJ a választóhoz). Feloldáskor
+ * a kiválasztott beteg bekerül a `mentionedPatientIds`-be, a bejegyzés pedig törlődik.
+ */
+export interface UnresolvedPatientMention {
+  matchedText: string;
+  candidates: Array<{ id: string; nev: string; taj?: string | null }>;
+}
+
 export interface DoctorMessage {
   id: string;
   senderId: string;
@@ -58,6 +69,11 @@ export interface DoctorMessage {
   mentionedPatientIds?: string[];
   /** Az említett betegek neve (id + nev), hogy a renderer lekérés nélkül linkelhessen. */
   mentionedPatients?: Array<{ id: string; nev: string; taj?: string | null }>;
+  /**
+   * 064: feloldatlan, kétértelmű beteg-említések (több azonos nevű beteg). Az
+   * elküldött üzeneten utólag is feloldhatók — ki melyik beteg.
+   */
+  unresolvedMentions?: UnresolvedPatientMention[];
   /** 041_message_replies óta: ha válasz, az eredeti doctor_messages.id. */
   replyToMessageId?: string | null;
   /**

@@ -15,7 +15,7 @@
 
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
-import { Check, CheckCheck, Loader2, AlertTriangle, RotateCcw, CornerUpLeft } from 'lucide-react';
+import { Check, CheckCheck, Loader2, AlertTriangle, RotateCcw, CornerUpLeft, HelpCircle } from 'lucide-react';
 import type { ReactNode } from 'react';
 import type { MessageContextLink, QuotedMessagePreview } from '@/lib/types/messaging';
 import { MessageQuoteBlock } from './MessageQuoteBlock';
@@ -45,6 +45,14 @@ export interface ChatBubbleMessage {
   contextLinks?: MessageContextLink[];
   /** Az üzenethez kötött betegek (id + nev) — a renderer lekérés nélkül linkel. */
   mentionedPatients?: Array<{ id: string; nev: string; taj?: string | null }>;
+  /**
+   * 064: feloldatlan, kétértelmű beteg-említések. Ha van, a buborékon megjelenik
+   * egy „Melyik beteg?” választó (lásd `onResolveMention`).
+   */
+  unresolvedMentions?: Array<{
+    matchedText: string;
+    candidates: Array<{ id: string; nev: string; taj?: string | null }>;
+  }>;
 }
 
 interface Props {
@@ -107,6 +115,11 @@ interface Props {
   /** Fázis 2.1: staff eltávolíthatja a strukturált linkeket. */
   onRemoveContextLink?: (messageId: string, linkId: string) => void;
   canRemoveContextLinks?: boolean;
+  /**
+   * 064: egy kétértelmű beteg-említés feloldása az elküldött üzeneten. Ha
+   * hiányzik, a „Melyik beteg?” választó nem jelenik meg.
+   */
+  onResolveMention?: (messageId: string, matchedText: string, patientId: string) => void;
   className?: string;
 }
 
@@ -127,6 +140,7 @@ export function ChatMessageBubble({
   bubbleFooter,
   onRemoveContextLink,
   canRemoveContextLinks = false,
+  onResolveMention,
   className,
 }: Props) {
   const isFromMe = message.isFromMe;
@@ -222,6 +236,51 @@ export function ChatMessageBubble({
           <div className="text-sm whitespace-pre-wrap break-words [overflow-wrap:anywhere]">
             {renderText ? renderText(message.message, message) : message.message}
           </div>
+
+          {onResolveMention &&
+            message.unresolvedMentions &&
+            message.unresolvedMentions.length > 0 && (
+              <div className="mt-2 space-y-1.5">
+                {message.unresolvedMentions.map((m, idx) => (
+                  <div
+                    key={`${m.matchedText}-${idx}`}
+                    className={`rounded-lg px-2 py-1.5 ${
+                      isFromMe
+                        ? 'bg-white/15'
+                        : 'bg-amber-50 dark:bg-amber-950/30 border border-amber-200 dark:border-amber-900'
+                    }`}
+                  >
+                    <div
+                      className={`flex items-center gap-1 mb-1 text-xs ${
+                        isFromMe ? 'text-white/90' : 'text-amber-800 dark:text-amber-300'
+                      }`}
+                    >
+                      <HelpCircle className="w-3 h-3 flex-shrink-0" />
+                      <span>
+                        „{m.matchedText}” — melyik beteg?
+                      </span>
+                    </div>
+                    <div className="flex flex-wrap gap-1">
+                      {m.candidates.map((c) => (
+                        <button
+                          key={c.id}
+                          type="button"
+                          onClick={() => onResolveMention(message.id, m.matchedText, c.id)}
+                          className={`inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium ${
+                            isFromMe
+                              ? 'bg-white/20 hover:bg-white/30 text-white'
+                              : 'bg-white dark:bg-gray-800 border border-amber-300 dark:border-amber-800 text-amber-800 dark:text-amber-200 hover:bg-amber-100 dark:hover:bg-amber-900/40'
+                          }`}
+                        >
+                          {c.nev}
+                          {c.taj ? <span className="opacity-60">· {c.taj}</span> : null}
+                        </button>
+                      ))}
+                    </div>
+                  </div>
+                ))}
+              </div>
+            )}
 
           <div className={`text-xs mt-1 flex items-center gap-1.5 ${timeStyle}`}>
             <span>{format(createdAt, 'HH:mm', { locale: hu })}</span>

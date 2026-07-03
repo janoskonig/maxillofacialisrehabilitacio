@@ -41,6 +41,9 @@ interface MessageThreadProps {
   canRemoveContextLinks?: boolean;
   onRemoveContextLink?: (messageId: string, linkId: string) => void;
 
+  /** 064: egy kétértelmű beteg-említés feloldása az elküldött üzeneten. */
+  onResolveMention?: (messageId: string, matchedText: string, patientId: string) => void;
+
   /** Feladó-név a buborék fölött (csak nem-saját). Csoportban hasznos; 1:1-ben kikapcsolható. */
   showSenderName?: boolean;
 
@@ -87,6 +90,7 @@ export function MessageThread({
   isThreadCollapsed,
   canRemoveContextLinks = false,
   onRemoveContextLink,
+  onResolveMention,
   showSenderName = true,
   ownTone = 'primary',
   containerRef,
@@ -210,6 +214,7 @@ export function MessageThread({
               canRemoveContextLinks && message.isFromMe && message.deliveryStatus !== 'pending'
             }
             onRemoveContextLink={onRemoveContextLink}
+            onResolveMention={onResolveMention}
             isFirstInGroup={isFirstInGroup}
             isLastInGroup={isLastInGroup}
             avatarSlot={!message.isFromMe && renderAvatar ? renderAvatar(message) : undefined}

@@ -47,7 +47,7 @@ export function DoctorMessages() {
     selectedDoctorId, selectedDoctorName, selectedGroupId, selectedGroupName,
     loading, sending, deletingGroup,
     replyState, startReplyTo,
-    selectDoctor, selectGroup, clearSelection, sendMessage, retryMessage,
+    selectDoctor, selectGroup, clearSelection, sendMessage, retryMessage, resolveMention,
     createGroupConversation, renameGroup, deleteGroup,
     refreshConversations, refreshGroupParticipants,
   } = useDoctorMessages({ socket, isConnected });
@@ -224,6 +224,7 @@ export function DoctorMessages() {
           readAt: message.readAt ?? null,
           contextLinks: message.contextLinks ?? [],
           mentionedPatients: message.mentionedPatients ?? [],
+          unresolvedMentions: message.unresolvedMentions ?? [],
         };
       }),
     [visibleMessages, currentUserId, selectedGroupId, groupParticipants],
@@ -579,6 +580,7 @@ export function DoctorMessages() {
         showSenderName={!!selectedGroupId}
         canRemoveContextLinks
         onRemoveContextLink={handleRemoveContextLink}
+        onResolveMention={resolveMention}
         emptyState={
           <div className="text-center text-gray-500 dark:text-gray-400">
             <MessageCircle className="w-12 h-12 mx-auto mb-2 text-gray-300 dark:text-gray-600" />

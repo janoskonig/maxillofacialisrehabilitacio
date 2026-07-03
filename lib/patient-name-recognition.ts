@@ -208,6 +208,48 @@ function collectDetections(
   return detections.sort((a, b) => a.start - b.start);
 }
 
+/** Egy küldéskor feloldatlanul maradó, kétértelmű említés nyers (DB) alakja. */
+export interface UnresolvedMentionRaw {
+  matchedText: string;
+  candidateIds: string[];
+}
+
+/**
+ * Küldéskori szétválasztás: a felismert találatokból eldönti, melyik beteg
+ * kerüljön automatikusan az üzenethez (`autoMentioned`), és melyik kétértelmű
+ * említés marad feloldatlan (`unresolved`).
+ *
+ *  - Egyértelmű (egy jelölt) → automatikusan hivatkozott.
+ *  - Kétértelmű (több azonos nevű): ha a feladó a composerben már kiválasztott
+ *    egy jelöltet (`confirmedIds`), az feloldottnak számít; különben feloldatlan
+ *    marad (sosem tippelünk beteget a klinikai adat miatt).
+ *
+ * Tisztán (DB nélkül) tesztelhető.
+ */
+export function splitDetectionsForSend(
+  detections: PatientDetection[],
+  confirmedIds: Set<string>,
+): { autoMentioned: string[]; unresolved: UnresolvedMentionRaw[] } {
+  const autoMentioned: string[] = [];
+  const unresolved: UnresolvedMentionRaw[] = [];
+  for (const d of detections) {
+    if (!d.ambiguous) {
+      if (d.candidates[0]) autoMentioned.push(d.candidates[0].id);
+      continue;
+    }
+    const picked = d.candidates.find((c) => confirmedIds.has(c.id));
+    if (picked) {
+      autoMentioned.push(picked.id);
+    } else {
+      unresolved.push({
+        matchedText: d.matchedText,
+        candidateIds: d.candidates.map((c) => c.id),
+      });
+    }
+  }
+  return { autoMentioned, unresolved };
+}
+
 function dedupeById(entries: PatientRosterEntry[]): PatientRosterEntry[] {
   const seen = new Set<string>();
   const out: PatientRosterEntry[] = [];

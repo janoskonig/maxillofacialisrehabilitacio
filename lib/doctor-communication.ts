@@ -1,5 +1,9 @@
 import { getDbPool } from './db';
 import { extractPatientMentions } from './mention-parser';
+import { recognizePatientsInText, splitDetectionsForSend } from './patient-name-recognition';
+import { getPatientRoster } from './patient-roster';
+import type { UnresolvedPatientMention } from './types/messaging';
+import { HttpError } from './auth-server';
 import {
   parseReplyToMessageId,
   isDoctorReplyTargetInScope,
@@ -42,6 +46,8 @@ export interface DoctorMessage {
   mentionedPatientIds?: string[]; // Új mező a megemlített betegek ID-ihoz
   /** Az említett betegek neve (id + nev), hogy a renderer lekérés nélkül linkelhessen. */
   mentionedPatients?: Array<{ id: string; nev: string; taj?: string | null }>;
+  /** 064: feloldatlan, kétértelmű beteg-említések (utólag feloldhatók a buborékon). */
+  unresolvedMentions?: UnresolvedPatientMention[];
   /** 041_message_replies óta: ha válasz, az eredeti doctor_messages.id. */
   replyToMessageId?: string | null;
   /** Szerver által összerakott előnézet az eredeti üzenetről (csak reply-nál). */
@@ -242,6 +248,79 @@ function parseMentionedPatientIds(value: unknown): string[] {
   return Array.isArray(value) ? (value as string[]) : [];
 }
 
+/** A `unresolved_patient_mentions` JSONB nyers (még nem hidratált) alakja. */
+interface UnresolvedMentionRaw {
+  matchedText: string;
+  candidateIds: string[];
+}
+
+/**
+ * A `unresolved_patient_mentions` oszlop nyers tömbbé alakítása (string vagy
+ * array jöhet a JSONB-ből). Csak a jól formált bejegyzéseket tartja meg.
+ */
+function parseUnresolvedMentionsRaw(value: unknown): UnresolvedMentionRaw[] {
+  let arr: unknown = value;
+  if (typeof value === 'string') {
+    try {
+      arr = JSON.parse(value);
+    } catch {
+      return [];
+    }
+  }
+  if (!Array.isArray(arr)) return [];
+  const out: UnresolvedMentionRaw[] = [];
+  for (const entry of arr) {
+    if (
+      entry &&
+      typeof entry.matchedText === 'string' &&
+      Array.isArray(entry.candidateIds) &&
+      entry.candidateIds.every((id: unknown) => typeof id === 'string')
+    ) {
+      out.push({ matchedText: entry.matchedText, candidateIds: entry.candidateIds });
+    }
+  }
+  return out;
+}
+
+/**
+ * Nyers feloldatlan említések hidratálása (jelölt-ID → név + TAJ) egyetlen
+ * patients-lekérdezéssel. Az ismeretlen (törölt) jelölteket kihagyjuk; az így
+ * üresre fogyott bejegyzéseket eldobjuk.
+ */
+async function hydrateUnresolvedMentions(
+  raw: UnresolvedMentionRaw[],
+): Promise<UnresolvedPatientMention[]> {
+  if (raw.length === 0) return [];
+  const ids = new Set<string>();
+  for (const r of raw) for (const id of r.candidateIds) ids.add(id);
+  const pool = getDbPool();
+  const result = await pool.query(
+    `SELECT id, nev, taj FROM patients WHERE id = ANY($1::uuid[])`,
+    [Array.from(ids)],
+  );
+  const byId = new Map<string, { id: string; nev: string; taj: string | null }>();
+  for (const r of result.rows) byId.set(r.id, { id: r.id, nev: r.nev, taj: r.taj ?? null });
+
+  return hydrateUnresolvedFromMap(raw, byId);
+}
+
+/** Mint a {@link hydrateUnresolvedMentions}, de egy már betöltött beteg-map-ből (nincs lekérdezés). */
+function hydrateUnresolvedFromMap(
+  raw: UnresolvedMentionRaw[],
+  byId: Map<string, { id: string; nev: string; taj: string | null }>,
+): UnresolvedPatientMention[] {
+  const out: UnresolvedPatientMention[] = [];
+  for (const r of raw) {
+    const candidates = r.candidateIds
+      .map((id) => byId.get(id))
+      .filter((p): p is { id: string; nev: string; taj: string | null } => Boolean(p));
+    if (candidates.length > 0) {
+      out.push({ matchedText: r.matchedText, candidates });
+    }
+  }
+  return out;
+}
+
 /**
  * Az említett betegek nevének egyszeri, kötegelt betöltése a sorokhoz — így a
  * renderer közvetlenül linkelhet (nincs per-pill `/api/patients` lekérés).
@@ -252,6 +331,10 @@ async function loadMentionedPatientsMap(
   const ids = new Set<string>();
   for (const row of rows) {
     for (const id of parseMentionedPatientIds(row.mentioned_patient_ids)) ids.add(id);
+    // A feloldatlan említések jelöltjeit is hidratáljuk (a buborék-választóhoz).
+    for (const m of parseUnresolvedMentionsRaw(row.unresolved_patient_mentions)) {
+      for (const id of m.candidateIds) ids.add(id);
+    }
   }
   const map = new Map<string, { id: string; nev: string; taj: string | null }>();
   if (ids.size === 0) return map;
@@ -311,6 +394,10 @@ async function mapDoctorMessageRows(
       mentionedPatients: mentionedPatientIds
         .map((id) => mentionedPatientsMap.get(id))
         .filter((p): p is { id: string; nev: string; taj: string | null } => Boolean(p)),
+      unresolvedMentions: hydrateUnresolvedFromMap(
+        parseUnresolvedMentionsRaw(row.unresolved_patient_mentions),
+        mentionedPatientsMap,
+      ),
     };
   });
 
@@ -363,13 +450,31 @@ async function validatePatientIds(
 export async function sendDoctorMessage(input: CreateDoctorMessageInput): Promise<DoctorMessage> {
   const pool = getDbPool();
 
-  // Beteg-hivatkozások: a legacy `@`-jelölésből kinyert ID-k egyesítve a
-  // (szabad-szöveges felismerésből) megerősített ID-kkal. Ez a tömb köti az
-  // üzenetet a beteg-profilhoz (`mentioned_patient_ids`).
+  // Beteg-hivatkozások (forrás-igazság a szerver). Három forrás egyesítve a
+  // `mentioned_patient_ids`-be (ez köti az üzenetet a beteg-profilhoz):
+  //   1) legacy `@vezeteknev+keresztnev` jelölések,
+  //   2) a composer által megerősített ID-k (egyértelmű auto + kézi feloldás),
+  //   3) szerveroldali szabad-szöveges felismerés egyértelmű találatai.
+  // A kétértelmű (azonos nevű) találatokat, amelyeket a feladó nem oldott fel,
+  // NEM tippeljük meg: `unresolved_patient_mentions`-be kerülnek, és az elküldött
+  // üzeneten utólag feloldhatók.
   const mentionedFromText = await extractPatientMentions(input.message);
   const confirmedIds = await validatePatientIds(pool, input.confirmedPatientIds);
+
+  const roster = await getPatientRoster();
+  const detections = recognizePatientsInText(input.message, roster);
+  const { autoMentioned, unresolved: unresolvedRaw } = splitDetectionsForSend(
+    detections,
+    new Set(confirmedIds),
+  );
+
   const mentionedPatientIds = Array.from(
-    new Set([...mentionedFromText, ...confirmedIds]),
+    new Set([...mentionedFromText, ...confirmedIds, ...autoMentioned]),
+  );
+  // A feloldatlan halmazból kihagyjuk azt, ami már (más úton) hivatkozott beteg.
+  const mentionedSet = new Set(mentionedPatientIds);
+  const unresolvedToStore = unresolvedRaw.filter(
+    (m) => !m.candidateIds.some((id) => mentionedSet.has(id)),
   );
 
   // Reply target normalizálás + scope ACL ellenőrzés (Szelet 0.2)
@@ -397,14 +502,20 @@ export async function sendDoctorMessage(input: CreateDoctorMessageInput): Promis
     const existing = await pool.query(
       `SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name,
               subject, message, read_at, created_at, mentioned_patient_ids,
-              reply_to_message_id
+              unresolved_patient_mentions, reply_to_message_id
          FROM doctor_messages
         WHERE sender_id = $1 AND client_message_id = $2
         LIMIT 1`,
       [input.senderId, normalizedClientMessageId],
     );
     if (existing.rows.length > 0) {
-      return buildDoctorMessageFromRow(existing.rows[0], { quotedMessageOverride: quotedMessage });
+      const built = buildDoctorMessageFromRow(existing.rows[0], {
+        quotedMessageOverride: quotedMessage,
+      });
+      built.unresolvedMentions = await hydrateUnresolvedMentions(
+        parseUnresolvedMentionsRaw(existing.rows[0].unresolved_patient_mentions),
+      );
+      return built;
     }
   }
 
@@ -412,8 +523,9 @@ export async function sendDoctorMessage(input: CreateDoctorMessageInput): Promis
   const result = await pool.query(
     `INSERT INTO doctor_messages
        (sender_id, recipient_id, sender_email, sender_name, subject, message,
-        mentioned_patient_ids, group_id, reply_to_message_id, client_message_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10)
+        mentioned_patient_ids, unresolved_patient_mentions, group_id,
+        reply_to_message_id, client_message_id)
+     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, $9, $10, $11)
      RETURNING id, sender_id, recipient_id, sender_email, sender_name, subject, message,
                read_at, created_at, mentioned_patient_ids, group_id, reply_to_message_id`,
     [
@@ -424,6 +536,7 @@ export async function sendDoctorMessage(input: CreateDoctorMessageInput): Promis
       input.subject || null,
       input.message,
       JSON.stringify(mentionedPatientIds),
+      JSON.stringify(unresolvedToStore),
       input.groupId || null,
       normalizedReplyToId,
       normalizedClientMessageId,
@@ -455,6 +568,9 @@ export async function sendDoctorMessage(input: CreateDoctorMessageInput): Promis
     readAt: row.read_at ? new Date(row.read_at) : null,
     createdAt: new Date(row.created_at),
     mentionedPatientIds: mentionedPatientIdsParsed,
+    // Azonnal hidratáljuk, hogy a feladó buborékján rögtön megjelenjen a választó
+    // (a 0.5mp múlva érkező refetch úgyis felülírja a teljes, hidratált sorral).
+    unresolvedMentions: await hydrateUnresolvedMentions(unresolvedToStore),
     replyToMessageId: row.reply_to_message_id ?? null,
     quotedMessage,
   };
@@ -470,6 +586,107 @@ export async function sendDoctorMessage(input: CreateDoctorMessageInput): Promis
   });
 
   return message;
+}
+
+/**
+ * Egy feloldatlan, kétértelmű beteg-említés feloldása egy elküldött üzeneten:
+ * a kiválasztott beteg bekerül a `mentioned_patient_ids`-be, a bejegyzés pedig
+ * törlődik az `unresolved_patient_mentions`-ből. A szál bármely résztvevője
+ * feloldhatja (feladó / címzett / csoporttag). A hívó (endpoint) a visszaadott
+ * routing-infóval szórja szét a realtime frissítést.
+ */
+export async function resolvePatientMention(opts: {
+  messageId: string;
+  matchedText: string;
+  patientId: string;
+  userId: string;
+}): Promise<{
+  groupId: string | null;
+  senderId: string;
+  recipientId: string | null;
+  mentionedPatientIds: string[];
+  mentionedPatients: Array<{ id: string; nev: string; taj: string | null }>;
+  unresolvedMentions: UnresolvedPatientMention[];
+}> {
+  const pool = getDbPool();
+  const { messageId, matchedText, patientId, userId } = opts;
+
+  if (!UUID_RE.test(patientId)) {
+    throw new HttpError(400, 'Érvénytelen beteg-azonosító', 'INVALID_PATIENT_ID');
+  }
+
+  const messageResult = await pool.query(
+    `SELECT sender_id, recipient_id, group_id, mentioned_patient_ids, unresolved_patient_mentions
+       FROM doctor_messages WHERE id = $1`,
+    [messageId],
+  );
+  if (messageResult.rows.length === 0) {
+    throw new HttpError(404, 'Üzenet nem található', 'MESSAGE_NOT_FOUND');
+  }
+  const row = messageResult.rows[0];
+
+  // ACL: a szál résztvevője lehet feladó / címzett / csoporttag.
+  if (row.group_id) {
+    const participant = await pool.query(
+      `SELECT 1 FROM doctor_message_group_participants WHERE group_id = $1 AND user_id = $2`,
+      [row.group_id, userId],
+    );
+    if (participant.rows.length === 0) {
+      throw new HttpError(403, 'Nincs jogosultsága ehhez az üzenethez', 'FORBIDDEN');
+    }
+  } else if (row.sender_id !== userId && row.recipient_id !== userId) {
+    throw new HttpError(403, 'Nincs jogosultsága ehhez az üzenethez', 'FORBIDDEN');
+  }
+
+  const unresolvedRaw = parseUnresolvedMentionsRaw(row.unresolved_patient_mentions);
+  const target = unresolvedRaw.find(
+    (m) => m.matchedText === matchedText && m.candidateIds.includes(patientId),
+  );
+  if (!target) {
+    throw new HttpError(404, 'A feloldandó említés nem található', 'MENTION_NOT_FOUND');
+  }
+
+  // A kiválasztott jelölt legyen érvényes, létező beteg.
+  const valid = await validatePatientIds(pool, [patientId]);
+  if (valid.length === 0) {
+    throw new HttpError(400, 'A kiválasztott beteg nem található', 'PATIENT_NOT_FOUND');
+  }
+
+  const mentioned = Array.from(
+    new Set([...parseMentionedPatientIds(row.mentioned_patient_ids), patientId]),
+  );
+  // A feloldott bejegyzés kikerül; a többi feloldatlan marad.
+  const remaining = unresolvedRaw.filter((m) => m !== target);
+
+  await pool.query(
+    `UPDATE doctor_messages
+        SET mentioned_patient_ids = $1, unresolved_patient_mentions = $2
+      WHERE id = $3`,
+    [JSON.stringify(mentioned), JSON.stringify(remaining), messageId],
+  );
+
+  // Egy lekérdezéssel hidratáljuk a választ és a realtime payloadot.
+  const allIds = new Set<string>(mentioned);
+  for (const m of remaining) for (const id of m.candidateIds) allIds.add(id);
+  const patientsResult = await pool.query(
+    `SELECT id, nev, taj FROM patients WHERE id = ANY($1::uuid[])`,
+    [Array.from(allIds)],
+  );
+  const byId = new Map<string, { id: string; nev: string; taj: string | null }>();
+  for (const r of patientsResult.rows) {
+    byId.set(r.id, { id: r.id, nev: r.nev, taj: r.taj ?? null });
+  }
+
+  return {
+    groupId: row.group_id ?? null,
+    senderId: row.sender_id,
+    recipientId: row.recipient_id ?? null,
+    mentionedPatientIds: mentioned,
+    mentionedPatients: mentioned
+      .map((id) => byId.get(id))
+      .filter((p): p is { id: string; nev: string; taj: string | null } => Boolean(p)),
+    unresolvedMentions: hydrateUnresolvedFromMap(remaining, byId),
+  };
 }
 
 /**
@@ -492,7 +709,7 @@ export async function getDoctorMessages(
   const pool = getDbPool();
 
   let query = `
-    SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at, reply_to_message_id, delivery_status, mentioned_patient_ids
+    SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at, reply_to_message_id, delivery_status, mentioned_patient_ids, unresolved_patient_mentions
     FROM doctor_messages
     WHERE (sender_id = $1 OR recipient_id = $1)
   `;
@@ -1129,7 +1346,7 @@ export async function getGroupMessages(
   }
 
   let query = `
-    SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at, reply_to_message_id, delivery_status, mentioned_patient_ids
+    SELECT id, sender_id, recipient_id, group_id, sender_email, sender_name, subject, message, read_at, created_at, reply_to_message_id, delivery_status, mentioned_patient_ids, unresolved_patient_mentions
     FROM doctor_messages
     WHERE group_id = $1
     ORDER BY created_at ASC
