@@ -861,6 +861,19 @@ export function PatientForm({
     showToast('Kérjük, javítsa ki a hibákat az űrlapban', 'error');
   };
 
+  // Ctrl/Cmd+S = kézi mentés (a böngésző „oldal mentése" dialógusa helyett).
+  useEffect(() => {
+    if (isViewOnly) return;
+    const onKeyDown = (e: KeyboardEvent) => {
+      if ((e.metaKey || e.ctrlKey) && e.key.toLowerCase() === 's') {
+        e.preventDefault();
+        (document.getElementById('patient-form') as HTMLFormElement | null)?.requestSubmit();
+      }
+    };
+    window.addEventListener('keydown', onKeyDown);
+    return () => window.removeEventListener('keydown', onKeyDown);
+  }, [isViewOnly]);
+
   // Save patient silently (without alert) - used for document upload
   const savePatientSilently = useCallback(async (): Promise<string | null> => {
     // Get current form values

@@ -9,6 +9,8 @@ import { useStaffTaskSummary } from '@/hooks/useStaffTaskSummary';
 import { useStaffInboxSummary } from '@/hooks/useStaffInboxSummary';
 import { Sidebar } from './Sidebar';
 import { SkipLink } from './SkipLink';
+import { CommandPalette } from '@/components/CommandPalette';
+import type { Role } from '@/lib/navigation';
 import { MobileBottomNav } from '@/components/mobile/MobileBottomNav';
 import { PageHeader } from '@/components/ui/PageHeader';
 
@@ -81,6 +83,7 @@ export function AppShell({ title, backTo, actions, maxWidth = 'lg', children }: 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 md:flex">
       <SkipLink />
+      <CommandPalette role={user.role as Role} />
       <Sidebar
         user={user}
         taskSummary={taskSummary}
