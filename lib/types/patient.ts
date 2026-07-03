@@ -289,11 +289,6 @@ export interface PatientAnamnesis {
   tnmStaging: string | null;
 }
 
-export const beutaloIntezmenyOptions = [
-  'OOI Fej-Nyaki Daganatok Multidiszciplináris Központ',
-  'Észak-Pesti Centrumkórház',
-  'Arc-, Állcsont-, Szájsebészeti és Fogászati Klinika'
-];
 
 export const nyakiBlokkdisszekcioOptions = ['nem volt', 'volt, egyoldali', 'volt, kétoldali'];
 
