@@ -4,6 +4,21 @@ import { useState } from 'react';
 import { X, Calendar, Clock, MapPin, User, AlertTriangle } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
+import { useModalA11y } from '@/hooks/useModalA11y';
+
+/**
+ * Strukturált lemondási okok: a betegnek egy koppintás (nem 10+ karakter
+ * gépelés), a klinikának pedig elemezhető kategória. A szerver felé a
+ * kategória + opcionális részletezés összefűzve megy (az API változatlan).
+ */
+const CANCELLATION_REASONS = [
+  'Betegség miatt nem tudok menni',
+  'Utazás vagy egyéb akadályoztatás',
+  'Másik időpontot szeretnék kérni',
+  'Egyéb ok',
+] as const;
+
+const OTHER_REASON = 'Egyéb ok';
 
 interface Appointment {
   id: string;
@@ -22,8 +37,10 @@ interface CancellationModalProps {
 }
 
 export function CancellationModal({ appointment, onConfirm, onCancel, loading = false }: CancellationModalProps) {
-  const [cancellationReason, setCancellationReason] = useState('');
+  const [selectedReason, setSelectedReason] = useState<string | null>(null);
+  const [detail, setDetail] = useState('');
   const [error, setError] = useState('');
+  const modalRef = useModalA11y({ onClose: loading ? undefined : onCancel });
 
   const startTime = new Date(appointment.startTime);
   const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
@@ -31,28 +48,32 @@ export function CancellationModal({ appointment, onConfirm, onCancel, loading = 
 
   const handleSubmit = (e: React.FormEvent) => {
     e.preventDefault();
-    
-    // Validate cancellation reason
-    if (!cancellationReason.trim()) {
-      setError('A lemondás indokának megadása kötelező');
+
+    if (!selectedReason) {
+      setError('Kérjük, válassza ki a lemondás okát');
       return;
     }
-
-    if (cancellationReason.trim().length < 10) {
-      setError('A lemondás indokának legalább 10 karakter hosszúnak kell lennie');
+    if (selectedReason === OTHER_REASON && detail.trim().length === 0) {
+      setError('Egyéb oknál kérjük, írja le röviden az indokot');
       return;
     }
 
     setError('');
-    onConfirm(cancellationReason.trim());
+    const reason = detail.trim() ? `${selectedReason} — ${detail.trim()}` : selectedReason;
+    onConfirm(reason);
   };
 
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-lg max-w-md w-full shadow-xl">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="cancellation-modal-title"
+    >
+      <div ref={modalRef} tabIndex={-1} className="bg-white dark:bg-gray-900 rounded-lg max-w-md w-full shadow-xl outline-none max-h-[90vh] overflow-y-auto">
         {/* Header */}
         <div className="flex items-center justify-between p-6 border-b">
-          <h2 className="text-xl font-bold text-gray-900 dark:text-gray-100">Időpont lemondása</h2>
+          <h2 id="cancellation-modal-title" className="text-xl font-bold text-gray-900 dark:text-gray-100">Időpont lemondása</h2>
           <button
             onClick={onCancel}
             disabled={loading}
@@ -108,28 +129,54 @@ export function CancellationModal({ appointment, onConfirm, onCancel, loading = 
             </div>
 
             <div>
-              <label htmlFor="cancellation-reason" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                Lemondás indoka <span className="text-red-600 dark:text-red-300">*</span>
+              <p className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
+                Lemondás oka <span className="text-red-600 dark:text-red-300">*</span>
+              </p>
+              <div role="radiogroup" aria-label="Lemondás oka" className="flex flex-col gap-2">
+                {CANCELLATION_REASONS.map(reason => (
+                  <button
+                    key={reason}
+                    type="button"
+                    role="radio"
+                    aria-checked={selectedReason === reason}
+                    onClick={() => {
+                      setSelectedReason(reason);
+                      setError('');
+                    }}
+                    disabled={loading}
+                    className={`w-full text-left px-4 py-3 rounded-lg text-sm font-medium border transition-colors ${
+                      selectedReason === reason
+                        ? 'border-medical-primary bg-medical-primary/5 ring-1 ring-medical-primary text-gray-900 dark:text-gray-100'
+                        : 'border-gray-200 dark:border-gray-700 text-gray-700 dark:text-gray-300 hover:border-medical-primary/60'
+                    }`}
+                  >
+                    {reason}
+                  </button>
+                ))}
+              </div>
+              <label htmlFor="cancellation-detail" className="block text-sm font-medium text-gray-700 dark:text-gray-300 mt-3 mb-1">
+                Részletezés{' '}
+                <span className="font-normal text-gray-500 dark:text-gray-400">
+                  {selectedReason === OTHER_REASON ? '(kötelező)' : '(nem kötelező)'}
+                </span>
               </label>
               <textarea
-                id="cancellation-reason"
-                value={cancellationReason}
+                id="cancellation-detail"
+                value={detail}
                 onChange={(e) => {
-                  setCancellationReason(e.target.value);
+                  setDetail(e.target.value);
                   setError('');
                 }}
                 className={`form-input w-full ${error ? 'border-red-500' : ''}`}
-                placeholder="Kérjük, adja meg a lemondás indokát (minimum 10 karakter)..."
-                rows={4}
+                placeholder="Ha szeretné, itt részletezheti..."
+                rows={2}
                 disabled={loading}
-                required
+                aria-invalid={error ? true : undefined}
+                aria-describedby={error ? 'cancellation-error' : undefined}
               />
               {error && (
-                <p className="mt-1 text-sm text-red-600 dark:text-red-300">{error}</p>
+                <p id="cancellation-error" className="mt-1 text-sm text-red-600 dark:text-red-300">{error}</p>
               )}
-              <p className="mt-1 text-xs text-gray-500 dark:text-gray-400">
-                Minimum 10 karakter szükséges
-              </p>
             </div>
 
             <div className="bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg p-3">
@@ -151,7 +198,7 @@ export function CancellationModal({ appointment, onConfirm, onCancel, loading = 
             </button>
             <button
               type="submit"
-              disabled={loading || !cancellationReason.trim() || cancellationReason.trim().length < 10}
+              disabled={loading || !selectedReason || (selectedReason === OTHER_REASON && detail.trim().length === 0)}
               className="bg-red-600 hover:bg-red-700 disabled:bg-gray-400 disabled:cursor-not-allowed text-white px-4 py-2 rounded-md text-sm font-medium transition-colors flex-1 flex items-center justify-center gap-2"
             >
               {loading ? (
