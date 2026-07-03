@@ -87,6 +87,7 @@ type Report = {
     clinicalIncomplete: number;
     researchComplete: number;
     researchReady: number;
+    publicationReady: number;
     withWarnings: number;
     avgCompletenessScore: number;
     missingOhipT0: number;
@@ -347,6 +348,18 @@ export default function DataCompletenessPage() {
             <div>
               <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{summary?.researchReady ?? 0}</p>
               <p className="text-sm text-gray-500 dark:text-gray-400">Elemzésre kész</p>
+            </div>
+          </div>
+          <div className="card p-4 flex items-center gap-3">
+            <BadgeCheck className="w-8 h-8 text-teal-600 dark:text-teal-300" />
+            <div>
+              <p className="text-2xl font-bold text-teal-700 dark:text-teal-300">{summary?.publicationReady ?? 0}</p>
+              <p
+                className="text-sm text-gray-500 dark:text-gray-400"
+                title="Elemzésre kész ÉS plauzibilitási figyelmeztetés-mentes"
+              >
+                Publikációra kész
+              </p>
             </div>
           </div>
         </div>

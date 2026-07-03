@@ -13,6 +13,8 @@ export type CompletenessSnapshot = {
   avgScore: number;
   clinicalComplete: number;
   researchReady: number;
+  /** Elemzésre kész ÉS plauzibilitási figyelmeztetés-mentes betegek. */
+  publicationReady: number;
   withWarnings: number;
 };
 
@@ -37,17 +39,18 @@ export async function recordCompletenessSnapshot(
 
   const res = await pool.query(
     `INSERT INTO data_completeness_snapshot
-       (snapshot_date, total, avg_score, clinical_complete, research_ready, with_warnings)
-     VALUES (CURRENT_DATE, $1, $2, $3, $4, $5)
+       (snapshot_date, total, avg_score, clinical_complete, research_ready, publication_ready, with_warnings)
+     VALUES (CURRENT_DATE, $1, $2, $3, $4, $5, $6)
      ON CONFLICT (snapshot_date) DO UPDATE SET
        total = EXCLUDED.total,
        avg_score = EXCLUDED.avg_score,
        clinical_complete = EXCLUDED.clinical_complete,
        research_ready = EXCLUDED.research_ready,
+       publication_ready = EXCLUDED.publication_ready,
        with_warnings = EXCLUDED.with_warnings,
        created_at = NOW()
-     RETURNING snapshot_date, total, avg_score, clinical_complete, research_ready, with_warnings`,
-    [s.total, s.avgCompletenessScore, s.clinicalComplete, s.researchReady, s.withWarnings],
+     RETURNING snapshot_date, total, avg_score, clinical_complete, research_ready, publication_ready, with_warnings`,
+    [s.total, s.avgCompletenessScore, s.clinicalComplete, s.researchReady, s.publicationReady, s.withWarnings],
   );
 
   return { recorded: true, snapshot: mapRow(res.rows[0]) };
@@ -58,7 +61,7 @@ export async function getCompletenessSnapshots(limitDays = 90): Promise<Complete
   const pool = getDbPool();
   const days = Number.isFinite(limitDays) && limitDays > 0 ? Math.min(Math.floor(limitDays), 730) : 90;
   const res = await pool.query(
-    `SELECT snapshot_date, total, avg_score, clinical_complete, research_ready, with_warnings
+    `SELECT snapshot_date, total, avg_score, clinical_complete, research_ready, publication_ready, with_warnings
        FROM data_completeness_snapshot
       WHERE snapshot_date > CURRENT_DATE - ($1::int)
       ORDER BY snapshot_date ASC`,
@@ -77,6 +80,7 @@ function mapRow(r: Record<string, unknown>): CompletenessSnapshot {
     avgScore: Number(r.avg_score),
     clinicalComplete: Number(r.clinical_complete),
     researchReady: Number(r.research_ready),
+    publicationReady: Number(r.publication_ready ?? 0),
     withWarnings: Number(r.with_warnings),
   };
 }

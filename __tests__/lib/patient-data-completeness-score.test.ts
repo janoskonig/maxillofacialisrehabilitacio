@@ -1,90 +1,75 @@
 import { describe, it, expect } from 'vitest';
 import {
   computeCompletenessScore,
+  completenessItemWeight,
   NA_ELIGIBLE_KEYS,
   naFieldLabel,
 } from '@/lib/patient-data-completeness';
+import {
+  WEIGHT_IDENTITY,
+  WEIGHT_CLINICAL,
+  WEIGHT_SUPPLEMENTARY,
+  RESEARCH_FIELD_WEIGHT,
+} from '@/lib/clinical-rules';
 
-describe('computeCompletenessScore', () => {
-  it('is 100 when nothing is missing', () => {
-    expect(
-      computeCompletenessScore({
-        clinicalApplicable: 9,
-        clinicalMissing: 0,
-        researchApplicable: 2,
-        researchMissing: 0,
-      })
-    ).toBe(100);
+describe('computeCompletenessScore (súlyozott)', () => {
+  it('100, ha semmi nem hiányzik', () => {
+    expect(computeCompletenessScore({ applicableWeight: 20, missingWeight: 0 })).toBe(100);
   });
 
-  it('is 0 when everything applicable is missing', () => {
-    expect(
-      computeCompletenessScore({
-        clinicalApplicable: 9,
-        clinicalMissing: 9,
-        researchApplicable: 1,
-        researchMissing: 1,
-      })
-    ).toBe(0);
+  it('0, ha minden értelmezhető tétel hiányzik', () => {
+    expect(computeCompletenessScore({ applicableWeight: 20, missingWeight: 20 })).toBe(0);
   });
 
-  it('computes the proportion of present applicable items', () => {
-    // 10 applicable, 2 missing → 8/10 = 80
-    expect(
-      computeCompletenessScore({
-        clinicalApplicable: 9,
-        clinicalMissing: 1,
-        researchApplicable: 1,
-        researchMissing: 1,
-      })
-    ).toBe(80);
+  it('a meglévő súly arányát számolja', () => {
+    // 20 összsúlyból 5 hiányzik → 75
+    expect(computeCompletenessScore({ applicableWeight: 20, missingWeight: 5 })).toBe(75);
   });
 
-  it('rounds to the nearest integer', () => {
-    // 9 applicable, 1 missing → 8/9 = 88.88 → 89
-    expect(
-      computeCompletenessScore({
-        clinicalApplicable: 9,
-        clinicalMissing: 1,
-        researchApplicable: 0,
-        researchMissing: 0,
-      })
-    ).toBe(89);
+  it('egészre kerekít', () => {
+    // 9-ből 1 hiányzik → 88.88 → 89
+    expect(computeCompletenessScore({ applicableWeight: 9, missingWeight: 1 })).toBe(89);
   });
 
-  it('ignores non-applicable research fields in the denominator', () => {
-    // A patient with no applicable research fields: only clinical counts.
-    // 9 applicable, 0 missing → 100 (OHIP/Brown/etc. not held against them)
-    expect(
-      computeCompletenessScore({
-        clinicalApplicable: 9,
-        clinicalMissing: 0,
-        researchApplicable: 0,
-        researchMissing: 0,
-      })
-    ).toBe(100);
+  it('100 degenerált esetben (nincs értelmezhető tétel)', () => {
+    expect(computeCompletenessScore({ applicableWeight: 0, missingWeight: 0 })).toBe(100);
   });
 
-  it('returns 100 when nothing is applicable (degenerate case)', () => {
-    expect(
-      computeCompletenessScore({
-        clinicalApplicable: 0,
-        clinicalMissing: 0,
-        researchApplicable: 0,
-        researchMissing: 0,
-      })
-    ).toBe(100);
+  it('0–100 közé szorít', () => {
+    expect(computeCompletenessScore({ applicableWeight: 2, missingWeight: 5 })).toBe(0);
   });
 
-  it('clamps to the 0–100 range', () => {
-    expect(
-      computeCompletenessScore({
-        clinicalApplicable: 2,
-        clinicalMissing: 5,
-        researchApplicable: 0,
-        researchMissing: 0,
-      })
-    ).toBe(0);
+  it('a súlyos tétel hiánya többet nyom, mint a könnyűé', () => {
+    const applicableWeight = 17; // klinikai minimum összsúlya (4×3 + 3×2 + 1×1... a lényeg a reláció)
+    const heavyMissing = computeCompletenessScore({
+      applicableWeight,
+      missingWeight: WEIGHT_IDENTITY,
+    });
+    const lightMissing = computeCompletenessScore({
+      applicableWeight,
+      missingWeight: WEIGHT_SUPPLEMENTARY,
+    });
+    expect(heavyMissing).toBeLessThan(lightMissing);
+  });
+});
+
+describe('completenessItemWeight', () => {
+  it('identitás-mezők 3× súlyt kapnak', () => {
+    for (const key of ['nev', 'taj', 'szuletesiDatum', 'diagnozis', 'kezelesreErkezesIndoka']) {
+      expect(completenessItemWeight(key)).toBe(WEIGHT_IDENTITY);
+    }
+  });
+
+  it('klinikai osztályozás / dokumentum 2×', () => {
+    expect(completenessItemWeight('nem')).toBe(WEIGHT_CLINICAL);
+    expect(completenessItemWeight('meglevoFogak')).toBe(WEIGHT_CLINICAL);
+    expect(completenessItemWeight('doc:op')).toBe(WEIGHT_CLINICAL);
+  });
+
+  it('kontakt és kutatási mezők 1×', () => {
+    expect(completenessItemWeight('email')).toBe(WEIGHT_SUPPLEMENTARY);
+    expect(completenessItemWeight('tnmStaging')).toBe(RESEARCH_FIELD_WEIGHT);
+    expect(completenessItemWeight('ohipT0')).toBe(RESEARCH_FIELD_WEIGHT);
   });
 });
 
