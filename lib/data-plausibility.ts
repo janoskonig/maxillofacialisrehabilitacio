@@ -56,6 +56,8 @@ export function getPlausibilityWarnings(p: {
   taj?: string | null;
   szuletesiDatum?: string | null;
   halalDatum?: string | null;
+  /** Odontogram JSONB (fogszám → státusz/leírás) — státusz nélküli leírások jelzéséhez. */
+  meglevoFogak?: Record<string, unknown> | null;
 }): PlausibilityWarning[] {
   const warnings: PlausibilityWarning[] = [];
   const now = new Date();
@@ -99,5 +101,39 @@ export function getPlausibilityWarnings(p: {
     });
   }
 
+  // Odontogram: leírásos fog-bejegyzés D/F/M státusz nélkül — a DMF-statisztika
+  // az ilyet nem látja, a bejegyzés csak szabad szövegként létezik.
+  const statuszNelkul = countToothEntriesWithoutStatus(p.meglevoFogak);
+  if (statuszNelkul > 0) {
+    warnings.push({
+      code: 'fogak_statusz_nelkul',
+      field: 'meglevoFogak',
+      message: `${statuszNelkul} fog-bejegyzés leírással, de D/F/M státusz nélkül.`,
+    });
+  }
+
   return warnings;
+}
+
+/**
+ * Státusz nélküli, de leírással rendelkező fog-bejegyzések száma az
+ * odontogram JSONB-ben. String érték ('D'|'F'|'M') = van státusz; objektumnál
+ * a `status` mező számít. Az üres objektum/érték nem bejegyzés.
+ */
+export function countToothEntriesWithoutStatus(
+  fogak: Record<string, unknown> | null | undefined,
+): number {
+  if (!fogak || typeof fogak !== 'object') return 0;
+  let count = 0;
+  for (const value of Object.values(fogak)) {
+    if (value === null || value === undefined) continue;
+    if (typeof value === 'string') continue; // 'D' | 'F' | 'M' — van státusz
+    if (typeof value === 'object') {
+      const v = value as { status?: unknown; description?: unknown };
+      const hasStatus = typeof v.status === 'string' && v.status.trim() !== '';
+      const hasDescription = typeof v.description === 'string' && v.description.trim() !== '';
+      if (!hasStatus && hasDescription) count += 1;
+    }
+  }
+  return count;
 }

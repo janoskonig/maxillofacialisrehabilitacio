@@ -343,6 +343,7 @@ export async function getPatientDataCompleteness(
       taj: row.taj as string | null,
       szuletesiDatum: row.szuletesi_datum ? String(row.szuletesi_datum) : null,
       halalDatum: row.halal_datum ? String(row.halal_datum) : null,
+      meglevoFogak: row.meglevo_fogak as Record<string, unknown> | null,
     });
 
     // Publikációs készültség: elemzésre kész ÉS nincs plauzibilitási gyanú.
