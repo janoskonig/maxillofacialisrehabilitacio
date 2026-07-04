@@ -12,6 +12,8 @@ interface ReferredPatient {
   nextAppointmentAt: string | null;
   nextAppointmentDentist: string | null;
   unreadMessages: number;
+  /** A beutaló által pótolható hiányzó adatok (chipek deeplinkkel). */
+  referrerMissing: { key: string; label: string; href: string }[];
 }
 
 /**
@@ -100,6 +102,20 @@ export function ReferredPatientsPanel() {
                     >
                       {p.nev || 'Név nélküli beteg'}
                     </Link>
+                    {(p.referrerMissing?.length ?? 0) > 0 && (
+                      <span className="mt-1 flex flex-wrap gap-1">
+                        {p.referrerMissing.map(m => (
+                          <Link
+                            key={m.key}
+                            href={m.href}
+                            title="Öntől pótolandó adat — kattintson a kitöltéshez"
+                            className="text-[11px] rounded-full px-2 py-0.5 border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40"
+                          >
+                            {m.label}
+                          </Link>
+                        ))}
+                      </span>
+                    )}
                   </td>
                   <td className="py-2.5 pr-4 text-gray-700 dark:text-gray-300">
                     {p.stageLabel || p.stageCode || <span className="text-gray-400">—</span>}

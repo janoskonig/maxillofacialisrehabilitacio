@@ -5,6 +5,8 @@ import {
   doctorActionableMissing,
   resolvePrimaryRecipients,
   PATIENT_FILLABLE_KEYS,
+  REFERRER_FILLABLE_KEYS,
+  splitByResponsible,
   shouldEscalate,
   ESCALATION_AFTER,
   type Recipient,
@@ -173,5 +175,38 @@ describe('doctorActionableMissing', () => {
   it('OHIP-T0 is the patient-fillable key', () => {
     expect(PATIENT_FILLABLE_KEYS.has('ohipT0')).toBe(true);
     expect(PATIENT_FILLABLE_KEYS.has('taj')).toBe(false);
+  });
+});
+
+describe('splitByResponsible — beutaló-routing', () => {
+  const item = (key: string): MissingItem => ({ key, label: key, group: 'research' });
+
+  it('a beutaló-mezők a beutalóhoz, a többi a kezelőorvoshoz kerül', () => {
+    const { referrerItems, kezeloItems } = splitByResponsible([
+      item('beutaloIndokolas'),
+      item('mutetLeiras'),
+      item('mutetIdeje'),
+      item('szovettan'),
+      item('bno'),
+      item('tnmStaging'),
+      item('brownFuggoleges'),
+      { key: 'taj', label: 'TAJ', group: 'clinical' },
+    ]);
+    expect(referrerItems.map(i => i.key)).toEqual([
+      'beutaloIndokolas', 'mutetLeiras', 'mutetIdeje', 'szovettan', 'bno', 'tnmStaging',
+    ]);
+    expect(kezeloItems.map(i => i.key)).toEqual(['brownFuggoleges', 'taj']);
+  });
+
+  it('üres listára üres felosztás', () => {
+    const { referrerItems, kezeloItems } = splitByResponsible([]);
+    expect(referrerItems).toEqual([]);
+    expect(kezeloItems).toEqual([]);
+  });
+
+  it('a beteg-kitölthető kulcsok nem beutaló-kulcsok (nincs átfedés)', () => {
+    for (const key of Array.from(PATIENT_FILLABLE_KEYS)) {
+      expect(REFERRER_FILLABLE_KEYS.has(key)).toBe(false);
+    }
   });
 });

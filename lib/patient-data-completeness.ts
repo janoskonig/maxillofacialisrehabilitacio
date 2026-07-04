@@ -176,6 +176,32 @@ const RESEARCH_RULES: ResearchRule[] = [
     applicable: (r) => r.radioterapia === true,
     missing: (r) => isBlank(r.radioterapia_dozis),
   },
+  // --- Beutaló orvos által pótolható mezők (beutaló-routing;
+  //     lib/missing-data-reminders REFERRER_FILLABLE_KEYS) ---
+  {
+    key: 'beutaloIndokolas',
+    label: 'Beutaló indoklás',
+    applicable: (r) => !isBlank(r.beutalo_orvos),
+    missing: (r) => isBlank(r.beutalo_indokolas),
+  },
+  {
+    key: 'mutetLeiras',
+    label: 'Primer műtét leírása',
+    applicable: (r) => r.kezelesre_erkezes_indoka === ONKO,
+    missing: (r) => isBlank(r.primer_mutet_leirasa),
+  },
+  {
+    key: 'mutetIdeje',
+    label: 'Műtét ideje',
+    applicable: (r) => r.kezelesre_erkezes_indoka === ONKO,
+    missing: (r) => r.mutet_ideje === null || r.mutet_ideje === undefined,
+  },
+  {
+    key: 'szovettan',
+    label: 'Szövettani diagnózis',
+    applicable: (r) => r.kezelesre_erkezes_indoka === ONKO,
+    missing: (r) => isBlank(r.szovettani_diagnozis),
+  },
   // --- Beteg által önkitölthető mezők (portál-nudge; az orvost nem terheljük) ---
   // Életmód-adatok: a QoL-elemzések standard zavaró változói (confounderei).
   {
@@ -246,6 +272,11 @@ export async function getPatientDataCompleteness(
         a.bno,
         a.alkoholfogyasztas,
         a.dohanyzas_szam,
+        pr.beutalo_orvos,
+        pr.beutalo_indokolas,
+        pr.primer_mutet_leirasa,
+        pr.mutet_ideje,
+        pr.szovettani_diagnozis,
         d.felso_fogpotlas_van,
         d.felso_fogpotlas_elegedett,
         d.also_fogpotlas_van,
@@ -268,6 +299,7 @@ export async function getPatientDataCompleteness(
      FROM patients p
      LEFT JOIN patient_anamnesis a ON a.patient_id = p.id
      LEFT JOIN patient_dental_status d ON d.patient_id = p.id
+     LEFT JOIN patient_referral pr ON pr.patient_id = p.id
      LEFT JOIN users ku ON ku.id = p.kezeleoorvos_user_id
      LEFT JOIN LATERAL (
         SELECT array_agg(field_key) AS keys,
