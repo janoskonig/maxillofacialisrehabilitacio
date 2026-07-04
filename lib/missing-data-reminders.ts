@@ -1,5 +1,5 @@
 import { getDbPool } from '@/lib/db';
-import { sendMissingDataReminderEmail } from '@/lib/email';
+import { sendMissingDataReminderEmail, sendEmail, getBaseUrlForEmail } from '@/lib/email';
 import { queueAdminNotification } from '@/lib/email/admin-notification-queue';
 import { insertUserTask } from '@/lib/user-tasks';
 import {
@@ -123,6 +123,35 @@ export function doctorActionableMissing(row: PatientCompletenessRow): MissingIte
   );
 }
 
+/**
+ * A beutaló orvos által pótolható tételek: a beutalás-kori klinikai adatok
+ * (indoklás, műtét, szövettan) és a kódolás (BNO, TNM). Ezekről elsődlegesen
+ * a beutaló orvos kap emlékeztetőt — a kezelőorvosra csak akkor szállnak
+ * vissza, ha a beutaló ESCALATION_AFTER emlékeztető után sem pótolta, vagy
+ * nincs feloldható beutaló orvos.
+ */
+export const REFERRER_FILLABLE_KEYS: ReadonlySet<string> = new Set([
+  'beutaloIndokolas',
+  'mutetLeiras',
+  'mutetIdeje',
+  'szovettan',
+  'bno',
+  'tnmStaging',
+]);
+
+/**
+ * Hiánylista felosztása felelős szerint (tiszta, DB-mentes — unit-tesztelhető).
+ */
+export function splitByResponsible(items: MissingItem[]): {
+  referrerItems: MissingItem[];
+  kezeloItems: MissingItem[];
+} {
+  return {
+    referrerItems: items.filter((i) => REFERRER_FILLABLE_KEYS.has(i.key)),
+    kezeloItems: items.filter((i) => !REFERRER_FILLABLE_KEYS.has(i.key)),
+  };
+}
+
 export async function sendMissingDataReminders(): Promise<MissingDataReminderResult> {
   const pool = getDbPool();
   const result: MissingDataReminderResult = {
@@ -162,10 +191,68 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
   }
 
   // 2) Hiányos betegenként az érintett orvosok értesítése.
+  //    A beutaló orvos által pótolható tételek (REFERRER_FILLABLE_KEYS)
+  //    elsődlegesen a BEUTALÓHOZ kerülnek (heti összesített e-mail); a
+  //    kezelőorvosra csak eszkalációként vagy feloldhatatlan beutalónál
+  //    szállnak vissza. Minden más tétel a kezelőorvosé marad.
+  const referrerDigests = new Map<
+    string,
+    {
+      recipient: Recipient;
+      entries: { patientId: string; patientName: string | null; items: MissingItem[] }[];
+    }
+  >();
+
   for (const row of incomplete) {
     const patientId = row.patientId;
     try {
-      const missingItems = doctorActionableMissing(row);
+      const allMissing = doctorActionableMissing(row);
+      const { referrerItems, kezeloItems: baseKezeloItems } = splitByResponsible(allMissing);
+      let kezeloItems = baseKezeloItems;
+
+      // --- Beutaló-ág ---
+      if (referrerItems.length > 0) {
+        const referrer = await resolveReferrer(pool, patientId);
+        if (!referrer) {
+          // Nincs feloldható beutaló → a kezelőorvos örökli a tételeket.
+          kezeloItems = [...kezeloItems, ...referrerItems];
+        } else {
+          const priorCount = await reminderCount(pool, patientId, referrer.userId);
+          if (shouldEscalate(priorCount)) {
+            // A beutalót eleget emlékeztettük — visszaszáll a kezelőorvosra
+            // (a beutaló nyitott feladata megmarad, de több levelet nem kap).
+            kezeloItems = [...kezeloItems, ...referrerItems];
+            result.escalations++;
+          } else {
+            const refSummary = formatMissingSummary(referrerItems);
+            const taskCreated = await ensureMissingDataTask(
+              pool,
+              patientId,
+              row.patientName,
+              referrer,
+              refSummary
+            );
+            if (taskCreated) result.tasksCreated++;
+            // Az e-mail NEM itt megy ki: beutalónként EGY heti összesítőt
+            // küldünk a ciklus után (betegenkénti cooldownnal).
+            const digest = referrerDigests.get(referrer.userId) ?? { recipient: referrer, entries: [] };
+            digest.entries.push({ patientId, patientName: row.patientName, items: referrerItems });
+            referrerDigests.set(referrer.userId, digest);
+          }
+        }
+      } else {
+        // A beutaló-tételek rendben → a beutaló nyitott feladatai lezárhatók.
+        result.tasksClosed += await closeRoleTasks(pool, patientId, REFERRER_ROLE);
+      }
+
+      if (kezeloItems.length === 0) {
+        // A kezelőorvosnak nincs teendője ennél a betegnél — a nyitott
+        // kezelőorvosi feladatait lezárjuk, e-mailt nem kap.
+        result.tasksClosed += await closeRoleTasks(pool, patientId, KEZELOORVOS_ROLE);
+        continue;
+      }
+
+      const missingItems = kezeloItems;
       const summary = formatMissingSummary(missingItems);
 
       // A kezelőorvos az elsődleges és EGYETLEN rendes felelős. Ha ki van
@@ -266,7 +353,123 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
     }
   }
 
+  // 3) Beutalónkénti heti összesítő e-mail (betegenkénti cooldownnal: csak
+  //    azok a betegek kerülnek a levélbe, akikről 7 napja nem ment értesítő).
+  for (const digest of Array.from(referrerDigests.values())) {
+    try {
+      const due: typeof digest.entries = [];
+      for (const entry of digest.entries) {
+        const recent = await hasRecentReminder(pool, entry.patientId, digest.recipient.userId);
+        if (recent) result.skipped++;
+        else due.push(entry);
+      }
+      if (due.length === 0) continue;
+
+      await sendEmail({
+        to: digest.recipient.email,
+        subject: `Pótlandó beutalási adatok — ${due.length} beteg (heti összesítő)`,
+        html: buildReferrerDigestHtml(digest.recipient.name, due),
+        emailType: 'missing_data_referrer_digest',
+        metadata: { recipientUserId: digest.recipient.userId, patientCount: due.length },
+      });
+      for (const entry of due) {
+        await pool.query(
+          `INSERT INTO missing_data_reminder_log
+             (patient_id, recipient_user_id, recipient_role, email_to, missing_summary)
+           VALUES ($1, $2, $3, $4, $5)`,
+          [
+            entry.patientId,
+            digest.recipient.userId,
+            REFERRER_ROLE,
+            digest.recipient.email,
+            formatMissingSummary(entry.items),
+          ]
+        );
+      }
+      result.emailsSent++;
+
+      await queueAdminNotification(
+        'missing_data_reminder_sent',
+        `Beutalói összesítő — ${digest.recipient.name ?? digest.recipient.email} (${due.length} beteg)`,
+        { recipientUserId: digest.recipient.userId, role: REFERRER_ROLE, patientCount: due.length }
+      ).catch(() => {});
+    } catch (err) {
+      logger.error(
+        `[missing-data-reminders] Beutalói összesítő hiba (${digest.recipient.email}):`,
+        err
+      );
+      result.errors++;
+    }
+  }
+
   return result;
+}
+
+/**
+ * Egy adott szerep-címkéjű címzett nyitott 'missing_data' feladatainak lezárása
+ * egy betegnél — akkor hívjuk, ha az adott felelős tétel-listája kiürült.
+ */
+async function closeRoleTasks(
+  pool: ReturnType<typeof getDbPool>,
+  patientId: string,
+  role: RecipientRole
+): Promise<number> {
+  const res = await pool.query(
+    `UPDATE user_tasks
+        SET status = 'done', completed_at = NOW()
+      WHERE task_type = 'missing_data'
+        AND status = 'open'
+        AND patient_id = $1
+        AND metadata->>'role' = $2`,
+    [patientId, role]
+  );
+  return res.rowCount ?? 0;
+}
+
+/** Volt-e e-mail ennek a (beteg, címzett) párnak a cooldown-ablakon belül? */
+async function hasRecentReminder(
+  pool: ReturnType<typeof getDbPool>,
+  patientId: string,
+  recipientUserId: string
+): Promise<boolean> {
+  const res = await pool.query(
+    `SELECT 1 FROM missing_data_reminder_log
+      WHERE patient_id = $1 AND recipient_user_id = $2
+        AND sent_at > NOW() - INTERVAL '${REMINDER_COOLDOWN_DAYS} days'
+      LIMIT 1`,
+    [patientId, recipientUserId]
+  );
+  return res.rows.length > 0;
+}
+
+/** A beutalói heti összesítő e-mail tartalma (beteg + hiányzó mezők + karton-link). */
+function buildReferrerDigestHtml(
+  recipientName: string | null,
+  entries: { patientId: string; patientName: string | null; items: MissingItem[] }[]
+): string {
+  const baseUrl = getBaseUrlForEmail();
+  const rows = entries
+    .map(
+      (e) => `
+        <li style="margin-bottom: 10px;">
+          <strong>${e.patientName ?? 'Név nélküli beteg'}</strong> —
+          ${e.items.map((i) => i.label).join(', ')}
+          &nbsp;<a href="${baseUrl}/patients/${e.patientId}/view">Karton megnyitása</a>
+        </li>`
+    )
+    .join('');
+  return `
+    <div style="font-family: Arial, sans-serif;">
+      <h2 style="color: #0f766e;">Kedves ${recipientName ?? 'Doktornő/Doktor Úr'}!</h2>
+      <p>Az Ön által beutalt betegeknél az alábbi, a beutaláshoz kapcsolódó adatok
+      hiányoznak (beutaló indoklás, műtéti adatok, szövettan, BNO/TNM kód):</p>
+      <ul>${rows}</ul>
+      <p style="color: #6b7280; font-size: 13px;">
+        Ezeket az adatokat Ön ismeri a legpontosabban. A pótlás a beteg kartonján
+        néhány percet vesz igénybe — köszönjük a segítségét!
+      </p>
+    </div>
+  `;
 }
 
 /** Eddig hány emlékeztetőt logoltunk ennek a (beteg, címzett) párnak. */

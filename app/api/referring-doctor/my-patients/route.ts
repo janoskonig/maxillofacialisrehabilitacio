@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { roleHandler } from '@/lib/api/route-handler';
 import { getDbPool } from '@/lib/db';
+import { getPatientDataCompleteness } from '@/lib/patient-data-completeness';
+import { splitByResponsible, doctorActionableMissing } from '@/lib/missing-data-reminders';
+import { completenessEditHref } from '@/lib/completeness-deeplinks';
 
 export const dynamic = 'force-dynamic';
 
@@ -78,15 +81,31 @@ export const GET = roleHandler(['beutalo_orvos'], async (_req, { auth }) => {
   const apptByPatient = new Map(apptRes.rows.map((r: any) => [r.patient_id, r]));
   const unreadByPatient = new Map(unreadRes.rows.map((r: any) => [r.patient_id, r.unread]));
 
-  const patients = patientsRes.rows.map((p: any) => ({
-    id: p.id,
-    nev: p.nev,
-    stageCode: stageByPatient.get(p.id)?.stageCode ?? null,
-    stageLabel: stageByPatient.get(p.id)?.stageLabel ?? null,
-    nextAppointmentAt: apptByPatient.get(p.id)?.startTime ?? null,
-    nextAppointmentDentist: apptByPatient.get(p.id)?.dentistName ?? null,
-    unreadMessages: unreadByPatient.get(p.id) ?? 0,
-  }));
+  // A beutaló által pótolható hiányok (beutaló indoklás, műtét, szövettan,
+  // BNO, TNM) — chipekként jelennek meg a panelen, karton-deeplinkkel.
+  const report = await getPatientDataCompleteness();
+  const completenessById = new Map(report.patients.map((r) => [r.patientId, r]));
+
+  const patients = patientsRes.rows.map((p: any) => {
+    const compRow = completenessById.get(p.id);
+    const referrerMissing = compRow
+      ? splitByResponsible(doctorActionableMissing(compRow)).referrerItems.map((i) => ({
+          key: i.key,
+          label: i.label,
+          href: completenessEditHref(p.id, i.key),
+        }))
+      : [];
+    return {
+      id: p.id,
+      nev: p.nev,
+      stageCode: stageByPatient.get(p.id)?.stageCode ?? null,
+      stageLabel: stageByPatient.get(p.id)?.stageLabel ?? null,
+      nextAppointmentAt: apptByPatient.get(p.id)?.startTime ?? null,
+      nextAppointmentDentist: apptByPatient.get(p.id)?.dentistName ?? null,
+      unreadMessages: unreadByPatient.get(p.id) ?? 0,
+      referrerMissing,
+    };
+  });
 
   return NextResponse.json({ patients, missingDoctorName: false });
 });

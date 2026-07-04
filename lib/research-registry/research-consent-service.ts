@@ -5,6 +5,8 @@
 import type { Pool, PoolClient } from 'pg';
 import { getDbPool } from '@/lib/db';
 import { writeAuditEvent } from './audit-events';
+import { escalateConsentConflictSilent } from '@/lib/consent-conflict';
+import { closeConsentNudgeTasksIfSettledSilent } from '@/lib/consent-reminders';
 import type { ConsentStatus } from './consent';
 
 type Db = Pool | PoolClient;
@@ -351,6 +353,10 @@ export async function grantResearchConsent(
     },
   });
 
+  // A nyilatkozat megszületett → a beteg consent-nudge feladata (ha minden
+  // nyilatkozat rendezett) lezárul. Fire-and-forget.
+  closeConsentNudgeTasksIfSettledSilent(patientId);
+
   return (await getPatientConsentState(patientId, db))!;
 }
 
@@ -404,6 +410,11 @@ export async function declineResearchConsent(
     newState: { consentStatus: 'declined' },
   });
 
+  // Önjáró consent-modell: a megtagadás KONFLIKTUS → admin-feladat + azonnali
+  // e-mail; a beteg nudge-feladata (ha rendezett) lezárul. Fire-and-forget.
+  escalateConsentConflictSilent(patientId, 'declined', input.reason ?? null);
+  closeConsentNudgeTasksIfSettledSilent(patientId);
+
   return (await getPatientConsentState(patientId, db))!;
 }
 
@@ -449,6 +460,11 @@ export async function withdrawResearchConsent(
     oldState: { consentStatus: current.consentStatus },
     newState: { consentStatus: 'withdrawn' },
   });
+
+  // Önjáró consent-modell: a visszavonás KONFLIKTUS → admin-feladat + azonnali
+  // e-mail; a beteg nudge-feladata (ha rendezett) lezárul. Fire-and-forget.
+  escalateConsentConflictSilent(patientId, 'withdrawn', input.reason ?? null);
+  closeConsentNudgeTasksIfSettledSilent(patientId);
 
   return (await getPatientConsentState(patientId, db))!;
 }
