@@ -30,7 +30,7 @@ export default function PrivacyPolicyHu() {
 
           <div className="prose prose-sm max-w-none text-gray-700 dark:text-gray-300 space-y-6">
             <p className="text-sm text-gray-600 dark:text-gray-400">
-              <strong>Irányelv verzió:</strong> {CURRENT_PRIVACY_POLICY_VERSION} &middot; <strong>Hatályba lépés:</strong> 2026. április 3.
+              <strong>Irányelv verzió:</strong> {CURRENT_PRIVACY_POLICY_VERSION} &middot; <strong>Hatályba lépés:</strong> 2026. július 4.
             </p>
 
             <section>
@@ -271,8 +271,8 @@ export default function PrivacyPolicyHu() {
               <p>
                 Rendszerünk egészségügyi szakemberek általi használatra készült, és minden korosztály betegadatait tartalmazhatja, 
                 beleértve a kiskorúakat is. Minden betegadatot, beleértve a kiskorúak adatait, a GDPR és az alkalmazandó magyar 
-                egészségügyi adatvédelmi törvényeknek megfelelően kezelünk. 16 év alatti betegek esetén a szülői felelősség 
-                gyakorlója adja meg a hozzájárulást.
+                egészségügyi adatvédelmi törvényeknek megfelelően kezelünk. 18. életévét be nem töltött betegek esetén a
+                nyilatkozatot a törvényes képviselő (a szülői felelősség gyakorlója) teszi meg.
               </p>
             </section>
 

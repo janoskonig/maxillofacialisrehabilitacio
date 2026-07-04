@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { handleApiError } from '../api-error-handler';
 import { requireAuth, requireRole, verifyAuth, type AuthPayload } from '../auth-server';
+import { maybeLogPatientAccess } from '../legal/patient-data-access-log';
 
 function generateCorrelationId(): string {
   if (typeof crypto !== 'undefined' && crypto.randomUUID) {
@@ -52,6 +53,10 @@ function wrapRoute<Ctx extends RouteContext>(
 
     try {
       const ctx = await setup(req, { correlationId, params });
+      // EüAK betekintési napló: authentikált beteg-rekord olvasás naplózása.
+      // Fire-and-forget, nem befolyásolja a választ.
+      const auth = (ctx as Partial<AuthedRouteContext>).auth;
+      if (auth) maybeLogPatientAccess(req, auth, correlationId);
       const res = await handler(req, ctx);
       res.headers.set('x-correlation-id', correlationId);
       return res;
