@@ -4,9 +4,11 @@
  * Patients below GUARDIAN_REQUIRED_BELOW_AGE require a legal guardian
  * (törvényes képviselő) to make declarations on their behalf.
  *
- * NOTE (legal sign-off): the privacy notice currently states 16; Hungarian
- * cselekvőképesség is generally 18. This single constant must be reconciled
- * with the published notice by the DPO / lawyer.
+ * NOTE (legal sign-off): the published privacy notice (app/privacy-hu, policy
+ * version 1.2) now also states 18, matching this enforced threshold and the
+ * Ptk. cselekvőképesség rule. The final threshold still awaits DPO / lawyer
+ * sign-off — if they rule 16 (GDPR Art. 8-style), change this constant AND
+ * publish a *material* notice bump (v1.3, no editorial ack backfill).
  */
 export const GUARDIAN_REQUIRED_BELOW_AGE = 18;
 

@@ -29,6 +29,11 @@ vi.mock('@/lib/api-error-handler', () => ({
   }),
 }));
 
+const maybeLogPatientAccessMock = vi.fn();
+vi.mock('@/lib/legal/patient-data-access-log', () => ({
+  maybeLogPatientAccess: (...args: unknown[]) => maybeLogPatientAccessMock(...args),
+}));
+
 import { apiHandler, authedHandler, roleHandler } from '@/lib/api/route-handler';
 import { requireAuth, requireRole } from '@/lib/auth-server';
 
@@ -134,5 +139,38 @@ describe('roleHandler', () => {
 
     const res = await handler(makeRequest());
     expect(res.status).toBe(403);
+  });
+});
+
+describe('betekintési napló (access-log) hook', () => {
+  it('invokes the access logger for an authed request, once, with auth + correlationId', async () => {
+    vi.mocked(requireAuth).mockResolvedValue(mockAuth);
+
+    const handler = authedHandler(async () => NextResponse.json({ ok: true }));
+    await handler(makeRequest('http://localhost/api/patients/abc', { 'x-correlation-id': 'cid-1' }));
+
+    expect(maybeLogPatientAccessMock).toHaveBeenCalledTimes(1);
+    const [, auth, correlationId] = maybeLogPatientAccessMock.mock.calls[0];
+    expect(auth).toEqual(mockAuth);
+    expect(correlationId).toBe('cid-1');
+  });
+
+  it('does not invoke the access logger for a public (unauthenticated) handler', async () => {
+    const handler = apiHandler(async () => NextResponse.json({ ok: true }));
+    await handler(makeRequest('http://localhost/api/patients/abc'));
+
+    expect(maybeLogPatientAccessMock).not.toHaveBeenCalled();
+  });
+
+  it('leaves the handler response untouched (logging is a side effect)', async () => {
+    vi.mocked(requireAuth).mockResolvedValue(mockAuth);
+
+    const handler = authedHandler(async () => NextResponse.json({ ok: true, value: 42 }));
+    const res = await handler(makeRequest('http://localhost/api/patients/abc'));
+
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body).toEqual({ ok: true, value: 42 });
+    expect(maybeLogPatientAccessMock).toHaveBeenCalledTimes(1);
   });
 });

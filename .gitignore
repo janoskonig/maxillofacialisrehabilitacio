@@ -60,6 +60,9 @@ logs
 *.md
 ADATBAZIS_OSSZEKOTES.md
 DATABASE_SETUP.md
+
+# Dokumentumok (kutatási/etikai tervezetek — nem verziózott)
+docs/
 # Showcase (untracked deck/pipeline work)
 showcase/
 

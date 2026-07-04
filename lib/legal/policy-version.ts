@@ -7,7 +7,7 @@
  *
  * Keep the rendered page (app/privacy-hu/page.tsx) in sync with these values.
  */
-export const CURRENT_PRIVACY_POLICY_VERSION = '1.1';
+export const CURRENT_PRIVACY_POLICY_VERSION = '1.2';
 
 /** ISO date the current version took effect (display only). */
-export const CURRENT_PRIVACY_POLICY_EFFECTIVE_FROM = '2026-04-03';
+export const CURRENT_PRIVACY_POLICY_EFFECTIVE_FROM = '2026-07-04';
