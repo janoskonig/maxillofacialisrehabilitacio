@@ -49,8 +49,6 @@ const USERS = [
   { email: 'fogpot@dev.local', role: 'fogpótlástanász', doktor_neve: 'Dev Fogpótlástanász dr.', intezmeny: 'SE Fogpótlástani Klinika' },
   { email: 'beutalo@dev.local', role: 'beutalo_orvos', doktor_neve: 'Dev Beutaló dr.', intezmeny: 'Észak-Pesti Centrumkórház' },
   { email: 'technikus@dev.local', role: 'technikus', doktor_neve: 'Dev Technikus', intezmeny: null },
-  // DEMÓ auto-login fiók (a /demo route ehhez a e-mailhez állít ki JWT-t; lásd DEMO_USER_EMAIL).
-  { email: 'demo@demo.local', role: 'admin', doktor_neve: 'Demó Doktor', intezmeny: 'DEMÓ Klinika' },
 ];
 
 const KERESZTNEVEK = ['Anna', 'Béla', 'Cecília', 'Dénes', 'Eszter', 'Ferenc', 'Gizella', 'Henrik'];
