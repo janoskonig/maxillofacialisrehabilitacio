@@ -1,11 +1,23 @@
 'use client';
 
-import { ReactNode, useState, useEffect } from 'react';
+import { ReactNode, useState, useEffect, useLayoutEffect } from 'react';
 import { useRouter, usePathname } from 'next/navigation';
 import { Logo } from '@/components/Logo';
 import { LogOut, LayoutDashboard, Calendar, FileText, User, MessageCircle, ClipboardList, AlertTriangle } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
 import { PortalBottomNav } from './PortalBottomNav';
+import { SkipLink } from '@/components/layout/SkipLink';
+import {
+  applyPortalScaleToHtml,
+  clearPortalScaleFromHtml,
+  isPortalDisplayScale,
+  NEXT_PORTAL_SCALE,
+  PORTAL_SCALE_EVENT,
+  PORTAL_SCALE_LABELS,
+  PORTAL_SCALE_STORAGE_KEY,
+  setPortalScale,
+  type PortalDisplayScale,
+} from '@/lib/portal-display-scale';
 
 interface PortalLayoutProps {
   children: ReactNode;
@@ -17,11 +29,58 @@ export function PortalLayout({ children }: PortalLayoutProps) {
   const { showToast } = useToast();
   const [patientName, setPatientName] = useState<string | null>(null);
   const [ohipPending, setOhipPending] = useState(false);
+  const [displayScale, setDisplayScale] = useState<PortalDisplayScale>('normal');
   const [consent, setConsent] = useState<{
     needsAction: boolean;
     needsNoticeAck: boolean;
     needsResearch: boolean;
   } | null>(null);
+
+  // Kényelmi mód: localStorage cache azonnal (villanásmentes), majd szerver-szinkron.
+  useLayoutEffect(() => {
+    try {
+      const cached = window.localStorage.getItem(PORTAL_SCALE_STORAGE_KEY);
+      if (isPortalDisplayScale(cached)) {
+        setDisplayScale(cached);
+        applyPortalScaleToHtml(cached);
+      }
+    } catch {
+      // localStorage tiltva (pl. privát mód) — marad a normál fokozat.
+    }
+    return () => clearPortalScaleFromHtml();
+  }, []);
+
+  useEffect(() => {
+    const ac = new AbortController();
+    fetch('/api/patient-portal/display-scale', { credentials: 'include', signal: ac.signal })
+      .then(res => (res.ok ? res.json() : null))
+      .then(data => {
+        if (data && isPortalDisplayScale(data.scale)) {
+          setDisplayScale(data.scale);
+          applyPortalScaleToHtml(data.scale);
+          try {
+            window.localStorage.setItem(PORTAL_SCALE_STORAGE_KEY, data.scale);
+          } catch {}
+        }
+      })
+      .catch(() => {});
+    return () => ac.abort();
+  }, []);
+
+  // Ha máshol (pl. Profil-kártya) váltanak fokozatot, a fejléc gomb is kövesse.
+  useEffect(() => {
+    const onScaleChange = (e: Event) => {
+      const detail = (e as CustomEvent<PortalDisplayScale>).detail;
+      if (isPortalDisplayScale(detail)) setDisplayScale(detail);
+    };
+    window.addEventListener(PORTAL_SCALE_EVENT, onScaleChange);
+    return () => window.removeEventListener(PORTAL_SCALE_EVENT, onScaleChange);
+  }, []);
+
+  const changeDisplayScale = (next: PortalDisplayScale) => {
+    setDisplayScale(next);
+    setPortalScale(next);
+  };
 
   useEffect(() => {
     const ac = new AbortController();
@@ -116,6 +175,7 @@ export function PortalLayout({ children }: PortalLayoutProps) {
 
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
+      <SkipLink />
       {/* Header */}
       <header className="bg-white dark:bg-gray-900 shadow-sm border-b sticky top-0 z-30 max-sm:mobile-safe-top">
         <div className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8">
@@ -133,13 +193,28 @@ export function PortalLayout({ children }: PortalLayoutProps) {
                 )}
               </div>
             </div>
-            <button
-              onClick={handleLogout}
-              className="hidden sm:flex btn-secondary items-center gap-2 text-sm px-3 py-2 flex-shrink-0"
-            >
-              <LogOut className="w-4 h-4" />
-              Kijelentkezés
-            </button>
+            <div className="flex items-center gap-2 flex-shrink-0">
+              <button
+                onClick={() => changeDisplayScale(NEXT_PORTAL_SCALE[displayScale])}
+                className="btn-secondary flex items-center gap-1.5 text-sm px-3 py-2"
+                aria-label={`Betűméret: ${PORTAL_SCALE_LABELS[displayScale]}. Kattintson a következő fokozathoz.`}
+                title={`Betűméret: ${PORTAL_SCALE_LABELS[displayScale]}`}
+              >
+                <span aria-hidden="true" className="font-semibold">
+                  Aa
+                </span>
+                <span className="hidden md:inline text-xs text-gray-500 dark:text-gray-400">
+                  {PORTAL_SCALE_LABELS[displayScale]}
+                </span>
+              </button>
+              <button
+                onClick={handleLogout}
+                className="hidden sm:flex btn-secondary items-center gap-2 text-sm px-3 py-2"
+              >
+                <LogOut className="w-4 h-4" />
+                Kijelentkezés
+              </button>
+            </div>
           </div>
         </div>
       </header>
@@ -262,7 +337,11 @@ export function PortalLayout({ children }: PortalLayoutProps) {
       )}
 
       {/* Main Content */}
-      <main className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 pb-mobile-nav-portal sm:pb-6">
+      <main
+        id="main-content"
+        tabIndex={-1}
+        className="max-w-7xl mx-auto px-3 sm:px-4 lg:px-8 py-4 sm:py-6 pb-mobile-nav-portal sm:pb-6 outline-none"
+      >
         {children}
       </main>
 

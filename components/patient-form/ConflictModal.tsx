@@ -2,6 +2,7 @@
 
 import { X, AlertTriangle } from 'lucide-react';
 import { ApiError } from '@/lib/storage';
+import { useModalA11y } from '@/hooks/useModalA11y';
 
 interface ConflictModalProps {
   showConflictModal: boolean;
@@ -20,20 +21,28 @@ export function ConflictModal({
   onOverwrite,
   userRole,
 }: ConflictModalProps) {
-  if (!showConflictModal || !conflictError) return null;
+  const isOpen = showConflictModal && !!conflictError;
+  const modalRef = useModalA11y({ active: isOpen, onClose: onDismiss });
+
+  if (!isOpen || !conflictError) return null;
 
   const details = conflictError.details && typeof conflictError.details === 'object' && 'serverUpdatedAt' in conflictError.details
     ? conflictError.details as { serverUpdatedAt?: string; clientUpdatedAt?: string }
     : null;
   
   return (
-    <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4">
-      <div className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full">
+    <div
+      className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50 p-4"
+      role="dialog"
+      aria-modal="true"
+      aria-labelledby="conflict-modal-title"
+    >
+      <div ref={modalRef} tabIndex={-1} className="bg-white dark:bg-gray-900 rounded-lg shadow-xl max-w-md w-full outline-none">
         <div className="p-6">
           <div className="flex items-start mb-4">
             <AlertTriangle className="w-6 h-6 text-amber-600 dark:text-amber-300 mr-3 mt-0.5 flex-shrink-0" />
             <div className="flex-1">
-              <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+              <h3 id="conflict-modal-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
                 Konfliktus észlelve
               </h3>
               <p className="text-sm text-gray-700 dark:text-gray-300 mb-4">

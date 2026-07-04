@@ -13,14 +13,15 @@ export const GET = apiHandler(async (_req, { correlationId }) => {
   if (cached) return NextResponse.json({ institutions: cached }, { headers: cacheHeaders });
 
   const pool = getDbPool();
+  // Admin által kezelt törzs (migration 067); csak az aktív intézmények
+  // jelennek meg az űrlap-autocomplete-ben.
   const result = await pool.query(
-    `SELECT DISTINCT intezmeny 
-     FROM users 
-     WHERE intezmeny IS NOT NULL AND intezmeny != ''
-     ORDER BY intezmeny ASC`
+    `SELECT name FROM referral_institutions
+     WHERE active = TRUE
+     ORDER BY name ASC`
   );
 
-  const institutions = result.rows.map(row => row.intezmeny);
+  const institutions = result.rows.map(row => row.name);
   setCache(CACHE_KEY, institutions, INSTITUTION_TTL);
 
   return NextResponse.json({ institutions }, { headers: cacheHeaders });

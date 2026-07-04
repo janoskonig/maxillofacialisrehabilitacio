@@ -6,6 +6,7 @@ import { Patient } from '@/lib/types';
 import { EQUITY_REQUEST_CONFIG } from '@/lib/equity-request-config';
 import { FileText, Download } from 'lucide-react';
 import { ReadField, ReadGrid, SectionShell, isEmptyValue } from './read/ReadView';
+import { FieldErrorText, fieldAriaProps } from './field-a11y';
 
 interface MeltanyossagiSectionProps {
   register: UseFormRegister<Patient>;
@@ -73,10 +74,15 @@ export function MeltanyossagiSection({
         <div className="space-y-4">
           <div>
             <label className="form-label">Kórtörténeti összefoglaló (3 hónapnál nem régebbi)</label>
-            <textarea {...register('kortortenetiOsszefoglalo')} className="form-input min-h-[100px]" placeholder="Kórtörténeti összefoglaló..." readOnly={isViewOnly} rows={4} />
-            {errors.kortortenetiOsszefoglalo && (
-              <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.kortortenetiOsszefoglalo.message}</p>
-            )}
+            <textarea
+              {...register('kortortenetiOsszefoglalo')}
+              className="form-input min-h-[100px]"
+              placeholder="Kórtörténeti összefoglaló..."
+              readOnly={isViewOnly}
+              rows={4}
+              {...fieldAriaProps('kortortenetiOsszefoglalo', !!errors.kortortenetiOsszefoglalo)}
+            />
+            <FieldErrorText name="kortortenetiOsszefoglalo" message={errors.kortortenetiOsszefoglalo?.message} />
           </div>
           <div>
             <label className="form-label">Szakorvosi vélemény az eszközrendelés szükségességéről (orvosszakmai indok)</label>

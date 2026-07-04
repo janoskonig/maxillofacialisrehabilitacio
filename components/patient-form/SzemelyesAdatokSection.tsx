@@ -8,6 +8,7 @@ import { MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { DatePicker } from '../DatePicker';
+import { FieldErrorText, fieldAriaProps, fieldErrorId } from './field-a11y';
 import { ReadField, ReadGrid, SectionShell, isEmptyValue } from './read/ReadView';
 
 interface SzemelyesAdatokSectionProps {
@@ -91,19 +92,23 @@ export function SzemelyesAdatokSection({
               placeholder="Válasszon dátumot"
               disabled={isViewOnly}
               maxDate={new Date()}
+              ariaInvalid={!!errors.szuletesiDatum}
+              ariaDescribedBy={errors.szuletesiDatum ? fieldErrorId('szuletesiDatum') : undefined}
             />
-            {errors.szuletesiDatum && (
-              <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.szuletesiDatum.message as string}</p>
-            )}
+            <FieldErrorText name="szuletesiDatum" message={errors.szuletesiDatum?.message as string | undefined} />
           </div>
           <div>
             <label className={`form-label ${compactPersonalFields ? 'form-label-required' : ''}`}>Nem</label>
-            <select {...register('nem')} className={`form-input ${errors.nem ? 'border-red-500' : ''}`}>
+            <select
+              {...register('nem')}
+              className={`form-input ${errors.nem ? 'border-red-500' : ''}`}
+              {...fieldAriaProps('nem', !!errors.nem)}
+            >
               <option value="">Válasszon...</option>
               <option value="ferfi">Férfi</option>
               <option value="no">Nő</option>
             </select>
-            {errors.nem && <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.nem.message as string}</p>}
+            <FieldErrorText name="nem" message={errors.nem?.message as string | undefined} />
           </div>
           {!compactPersonalFields && (
             <>
@@ -118,10 +123,10 @@ export function SzemelyesAdatokSection({
                   placeholder="Válasszon dátumot"
                   disabled={isViewOnly}
                   maxDate={new Date()}
+                  ariaInvalid={!!errors.halalDatum}
+                  ariaDescribedBy={errors.halalDatum ? fieldErrorId('halalDatum') : undefined}
                 />
-                {errors.halalDatum && (
-                  <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.halalDatum.message}</p>
-                )}
+                <FieldErrorText name="halalDatum" message={errors.halalDatum?.message} />
               </div>
               <div>
                 <label className="form-label">Cím</label>

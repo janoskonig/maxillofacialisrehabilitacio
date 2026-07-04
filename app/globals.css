@@ -21,6 +21,19 @@
   html.dark {
     color-scheme: dark;
   }
+
+}
+
+/* Betegportál kényelmi mód: a gyökér font-size emelésével minden rem-alapú
+   méret (szöveg, gomb-padding, érintési célok) arányosan nő. Az osztályt a
+   PortalLayout teszi fel/le (lib/portal-display-scale.ts). Szándékosan a
+   @layer-eken KÍVÜL: a Tailwind a layerbe írt egyedi szabályt tree-shake-eli,
+   ha az osztálynév csak nem-szkennelt fájlban (lib/) fordul elő. */
+html.portal-scale-nagy {
+  font-size: 112.5%;
+}
+html.portal-scale-extra {
+  font-size: 125%;
 }
 
 @layer components {
@@ -35,8 +48,8 @@
 
   /* Form Inputs */
   .form-input {
-    @apply block w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-400 shadow-soft;
-    @apply dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-500;
+    @apply block w-full rounded-lg border border-gray-300 bg-white px-4 py-2.5 text-sm text-gray-900 placeholder-gray-500 shadow-soft;
+    @apply dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100 dark:placeholder-gray-400;
     @apply transition-all duration-200 ease-smooth;
     @apply focus:border-medical-primary focus:ring-2 focus:ring-medical-primary/20 focus:outline-none;
     @apply hover:border-gray-400 dark:hover:border-gray-600;

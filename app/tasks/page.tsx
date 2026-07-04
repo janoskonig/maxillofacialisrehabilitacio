@@ -24,11 +24,47 @@ type TaskItem = {
   dueAt?: string | null;
 };
 
+/** Feladattípusok magyar címkéi a szűrő-chipekhez (user_tasks.task_type). */
+const TASK_TYPE_LABELS: Record<string, string> = {
+  document_upload: 'Dokumentum',
+  ohip14: 'OHIP-14',
+  manual: 'Kézi teendő',
+  meeting_action: 'Konzílium',
+  staff_registration_review: 'Regisztráció',
+  missing_data: 'Hiányzó adat',
+};
+
+const TYPE_FILTER_STORAGE_KEY = 'tasks-type-filter';
+
 export default function StaffTasksPage() {
   const router = useRouter();
   const [loading, setLoading] = useState(true);
   const [tasks, setTasks] = useState<TaskItem[]>([]);
   const [canManage, setCanManage] = useState(false);
+  const [typeFilter, setTypeFilter] = useState<string | null>(null);
+
+  // Szűrő inicializálása: URL query (megosztható link) → localStorage (utolsó választás).
+  useEffect(() => {
+    try {
+      const fromUrl = new URLSearchParams(window.location.search).get('type');
+      if (fromUrl && TASK_TYPE_LABELS[fromUrl]) {
+        setTypeFilter(fromUrl);
+        return;
+      }
+      const stored = window.localStorage.getItem(TYPE_FILTER_STORAGE_KEY);
+      if (stored && TASK_TYPE_LABELS[stored]) setTypeFilter(stored);
+    } catch {}
+  }, []);
+
+  const changeTypeFilter = (next: string | null) => {
+    setTypeFilter(next);
+    try {
+      if (next) window.localStorage.setItem(TYPE_FILTER_STORAGE_KEY, next);
+      else window.localStorage.removeItem(TYPE_FILTER_STORAGE_KEY);
+    } catch {}
+    const url = next ? `/tasks?type=${encodeURIComponent(next)}` : '/tasks';
+    router.replace(url, { scroll: false });
+  };
 
   const loadTasks = useCallback(async () => {
     const res = await fetch('/api/user-tasks', { credentials: 'include' });
@@ -75,6 +111,44 @@ export default function StaffTasksPage() {
           <QuickTaskForm onCreated={() => void loadTasks()} />
         </section>
 
+        {/* Típus-szűrő chipek — csak a ténylegesen előforduló típusok */}
+        {!loading && tasks.length > 0 && (() => {
+          const typeCounts = new Map<string, number>();
+          tasks.forEach(t => typeCounts.set(t.taskType, (typeCounts.get(t.taskType) ?? 0) + 1));
+          if (typeCounts.size < 2 && !typeFilter) return null;
+          return (
+            <div className="flex flex-wrap gap-2" role="group" aria-label="Feladattípus szűrő">
+              <button
+                type="button"
+                onClick={() => changeTypeFilter(null)}
+                aria-pressed={typeFilter === null}
+                className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                  typeFilter === null
+                    ? 'bg-medical-primary text-white border-medical-primary'
+                    : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:border-medical-primary/60'
+                }`}
+              >
+                Mind ({tasks.length})
+              </button>
+              {Array.from(typeCounts.entries()).map(([type, count]) => (
+                <button
+                  key={type}
+                  type="button"
+                  onClick={() => changeTypeFilter(type)}
+                  aria-pressed={typeFilter === type}
+                  className={`px-3 py-1.5 rounded-full text-sm font-medium border transition-colors ${
+                    typeFilter === type
+                      ? 'bg-medical-primary text-white border-medical-primary'
+                      : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 border-gray-300 dark:border-gray-700 hover:border-medical-primary/60'
+                  }`}
+                >
+                  {TASK_TYPE_LABELS[type] ?? type} ({count})
+                </button>
+              ))}
+            </div>
+          );
+        })()}
+
         {loading ? (
           <div className="flex items-center justify-center py-12 text-gray-500 dark:text-gray-400 gap-2">
             <Loader2 className="w-6 h-6 animate-spin" />
@@ -82,9 +156,11 @@ export default function StaffTasksPage() {
           </div>
         ) : tasks.length === 0 ? (
           <EmptyState icon={ClipboardList} title="Nincs nyitott feladat." />
+        ) : tasks.filter(t => !typeFilter || t.taskType === typeFilter).length === 0 ? (
+          <EmptyState icon={ClipboardList} title="Nincs ilyen típusú nyitott feladat." />
         ) : (
           <ul className="space-y-3">
-            {tasks.map((t) => (
+            {tasks.filter(t => !typeFilter || t.taskType === typeFilter).map((t) => (
               <li key={t.id} className="card p-4 hover:shadow-md transition-shadow">
                 <div className="flex items-start gap-3">
                   <ClipboardList className="w-5 h-5 text-medical-primary flex-shrink-0 mt-0.5" />

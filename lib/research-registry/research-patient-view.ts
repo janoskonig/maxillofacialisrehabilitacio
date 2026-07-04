@@ -13,6 +13,11 @@ export interface DeidentifiedPatientRow {
   kezelesreErkezesIndoka: string | null;
   domainRevision: number;
   legacyComplianceStatus: string | null;
+  /**
+   * Hiányzási okkódok mezőnként (patient_field_na.reason_code) — a hiányzó
+   * adat mechanizmusának (MAR/MNAR) elemzéséhez. Nem PHI: kód-értékek.
+   */
+  fieldNaReasons: Record<string, string>;
 }
 
 export function computeAgeBand(birthDate: Date | string | null): number | null {
@@ -51,5 +56,6 @@ export function deidentifyPatientRow(
     kezelesreErkezesIndoka: (row.kezelesre_erkezes_indoka as string) ?? null,
     domainRevision: Number(row.domain_revision ?? 1),
     legacyComplianceStatus: (row.legacy_compliance_status as string) ?? null,
+    fieldNaReasons: (row.field_na_reasons as Record<string, string>) ?? {},
   };
 }

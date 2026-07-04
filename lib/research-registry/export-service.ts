@@ -13,7 +13,8 @@ import {
 import { assertExportPhiSafe } from './phi-safety';
 import { assertExportSchemaCompatible } from './schema-evolution';
 
-export const CURRENT_EXPORT_SCHEMA_VERSION = '1.0';
+// 1.1: fieldNaReasons oszlop (hiányzási okkódok mezőnként; migration 068).
+export const CURRENT_EXPORT_SCHEMA_VERSION = '1.1';
 
 export interface CreateExportInput {
   exportLabel: string;

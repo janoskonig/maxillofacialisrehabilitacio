@@ -3,6 +3,7 @@
 import { useState, useEffect, useCallback, useRef } from 'react';
 import { X, Calendar, Clock, Users, Plus, CalendarClock, AlertTriangle } from 'lucide-react';
 import { toBudapestStartOfDayISO } from '@/lib/datetime';
+import { useModalA11y } from '@/hooks/useModalA11y';
 
 interface Doctor {
   id: string;
@@ -257,6 +258,8 @@ export function SlotPickerModal({
   }, {});
   const dayKeys = Object.keys(groupedByDay).sort();
 
+  const modalRef = useModalA11y({ active: open, onClose });
+
   if (!open) return null;
 
   const rescheduleFromLabel = rescheduleFromIso
@@ -283,7 +286,11 @@ export function SlotPickerModal({
 
   return (
     <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50" role="dialog" aria-modal="true" aria-labelledby="slot-picker-title">
-      <div className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col">
+      <div
+        ref={modalRef}
+        tabIndex={-1}
+        className="bg-white dark:bg-gray-800 rounded-lg shadow-xl max-w-2xl w-full mx-4 max-h-[90vh] overflow-hidden flex flex-col outline-none"
+      >
         <div className="flex items-center justify-between p-4 border-b">
           <h2 id="slot-picker-title" className="text-lg font-semibold text-gray-900 dark:text-gray-100 flex items-center gap-2">
             {retryContext && <AlertTriangle className="w-5 h-5 text-orange-600 dark:text-orange-300" aria-hidden="true" />}

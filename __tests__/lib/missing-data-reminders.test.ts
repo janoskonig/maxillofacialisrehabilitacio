@@ -142,6 +142,7 @@ describe('doctorActionableMissing', () => {
     applicableCount: 9,
     completenessScore: 100,
     researchReady: clinical.length === 0 && research.length === 0,
+    publicationReady: clinical.length === 0 && research.length === 0,
   });
 
   it('excludes patient-fillable items (e.g. OHIP-14 T0)', () => {

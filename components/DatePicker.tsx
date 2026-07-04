@@ -18,6 +18,8 @@ interface DatePickerProps {
   maxDate?: Date;
   isClearable?: boolean;
   dateFormat?: string;
+  ariaInvalid?: boolean;
+  ariaDescribedBy?: string;
 }
 
 export function DatePicker({
@@ -30,6 +32,8 @@ export function DatePicker({
   maxDate,
   isClearable = true,
   dateFormat = 'yyyy-MM-dd',
+  ariaInvalid,
+  ariaDescribedBy,
 }: DatePickerProps) {
   // Convert string date to Date object if needed
   const selectedDate = selected instanceof Date ? selected : (selected ? new Date(selected) : null);
@@ -46,6 +50,8 @@ export function DatePicker({
       maxDate={maxDate}
       locale={hu}
       isClearable={isClearable}
+      ariaInvalid={ariaInvalid ? 'true' : undefined}
+      ariaDescribedBy={ariaDescribedBy}
     />
   );
 }

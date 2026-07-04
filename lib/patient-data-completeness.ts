@@ -2,6 +2,7 @@ import { getDbPool } from '@/lib/db';
 import {
   REQUIRED_FIELDS,
   REQUIRED_DOC_RULES,
+  RESEARCH_FIELD_WEIGHT,
   getMissingRequiredFields,
   type RequiredField,
 } from '@/lib/clinical-rules';
@@ -11,21 +12,35 @@ import { getPlausibilityWarnings, type PlausibilityWarning } from '@/lib/data-pl
 /** Mindig értelmezhető klinikai tételek száma: kötelező mezők + kötelező dokumentumok. */
 const CLINICAL_APPLICABLE = REQUIRED_FIELDS.length + REQUIRED_DOC_RULES.length;
 
+/** A klinikai minimum összsúlya (mezők + dokumentumok). */
+const CLINICAL_APPLICABLE_WEIGHT =
+  REQUIRED_FIELDS.reduce((sum, f) => sum + f.weight, 0) +
+  REQUIRED_DOC_RULES.reduce((sum, r) => sum + r.weight, 0);
+
+/** Tétel-kulcs → súly (klinikai mezők, kötelező dokumentumok). */
+const WEIGHT_BY_KEY = new Map<string, number>([
+  ...REQUIRED_FIELDS.map((f): [string, number] => [String(f.key), f.weight]),
+  ...REQUIRED_DOC_RULES.map((r): [string, number] => [`doc:${r.tag}`, r.weight]),
+]);
+
+/** Egy hiányzó tétel súlya (kutatási mezőké egységes). */
+export function completenessItemWeight(key: string): number {
+  return WEIGHT_BY_KEY.get(key) ?? RESEARCH_FIELD_WEIGHT;
+}
+
 /**
- * Adat-teljességi pontszám (0–100) az értelmezhető (applicable) tételek arányából.
- * A nevező az adott betegre értelmezhető klinikai + kutatási mezők száma, a számláló
- * a meglévők száma. Ha semmi nem értelmezhető (elvi eset), 100-at adunk vissza.
+ * Súlyozott adat-teljességi pontszám (0–100). A nevező az adott betegre
+ * értelmezhető tételek összsúlya, a számláló a meglévők összsúlya — az
+ * identitás/diagnózis hiánya (3×) többet nyom, mint egy kontakt-mezőé (1×).
+ * Ha semmi nem értelmezhető (elvi eset), 100-at adunk vissza.
  */
 export function computeCompletenessScore(input: {
-  clinicalApplicable: number;
-  clinicalMissing: number;
-  researchApplicable: number;
-  researchMissing: number;
+  applicableWeight: number;
+  missingWeight: number;
 }): number {
-  const applicable = input.clinicalApplicable + input.researchApplicable;
-  if (applicable <= 0) return 100;
-  const present = applicable - (input.clinicalMissing + input.researchMissing);
-  const pct = (present / applicable) * 100;
+  if (input.applicableWeight <= 0) return 100;
+  const presentWeight = input.applicableWeight - input.missingWeight;
+  const pct = (presentWeight / input.applicableWeight) * 100;
   return Math.max(0, Math.min(100, Math.round(pct)));
 }
 
@@ -45,6 +60,8 @@ export type MissingItem = {
   key: string;
   label: string;
   group: MissingItemGroup;
+  /** N/A-jelölt tételnél a hiányzás okkódja (lib/field-na-reasons). */
+  reasonCode?: string;
 };
 
 export type PatientCompletenessRow = {
@@ -66,6 +83,8 @@ export type PatientCompletenessRow = {
   completenessScore: number;
   /** Elemzésre kész: nincs sem klinikai, sem kutatási hiány. */
   researchReady: boolean;
+  /** Publikációs készültség: elemzésre kész ÉS nincs plauzibilitási figyelmeztetés. */
+  publicationReady: boolean;
 };
 
 export type FieldGapSummary = {
@@ -84,6 +103,8 @@ export type PatientCompletenessReport = {
     researchComplete: number;
     /** Elemzésre kész betegek száma (sem klinikai, sem kutatási hiány). */
     researchReady: number;
+    /** Publikációs készültség: elemzésre kész ÉS figyelmeztetés-mentes betegek. */
+    publicationReady: number;
     /** Plauzibilitási figyelmeztetéssel rendelkező betegek száma. */
     withWarnings: number;
     /** Az összes beteg átlagos adat-teljességi pontszáma (0–100). */
@@ -117,6 +138,15 @@ const RESEARCH_RULES: ResearchRule[] = [
     missing: (r) => r.has_ohip_t0 !== true,
   },
   {
+    // Kódolt diagnózis: a szabad szöveges `diagnozis` (klinikai minimum)
+    // mellett a BNO-kód a kutatási elemezhetőség feltétele — mindig
+    // alkalmazható, de nem blokkol klinikai kaput.
+    key: 'bno',
+    label: 'BNO kód',
+    applicable: () => true,
+    missing: (r) => isBlank(r.bno),
+  },
+  {
     key: 'tnmStaging',
     label: 'TNM-staging',
     applicable: (r) => r.kezelesre_erkezes_indoka === ONKO,
@@ -145,6 +175,32 @@ const RESEARCH_RULES: ResearchRule[] = [
     label: 'Radioterápia dózis',
     applicable: (r) => r.radioterapia === true,
     missing: (r) => isBlank(r.radioterapia_dozis),
+  },
+  // --- Beteg által önkitölthető mezők (portál-nudge; az orvost nem terheljük) ---
+  // Életmód-adatok: a QoL-elemzések standard zavaró változói (confounderei).
+  {
+    key: 'dohanyzas',
+    label: 'Dohányzási szokások',
+    applicable: () => true,
+    missing: (r) => isBlank(r.dohanyzas_szam),
+  },
+  {
+    key: 'alkohol',
+    label: 'Alkoholfogyasztás',
+    applicable: () => true,
+    missing: (r) => isBlank(r.alkoholfogyasztas),
+  },
+  {
+    key: 'felsoFogpotlasElegedett',
+    label: 'Felső fogpótlás — elégedettség',
+    applicable: (r) => r.felso_fogpotlas_van === true,
+    missing: (r) => r.felso_fogpotlas_elegedett === null || r.felso_fogpotlas_elegedett === undefined,
+  },
+  {
+    key: 'alsoFogpotlasElegedett',
+    label: 'Alsó fogpótlás — elégedettség',
+    applicable: (r) => r.also_fogpotlas_van === true,
+    missing: (r) => r.also_fogpotlas_elegedett === null || r.also_fogpotlas_elegedett === undefined,
   },
 ];
 
@@ -187,6 +243,13 @@ export async function getPatientDataCompleteness(
         a.kezelesre_erkezes_indoka,
         a.diagnozis,
         a.tnm_staging,
+        a.bno,
+        a.alkoholfogyasztas,
+        a.dohanyzas_szam,
+        d.felso_fogpotlas_van,
+        d.felso_fogpotlas_elegedett,
+        d.also_fogpotlas_van,
+        d.also_fogpotlas_elegedett,
         a.brown_fuggoleges_osztaly,
         a.brown_vizszintes_komponens,
         a.kovacs_dobak_osztaly,
@@ -200,13 +263,15 @@ export async function getPatientDataCompleteness(
           SELECT 1 FROM ohip14_responses o
           WHERE o.patient_id = p.id AND o.timepoint = 'T0'
         ) AS has_ohip_t0,
-        COALESCE(na.keys, ARRAY[]::text[]) AS na_keys
+        COALESCE(na.keys, ARRAY[]::text[]) AS na_keys,
+        COALESCE(na.reason_map, '{}'::json) AS na_reason_map
      FROM patients p
      LEFT JOIN patient_anamnesis a ON a.patient_id = p.id
      LEFT JOIN patient_dental_status d ON d.patient_id = p.id
      LEFT JOIN users ku ON ku.id = p.kezeleoorvos_user_id
      LEFT JOIN LATERAL (
-        SELECT array_agg(field_key) AS keys
+        SELECT array_agg(field_key) AS keys,
+               json_object_agg(field_key, reason_code) AS reason_map
         FROM patient_field_na
         WHERE patient_id = p.id
      ) na ON true
@@ -235,6 +300,7 @@ export async function getPatientDataCompleteness(
   let clinicalComplete = 0;
   let researchComplete = 0;
   let researchReadyCount = 0;
+  let publicationReadyCount = 0;
   let withWarnings = 0;
   let scoreSum = 0;
   let missingOhipT0 = 0;
@@ -265,6 +331,7 @@ export async function getPatientDataCompleteness(
     // --- Kutatási mezők (feltételes) ---
     // Egy mező "rendezett", ha ki van töltve VAGY explicit N/A-ként megjelölt.
     const naKeys = new Set<string>((row.na_keys as string[] | null) ?? []);
+    const naReasonMap = (row.na_reason_map as Record<string, string> | null) ?? {};
     const researchMissing: MissingItem[] = [];
     const naMarked: MissingItem[] = [];
     let researchApplicable = 0;
@@ -272,8 +339,16 @@ export async function getPatientDataCompleteness(
       if (!rule.applicable(row)) continue;
       researchApplicable += 1;
       if (naKeys.has(rule.key)) {
-        naMarked.push({ key: rule.key, label: rule.label, group: 'research' });
-        continue; // N/A → rendezett, nem hiány
+        const reasonCode = naReasonMap[rule.key];
+        naMarked.push({ key: rule.key, label: rule.label, group: 'research', reasonCode });
+        // 'meg_nem_kerdeztek': dokumentált ok, de a mező elintézendő hiány
+        // marad (score-ban, kapukban, emlékeztetőkben látszik). A többi kód
+        // rendezetté teszi a mezőt.
+        if (reasonCode !== 'meg_nem_kerdeztek') continue;
+        if (rule.missing(row)) {
+          researchMissing.push({ key: rule.key, label: rule.label, group: 'research', reasonCode });
+        }
+        continue;
       }
       if (rule.missing(row)) {
         researchMissing.push({ key: rule.key, label: rule.label, group: 'research' });
@@ -287,22 +362,29 @@ export async function getPatientDataCompleteness(
     const isResearchComplete = researchMissing.length === 0;
     const isResearchReady = isClinicalComplete && isResearchComplete;
     const applicableCount = CLINICAL_APPLICABLE + researchApplicable;
+    const missingWeight = [...clinicalMissing, ...researchMissing].reduce(
+      (sum, item) => sum + completenessItemWeight(item.key),
+      0,
+    );
     const completenessScore = computeCompletenessScore({
-      clinicalApplicable: CLINICAL_APPLICABLE,
-      clinicalMissing: clinicalMissing.length,
-      researchApplicable,
-      researchMissing: researchMissing.length,
+      applicableWeight: CLINICAL_APPLICABLE_WEIGHT + researchApplicable * RESEARCH_FIELD_WEIGHT,
+      missingWeight,
     });
 
     const warnings = getPlausibilityWarnings({
       taj: row.taj as string | null,
       szuletesiDatum: row.szuletesi_datum ? String(row.szuletesi_datum) : null,
       halalDatum: row.halal_datum ? String(row.halal_datum) : null,
+      meglevoFogak: row.meglevo_fogak as Record<string, unknown> | null,
     });
+
+    // Publikációs készültség: elemzésre kész ÉS nincs plauzibilitási gyanú.
+    const isPublicationReady = isResearchReady && warnings.length === 0;
 
     if (isClinicalComplete) clinicalComplete += 1;
     if (isResearchComplete) researchComplete += 1;
     if (isResearchReady) researchReadyCount += 1;
+    if (isPublicationReady) publicationReadyCount += 1;
     if (warnings.length > 0) withWarnings += 1;
     scoreSum += completenessScore;
     if (row.has_ohip_t0 !== true) missingOhipT0 += 1;
@@ -321,6 +403,7 @@ export async function getPatientDataCompleteness(
       applicableCount,
       completenessScore,
       researchReady: isResearchReady,
+      publicationReady: isPublicationReady,
     };
   });
 
@@ -336,6 +419,7 @@ export async function getPatientDataCompleteness(
       clinicalIncomplete: patients.length - clinicalComplete,
       researchComplete,
       researchReady: researchReadyCount,
+      publicationReady: publicationReadyCount,
       withWarnings,
       avgCompletenessScore: patients.length > 0 ? Math.round(scoreSum / patients.length) : 100,
       missingOhipT0,

@@ -103,7 +103,15 @@ export function formatMissingSummary(items: MissingItem[]): string {
  * emlékeztetőkkel, pl. OHIP-14). A kulcsok a getPatientDataCompleteness()
  * MissingItem.key értékeivel egyeznek.
  */
-export const PATIENT_FILLABLE_KEYS: ReadonlySet<string> = new Set(['ohipT0']);
+export const PATIENT_FILLABLE_KEYS: ReadonlySet<string> = new Set([
+  'ohipT0',
+  // Életmód-anamnézis + fogpótlás-elégedettség: a beteg a hiteles forrás,
+  // a portálon tölti ki (lib/patient-selffill-reminders nudge-olja).
+  'dohanyzas',
+  'alkohol',
+  'felsoFogpotlasElegedett',
+  'alsoFogpotlasElegedett',
+]);
 
 /**
  * Az orvosi intézkedést igénylő hiányok: a teljes hiánylistából kiszűrve a

@@ -10,6 +10,7 @@ import { StageCatalogEditor } from '@/components/admin/StageCatalogEditor';
 import { StepCatalogEditor } from '@/components/admin/StepCatalogEditor';
 import { TreatmentTypesEditor } from '@/components/admin/TreatmentTypesEditor';
 import { ToothTreatmentCatalogEditor } from '@/components/admin/ToothTreatmentCatalogEditor';
+import { InstitutionsEditor } from '@/components/admin/InstitutionsEditor';
 import { AppShell } from '@/components/layout/AppShell';
 import { UserManagementTab } from './_components/UserManagementTab';
 import { PatientMerge } from '@/components/admin/PatientMerge';
@@ -170,6 +171,10 @@ export default function AdminPage() {
             <section className="card" aria-labelledby="section-tooth-treatment-catalog">
               <div className="mb-4"><h2 id="section-tooth-treatment-catalog" className="text-lg font-semibold text-gray-900 dark:text-gray-100">5. Fog-szintű kezelési típusok</h2></div>
               <ToothTreatmentCatalogEditor />
+            </section>
+
+            <section aria-labelledby="section-institutions">
+              <InstitutionsEditor />
             </section>
           </div>
         ) : (

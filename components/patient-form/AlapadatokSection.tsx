@@ -6,6 +6,7 @@ import { Patient } from '@/lib/types';
 import { REQUIRED_FIELDS } from '@/lib/clinical-rules';
 import { User, AlertTriangle } from 'lucide-react';
 import { ReadField, ReadGrid, SectionShell, isEmptyValue } from './read/ReadView';
+import { FieldErrorText, fieldAriaProps } from './field-a11y';
 
 interface AlapadatokSectionProps {
   register: UseFormRegister<Patient>;
@@ -71,8 +72,9 @@ export function AlapadatokSection({
               className="form-input"
               placeholder="Teljes név"
               readOnly={isViewOnly}
+              {...fieldAriaProps('nev', !!errors.nev)}
             />
-            {errors.nev && <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.nev.message}</p>}
+            <FieldErrorText name="nev" message={errors.nev?.message} />
           </div>
           {!isTechnikus && (
             <>
@@ -84,16 +86,17 @@ export function AlapadatokSection({
                   className={`form-input ${errors.taj ? 'border-red-500' : tajChecksumWarning ? 'border-amber-400' : ''}`}
                   placeholder="000-000-000"
                   readOnly={isViewOnly}
+                  {...fieldAriaProps('taj', !!errors.taj, 'taj-help')}
                 />
                 {errors.taj ? (
-                  <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.taj.message}</p>
+                  <FieldErrorText name="taj" message={errors.taj.message} />
                 ) : tajChecksumWarning ? (
-                  <p className="text-amber-600 dark:text-amber-300 text-xs mt-1 flex items-center gap-1">
-                    <AlertTriangle className="w-3 h-3 flex-shrink-0" />
+                  <p id="taj-help" className="text-amber-600 dark:text-amber-300 text-xs mt-1 flex items-center gap-1">
+                    <AlertTriangle className="w-3 h-3 flex-shrink-0" aria-hidden="true" />
                     Az ellenőrző számjegy nem megfelelő. Kérjük, ellenőrizze a TAJ számot.
                   </p>
                 ) : (
-                  <p className="text-gray-500 dark:text-gray-400 text-xs mt-1">Formátum: XXX-XXX-XXX (9 számjegy)</p>
+                  <p id="taj-help" className="text-gray-500 dark:text-gray-400 text-xs mt-1">Formátum: XXX-XXX-XXX (9 számjegy)</p>
                 )}
               </div>
               <div>
@@ -107,10 +110,9 @@ export function AlapadatokSection({
                   className={`form-input ${errors.telefonszam ? 'border-red-500' : ''}`}
                   placeholder="+36..."
                   readOnly={isViewOnly}
+                  {...fieldAriaProps('telefonszam', !!errors.telefonszam)}
                 />
-                {errors.telefonszam && (
-                  <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.telefonszam.message}</p>
-                )}
+                <FieldErrorText name="telefonszam" message={errors.telefonszam?.message} />
               </div>
               <div>
                 <label className={`form-label ${req('email') ? 'form-label-required' : ''}`}>
@@ -123,8 +125,9 @@ export function AlapadatokSection({
                   className={`form-input ${errors.email ? 'border-red-500' : ''}`}
                   placeholder="nev@example.com"
                   readOnly={isViewOnly}
+                  {...fieldAriaProps('email', !!errors.email)}
                 />
-                {errors.email && <p className="text-red-500 dark:text-red-400 text-sm mt-1">{errors.email.message}</p>}
+                <FieldErrorText name="email" message={errors.email?.message} />
               </div>
             </>
           )}

@@ -10,7 +10,21 @@ import { Patient } from './types';
 import { PatientDocument } from './types';
 
 // Protocol version (for tracking changes)
-export const PROTOCOL_VERSION = '2026-01-17';
+// 2026-07-03: tétel-súlyok bevezetése (a completeness score súlyozott).
+export const PROTOCOL_VERSION = '2026-07-03';
+
+/**
+ * Tétel-súlyok a completeness score-hoz. Nem minden hiány egyenértékű:
+ * az identitás/diagnózis (3×) nélkül a rekord kutatásra alkalmatlan; a
+ * klinikai osztályozás/dokumentum (2×) az elemzés gerince; a kontakt és a
+ * kutatási kiegészítők (1×) pótolhatók.
+ */
+export const WEIGHT_IDENTITY = 3;
+export const WEIGHT_CLINICAL = 2;
+export const WEIGHT_SUPPLEMENTARY = 1;
+
+/** A feltételes kutatási mezők egységes súlya a score-ban. */
+export const RESEARCH_FIELD_WEIGHT = WEIGHT_SUPPLEMENTARY;
 
 // Required field definitions for clinical protocol
 // Each field has: key (Patient object key), label (display name), severity (error/warning)
@@ -18,19 +32,21 @@ export interface RequiredField {
   key: keyof Patient;
   label: string;
   severity?: 'error' | 'warning';
+  /** Súly a completeness score-ban (WEIGHT_* konstansok). */
+  weight: number;
 }
 
 // NEAK/Klinikai minimum protokoll - kötelező mezők
 // These are hard-required (severity: "error") - everything else is optional
 export const REQUIRED_FIELDS: RequiredField[] = [
-  { key: 'nev', label: 'Név', severity: 'error' },
-  { key: 'nem', label: 'Nem', severity: 'error' },
-  { key: 'szuletesiDatum', label: 'Születési idő', severity: 'error' },
-  { key: 'taj', label: 'TAJ', severity: 'error' },
-  { key: 'email', label: 'Email', severity: 'error' },
-  { key: 'kezelesreErkezesIndoka', label: 'Kezelésre érkezés indoka', severity: 'error' },
-  { key: 'diagnozis', label: 'Diagnózis', severity: 'error' },
-  { key: 'meglevoFogak', label: 'Fogazati státusz', severity: 'error' },
+  { key: 'nev', label: 'Név', severity: 'error', weight: WEIGHT_IDENTITY },
+  { key: 'nem', label: 'Nem', severity: 'error', weight: WEIGHT_CLINICAL },
+  { key: 'szuletesiDatum', label: 'Születési idő', severity: 'error', weight: WEIGHT_IDENTITY },
+  { key: 'taj', label: 'TAJ', severity: 'error', weight: WEIGHT_IDENTITY },
+  { key: 'email', label: 'Email', severity: 'error', weight: WEIGHT_SUPPLEMENTARY },
+  { key: 'kezelesreErkezesIndoka', label: 'Kezelésre érkezés indoka', severity: 'error', weight: WEIGHT_IDENTITY },
+  { key: 'diagnozis', label: 'Diagnózis', severity: 'error', weight: WEIGHT_IDENTITY },
+  { key: 'meglevoFogak', label: 'Fogazati státusz', severity: 'error', weight: WEIGHT_CLINICAL },
 ] as const;
 
 // Required document rules (tag-based with minimum count)
@@ -38,13 +54,15 @@ export interface RequiredDocRule {
   tag: string;
   label: string;
   minCount: number;
+  /** Súly a completeness score-ban. */
+  weight: number;
 }
 
 // NEAK/Klinikai minimum protokoll - kötelező dokumentumok
 // Only OP röntgenfelvétel is required (1 db minimum)
 // Note: If your OP tag is different (e.g., "rtg_op" or "panorama"), update this
 export const REQUIRED_DOC_RULES: RequiredDocRule[] = [
-  { tag: 'op', label: 'OP röntgenfelvétel', minCount: 1 },
+  { tag: 'op', label: 'OP röntgenfelvétel', minCount: 1, weight: WEIGHT_CLINICAL },
 ] as const;
 
 // Backward compatibility: Extract tag list from REQUIRED_DOC_RULES

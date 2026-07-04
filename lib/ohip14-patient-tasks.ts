@@ -44,7 +44,7 @@ export function closeOpenOhipPatientTasksSilent(patientId: string): void {
 }
 
 /** A beteg portál-fiókjának user-id-ja (e-mail egyezés alapján), ha van. */
-async function resolvePatientPortalUserId(pool: Pool, patientId: string): Promise<string | null> {
+export async function resolvePatientPortalUserId(pool: Pool, patientId: string): Promise<string | null> {
   const r = await pool.query(
     `SELECT u.id
        FROM patients p
@@ -62,7 +62,7 @@ async function resolvePatientPortalUserId(pool: Pool, patientId: string): Promis
  * Egy érvényes `created_by_user_id` a beteg-feladathoz (a kapcsolat NOT NULL):
  * a felelős kezelőorvos, vagy ha nincs, az első admin.
  */
-async function resolveTaskCreator(pool: Pool, patientId: string): Promise<string | null> {
+export async function resolveTaskCreator(pool: Pool, patientId: string): Promise<string | null> {
   const k = await pool.query(`SELECT kezeleoorvos_user_id FROM patients WHERE id = $1`, [patientId]);
   const kid = k.rows[0]?.kezeleoorvos_user_id as string | null | undefined;
   if (kid) return kid;

@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect } from 'react';
+import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
 import { OHIP14Response, OHIP14Timepoint, ohip14TimepointOptions, ohip14ResponseValueOptions } from '@/lib/types';
 import { ohip14Questions, calculateOHIP14Scores } from '@/lib/ohip14-questions';
@@ -14,6 +14,33 @@ interface OHIP14SectionProps {
   patientId: string;
   isViewOnly?: boolean;
   isPatientPortal?: boolean;
+}
+
+/** Kérdés-azonosító → válaszmező (a léptetett mód index-számításához). */
+const OHIP_QUESTION_FIELD: Record<string, keyof OHIP14Response> = {
+  q1: 'q1_functional_limitation',
+  q2: 'q2_functional_limitation',
+  q3: 'q3_physical_pain',
+  q4: 'q4_physical_pain',
+  q5: 'q5_psychological_discomfort',
+  q6: 'q6_psychological_discomfort',
+  q7: 'q7_physical_disability',
+  q8: 'q8_physical_disability',
+  q9: 'q9_psychological_disability',
+  q10: 'q10_psychological_disability',
+  q11: 'q11_social_disability',
+  q12: 'q12_social_disability',
+  q13: 'q13_handicap',
+  q14: 'q14_handicap',
+};
+
+/** Első megválaszolatlan kérdés indexe egy válaszobjektumban (-1 → mind kész). */
+function firstUnansweredIndex(response: OHIP14Response | null): number {
+  return ohip14Questions.findIndex(q => {
+    const field = OHIP_QUESTION_FIELD[q.id];
+    const v = response ? (response as any)[field] : null;
+    return v === null || v === undefined;
+  });
 }
 
 export function OHIP14Section({
@@ -43,6 +70,67 @@ export function OHIP14Section({
     recipient: string;
     errorMessage: string | null;
   }>>([]);
+
+  // ----- Portál léptetett kitöltés (egy kérdés / képernyő) + piszkozat -----
+  // A léptetett mód az alapértelmezés a portálon; a kompakt (egyoldalas)
+  // nézetre linkkel lehet váltani. A piszkozat localStorage-ben él (eszköz-
+  // lokális), így a kitöltöttség-lekérdezéseket (emlékeztető, tölcsér,
+  // research-ready) nem érinti.
+  const [stepMode, setStepMode] = useState(true);
+  const [stepIndex, setStepIndex] = useState(0);
+  const draftRestoredRef = useRef<Set<OHIP14Timepoint>>(new Set());
+  const stepAdvanceTimerRef = useRef<number | null>(null);
+
+  const draftKey = (tp: OHIP14Timepoint) => `ohip14-draft-${patientId}-${tp}`;
+
+  // Léptetett mód: timepoint-váltáskor / betöltéskor az első megválaszolatlan
+  // kérdésre ugrunk. SZÁNDÉKOSAN a piszkozat-visszatöltő effekt ELŐTT áll:
+  // azonos commitben előbb fut, így a restore pontosabb (piszkozat-alapú)
+  // indexe nyer.
+  useEffect(() => {
+    if (!isPatientPortal || loading || !activeTimepoint) return;
+    const idx = firstUnansweredIndex(responses[activeTimepoint]);
+    setStepIndex(idx === -1 ? ohip14Questions.length - 1 : idx);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [isPatientPortal, loading, activeTimepoint]);
+
+  // Piszkozat visszatöltése az aktív (még nem kitöltött) timepointhoz.
+  useEffect(() => {
+    if (!isPatientPortal || loading || !activeTimepoint) return;
+    if (completedTimepoints.includes(activeTimepoint)) return;
+    if (draftRestoredRef.current.has(activeTimepoint)) return;
+    draftRestoredRef.current.add(activeTimepoint);
+    try {
+      const raw = window.localStorage.getItem(draftKey(activeTimepoint));
+      if (!raw) return;
+      const draft = JSON.parse(raw) as OHIP14Response;
+      if (draft && typeof draft === 'object' && draft.timepoint === activeTimepoint) {
+        setResponses(prev => (prev[activeTimepoint] ? prev : { ...prev, [activeTimepoint]: draft }));
+        // A folytatás az első megválaszolatlan kérdésnél kezdődjön (a state-
+        // alapú index-effekt ilyenkor még az üres választ látná).
+        const idx = firstUnansweredIndex(draft);
+        setStepIndex(idx === -1 ? ohip14Questions.length - 1 : idx);
+      }
+    } catch {
+      // sérült piszkozat — figyelmen kívül hagyjuk
+    }
+  }, [isPatientPortal, loading, activeTimepoint, completedTimepoints]);
+
+  // Piszkozat mentése minden válasz-változásnál (csak beküldés előtt).
+  useEffect(() => {
+    if (!isPatientPortal || !activeTimepoint) return;
+    const resp = responses[activeTimepoint];
+    if (!resp || resp.completedAt || resp.id) return;
+    try {
+      window.localStorage.setItem(draftKey(activeTimepoint), JSON.stringify(resp));
+    } catch {}
+  }, [isPatientPortal, activeTimepoint, responses]);
+
+  useEffect(() => {
+    return () => {
+      if (stepAdvanceTimerRef.current) window.clearTimeout(stepAdvanceTimerRef.current);
+    };
+  }, []);
 
   useEffect(() => {
     fetchCurrentStage();
@@ -305,6 +393,9 @@ export function OHIP14Section({
       }
 
       showToast('OHIP-14 válaszok sikeresen mentve', 'success');
+      try {
+        window.localStorage.removeItem(draftKey(timepoint));
+      } catch {}
       await fetchResponses();
     } catch (error) {
       console.error('Error saving OHIP-14:', error);
@@ -586,8 +677,90 @@ export function OHIP14Section({
             </div>
           </div>
 
-          {/* Questions grouped by dimension */}
-          {ohip14Questions.map((question) => {
+          {/* Kitöltési mód váltó (csak portál) */}
+          {isPatientPortal && !isViewOnly && (
+            <div className="flex justify-end">
+              <button
+                type="button"
+                onClick={() => setStepMode(m => !m)}
+                className="text-sm text-medical-primary underline hover:no-underline"
+              >
+                {stepMode ? 'Minden kérdés egy oldalon' : 'Kérdésenkénti kitöltés'}
+              </button>
+            </div>
+          )}
+
+          {/* Léptetett mód: egy kérdés / képernyő, nagy válaszgombokkal */}
+          {isPatientPortal && stepMode ? (() => {
+            const question = ohip14Questions[stepIndex];
+            const value = getQuestionValue(activeTimepoint, question.id);
+            const response = responses[activeTimepoint];
+            const isLocked = !!response?.lockedAt;
+            const isAllowed = getAvailability(activeTimepoint).allowed;
+            const canEditAnswers =
+              isAllowed && !isTimepointFilled(activeTimepoint) && !isViewOnly && !isLocked;
+            const isLast = stepIndex === ohip14Questions.length - 1;
+
+            return (
+              <div className="rounded-xl border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
+                <p className="text-sm text-gray-500 dark:text-gray-400 mb-2">
+                  Kérdés {stepIndex + 1} / {ohip14Questions.length}
+                </p>
+                <p className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4">
+                  {question.questionNumber}. {question.question}
+                </p>
+                <div className="flex flex-col gap-2" role="radiogroup" aria-label={`${question.questionNumber}. kérdés válaszai`}>
+                  {ohip14ResponseValueOptions.map(option => (
+                    <button
+                      key={option.value}
+                      type="button"
+                      role="radio"
+                      aria-checked={value === option.value}
+                      onClick={() => {
+                        if (!canEditAnswers) return;
+                        handleResponseChange(activeTimepoint, question.id, option.value);
+                        // Automatikus továbblépés — az idős felhasználónak
+                        // eggyel kevesebb gombnyomás kérdésenként.
+                        if (!isLast) {
+                          if (stepAdvanceTimerRef.current) window.clearTimeout(stepAdvanceTimerRef.current);
+                          stepAdvanceTimerRef.current = window.setTimeout(
+                            () => setStepIndex(i => Math.min(i + 1, ohip14Questions.length - 1)),
+                            300
+                          );
+                        }
+                      }}
+                      disabled={!canEditAnswers}
+                      className={`w-full text-left px-4 py-3 rounded-lg text-base font-medium transition-colors ${
+                        value === option.value
+                          ? 'bg-medical-primary text-white'
+                          : 'bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 hover:bg-gray-200 dark:hover:bg-gray-700'
+                      } ${!canEditAnswers ? 'opacity-50 cursor-not-allowed' : ''}`}
+                    >
+                      {option.label}
+                    </button>
+                  ))}
+                </div>
+                <div className="flex items-center justify-between mt-6">
+                  <button
+                    type="button"
+                    onClick={() => setStepIndex(i => Math.max(i - 1, 0))}
+                    disabled={stepIndex === 0}
+                    className="btn-secondary text-sm px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    ← Előző
+                  </button>
+                  <button
+                    type="button"
+                    onClick={() => setStepIndex(i => Math.min(i + 1, ohip14Questions.length - 1))}
+                    disabled={isLast}
+                    className="btn-secondary text-sm px-4 py-2 disabled:opacity-40 disabled:cursor-not-allowed"
+                  >
+                    Következő →
+                  </button>
+                </div>
+              </div>
+            );
+          })() : ohip14Questions.map((question) => {
             const value = getQuestionValue(activeTimepoint, question.id);
             const response = responses[activeTimepoint];
             const isLocked = !!response?.lockedAt;

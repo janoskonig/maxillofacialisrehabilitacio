@@ -5,6 +5,11 @@ import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { getCurrentUser } from '@/lib/auth';
 import { completenessEditHref } from '@/lib/completeness-deeplinks';
+import {
+  FIELD_NA_REASON_CODES,
+  FIELD_NA_REASON_LABELS,
+  type FieldNaReasonCode,
+} from '@/lib/field-na-reasons';
 import { AppShell } from '@/components/layout/AppShell';
 import {
   Loader2,
@@ -48,7 +53,13 @@ type CohortRow = {
   withWarnings: number;
 };
 
-type MissingItem = { key: string; label: string; group: 'clinical' | 'research' };
+type MissingItem = {
+  key: string;
+  label: string;
+  group: 'clinical' | 'research';
+  /** N/A-jelölt tételnél a hiányzás okkódja. */
+  reasonCode?: string;
+};
 
 type CompletenessRow = {
   patientId: string;
@@ -76,6 +87,7 @@ type Report = {
     clinicalIncomplete: number;
     researchComplete: number;
     researchReady: number;
+    publicationReady: number;
     withWarnings: number;
     avgCompletenessScore: number;
     missingOhipT0: number;
@@ -142,10 +154,10 @@ export default function DataCompletenessPage() {
     }
   }, [load]);
 
-  /** Egy kutatási mező N/A ("nem értelmezhető / nem ismert") jelölése / visszavonása. */
+  /** Egy kutatási mező N/A jelölése okkóddal / a jelölés visszavonása. */
   const [naBusy, setNaBusy] = useState<string | null>(null);
   const markNa = useCallback(
-    async (patientId: string, fieldKey: string, na: boolean) => {
+    async (patientId: string, fieldKey: string, na: boolean, reasonCode?: string) => {
       const busyKey = `${patientId}:${fieldKey}`;
       setNaBusy(busyKey);
       try {
@@ -153,7 +165,7 @@ export default function DataCompletenessPage() {
           method: 'POST',
           credentials: 'include',
           headers: { 'Content-Type': 'application/json' },
-          body: JSON.stringify({ fieldKey, na }),
+          body: JSON.stringify({ fieldKey, na, ...(reasonCode ? { reasonCode } : {}) }),
         });
         if (!res.ok) throw new Error('N/A beállítás sikertelen');
         await load();
@@ -336,6 +348,18 @@ export default function DataCompletenessPage() {
             <div>
               <p className="text-2xl font-bold text-emerald-700 dark:text-emerald-300">{summary?.researchReady ?? 0}</p>
               <p className="text-sm text-gray-500 dark:text-gray-400">Elemzésre kész</p>
+            </div>
+          </div>
+          <div className="card p-4 flex items-center gap-3">
+            <BadgeCheck className="w-8 h-8 text-teal-600 dark:text-teal-300" />
+            <div>
+              <p className="text-2xl font-bold text-teal-700 dark:text-teal-300">{summary?.publicationReady ?? 0}</p>
+              <p
+                className="text-sm text-gray-500 dark:text-gray-400"
+                title="Elemzésre kész ÉS plauzibilitási figyelmeztetés-mentes"
+              >
+                Publikációra kész
+              </p>
             </div>
           </div>
         </div>
@@ -540,17 +564,25 @@ export default function DataCompletenessPage() {
                                 {m.label}
                                 <ExternalLink className="w-3 h-3 opacity-60" />
                               </Link>
-                              {/* Kutatási mező N/A-ként jelölhető (a klinikai minimum nem). */}
+                              {/* Kutatási mező N/A-ként jelölhető okkóddal (a klinikai minimum nem). */}
                               {m.group === 'research' && (
-                                <button
-                                  type="button"
+                                <select
+                                  value=""
                                   disabled={naBusy === `${p.patientId}:${m.key}`}
-                                  onClick={() => void markNa(p.patientId, m.key, true)}
-                                  title="Jelölés: nem értelmezhető / nem ismert (nem számít hiánynak)"
-                                  className="text-xs rounded-r-full px-1.5 py-0.5 border border-l-0 border-amber-200 dark:border-amber-800 bg-white dark:bg-gray-900 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50"
+                                  onChange={(e) => {
+                                    if (e.target.value) void markNa(p.patientId, m.key, true, e.target.value);
+                                  }}
+                                  title="Jelölés hiányzási okkal (nem számít hiánynak; az ok a kutatási exportba kerül)"
+                                  aria-label={`${m.label} — hiányzási ok megjelölése`}
+                                  className="text-xs rounded-r-full pl-1 pr-4 py-0.5 border border-l-0 border-amber-200 dark:border-amber-800 bg-white dark:bg-gray-900 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40 disabled:opacity-50 cursor-pointer"
                                 >
-                                  N/A
-                                </button>
+                                  <option value="">N/A…</option>
+                                  {FIELD_NA_REASON_CODES.map((code) => (
+                                    <option key={code} value={code}>
+                                      {FIELD_NA_REASON_LABELS[code]}
+                                    </option>
+                                  ))}
+                                </select>
                               )}
                             </span>
                           ))}
@@ -592,10 +624,13 @@ export default function DataCompletenessPage() {
                               type="button"
                               disabled={naBusy === `${p.patientId}:${m.key}`}
                               onClick={() => void markNa(p.patientId, m.key, false)}
-                              title="N/A visszavonása (újra hiányként számít)"
+                              title="Jelölés visszavonása (újra hiányként számít)"
                               className="text-xs rounded-full px-2 py-0.5 border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 text-gray-500 dark:text-gray-400 hover:bg-gray-100 dark:hover:bg-gray-700 inline-flex items-center gap-1 disabled:opacity-50"
                             >
-                              {m.label}: N/A
+                              {m.label}:{' '}
+                              {m.reasonCode && FIELD_NA_REASON_LABELS[m.reasonCode as FieldNaReasonCode]
+                                ? FIELD_NA_REASON_LABELS[m.reasonCode as FieldNaReasonCode]
+                                : 'N/A'}
                               <span className="opacity-60">✕</span>
                             </button>
                           ))}

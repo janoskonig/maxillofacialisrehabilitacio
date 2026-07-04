@@ -1,5 +1,9 @@
 import { describe, it, expect } from 'vitest';
-import { isValidTajChecksum, getPlausibilityWarnings } from '@/lib/data-plausibility';
+import {
+  isValidTajChecksum,
+  getPlausibilityWarnings,
+  countToothEntriesWithoutStatus,
+} from '@/lib/data-plausibility';
 
 describe('isValidTajChecksum', () => {
   // d9 = (3*(d1+d3+d5+d7) + 7*(d2+d4+d6+d8)) % 10
@@ -62,5 +66,43 @@ describe('getPlausibilityWarnings', () => {
       halalDatum: '1979-01-01',
     });
     expect(w.map((x) => x.code)).toContain('death_before_birth');
+  });
+});
+
+describe('countToothEntriesWithoutStatus / fogak_statusz_nelkul', () => {
+  it('nem jelez string státuszú (D/F/M) bejegyzésre', () => {
+    expect(countToothEntriesWithoutStatus({ '18': 'M', '17': 'F', '16': 'D' })).toBe(0);
+  });
+
+  it('nem jelez objektumra, ha van státusza', () => {
+    expect(
+      countToothEntriesWithoutStatus({ '18': { status: 'M', description: 'régen eltávolítva' } })
+    ).toBe(0);
+  });
+
+  it('számolja a csak leírásos (státusz nélküli) bejegyzést', () => {
+    expect(
+      countToothEntriesWithoutStatus({
+        '18': { description: 'korona' },
+        '17': { status: 'F' },
+        '16': { description: 'csapos fog' },
+      })
+    ).toBe(2);
+  });
+
+  it('üres/hiányzó odontogramra 0', () => {
+    expect(countToothEntriesWithoutStatus(null)).toBe(0);
+    expect(countToothEntriesWithoutStatus({})).toBe(0);
+    expect(countToothEntriesWithoutStatus({ '18': {} })).toBe(0);
+  });
+
+  it('a getPlausibilityWarnings figyelmeztetést ad rá', () => {
+    const w = getPlausibilityWarnings({ meglevoFogak: { '18': { description: 'korona' } } });
+    expect(w.map((x) => x.code)).toContain('fogak_statusz_nelkul');
+  });
+
+  it('státuszos odontogramra nincs figyelmeztetés', () => {
+    const w = getPlausibilityWarnings({ meglevoFogak: { '18': 'M' } });
+    expect(w.map((x) => x.code)).not.toContain('fogak_statusz_nelkul');
   });
 });

@@ -41,6 +41,10 @@ const TreatmentPlanStatsChart = dynamic(() => import('./charts/TreatmentPlanStat
   loading: () => <div className="h-64 flex items-center justify-center"><p className="text-gray-500 dark:text-gray-400">Diagram betöltése...</p></div>
 });
 
+const OhipFunnelPanel = dynamic(() => import('./charts/OhipFunnelPanel').then(mod => ({ default: mod.OhipFunnelPanel })), {
+  loading: () => <div className="h-32 flex items-center justify-center"><p className="text-gray-500 dark:text-gray-400">Válaszarányok betöltése...</p></div>
+});
+
 export function MedicalStatisticsSection() {
   const [stats, setStats] = useState<MedicalStats | null>(null);
   const [loading, setLoading] = useState(true);
@@ -200,6 +204,17 @@ export function MedicalStatisticsSection() {
             </>
           )}
         </div>
+      </div>
+
+      {/* OHIP-14 válaszarány-tölcsér */}
+      <div className="card">
+        <h2 className="text-xl font-semibold mb-4">OHIP-14 válaszarányok (tölcsér)</h2>
+        <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
+          Időpontonként: jogosult → emlékeztetett → eszkalált → kitöltött, élő számítással (ugyanaz a
+          jogosultsági logika, mint az emlékeztető-küldésé). A T1–T3 kitöltési arány esése nem
+          véletlenszerű lemorzsolódásra — a kimenetek torzulására — figyelmeztet.
+        </p>
+        <OhipFunnelPanel />
       </div>
 
       <div className="card">
