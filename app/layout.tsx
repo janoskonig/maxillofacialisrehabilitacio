@@ -11,7 +11,6 @@ import { SocketProvider } from '@/contexts/SocketContext'
 import { ThemeProvider } from '@/components/ThemeProvider'
 import PWARegister from '@/components/PWARegister'
 import { CookieConsent } from '@/components/CookieConsent'
-import { DemoBanner } from '@/components/DemoBanner'
 
 const inter = Inter({ 
   subsets: ['latin'],
@@ -63,7 +62,6 @@ export default function RootLayout({
               <ToastProvider>
                 <FeedbackProvider>
                   <GlobalErrorHandler />
-                  <DemoBanner />
                   {children}
                   <FeedbackModal />
                   <ToastContainer />
