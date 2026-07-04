@@ -1,4 +1,4 @@
-export { sendEmail } from './config';
+export { sendEmail, isEmailDryRun } from './config';
 export type { EmailAttachment, SendEmailOptions } from './config';
 export { formatDateForEmail, formatDateForEmailShort, getBaseUrlForEmail } from './templates';
 export {

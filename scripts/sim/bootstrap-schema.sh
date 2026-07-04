@@ -1,15 +1,19 @@
 #!/usr/bin/env bash
-# Bootstrap throwaway maxfac_sim schema. Fresh DB assumed.
+# Bootstrap throwaway/dev schema. Fresh DB assumed.
+# Alapértelmezés: maxfac_sim; a fejlesztői DB-hez: SIM_DB=maxfac_dev.
+# A psql útvonala PSQL-lel felülírható (pl. Homebrew postgresql@16).
 set -u
-# Require the local maxfac_sim DB password from the environment — never hardcode
+# Require the local DB password from the environment — never hardcode
 # a credential in source. Export it before running (see scripts/sim/README.md).
-export PGPASSWORD="${PGPASSWORD:?Set PGPASSWORD to your local maxfac_sim DB password (see scripts/sim/README.md)}"
+export PGPASSWORD="${PGPASSWORD:?Set PGPASSWORD to your local DB password (see scripts/sim/README.md)}"
+DB="${SIM_DB:-maxfac_sim}"
+PSQL="${PSQL:-psql}"
 ROOT="$(cd "$(dirname "$0")/../.." && pwd)"
 L="$ROOT/database/legacy"
-run() { psql -h 127.0.0.1 -U maxfac -d maxfac_sim -v ON_ERROR_STOP=0 -q -f "$1" 2>&1; }
+run() { "$PSQL" -h 127.0.0.1 -U maxfac -d "$DB" -v ON_ERROR_STOP=0 -q -f "$1" 2>&1; }
 has_err() { echo "$1" | grep -qiE "^psql.*ERROR|^ERROR"; }
 
-echo "### schema.sql"; out=$(psql -h 127.0.0.1 -U maxfac -d maxfac_sim -v ON_ERROR_STOP=0 -q -f "$ROOT/database/schema.sql" 2>&1); has_err "$out" && echo "$out" | grep -iE ERROR | head
+echo "### schema.sql -> $DB"; out=$("$PSQL" -h 127.0.0.1 -U maxfac -d "$DB" -v ON_ERROR_STOP=0 -q -f "$ROOT/database/schema.sql" 2>&1); has_err "$out" && echo "$out" | grep -iE ERROR | head
 
 # Base tables in dependency order
 BASE=(migration_users.sql migration_users_add_name.sql migration_users_institution.sql

@@ -70,6 +70,24 @@ function htmlToText(html: string): string {
 }
 
 /**
+ * E-mail dry-run kapcsoló — biztonságos alapértelmezés.
+ *
+ * Nem-éles környezetben (NODE_ENV !== 'production') a küldés alapból SZÁRAZ:
+ * csak naplózunk, SMTP-re semmi nem megy ki — kivéve, ha EMAIL_DRY_RUN=false
+ * expliciten engedélyezi. Élesben az EMAIL_DRY_RUN=true kényszerítheti a
+ * száraz módot (pl. karbantartáskor). Háttér: 2026-07-03-án egy dev-futtatás
+ * valódi betegeknek küldött levelet — ez a kapcsoló ezt zárja ki.
+ */
+export function isEmailDryRun(env: {
+  NODE_ENV?: string;
+  EMAIL_DRY_RUN?: string;
+} = process.env): boolean {
+  if (env.EMAIL_DRY_RUN === 'true') return true;
+  if (env.EMAIL_DRY_RUN === 'false') return false;
+  return env.NODE_ENV !== 'production';
+}
+
+/**
  * Send an email using the configured SMTP settings
  * Includes spam prevention best practices:
  * - Reply-To header
@@ -80,6 +98,12 @@ function htmlToText(html: string): string {
  * - Message-ID and Date headers (handled by nodemailer)
  */
 export async function sendEmail(options: SendEmailOptions): Promise<void> {
+  if (isEmailDryRun()) {
+    const to = Array.isArray(options.to) ? options.to.join(', ') : options.to;
+    console.log(`[Email DRY-RUN] NEM küldött levél — to=${to} subject="${options.subject}"`);
+    return;
+  }
+
   if (!SMTP_HOST || !SMTP_USER || !SMTP_PASS || !SMTP_FROM) {
     console.error('Email configuration is missing. Please check SMTP_* environment variables.');
     throw new Error('Email configuration is missing');
