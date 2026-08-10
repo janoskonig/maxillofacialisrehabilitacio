@@ -5,27 +5,15 @@ import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { PatientForm } from '@/components/PatientForm';
 import { Patient, PatientStageEntry } from '@/lib/types';
-import {
-  LayoutDashboard,
-  User,
-  Stethoscope,
-  CalendarClock,
-  MessageCircle,
-  FolderOpen,
-} from 'lucide-react';
+import { User } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { PatientHeaderBar } from '@/components/PatientHeaderBar';
 import { PatientOverviewTab } from '@/components/PatientOverviewTab';
 import { PatientCommunicationTab } from '@/components/PatientCommunicationTab';
 import { PatientWorklistWidget } from '@/components/PatientWorklistWidget';
+import { PatientTabsNav, type PatientProfileTabId } from '@/components/PatientTabsNav';
 
-type TabType =
-  | 'attekintes'
-  | 'torzsadatok'
-  | 'anamnezis'
-  | 'terv_idopont'
-  | 'kommunikacio'
-  | 'adminisztracio';
+type TabType = PatientProfileTabId;
 
 const VALID_TABS: TabType[] = [
   'attekintes',
@@ -213,18 +201,6 @@ export default function PatientViewPage() {
     return null;
   }
 
-  const allTabs: Array<{ id: TabType; label: string; shortLabel: string; icon: React.ReactNode }> = [
-    { id: 'attekintes', label: 'Áttekintés', shortLabel: 'Áttekintés', icon: <LayoutDashboard className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
-    { id: 'torzsadatok', label: 'Törzsadatok', shortLabel: 'Törzs', icon: <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
-    { id: 'anamnezis', label: 'Anamnézis & vizsgálat', shortLabel: 'Anamnézis', icon: <Stethoscope className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
-    { id: 'terv_idopont', label: 'Kezelési terv & időpont', shortLabel: 'Terv', icon: <CalendarClock className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
-    { id: 'kommunikacio', label: 'Kommunikáció', shortLabel: 'Üzenet', icon: <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
-    { id: 'adminisztracio', label: 'Adminisztráció', shortLabel: 'Admin', icon: <FolderOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
-  ];
-
-  // Egyelőre mindenki minden fület lát (szerepkör-szűrés kikapcsolva).
-  const tabs = allTabs;
-
   return (
     <AppShell
       title="Beteg profil"
@@ -252,29 +228,13 @@ export default function PatientViewPage() {
         onGoToScheduling={() => handleTabChange('terv_idopont')}
       />
 
-      {/* Fülek */}
-      <div className="mb-4 sm:mb-6 border-b border-gray-200 dark:border-gray-800 -mx-2 sm:mx-0">
-        <nav
-          className="flex gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide px-2 sm:px-0"
-          aria-label="Betegkarton fülök"
-        >
-          {tabs.map((tab) => (
-            <button
-              key={tab.id}
-              onClick={() => handleTabChange(tab.id)}
-              className={`flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
-                activeTab === tab.id
-                  ? 'text-medical-primary border-medical-primary'
-                  : 'text-gray-700 dark:text-gray-300 hover:text-medical-primary border-transparent hover:border-medical-primary'
-              }`}
-            >
-              {tab.icon}
-              <span className="hidden sm:inline">{tab.label}</span>
-              <span className="sm:hidden">{tab.shortLabel}</span>
-            </button>
-          ))}
-        </nav>
-      </div>
+      {/* Fülek — közös fülsor a stádium oldallal (a „Stádiumok & epizódok" fül oda navigál) */}
+      <PatientTabsNav
+        patientId={patientId}
+        activeTab={activeTab}
+        onTabChange={handleTabChange}
+        showStadiumok={userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász'}
+      />
 
       {/* Fültartalom */}
       <div className="space-y-4 sm:space-y-6">
