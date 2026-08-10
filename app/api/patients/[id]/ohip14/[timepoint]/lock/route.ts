@@ -2,7 +2,7 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { getCurrentEpisodeAndStage } from '@/lib/ohip14-stage';
-import { OHIP14Timepoint } from '@/lib/types';
+import { isOhip14Timepoint } from '@/lib/types';
 import { logActivity } from '@/lib/activity';
 import { writeAuditEvent } from '@/lib/research-registry/audit-events';
 import { bumpDomainRevision, RevisionConflictError } from '@/lib/research-registry/entity-revision';
@@ -19,9 +19,9 @@ export const POST = roleHandler(
   async (req, { auth, params }) => {
     const pool = getDbPool();
     const patientId = params.id;
-    const timepoint = params.timepoint as OHIP14Timepoint;
+    const timepoint = params.timepoint;
 
-    if (!['T0', 'T1', 'T2', 'T3'].includes(timepoint)) {
+    if (!isOhip14Timepoint(timepoint)) {
       return NextResponse.json(
         { error: 'Érvénytelen timepoint' },
         { status: 400 }

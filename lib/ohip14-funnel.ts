@@ -5,15 +5,15 @@ import {
   type TimepointAvailability,
 } from '@/lib/ohip14-timepoint-stage';
 import { OHIP_ESCALATION_AFTER } from '@/lib/ohip14-patient-tasks';
-import type { OHIP14Timepoint } from '@/lib/types';
+import { OHIP14_TIMEPOINTS, type OHIP14Timepoint } from '@/lib/types';
 
-const ALL_TIMEPOINTS: OHIP14Timepoint[] = ['T0', 'T1', 'T2', 'T3'];
+const ALL_TIMEPOINTS: readonly OHIP14Timepoint[] = OHIP14_TIMEPOINTS;
 
 /**
  * OHIP-14 válaszarány-tölcsér (adatminőség / torzítás-monitorozás).
  *
  * A kérdőíves utánkövetés legnagyobb kockázata a nem véletlenszerű
- * lemorzsolódás: ha a T1–T3 kitöltési arány szisztematikusan esik, a
+ * lemorzsolódás: ha a T1–T5 kitöltési arány szisztematikusan esik, a
  * QoL-kimenetek torzulnak. Ez a modul betegenként/időpontonként élőben
  * osztályozza az állapotot (kitöltött / nyitott ablak / kihagyott ablak /
  * még nem nyílt meg), és hozzáteszi az emlékeztető- és eszkalációs

@@ -1,6 +1,7 @@
 import { sendEmail } from './config';
 import { formatDateForEmail, formatDateForEmailShort, getBaseUrlForEmail } from './templates';
 import { queueAdminNotification } from './admin-notification-queue';
+import { ohip14TimepointOptions } from '@/lib/types';
 
 function patientGreeting(name: string | null, nem?: string | null, fallback = 'Betegünk'): string {
   if (name) return `Kedves ${name.trim()}`;
@@ -1014,13 +1015,8 @@ export async function sendOhipReminderEmail(
     sentBy?: string;
   },
 ): Promise<void> {
-  const timepointLabels: Record<string, string> = {
-    T0: 'Protetikai fázis előtt',
-    T1: 'Átadás után ~1 hónap',
-    T2: 'Átadás után ~6 hónap',
-    T3: 'Átadás után ~3 év',
-  };
-  const label = timepointLabels[timepoint] || timepoint;
+  const label =
+    ohip14TimepointOptions.find((tp) => tp.value === timepoint)?.description || timepoint;
 
   const greeting = patientGreeting(patientName, patientNem);
 

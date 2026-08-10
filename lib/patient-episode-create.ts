@@ -2,6 +2,10 @@ import type { Pool } from 'pg';
 import type { PatientEpisode } from '@/lib/types';
 import { logger } from '@/lib/logger';
 import { recomputeKezeleoorvosSilent } from '@/lib/recompute-kezeleoorvos';
+import {
+  closeOpenOhipPatientTasksSilent,
+  closeOpenOhipEscalationTasksSilent,
+} from '@/lib/ohip14-patient-tasks';
 
 export const EPISODE_REASON_VALUES = [
   'traumás sérülés',
@@ -139,6 +143,17 @@ export async function createOpenEpisodeWithInitialStageZero(
     // be később), úgyhogy a recompute jó eséllyel A-esetre vagy „ne vonja
     // vissza" no-opra fut. Fire-and-forget — a hiba ne ölje meg a fő flow-t.
     recomputeKezeleoorvosSilent(input.patientId);
+
+    // Új epizód → a korábbi epizód OHIP-utánkövetése (T1..T5) okafogyottá
+    // válik: az új epizódban új kezelés indul, az emlékeztetők az új epizód
+    // átadása után indulnak újra. A nyitott in-app OHIP-feladatot és a
+    // kezelőorvosi eszkalációt azonnal lezárjuk; az e-mail emlékeztetők
+    // maguktól elhalnak, mert az ablakok az (átadás nélküli) új epizódhoz
+    // képest számítódnak. Tudatos következmény: ha egy beteg kezelése két
+    // párhuzamos epizódban fut (pl. felső és alsó állcsont külön epizódban —
+    // kerülendő!), a régebbi epizód utánkövetése itt megszakad.
+    closeOpenOhipPatientTasksSilent(input.patientId);
+    closeOpenOhipEscalationTasksSilent(input.patientId);
 
     return episode;
   } catch (e) {

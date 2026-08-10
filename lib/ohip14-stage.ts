@@ -99,24 +99,27 @@ export async function getOhipPatientContext(
   }
 
   try {
-    const stage6 = await pool.query(
-      `SELECT episode_id, at
+    // Az utolsó átadás-vagy-későbbi (STAGE_6/STAGE_7) esemény epizódja — a
+    // pontos átadás-dátumot ezután a getDeliveryDate priorizálja (STAGE_6
+    // előnyben, különben legkorábbi STAGE_7).
+    const delivered = await pool.query(
+      `SELECT episode_id
        FROM stage_events
-       WHERE patient_id = $1 AND stage_code = 'STAGE_6'
+       WHERE patient_id = $1 AND stage_code IN ('STAGE_6', 'STAGE_7')
        ORDER BY at DESC
        LIMIT 1`,
       [patientId],
     );
-    const episodeId = stage6.rows[0]?.episode_id as string | undefined;
+    const episodeId = delivered.rows[0]?.episode_id as string | undefined;
     if (episodeId) {
       const stageCode = await getCurrentStageCodeForOhip(pool, patientId, episodeId);
-      const deliveryDate = stage6.rows[0]?.at ?? (await getDeliveryDate(pool, patientId, episodeId));
+      const deliveryDate = await getDeliveryDate(pool, patientId, episodeId);
       return {
         episodeId,
         stageCode,
         stage: null,
         useNewModel: true,
-        deliveryDate: deliveryDate ?? null,
+        deliveryDate,
       };
     }
   } catch {
@@ -172,8 +175,12 @@ export async function getCurrentStageCodeForOhip(
 }
 
 /**
- * Return the delivery date (STAGE_6 event) for a patient episode.
- * New model: stage_events with stage_code = 'STAGE_6'.
+ * Return the delivery date for a patient episode.
+ * New model: the latest STAGE_6 ('Átadás megtörtént') stage event; if the
+ * episode was moved past the delivery stage without STAGE_6 ever being
+ * recorded (e.g. straight to STAGE_7 'Gondozás'), the earliest such
+ * beyond-delivery event approximates the delivery date, so the T1..T5
+ * questionnaire windows still open.
  */
 export async function getDeliveryDate(
   pool: Pool,
@@ -183,9 +190,14 @@ export async function getDeliveryDate(
   if (!episodeId) return null;
   try {
     const row = await pool.query(
-      `SELECT at FROM stage_events
-       WHERE patient_id = $1 AND episode_id = $2 AND stage_code = 'STAGE_6'
-       ORDER BY at DESC LIMIT 1`,
+      `SELECT COALESCE(
+         (SELECT at FROM stage_events
+           WHERE patient_id = $1 AND episode_id = $2 AND stage_code = 'STAGE_6'
+           ORDER BY at DESC LIMIT 1),
+         (SELECT at FROM stage_events
+           WHERE patient_id = $1 AND episode_id = $2 AND stage_code = 'STAGE_7'
+           ORDER BY at ASC LIMIT 1)
+       ) AS at`,
       [patientId, episodeId],
     );
     return row.rows[0]?.at ?? null;

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
-import { OHIP14Response, OHIP14Timepoint } from '@/lib/types';
+import { OHIP14Response, isOhip14Timepoint } from '@/lib/types';
 import { calculateOHIP14Scores } from '@/lib/ohip14-questions';
 import { getCurrentStageCodeForOhip, getCurrentEpisodeAndStage, isTimepointAllowedForStage } from '@/lib/ohip14-stage';
 import { logActivity } from '@/lib/activity';
@@ -15,9 +15,9 @@ export const dynamic = 'force-dynamic';
 export const GET = authedHandler(async (req, { params }) => {
   const pool = getDbPool();
   const patientId = params.id;
-  const timepoint = params.timepoint as OHIP14Timepoint;
+  const timepoint = params.timepoint;
 
-  if (!['T0', 'T1', 'T2', 'T3'].includes(timepoint)) {
+  if (!isOhip14Timepoint(timepoint)) {
     return NextResponse.json(
       { error: 'Érvénytelen timepoint' },
       { status: 400 }
@@ -101,9 +101,9 @@ export const GET = authedHandler(async (req, { params }) => {
 export const POST = authedHandler(async (req, { auth, params }) => {
   const pool = getDbPool();
   const patientId = params.id;
-  const timepoint = params.timepoint as OHIP14Timepoint;
+  const timepoint = params.timepoint;
 
-  if (!['T0', 'T1', 'T2', 'T3'].includes(timepoint)) {
+  if (!isOhip14Timepoint(timepoint)) {
     return NextResponse.json(
       { error: 'Érvénytelen timepoint' },
       { status: 400 }

@@ -6,9 +6,9 @@ import type { OhipFunnelReport } from '@/lib/ohip14-funnel';
 /**
  * OHIP-14 válaszarány-tölcsér panel (admin statisztika).
  *
- * Időpontonként (T0–T3): jogosult → emlékeztetett → eszkalált → kitöltött,
+ * Időpontonként (T0–T5): jogosult → emlékeztetett → eszkalált → kitöltött,
  * plusz kezelőorvosonkénti kitöltési arány. A nem véletlenszerű lemorzsolódás
- * (T1–T3 arányesés) a QoL-kimenetek torzításának fő forrása — ez a panel
+ * (T1–T5 arányesés) a QoL-kimenetek torzításának fő forrása — ez a panel
  * teszi láthatóvá.
  */
 export function OhipFunnelPanel() {

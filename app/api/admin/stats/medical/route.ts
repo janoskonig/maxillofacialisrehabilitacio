@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
-import type { MedicalStats } from '@/lib/types';
+import { OHIP14_TIMEPOINTS, type MedicalStats } from '@/lib/types';
 import { getBnoKodToNevMap } from '@/lib/bno-codes-data';
 
 export const dynamic = 'force-dynamic';
@@ -282,7 +282,7 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
 
     pool.query(`SELECT code, label_hu FROM treatment_types ORDER BY code`),
 
-    // OHIP-14 javulás T0 → T3 (klinikai kimenet KPI).
+    // OHIP-14 javulás T0 → T3 (átadás után ~6 hónap; klinikai kimenet KPI).
     // (patient_id, episode_id) páron belül párosítjuk a T0 és T3 score-t.
     // Csak ahol mindkettő total_score nem NULL.
     pool.query(`
@@ -418,7 +418,7 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
       },
     ])
   );
-  const tpOrder = ['T0', 'T1', 'T2', 'T3'];
+  const tpOrder = [...OHIP14_TIMEPOINTS];
   const ohip14Idopontok = tpOrder.map((tp) => {
     const row = ohipByTp.get(tp);
     return {

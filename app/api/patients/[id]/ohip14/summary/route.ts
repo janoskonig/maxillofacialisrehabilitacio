@@ -82,6 +82,8 @@ export const GET = authedHandler(async (req, { params }) => {
     T1: timepointMap['T1'] || null,
     T2: timepointMap['T2'] || null,
     T3: timepointMap['T3'] || null,
+    T4: timepointMap['T4'] || null,
+    T5: timepointMap['T5'] || null,
     episodeId: finalEpisodeId,
   };
 
@@ -102,6 +104,10 @@ export const GET = authedHandler(async (req, { params }) => {
     T0toT2: summary.T0 && summary.T2 ? calcDiff(summary.T0, summary.T2) : null,
     T2toT3: summary.T2 && summary.T3 ? calcDiff(summary.T2, summary.T3) : null,
     T0toT3: summary.T0 && summary.T3 ? calcDiff(summary.T0, summary.T3) : null,
+    T3toT4: summary.T3 && summary.T4 ? calcDiff(summary.T3, summary.T4) : null,
+    T0toT4: summary.T0 && summary.T4 ? calcDiff(summary.T0, summary.T4) : null,
+    T4toT5: summary.T4 && summary.T5 ? calcDiff(summary.T4, summary.T5) : null,
+    T0toT5: summary.T0 && summary.T5 ? calcDiff(summary.T0, summary.T5) : null,
   };
 
   return NextResponse.json({

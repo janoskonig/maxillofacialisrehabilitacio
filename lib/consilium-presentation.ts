@@ -6,6 +6,7 @@ import type { ConsiliumPrepCommentSnapshot } from '@/lib/consilium-view-helpers'
 
 export type { ConsiliumPrepCommentSnapshot } from '@/lib/consilium-view-helpers';
 import { patientStageOptions } from '@/lib/types/episode';
+import { OHIP14_TIMEPOINTS, type OHIP14Timepoint } from '@/lib/types/ohip14';
 import { legacyPatientStageToCode, LEGACY_MERGED_STAGE_EVENT_ID_PREFIX } from '@/lib/legacy-patient-stage-map';
 import { stageTimelineDedupeKey } from '@/lib/stage-timeline-merge';
 
@@ -98,7 +99,7 @@ export type PatientPresentationSummary = {
   chemoterapiaLeiras: string | null;
   ohip14Summary: Partial<
     Record<
-      'T0' | 'T1' | 'T2' | 'T3',
+      OHIP14Timepoint,
       {
         totalScore: number | null;
         completedAt: string | null;
@@ -552,7 +553,7 @@ async function loadPatientOhip14Summary(
     );
     if (hasTable.rows.length === 0) return {};
     const result = await pool.query<{
-      timepoint: 'T0' | 'T1' | 'T2' | 'T3';
+      timepoint: OHIP14Timepoint;
       totalScore: number | null;
       completedAt: Date | null;
       functionalLimitationScore: number | null;
@@ -576,9 +577,9 @@ async function loadPatientOhip14Summary(
          handicap_score as "handicapScore"
        FROM ohip14_responses
        WHERE patient_id = $1::uuid
-         AND timepoint IN ('T0', 'T1', 'T2', 'T3')
+         AND timepoint = ANY($2::text[])
        ORDER BY timepoint, completed_at DESC NULLS LAST, created_at DESC`,
-      [patientId],
+      [patientId, [...OHIP14_TIMEPOINTS]],
     );
     const out: PatientPresentationSummary['ohip14Summary'] = {};
     for (const row of result.rows) {

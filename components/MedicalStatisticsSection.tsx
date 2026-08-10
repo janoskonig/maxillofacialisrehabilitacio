@@ -112,14 +112,14 @@ export function MedicalStatisticsSection() {
       <div className="card">
         <h2 className="text-xl font-semibold mb-4">OHIP-14 (minőségélet / szájhigiénés hatás)</h2>
         <p className="text-sm text-gray-500 dark:text-gray-400 mb-4">
-          Kitöltések és összpontszám-statisztikák időpontonként (T0–T3). Az átlag és a medián csak olyan
+          Kitöltések és összpontszám-statisztikák időpontonként (T0–T5). Az átlag és a medián csak olyan
           kitöltéseknél számított, ahol a teljes pontszám rögzítve van.
         </p>
         <OHIP14StatsChart ohip14={stats.ohip14} />
 
         {/* T0 → T3 javulás összegzés */}
         <div className="mt-6 rounded-xl border border-gray-200/80 dark:border-gray-800 bg-gradient-to-br from-emerald-50/40 to-white p-4">
-          <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">T0 → T3 változás</h3>
+          <h3 className="mb-2 text-sm font-semibold text-gray-900 dark:text-gray-100">T0 → T3 (átadás után ~6 hó) változás</h3>
           {stats.ohip14.t0t3Delta.parosSzam === 0 ? (
             <p className="text-xs text-gray-500 dark:text-gray-400">
               Még nincs olyan beteg, akinél T0 és T3 is kitöltött; a delta nem számítható.
