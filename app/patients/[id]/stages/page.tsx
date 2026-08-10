@@ -8,6 +8,8 @@ import type { PatientEpisode, PatientStageEntry, StageEventEntry } from '@/lib/t
 import Link from 'next/link';
 import { BarChart3, Calendar, ChevronRight, UserRound } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
+import { PatientHeaderBar } from '@/components/PatientHeaderBar';
+import { PatientTabsNav } from '@/components/PatientTabsNav';
 import { EpisodePathwayEditor } from '@/components/EpisodePathwayEditor';
 import { EpisodeStepsManager } from '@/components/EpisodeStepsManager';
 import { EpisodeStepProjections } from '@/components/EpisodeStepProjections';
@@ -125,13 +127,13 @@ export default function PatientStagesPage() {
   const rawReason = patient?.kezelesreErkezesIndoka ?? activeEpisode?.reason ?? null;
   const patientReason =
     rawReason === '' || rawReason == null ? undefined : (rawReason as 'traumás sérülés' | 'veleszületett rendellenesség' | 'onkológiai kezelés utáni állapot');
+  // A PatientHeaderBar a legacy stádium-bejegyzést ismeri (badge) — új modellnél nincs badge, mint a profilon.
+  const headerStage = currentStage && 'stage' in currentStage ? currentStage : null;
 
   if (loading) {
     return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950">
-        <div className="flex items-center justify-center h-screen">
-          <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-medical-primary"></div>
-        </div>
+      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
+        <div className="animate-pulse text-gray-500 dark:text-gray-400">Betöltés...</div>
       </div>
     );
   }
@@ -142,8 +144,8 @@ export default function PatientStagesPage() {
 
   return (
     <AppShell
-      title="Betegstádiumok"
-      backTo="/"
+      title="Beteg profil"
+      backTo={`/patients/${patientId}/view`}
       maxWidth="xl"
       actions={
         <Link
@@ -155,17 +157,19 @@ export default function PatientStagesPage() {
         </Link>
       }
     >
-      <div className="mb-6">
-        <h1 className="text-2xl font-bold text-gray-900 dark:text-gray-100 flex items-center gap-2">
-          <Calendar className="w-6 h-6 text-medical-primary" />
-          Betegstádiumok - {patient.nev || 'Névtelen beteg'}
-        </h1>
-        <p className="text-gray-600 dark:text-gray-400 mt-1">
-          Stádiumok kezelése és timeline megtekintése
-        </p>
-      </div>
+      {/* Állandó beteg-fejléc — ugyanaz, mint a beteg profilon */}
+      <PatientHeaderBar
+        patient={patient}
+        currentStage={headerStage}
+        canSeeNextStep
+        canAssignDoctor={userRole === 'admin' || userRole === 'fogpótlástanász'}
+        onGoToScheduling={() => router.push(`/patients/${patientId}/view?tab=terv_idopont`)}
+      />
 
-      <div className="space-y-6">
+      {/* Közös fülsor a profillal — itt a „Stádiumok & epizódok" fül az aktív */}
+      <PatientTabsNav patientId={patientId} activeTab="stadiumok" />
+
+      <div className="space-y-4 sm:space-y-6">
           {/* 0) Ellátási epizódok — legfelülre: előbb az epizód, aztán a többi */}
           {episodes.length > 0 && (
             <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
