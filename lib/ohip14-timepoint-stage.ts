@@ -1,24 +1,32 @@
-import type { OHIP14Timepoint } from './types';
+import { OHIP14_TIMEPOINTS, type OHIP14Timepoint } from './types';
 
 // ── Window constants (days relative to delivery date) ─────────────────
 //
 // Each delivery-relative timepoint becomes fillable on its OPEN day and stays
-// fillable until the NEXT timepoint opens (T3 has no successor → stays open
+// fillable until the NEXT timepoint opens (T5 has no successor → stays open
 // indefinitely). This removes the gaps that used to exist between windows and
 // guarantees that a skipped earlier timepoint never blocks a later one: when a
 // later window opens, it is fillable regardless of whether the earlier ones
 // were completed.
+//
+// The delivery date is the first stage event at/after "Átadás megtörtént"
+// (STAGE_6) — a patient moved straight to STAGE_7 also starts the clock
+// (lib/ohip14-stage.ts getDeliveryDate).
 const OPEN_DAYS: Record<Exclude<OHIP14Timepoint, 'T0'>, number> = {
-  T1: 21,    // 3 weeks after delivery
-  T2: 150,   // 5 months after delivery
-  T3: 912,   // 2.5 years after delivery
+  T1: 0,     // immediately at delivery
+  T2: 30,    // 1 month after delivery
+  T3: 180,   // 6 months after delivery
+  T4: 365,   // 1 year after delivery
+  T5: 1095,  // 3 years after delivery
 };
 
 // The timepoint whose opening closes the current one's window (null = open-ended).
 const NEXT_TIMEPOINT: Record<Exclude<OHIP14Timepoint, 'T0'>, Exclude<OHIP14Timepoint, 'T0'> | null> = {
   T1: 'T2',
   T2: 'T3',
-  T3: null,
+  T3: 'T4',
+  T4: 'T5',
+  T5: null,
 };
 
 // T0 is allowed for these stages (before prosthetic phase)
@@ -53,9 +61,10 @@ export interface TimepointAvailability {
  *
  * T0  – stage-gated: allowed if current stage is before prosthetic phase
  *        (STAGE_0..STAGE_4) or no stage is set yet.
- * T1/T2/T3 – delivery-date-relative: allowed once `now` reaches the timepoint's
- *        open day after delivery (STAGE_6) and until the next timepoint opens.
- *        Missing an earlier timepoint never blocks a later one.
+ * T1..T5 – delivery-date-relative: allowed once `now` reaches the timepoint's
+ *        open day after delivery (first STAGE_6-or-beyond stage event; T1 opens
+ *        immediately) and until the next timepoint opens. Missing an earlier
+ *        timepoint never blocks a later one.
  */
 export function getTimepointAvailability(
   timepoint: OHIP14Timepoint,
@@ -76,11 +85,11 @@ export function getTimepointAvailability(
     };
   }
 
-  // T1, T2, T3 — delivery-date relative
+  // T1..T5 — delivery-date relative
   if (!deliveryDate) {
     return {
       allowed: false,
-      reason: 'Az átadás (STAGE_6) még nem történt meg, ezért ez a timepoint nem elérhető.',
+      reason: 'Az átadás (STAGE_6 vagy azt követő stádium) még nem történt meg, ezért ez a timepoint nem elérhető.',
     };
   }
 
@@ -118,7 +127,7 @@ export function isTimepointAllowedForStage(
   if (timepoint === 'T0') {
     return LEGACY_PRE_PROSTHETIC_STAGES.includes(stageCodeOrLegacyStage);
   }
-  // T1/T2/T3 in legacy model — only available via delivery date
+  // T1..T5 in legacy model — only available via delivery date
   return getTimepointAvailability(timepoint, null, deliveryDate).allowed;
 }
 
@@ -131,8 +140,7 @@ export function getTimepointForStage(
   useNewModel: boolean,
   deliveryDate: Date | null = null,
 ): OHIP14Timepoint | null {
-  const timepoints: OHIP14Timepoint[] = ['T0', 'T1', 'T2', 'T3'];
-  for (const tp of timepoints) {
+  for (const tp of OHIP14_TIMEPOINTS) {
     if (isTimepointAllowedForStage(tp, stageCodeOrLegacyStage, useNewModel, deliveryDate)) {
       return tp;
     }
@@ -161,10 +169,7 @@ export function getAllTimepointWindows(
   currentStageCode: string | null,
   deliveryDate: Date | null,
 ): Record<OHIP14Timepoint, TimepointAvailability> {
-  return {
-    T0: getTimepointAvailability('T0', currentStageCode, deliveryDate),
-    T1: getTimepointAvailability('T1', currentStageCode, deliveryDate),
-    T2: getTimepointAvailability('T2', currentStageCode, deliveryDate),
-    T3: getTimepointAvailability('T3', currentStageCode, deliveryDate),
-  };
+  return Object.fromEntries(
+    OHIP14_TIMEPOINTS.map((tp) => [tp, getTimepointAvailability(tp, currentStageCode, deliveryDate)]),
+  ) as Record<OHIP14Timepoint, TimepointAvailability>;
 }

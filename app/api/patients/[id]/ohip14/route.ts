@@ -1,10 +1,10 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
-import { OHIP14Response, OHIP14Timepoint } from '@/lib/types';
+import { OHIP14_TIMEPOINTS, OHIP14Response, OHIP14Timepoint } from '@/lib/types';
 import { getOhipPatientContext } from '@/lib/ohip14-stage';
 
-const OHIP_TIMEPOINTS: OHIP14Timepoint[] = ['T0', 'T1', 'T2', 'T3'];
+const OHIP_TIMEPOINTS: readonly OHIP14Timepoint[] = OHIP14_TIMEPOINTS;
 
 function pickResponsesForEpisode(
   rows: OHIP14Response[],

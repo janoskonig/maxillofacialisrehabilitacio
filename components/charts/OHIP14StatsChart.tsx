@@ -14,9 +14,11 @@ import type { MedicalStats } from '@/lib/types';
 
 const TIMEPOINT_LABEL: Record<string, string> = {
   T0: 'T0 — protetikai fázis előtt',
-  T1: 'T1 — átadás +1 hó',
-  T2: 'T2 — átadás +6 hó',
-  T3: 'T3 — átadás +3 év',
+  T1: 'T1 — közvetlenül átadás után',
+  T2: 'T2 — átadás +1 hó',
+  T3: 'T3 — átadás +6 hó',
+  T4: 'T4 — átadás +1 év',
+  T5: 'T5 — átadás +3 év',
 };
 
 type Props = {

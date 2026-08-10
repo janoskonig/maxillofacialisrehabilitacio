@@ -2,7 +2,14 @@
 
 import { useState, useEffect, useRef } from 'react';
 import { useRouter } from 'next/navigation';
-import { OHIP14Response, OHIP14Timepoint, ohip14TimepointOptions, ohip14ResponseValueOptions } from '@/lib/types';
+import {
+  OHIP14Response,
+  OHIP14Timepoint,
+  OHIP14_TIMEPOINTS,
+  isOhip14Timepoint,
+  ohip14TimepointOptions,
+  ohip14ResponseValueOptions,
+} from '@/lib/types';
 import { ohip14Questions, calculateOHIP14Scores } from '@/lib/ohip14-questions';
 import { getTimepointAvailability, type TimepointAvailability } from '@/lib/ohip14-timepoint-stage';
 import { getOhip14ImpactBand } from '@/lib/ohip14-score-interpretation';
@@ -34,6 +41,14 @@ const OHIP_QUESTION_FIELD: Record<string, keyof OHIP14Response> = {
   q14: 'q14_handicap',
 };
 
+/** Üres timepoint → válasz map (minden timepoint kulcs jelen van, null értékkel). */
+function emptyResponseMap(): Record<OHIP14Timepoint, OHIP14Response | null> {
+  return Object.fromEntries(OHIP14_TIMEPOINTS.map((tp) => [tp, null])) as Record<
+    OHIP14Timepoint,
+    OHIP14Response | null
+  >;
+}
+
 /** Első megválaszolatlan kérdés indexe egy válaszobjektumban (-1 → mind kész). */
 function firstUnansweredIndex(response: OHIP14Response | null): number {
   return ohip14Questions.findIndex(q => {
@@ -50,12 +65,9 @@ export function OHIP14Section({
 }: OHIP14SectionProps) {
   const router = useRouter();
   const { showToast } = useToast();
-  const [responses, setResponses] = useState<Record<OHIP14Timepoint, OHIP14Response | null>>({
-    T0: null,
-    T1: null,
-    T2: null,
-    T3: null,
-  });
+  const [responses, setResponses] = useState<Record<OHIP14Timepoint, OHIP14Response | null>>(
+    emptyResponseMap(),
+  );
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState<OHIP14Timepoint | null>(null);
   const [activeTimepoint, setActiveTimepoint] = useState<OHIP14Timepoint | null>(null);
@@ -232,15 +244,13 @@ export function OHIP14Section({
       }
 
       const data = await response.json();
-      const responsesMap: Record<OHIP14Timepoint, OHIP14Response | null> = {
-        T0: null, T1: null, T2: null, T3: null,
-      };
+      const responsesMap: Record<OHIP14Timepoint, OHIP14Response | null> = emptyResponseMap();
 
       if (isPatientPortal) {
         const completed: OHIP14Timepoint[] = [];
         if (data.responses && Array.isArray(data.responses)) {
           data.responses.forEach((r: { timepoint?: string }) => {
-            if (r.timepoint === 'T0' || r.timepoint === 'T1' || r.timepoint === 'T2' || r.timepoint === 'T3') {
+            if (isOhip14Timepoint(r.timepoint)) {
               completed.push(r.timepoint);
             }
           });
@@ -256,7 +266,7 @@ export function OHIP14Section({
         }
         if (data.responses && Array.isArray(data.responses)) {
           data.responses.forEach((resp: OHIP14Response) => {
-            if (resp.timepoint === 'T0' || resp.timepoint === 'T1' || resp.timepoint === 'T2' || resp.timepoint === 'T3') {
+            if (isOhip14Timepoint(resp.timepoint)) {
               responsesMap[resp.timepoint] = resp;
             }
           });
@@ -614,7 +624,7 @@ export function OHIP14Section({
 
         {deliveryDate && (
           <p className="text-sm text-gray-600 dark:text-gray-400 mt-2">
-            Átadás (STAGE_6): <strong>{formatWindowDate(deliveryDate)}</strong>
+            Átadás dátuma: <strong>{formatWindowDate(deliveryDate)}</strong>
           </p>
         )}
         {currentStageCode && (

@@ -9,9 +9,9 @@ import {
   escalateOhipToKezeloorvos,
   closeOpenOhipPatientTasks,
 } from '@/lib/ohip14-patient-tasks';
-import type { OHIP14Timepoint } from '@/lib/types';
+import { OHIP14_TIMEPOINTS, type OHIP14Timepoint } from '@/lib/types';
 
-const ALL_TIMEPOINTS: OHIP14Timepoint[] = ['T0', 'T1', 'T2', 'T3'];
+const ALL_TIMEPOINTS: readonly OHIP14Timepoint[] = OHIP14_TIMEPOINTS;
 const REMINDER_COOLDOWN_DAYS = 7;
 
 interface ReminderResult {

@@ -3,6 +3,7 @@
  */
 
 import type { PresentationTimelineEpisode, PresentationTimelineStage } from '@/lib/consilium-presentation';
+import { OHIP14_TIMEPOINTS, type OHIP14Timepoint } from '@/lib/types';
 
 export type ConsiliumPrepCommentSnapshot = {
   id: string;
@@ -122,7 +123,7 @@ export function consiliumPresentationOncologyRows(ps: {
 export function consiliumPresentationOhipRows(ps: {
   ohip14Summary?: Partial<
     Record<
-      'T0' | 'T1' | 'T2' | 'T3',
+      OHIP14Timepoint,
       {
         totalScore: number | null;
         completedAt: string | null;
@@ -176,8 +177,7 @@ export function consiliumPresentationOhipRows(ps: {
     }
   }
 
-  const timepoints: Array<'T0' | 'T1' | 'T2' | 'T3'> = ['T0', 'T1', 'T2', 'T3'];
-  const rows = timepoints.map((tp) => {
+  const rows = OHIP14_TIMEPOINTS.map((tp) => {
     const row = ps.ohip14Summary?.[tp];
     if (!row || row.totalScore == null) return { label: `OHIP-14 ${tp}`, value: null };
     const dateText = formatConsiliumHuDateTime(row.completedAt);

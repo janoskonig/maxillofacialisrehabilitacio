@@ -6,7 +6,7 @@ export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/admin/stats/ohip-funnel
- * OHIP-14 válaszarány-tölcsér: időpontonként (T0–T3) jogosult → emlékeztetett →
+ * OHIP-14 válaszarány-tölcsér: időpontonként (T0–T5) jogosult → emlékeztetett →
  * eszkalált → kitöltött, plusz kezelőorvosonkénti kitöltési arány.
  * Élő számítás — ugyanaz a jogosultsági logika, mint az emlékeztető-jobé.
  */

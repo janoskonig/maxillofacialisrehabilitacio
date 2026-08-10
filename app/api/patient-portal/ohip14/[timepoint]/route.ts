@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
-import { OHIP14Response, OHIP14Timepoint } from '@/lib/types';
+import { OHIP14Response, isOhip14Timepoint } from '@/lib/types';
 import { calculateOHIP14Scores } from '@/lib/ohip14-questions';
 import {
   getCurrentEpisodeAndStage,
@@ -14,7 +14,6 @@ import { apiHandler } from '@/lib/api/route-handler';
 
 export const dynamic = 'force-dynamic';
 
-const VALID_TIMEPOINTS = ['T0', 'T1', 'T2', 'T3'];
 
 export const GET = apiHandler(async (req, { correlationId, params }) => {
   const patientId = await verifyPatientPortalSession(req);
@@ -26,8 +25,8 @@ export const GET = apiHandler(async (req, { correlationId, params }) => {
     );
   }
 
-  const timepoint = params.timepoint as OHIP14Timepoint;
-  if (!VALID_TIMEPOINTS.includes(timepoint)) {
+  const timepoint = params.timepoint;
+  if (!isOhip14Timepoint(timepoint)) {
     return NextResponse.json(
       { error: 'Érvénytelen timepoint' },
       { status: 400 }
@@ -133,8 +132,8 @@ export const POST = apiHandler(async (req, { correlationId, params }) => {
     );
   }
 
-  const timepoint = params.timepoint as OHIP14Timepoint;
-  if (!VALID_TIMEPOINTS.includes(timepoint)) {
+  const timepoint = params.timepoint;
+  if (!isOhip14Timepoint(timepoint)) {
     return NextResponse.json(
       { error: 'Érvénytelen timepoint' },
       { status: 400 }
@@ -303,8 +302,8 @@ export const PUT = apiHandler(async (req, { correlationId, params }) => {
     );
   }
 
-  const timepoint = params.timepoint as OHIP14Timepoint;
-  if (!VALID_TIMEPOINTS.includes(timepoint)) {
+  const timepoint = params.timepoint;
+  if (!isOhip14Timepoint(timepoint)) {
     return NextResponse.json(
       { error: 'Érvénytelen timepoint' },
       { status: 400 }

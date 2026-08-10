@@ -43,6 +43,31 @@ export function closeOpenOhipPatientTasksSilent(patientId: string): void {
   );
 }
 
+/**
+ * Nyitott kezelőorvosi OHIP-eszkalációs feladatok lezárása — új epizód
+ * indításakor hívandó: az előző epizód kérdőív-utánkövetése okafogyott.
+ */
+export async function closeOpenOhipEscalationTasks(patientId: string): Promise<number> {
+  const pool = getDbPool();
+  const res = await pool.query(
+    `UPDATE user_tasks
+        SET status = 'done', completed_at = NOW()
+      WHERE task_type = 'missing_data'
+        AND patient_id = $1
+        AND status = 'open'
+        AND metadata->>'source' = 'ohip_escalation'`,
+    [patientId],
+  );
+  return res.rowCount ?? 0;
+}
+
+/** Fire-and-forget burkoló — sosem dob, csak logol. */
+export function closeOpenOhipEscalationTasksSilent(patientId: string): void {
+  closeOpenOhipEscalationTasks(patientId).catch((err) =>
+    logger.error(`[ohip-tasks] eszkaláció-zárás hiba (${patientId}):`, err),
+  );
+}
+
 /** A beteg portál-fiókjának user-id-ja (e-mail egyezés alapján), ha van. */
 export async function resolvePatientPortalUserId(pool: Pool, patientId: string): Promise<string | null> {
   const r = await pool.query(

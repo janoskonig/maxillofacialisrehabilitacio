@@ -15,6 +15,7 @@ import type { ToothStatus } from '@/hooks/usePatientAutoSave';
 import { usePatientDocumentAnnotationsMap } from '@/hooks/usePatientDocumentAnnotationsMap';
 import type { ChecklistEntry } from '@/lib/consilium';
 import type { ItemMediaSummary, MediaPreviewItem, PatientPresentationSummary } from '@/lib/consilium-presentation';
+import { OHIP14_TIMEPOINTS } from '@/lib/types';
 import {
   consiliumCommentAvatarToneClass,
   consiliumCommentMonogram,
@@ -1003,9 +1004,9 @@ export default function ConsiliumPresentPage() {
                         </div>
                       ))}
                       <div className="pt-2 border-t border-white/10">
-                        <p className="text-xs text-white/50 mb-2">OHIP-14 (T0-T3)</p>
+                        <p className="text-xs text-white/50 mb-2">OHIP-14 (T0-T5)</p>
                         <div className="flex gap-2 overflow-x-auto pb-1">
-                          {(['T0', 'T1', 'T2', 'T3'] as const).map((tp) => {
+                          {OHIP14_TIMEPOINTS.map((tp) => {
                             const row = ps.ohip14Summary?.[tp];
                             const top3 = topOhipDomainsForTimepoint(row);
                             return (
