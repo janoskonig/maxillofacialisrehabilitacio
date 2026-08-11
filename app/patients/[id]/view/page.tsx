@@ -228,7 +228,7 @@ export default function PatientViewPage() {
         onGoToScheduling={() => handleTabChange('terv_idopont')}
       />
 
-      {/* Fülek — közös fülsor a stádium oldallal (a „Stádiumok & epizódok" fül oda navigál) */}
+      {/* Fülek — közös fülsor a stádium oldallal (a „Kezelés menete" fül oda navigál) */}
       <PatientTabsNav
         patientId={patientId}
         activeTab={activeTab}

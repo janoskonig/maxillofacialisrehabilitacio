@@ -21,7 +21,7 @@ export type PatientProfileTabId =
   | 'kommunikacio'
   | 'adminisztracio';
 
-/** A „Stádiumok & epizódok" saját útvonalon él (/patients/[id]/stages), de a fülsor része. */
+/** A „Kezelés menete" saját útvonalon él (/patients/[id]/stages), de a fülsor része. */
 export type PatientTabId = PatientProfileTabId | 'stadiumok';
 
 const TABS: Array<{ id: PatientTabId; label: string; shortLabel: string; icon: ReactNode }> = [
@@ -29,7 +29,7 @@ const TABS: Array<{ id: PatientTabId; label: string; shortLabel: string; icon: R
   { id: 'torzsadatok', label: 'Törzsadatok', shortLabel: 'Törzs', icon: <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'anamnezis', label: 'Anamnézis & vizsgálat', shortLabel: 'Anamnézis', icon: <Stethoscope className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'terv_idopont', label: 'Kezelési terv & időpont', shortLabel: 'Terv', icon: <CalendarClock className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
-  { id: 'stadiumok', label: 'Stádiumok & epizódok', shortLabel: 'Stádium', icon: <Milestone className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
+  { id: 'stadiumok', label: 'Kezelés menete', shortLabel: 'Kezelés', icon: <Milestone className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'kommunikacio', label: 'Kommunikáció', shortLabel: 'Üzenet', icon: <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'adminisztracio', label: 'Adminisztráció', shortLabel: 'Admin', icon: <FolderOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
 ];
