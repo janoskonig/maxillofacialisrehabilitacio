@@ -22,6 +22,10 @@ interface PatientEpisodeFormProps {
   patientId: string;
   patientReason?: ReasonType | null;
   onEpisodeCreated?: (episode: PatientEpisode) => void;
+  /** Beágyazott mód: nincs saját kártya-keret és nyitó gomb — a szülő vezérli a láthatóságot. */
+  embedded?: boolean;
+  /** Beágyazott módban hívódik Mégse-re és sikeres létrehozás után. */
+  onClose?: () => void;
 }
 
 const TRIGGER_LABELS: Record<TriggerType, string> = {
@@ -36,9 +40,11 @@ export function PatientEpisodeForm({
   patientId,
   patientReason,
   onEpisodeCreated,
+  embedded = false,
+  onClose,
 }: PatientEpisodeFormProps) {
   const { showToast } = useToast();
-  const [open, setOpen] = useState(false);
+  const [open, setOpen] = useState(embedded);
   const [reason, setReason] = useState<ReasonType>(patientReason || 'onkológiai kezelés utáni állapot');
   const [chiefComplaint, setChiefComplaint] = useState('');
   const [triggerType, setTriggerType] = useState<TriggerType | ''>('');
@@ -78,7 +84,8 @@ export function PatientEpisodeForm({
       setTriggerType('');
       setGateBlock(null);
       setOverrideReason('');
-      setOpen(false);
+      setOpen(embedded);
+      if (embedded) onClose?.();
       onEpisodeCreated?.(data.episode);
     } catch (err) {
       showToast(err instanceof Error ? err.message : 'Hiba az epizód létrehozásakor', 'error');
@@ -106,8 +113,8 @@ export function PatientEpisodeForm({
   };
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
-      {!open ? (
+    <div className={embedded ? '' : 'bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4'}>
+      {!open && !embedded ? (
         <button
           type="button"
           onClick={() => setOpen(true)}
@@ -119,6 +126,7 @@ export function PatientEpisodeForm({
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <h4 className="font-semibold text-gray-900 dark:text-gray-100">Új ellátási epizód</h4>
+          <p className="text-sm text-gray-500 dark:text-gray-400 -mt-2">Indítson új kezelési ciklust — pl. külön epizód a felső és alsó állcsonthoz</p>
 
           {gateBlock && (
             <div className="rounded-md border border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3">
@@ -223,7 +231,14 @@ export function PatientEpisodeForm({
             </button>
             <button
               type="button"
-              onClick={() => { setOpen(false); setChiefComplaint(''); setTriggerType(''); }}
+              onClick={() => {
+                setChiefComplaint('');
+                setTriggerType('');
+                setGateBlock(null);
+                setOverrideReason('');
+                if (embedded) onClose?.();
+                else setOpen(false);
+              }}
               className="px-4 py-2 border border-gray-300 dark:border-gray-700 rounded-md text-sm text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50"
             >
               Mégse

@@ -1014,11 +1014,15 @@ export function EpisodeStepsManager({
       >
         <div>
           <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Kezelési munkafázisok</h3>
-          {hasMultiplePathways ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{episodePathways.length} kezelési út összefésülve</p>
-          ) : carePathwayName ? (
-            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">{carePathwayName}</p>
-          ) : null}
+          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+            {hasMultiplePathways
+              ? `${episodePathways.length} kezelési út összefésülve`
+              : carePathwayName
+                ? carePathwayName
+                : null}
+            {(hasMultiplePathways || carePathwayName) && ' · '}
+            Az epizódon belüli konkrét lépések, amelyekhez időpont foglalható
+          </p>
         </div>
         <div className="flex items-center gap-2">
           {steps.length > 0 && (

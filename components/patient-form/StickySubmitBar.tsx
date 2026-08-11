@@ -1,6 +1,6 @@
 'use client';
 
-import { Loader2 } from 'lucide-react';
+import { Loader2, AlertTriangle } from 'lucide-react';
 import { Patient } from '@/lib/types';
 import { Section } from '../mobile/PatientFormSectionNavigation';
 
@@ -14,8 +14,12 @@ interface StickySubmitBarProps {
   isSaving?: boolean;
   /** Automatikus mentés fut éppen (a kézi mentést az isSaving jelzi). */
   isAutoSaving?: boolean;
-  /** Utolsó sikeres mentés időpontja — „Utoljára mentve HH:MM”. */
+  /** Utolsó sikeres mentés időpontja — „Utoljára mentve HH:MM". */
   lastSavedAt?: Date | null;
+  /** Ha az utolsó autosave sikertelen volt — piros hibajelzés. */
+  autoSaveError?: Error | null;
+  /** Kézi újrapróbálkozás az autosave hibánál. */
+  onRetryAutoSave?: () => void;
 }
 
 function formatSavedTime(date: Date): string {
@@ -32,16 +36,26 @@ export function StickySubmitBar({
   isSaving = false,
   isAutoSaving = false,
   lastSavedAt = null,
+  autoSaveError = null,
+  onRetryAutoSave,
 }: StickySubmitBarProps) {
+  const hasError = autoSaveError !== null && !isSaving && !isAutoSaving;
+
   const saveStatus = isSaving || isAutoSaving
     ? 'Mentés folyamatban…'
-    : lastSavedAt
-      ? `Utoljára mentve ${formatSavedTime(lastSavedAt)}`
-      : null;
+    : hasError
+      ? 'Mentés sikertelen — változtatásai nincsenek mentve'
+      : lastSavedAt
+        ? `Utoljára mentve ${formatSavedTime(lastSavedAt)}`
+        : null;
 
   return (
     <div
-      className="fixed left-0 right-0 z-[55] bg-white/95 dark:bg-gray-900/95 backdrop-blur-sm border-t border-gray-200 dark:border-gray-800 shadow-[0_-4px_12px_-2px_rgba(0,0,0,0.06)] px-3 sm:px-6 md:px-8 max-md:bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] md:bottom-0 pb-[env(safe-area-inset-bottom,0px)]"
+      className={`fixed left-0 right-0 z-[55] backdrop-blur-sm px-3 sm:px-6 md:px-8 max-md:bottom-[calc(3.5rem+env(safe-area-inset-bottom,0px))] md:bottom-0 pb-[env(safe-area-inset-bottom,0px)] ${
+        hasError
+          ? 'bg-red-50/95 dark:bg-red-950/90 border-t-2 border-red-400 dark:border-red-600 shadow-[0_-4px_12px_-2px_rgba(220,38,38,0.15)]'
+          : 'bg-white/95 dark:bg-gray-900/95 border-t border-gray-200 dark:border-gray-800 shadow-[0_-4px_12px_-2px_rgba(0,0,0,0.06)]'
+      }`}
       role="region"
       aria-label="Űrlap mentése"
     >
@@ -77,14 +91,49 @@ export function StickySubmitBar({
             Következő szekció →
           </button>
         )}
-        
+
         {/* Mentés állapota — képernyőolvasónak is bejelentve */}
-        <p
+        <div
           aria-live="polite"
-          className="hidden sm:flex items-center text-xs text-gray-500 dark:text-gray-400 order-3 sm:order-1 sm:mr-auto"
+          className={`hidden sm:flex items-center gap-1.5 order-3 sm:order-1 sm:mr-auto ${
+            hasError ? 'text-sm font-medium' : 'text-xs'
+          }`}
         >
-          {saveStatus}
-        </p>
+          {hasError ? (
+            <>
+              <AlertTriangle className="w-4 h-4 text-red-500 dark:text-red-400 shrink-0" aria-hidden />
+              <span className="text-red-700 dark:text-red-300">{saveStatus}</span>
+              {onRetryAutoSave && (
+                <button
+                  type="button"
+                  onClick={onRetryAutoSave}
+                  className="ml-2 text-xs font-semibold text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-200 underline underline-offset-2"
+                >
+                  Újrapróbálás
+                </button>
+              )}
+            </>
+          ) : (
+            <span className="text-gray-500 dark:text-gray-400">{saveStatus}</span>
+          )}
+        </div>
+
+        {/* Mobile-only error banner */}
+        {hasError && breakpoint === 'mobile' && (
+          <div className="flex items-center gap-1.5 text-xs font-medium text-red-700 dark:text-red-300 order-0 sm:hidden">
+            <AlertTriangle className="w-3.5 h-3.5 shrink-0" aria-hidden />
+            <span>Mentés sikertelen</span>
+            {onRetryAutoSave && (
+              <button
+                type="button"
+                onClick={onRetryAutoSave}
+                className="ml-auto text-xs font-semibold underline underline-offset-2"
+              >
+                Újra
+              </button>
+            )}
+          </div>
+        )}
 
         {/* Right: Cancel and Save buttons */}
         <div className="flex gap-2 sm:gap-3 w-full sm:w-auto order-1 sm:order-2 ml-auto">

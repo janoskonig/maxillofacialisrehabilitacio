@@ -408,6 +408,7 @@ export function PatientForm({
   const {
     savingSource,
     lastSavedAt,
+    lastAutoSaveError,
     performSave,
     fogakRef,
     implantatumokRef,
@@ -2110,6 +2111,10 @@ export function PatientForm({
           isSaving={savingSource === 'manual'}
           isAutoSaving={savingSource === 'auto'}
           lastSavedAt={lastSavedAt}
+          autoSaveError={lastAutoSaveError}
+          onRetryAutoSave={() => {
+            performSave('manual', getValues()).catch(() => {});
+          }}
         />
       )}
     </div>
