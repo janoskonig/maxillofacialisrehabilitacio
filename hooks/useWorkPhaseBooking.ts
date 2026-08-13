@@ -118,6 +118,16 @@ export interface WorkPhaseBookingApi {
   confirmMarkUnsuccessful: (payload: UnsuccessfulAttemptConfirmPayload) => Promise<void>;
 }
 
+/**
+ * Kereszt-komponens értesítés: a beteg oldalán élő időpontlista
+ * (useAppointmentBooking) erre az eseményre tölti újra a foglalásait.
+ */
+function notifyAppointmentsChanged() {
+  if (typeof window !== 'undefined') {
+    window.dispatchEvent(new Event('appointments-changed'));
+  }
+}
+
 export function useWorkPhaseBooking({
   patientId,
   episodeId,
@@ -261,6 +271,7 @@ export function useWorkPhaseBooking({
           });
           await fetchWorklist();
           onChanged?.();
+          notifyAppointmentsChanged();
           return;
         }
 
@@ -364,6 +375,7 @@ export function useWorkPhaseBooking({
         }));
         await fetchWorklist();
         onChanged?.();
+        notifyAppointmentsChanged();
       } catch (e) {
         setOverride429(null);
         throw e;
@@ -404,6 +416,7 @@ export function useWorkPhaseBooking({
           });
           await fetchWorklist();
           onChanged?.();
+          notifyAppointmentsChanged();
           return;
         }
         const reasonSummary = skipped
@@ -428,6 +441,7 @@ export function useWorkPhaseBooking({
       }
       await fetchWorklist();
       onChanged?.();
+      notifyAppointmentsChanged();
     } catch {
       setConvertAllMessage({ type: 'error', text: 'Hálózati hiba' });
     } finally {
@@ -462,6 +476,7 @@ export function useWorkPhaseBooking({
       }
       await fetchWorklist();
       onChanged?.();
+      notifyAppointmentsChanged();
     },
     [linkAppointmentItem, fetchWorklist, onChanged]
   );
@@ -503,6 +518,7 @@ export function useWorkPhaseBooking({
       }
       await fetchWorklist();
       onChanged?.();
+      notifyAppointmentsChanged();
     },
     [markCompleteRetroCtx, fetchWorklist, onChanged]
   );
@@ -537,6 +553,7 @@ export function useWorkPhaseBooking({
       }
       await fetchWorklist();
       onChanged?.();
+      notifyAppointmentsChanged();
       if (payload.shouldOpenSlotPicker) {
         // Az item régi snapshot — a window tanácsadó jellegű, a SlotPicker a
         // tényleges szabad slotok alapján mutatja az opciókat.

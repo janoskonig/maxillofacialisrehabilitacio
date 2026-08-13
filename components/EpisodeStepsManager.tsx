@@ -316,7 +316,7 @@ function SortableStepRow({
   return (
     <div ref={setNodeRef} style={style}>
       <div
-        className={`flex items-center gap-2 px-3 py-2.5 rounded-lg transition-colors ${
+        className={`flex items-center gap-2 flex-wrap px-3 py-2.5 rounded-lg transition-colors ${
           isDragging ? 'shadow-lg ring-2 ring-medical-primary/30' : ''
         } ${isNext ? 'bg-medical-primary/5 border border-medical-primary/20' : config.bgColor}`}
       >
@@ -347,8 +347,8 @@ function SortableStepRow({
           <StatusIcon className={`w-4 h-4 ${config.color}`} />
         </div>
 
-        {/* Step info */}
-        <div className="flex-1 min-w-0">
+        {/* Step info — min szélesség alatt az akciósor új sorba törik */}
+        <div className="flex-1 min-w-[220px]">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
               {stepLabel}
@@ -426,8 +426,8 @@ function SortableStepRow({
           )}
         </div>
 
-        {/* Actions */}
-        <div className="shrink-0 flex items-center gap-1 flex-wrap justify-end">
+        {/* Actions — egy sorban jobbra zárva; szűk helyen saját sorba törik és belül tördel */}
+        <div className="flex grow items-center gap-1 flex-wrap justify-end">
           {rowBooking && !mergeMode && rowBooking.state === 'READY' && (
             <>
               <button
@@ -795,9 +795,12 @@ export function EpisodeStepsManager({
 
   useEffect(() => { setMounted(true); }, []);
 
-  // Reload steps on timing save
+  // Reload steps on timing save / external appointment mutations. A vetítést
+  // explicit is frissítjük: külső foglalás-változásnál (pl. időpont törlése a
+  // Gyors foglalás listában) a lépés-szignatúra változatlan maradhat, a
+  // vetített dátumok mégis elavulnak.
   useEffect(() => {
-    const handler = () => { loadSteps(); notifyPlanChanged(); };
+    const handler = () => { loadSteps(); loadProjections(); notifyPlanChanged(); };
     window.addEventListener('episode-work-phases-reload', handler);
     return () => window.removeEventListener('episode-work-phases-reload', handler);
   });

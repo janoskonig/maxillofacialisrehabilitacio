@@ -280,6 +280,26 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
     setLoadError(firstError);
   };
 
+  // A terv-kártya sor-foglalása (useWorkPhaseBooking) ezzel az eseménnyel jelzi,
+  // hogy a beteg foglalásai megváltoztak — az itteni lista is frissül.
+  useEffect(() => {
+    const handler = () => { void reloadAll(); };
+    window.addEventListener('appointments-changed', handler);
+    return () => window.removeEventListener('appointments-changed', handler);
+  });
+
+  /**
+   * A foglalás-mutációk munkafázis-állapotot is válthatnak (pending↔scheduled↔
+   * completed) — a Kezelési terv kártya az 'episode-work-phases-reload'
+   * eseményre tölti újra a lépéssorait. Ahol nincs terv-kártya (pl. beteg
+   * űrlap), az esemény hallgatatlanul elhal.
+   */
+  const notifyWorkPhasesChanged = () => {
+    if (typeof window !== 'undefined') {
+      window.dispatchEvent(new Event('episode-work-phases-reload'));
+    }
+  };
+
   const retryLoad = async () => {
     await refreshData();
   };
@@ -304,6 +324,7 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
 
       if (response.ok) {
         await reloadAll();
+        notifyWorkPhasesChanged();
         return { success: true };
       }
 
@@ -325,6 +346,7 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
 
       if (response.ok) {
         await reloadAll();
+        notifyWorkPhasesChanged();
         return { success: true };
       }
 
@@ -352,6 +374,7 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
 
       if (response.ok) {
         await reloadAll();
+        notifyWorkPhasesChanged();
         return { success: true };
       }
 
@@ -378,6 +401,7 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
 
       if (response.ok) {
         await reloadAll();
+        notifyWorkPhasesChanged();
         return { success: true };
       }
 
@@ -402,6 +426,7 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
 
       if (response.ok) {
         await reloadAll();
+        notifyWorkPhasesChanged();
         return { success: true };
       }
 
@@ -429,6 +454,7 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
 
       if (response.ok) {
         await reloadAll();
+        notifyWorkPhasesChanged();
         return { success: true };
       }
 
