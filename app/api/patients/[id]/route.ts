@@ -9,6 +9,7 @@ import { logActivity, logActivityWithAuth } from '@/lib/activity';
 import { reconcileMissingDataTasksSilent } from '@/lib/missing-data-reminders';
 import { recomputeReferrerUserIdSilent } from '@/lib/recompute-referrer';
 import { recomputeDerivedNumericsSilent } from '@/lib/derived-numerics';
+import { syncAutoCreatedIntakeEpisodeSilent } from '@/lib/patient-intake-episode';
 import { applyKezeleoorvosFromForm } from '@/lib/kezeleoorvos-assignment';
 import { getPatientCompletenessRow } from '@/lib/patient-data-completeness';
 import { getPlausibilityWarnings } from '@/lib/data-plausibility';
@@ -41,6 +42,9 @@ const FIELD_DISPLAY_NAMES: Record<string, string> = {
   cim: 'Cím',
   varos: 'Város',
   iranyitoszam: 'Irányítószám',
+  torvenyes_kepviselo_nev: 'Törvényes képviselő neve',
+  torvenyes_kepviselo_kapcsolat: 'Törvényes képviselő kapcsolata',
+  torvenyes_kepviselo_email: 'Törvényes képviselő email címe',
   beutalo_orvos: 'Beutaló orvos',
   beutalo_intezmeny: 'Beutaló intézmény',
   beutalo_indokolas: 'Beutaló indokolás',
@@ -172,8 +176,8 @@ async function executePatientUpdate(
     await client.query('BEGIN');
     await Promise.all([
       client.query(
-        `UPDATE patients SET nev=$2, taj=$3, telefonszam=$4, szuletesi_datum=$5, nem=$6, email=$7, cim=$8, varos=$9, iranyitoszam=$10, kezeleoorvos=$11, kezeleoorvos_intezete=$12, felvetel_datuma=$13, halal_datum=$14, updated_at=CURRENT_TIMESTAMP, updated_by=$15 WHERE id=$1`,
-        [patientId, patient.nev, patient.taj||null, patient.telefonszam||null, patient.szuletesiDatum||null, patient.nem||null, patient.email||null, patient.cim||null, patient.varos||null, patient.iranyitoszam||null, patient.kezeleoorvos||null, patient.kezeleoorvosIntezete||null, patient.felvetelDatuma||null, patient.halalDatum||null, userEmail]
+        `UPDATE patients SET nev=$2, taj=$3, telefonszam=$4, szuletesi_datum=$5, nem=$6, email=$7, cim=$8, varos=$9, iranyitoszam=$10, kezeleoorvos=$11, kezeleoorvos_intezete=$12, felvetel_datuma=$13, halal_datum=$14, torvenyes_kepviselo_nev=$15, torvenyes_kepviselo_kapcsolat=$16, torvenyes_kepviselo_email=$17, updated_at=CURRENT_TIMESTAMP, updated_by=$18 WHERE id=$1`,
+        [patientId, patient.nev, patient.taj||null, patient.telefonszam||null, patient.szuletesiDatum||null, patient.nem||null, patient.email||null, patient.cim||null, patient.varos||null, patient.iranyitoszam||null, patient.kezeleoorvos||null, patient.kezeleoorvosIntezete||null, patient.felvetelDatuma||null, patient.halalDatum||null, patient.torvenyesKepviseloNev||null, patient.torvenyesKepviseloKapcsolat||null, patient.torvenyesKepviseloEmail||null, userEmail]
       ),
       client.query(
         `INSERT INTO patient_referral (patient_id, beutalo_orvos, beutalo_intezmeny, beutalo_indokolas, primer_mutet_leirasa, mutet_ideje, szovettani_diagnozis, nyaki_blokkdisszekcio)
@@ -834,6 +838,12 @@ export const PUT = authedHandler(async (req, { auth, params, correlationId }) =>
 
     // 9c. Szabad szöveges numerikus mezők → származtatott numerikus oszlopok.
     recomputeDerivedNumericsSilent(patientId);
+
+    // 9d. A felvételkor automatikusan nyitott epizód „félkész": a gyors felvétel
+    //     űrlapon még nincs beutaló orvos / indokolás / etiológia. Amíg az
+    //     epizód automatikus, nyitott és STAGE_0, a pótolt beutaló-adatok
+    //     visszaíródnak rá. Fire-and-forget, nem blokkol.
+    syncAutoCreatedIntakeEpisodeSilent(pool, patientId, validatedPatient);
 
     // 10. Tanácsadó adat-teljességi visszajelzés (nem blokkol) — a kliens
     //     jelezheti a hiányokat mentés után. Hiba esetén csendben kihagyjuk.

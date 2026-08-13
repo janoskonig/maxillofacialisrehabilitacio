@@ -4,6 +4,7 @@ import { useEffect, useState } from 'react';
 import { Patient, patientStageOptions, PatientStageEntry } from '@/lib/types';
 import type { WorklistItemBackend } from '@/lib/worklist-types';
 import { calculateAge } from '@/lib/dateUtils';
+import { requiresGuardian } from '@/lib/legal/legal-capacity';
 import { Phone, CalendarPlus, ArrowRight, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { completenessEditHref } from '@/lib/completeness-deeplinks';
@@ -132,6 +133,10 @@ export function PatientHeaderBar({
     : null;
 
   const age = calculateAge(patient.szuletesiDatum);
+  // Kiskorúnál a nyilatkozatokat a törvényes képviselő teszi meg — ha hiányzik,
+  // passzív figyelmeztetés a fejlécben, a pótlás helyére mutató linkkel.
+  const isMinor = requiresGuardian(patient.szuletesiDatum);
+  const guardianName = patient.torvenyesKepviseloNev?.trim() || '';
   const metaParts: string[] = [];
   if (patient.taj) metaParts.push(`TAJ ${patient.taj}`);
   if (age != null) metaParts.push(`${age} é`);
@@ -175,6 +180,23 @@ export function PatientHeaderBar({
                 {stageLabel}
               </span>
             )}
+            {isMinor &&
+              (guardianName ? (
+                <span
+                  className="px-2 py-0.5 rounded-full text-xs font-medium bg-gray-100 text-gray-700 dark:bg-gray-800 dark:text-gray-300"
+                  title={`Kiskorú páciens — a nyilatkozatokat a törvényes képviselő teszi meg: ${guardianName}`}
+                >
+                  Kiskorú · képviselő: {guardianName}
+                </span>
+              ) : (
+                <Link
+                  href={`/patients/${patient.id}/view?tab=torzsadatok#section-szemelyes`}
+                  className="px-2 py-0.5 rounded-full text-xs font-medium bg-red-100 text-red-800 dark:bg-red-950/50 dark:text-red-300 hover:bg-red-200 dark:hover:bg-red-950/70"
+                  title="Kiskorú páciens — a nyilatkozatokhoz törvényes képviselő szükséges. Kattintson a pótláshoz."
+                >
+                  Kiskorú · törvényes képviselő hiányzik
+                </Link>
+              ))}
           </div>
           <div className="text-xs sm:text-[13px] text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
             {metaParts.length > 0 && <span>{metaParts.join(' · ')}</span>}

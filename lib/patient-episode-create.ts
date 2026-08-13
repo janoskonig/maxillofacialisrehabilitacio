@@ -1,6 +1,7 @@
 import type { Pool } from 'pg';
 import type { PatientEpisode } from '@/lib/types';
 import { logger } from '@/lib/logger';
+import { probeColumnExists } from '@/lib/schema-probe';
 import { recomputeKezeleoorvosSilent } from '@/lib/recompute-kezeleoorvos';
 import {
   closeOpenOhipPatientTasksSilent,
@@ -47,6 +48,13 @@ export type CreateOpenEpisodeInput = {
   triggerType: string | null;
   treatmentTypeId: string | null;
   createdBy: string;
+  /**
+   * TRUE, ha az epizód nem kézi indításból, hanem automatikusan (beteg-felvételkor)
+   * nyílik — lásd `lib/patient-intake-episode.ts`. A `patient_episodes.auto_created`
+   * oszlop (076-os migráció) csak ilyenkor kap TRUE-t; régi DB-n (oszlop nélkül)
+   * csendben kimarad.
+   */
+  autoCreated?: boolean;
 };
 
 /**
@@ -79,21 +87,27 @@ export async function createOpenEpisodeWithInitialStageZero(
       [input.patientId],
     );
 
+    const hasAutoCreatedCol = await probeColumnExists(client, 'patient_episodes', 'auto_created');
+    const autoCreatedColumn = hasAutoCreatedCol ? ', auto_created' : '';
+    const autoCreatedValue = hasAutoCreatedCol ? ', $9' : '';
+    const insertParams: unknown[] = [
+      input.patientId,
+      input.reason,
+      input.chiefComplaint,
+      input.caseTitle,
+      input.parentEpisodeId,
+      input.triggerType,
+      input.treatmentTypeId || null,
+      input.createdBy,
+    ];
+    if (hasAutoCreatedCol) insertParams.push(input.autoCreated === true);
+
     const insertResult = await client.query(
       `INSERT INTO patient_episodes (
-        patient_id, reason, chief_complaint, case_title, status, opened_at, parent_episode_id, trigger_type, treatment_type_id, created_by
-      ) VALUES ($1, $2, $3, $4, 'open', CURRENT_TIMESTAMP, $5, $6, $7, $8)
+        patient_id, reason, chief_complaint, case_title, status, opened_at, parent_episode_id, trigger_type, treatment_type_id, created_by${autoCreatedColumn}
+      ) VALUES ($1, $2, $3, $4, 'open', CURRENT_TIMESTAMP, $5, $6, $7, $8${autoCreatedValue})
       RETURNING id`,
-      [
-        input.patientId,
-        input.reason,
-        input.chiefComplaint,
-        input.caseTitle,
-        input.parentEpisodeId,
-        input.triggerType,
-        input.treatmentTypeId || null,
-        input.createdBy,
-      ],
+      insertParams,
     );
 
     const newId = insertResult.rows[0]?.id as string | undefined;

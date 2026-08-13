@@ -16,6 +16,7 @@ import { markConsentPending } from '@/lib/research-registry/research-consent-ser
 import { triggerConsentRequest } from '@/lib/consent-reminders';
 import { requiresGuardian } from '@/lib/legal/legal-capacity';
 import { applyKezeleoorvosFromForm } from '@/lib/kezeleoorvos-assignment';
+import { openIntakeEpisode } from '@/lib/patient-intake-episode';
 
 type ViewPreset = 'neak_pending' | 'missing_docs';
 
@@ -456,13 +457,43 @@ export const POST = authedHandler(async (req, { auth }) => {
   }
 
   logger.info('Beteg sikeresen mentve, ID:', result.rows[0].id);
-  
+
   await logActivity(
     req,
     userEmail,
     'patient_created',
     `Patient ID: ${result.rows[0].id}, Name: ${result.rows[0].nev || 'N/A'}`
   );
+
+  // Új beteg → azonnal nyíljon ellátási epizód a beutaló adataiból, STAGE_0
+  // („Első konzultációra vár") stádiummal, hogy a beteg ne maradjon epizód
+  // nélkül a pipeline-on. A gyors felvétel űrlapon a beutaló-mezők még üresek
+  // lehetnek — azokat a későbbi mentés (PUT) pótolja az epizódra is
+  // (lib/patient-intake-episode.ts). Az epizód hibája ne buktassa el a beteg
+  // felvételét: logolunk és megyünk tovább.
+  let episode = null;
+  try {
+    episode = await openIntakeEpisode(pool, {
+      patientId: result.rows[0].id as string,
+      createdBy: userEmail,
+      source: validatedPatient,
+    });
+    if (episode) {
+      await logActivity(
+        req,
+        userEmail,
+        'patient_episode_created',
+        JSON.stringify({
+          patientId: result.rows[0].id,
+          episodeId: episode.id,
+          reason: episode.reason,
+          auto: true,
+        })
+      );
+    }
+  } catch (episodeErr) {
+    logger.error('Automatikus epizódnyitás sikertelen (create):', episodeErr);
+  }
 
   // Beutaló orvos szöveges név → user_id FK (statisztika + emlékeztető-célzás).
   recomputeReferrerUserIdSilent(result.rows[0].id as string);
@@ -518,5 +549,5 @@ export const POST = authedHandler(async (req, { auth }) => {
     logger.error('Failed to compute data quality:', qualityError);
   }
 
-  return NextResponse.json({ patient: result.rows[0], dataQuality }, { status: 201 });
+  return NextResponse.json({ patient: result.rows[0], dataQuality, episode }, { status: 201 });
 });

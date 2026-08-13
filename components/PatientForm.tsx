@@ -1611,6 +1611,9 @@ export function PatientForm({
     cim: 'szemelyes',
     varos: 'szemelyes',
     iranyitoszam: 'szemelyes',
+    torvenyesKepviseloNev: 'szemelyes',
+    torvenyesKepviseloKapcsolat: 'szemelyes',
+    torvenyesKepviseloEmail: 'szemelyes',
     // beutalo
     beutaloOrvos: 'beutalo',
     beutaloIntezmeny: 'beutalo',

@@ -4,6 +4,7 @@ import { useState } from 'react';
 import { UseFormRegister, UseFormWatch, UseFormSetValue, FieldErrors } from 'react-hook-form';
 import { Patient } from '@/lib/types';
 import { formatDateForInput, calculateAge } from '@/lib/dateUtils';
+import { requiresGuardian } from '@/lib/legal/legal-capacity';
 import { MapPin } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
@@ -54,12 +55,22 @@ export function SzemelyesAdatokSection({
   const cim = watch('cim');
   const varos = watch('varos');
   const iranyitoszam = watch('iranyitoszam');
+  const kepviseloNev = watch('torvenyesKepviseloNev');
+  const kepviseloKapcsolat = watch('torvenyesKepviseloKapcsolat');
+  const kepviseloEmail = watch('torvenyesKepviseloEmail');
 
   if (userRole === 'technikus') return null;
 
-  const expected = compactPersonalFields
-    ? [szuletesiDatum, nem]
-    : [szuletesiDatum, nem, cim, varos, iranyitoszam];
+  // 18 alatt a nyilatkozatokat a törvényes képviselő teszi meg — a nevét
+  // a mentés (POST /api/patients) is megköveteli, ezért itt is kötelező mező.
+  const isMinor = requiresGuardian(szuletesiDatum);
+
+  const expected: unknown[] = [
+    ...(compactPersonalFields
+      ? [szuletesiDatum, nem]
+      : [szuletesiDatum, nem, cim, varos, iranyitoszam]),
+    ...(isMinor ? [kepviseloNev] : []),
+  ];
   const missingCount = expected.filter(isEmptyValue).length;
 
   const age = calculateAge(szuletesiDatum);
@@ -142,6 +153,49 @@ export function SzemelyesAdatokSection({
               </div>
             </>
           )}
+
+          {/* Törvényes képviselő — csak kiskorúnál, a gyors felvételnél is */}
+          {isMinor && (
+            <div className="md:col-span-2 border-t border-gray-200 dark:border-gray-800 pt-4 mt-1 space-y-4">
+              <p className="text-sm text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 rounded-lg p-3">
+                A megadott születési dátum alapján a páciens kiskorú. A nyilatkozatokat
+                (adatkezelési tájékoztató, kutatási hozzájárulás) a törvényes képviselő teszi
+                meg — a neve a mentéshez kötelező.
+              </p>
+              <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
+                <div>
+                  <label className="form-label form-label-required">Törvényes képviselő neve</label>
+                  <input
+                    {...register('torvenyesKepviseloNev')}
+                    className={`form-input ${errors.torvenyesKepviseloNev ? 'border-red-500' : ''}`}
+                    placeholder="Kovács Anna"
+                    {...fieldAriaProps('torvenyesKepviseloNev', !!errors.torvenyesKepviseloNev)}
+                  />
+                  <FieldErrorText
+                    name="torvenyesKepviseloNev"
+                    message={errors.torvenyesKepviseloNev?.message as string | undefined}
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Kapcsolat a pácienssel</label>
+                  <input
+                    {...register('torvenyesKepviseloKapcsolat')}
+                    className="form-input"
+                    placeholder="szülő / gyám"
+                  />
+                </div>
+                <div>
+                  <label className="form-label">Törvényes képviselő email címe</label>
+                  <input
+                    type="email"
+                    {...register('torvenyesKepviseloEmail')}
+                    className="form-input"
+                    placeholder="kepviselo@example.com"
+                  />
+                </div>
+              </div>
+            </div>
+          )}
         </div>
       ) : (
         <ReadGrid>
@@ -153,6 +207,13 @@ export function SzemelyesAdatokSection({
               <ReadField label="Cím" value={cim} />
               <ReadField label="Város" value={varos} />
               <ReadField label="Irányítószám" value={iranyitoszam} />
+            </>
+          )}
+          {isMinor && (
+            <>
+              <ReadField label="Törvényes képviselő neve" value={kepviseloNev} required />
+              <ReadField label="Kapcsolat a pácienssel" value={kepviseloKapcsolat} />
+              <ReadField label="Törvényes képviselő email címe" value={kepviseloEmail} />
             </>
           )}
         </ReadGrid>
