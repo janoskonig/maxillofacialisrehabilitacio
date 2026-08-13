@@ -1,11 +1,13 @@
 'use client';
 
 import { useState, useEffect, useCallback, useMemo } from 'react';
+import Link from 'next/link';
 import { useToast } from '@/contexts/ToastContext';
 import {
   Loader2, SkipForward, RotateCcw, CheckCircle2, Circle, Clock,
-  ChevronDown, ChevronUp, GripVertical, Trash2,
+  ChevronDown, ChevronUp, ChevronRight, GripVertical, Trash2,
   Plus, Search, FileText, Layers, PenLine, Merge, Unlink, Calendar, SendHorizontal,
+  AlertTriangle, CalendarDays, UserRound,
 } from 'lucide-react';
 import { WorkPhaseTaskDelegateBlock } from './WorkPhaseTaskDelegateBlock';
 import { PlanValidationPanel } from './PlanValidationPanel';
@@ -73,6 +75,46 @@ const JAW_SHORT: Record<string, string> = {
   also: 'alsó',
 };
 
+// ─── Tervezett ütemezés (step-projections) — a lépéssorba fésülve ────────────
+
+/** A GET /api/episodes/:id/step-projections sorainak itt használt szelete. */
+interface StepProjectionInfo {
+  /** Kanonikus episode_work_phases.id — ezen join-olunk az EpisodeStep.id-hoz. */
+  workPhaseId?: string | null;
+  status: string;
+  actualDate: string | null;
+  windowStart: string | null;
+  windowEnd: string | null;
+  waitFromNowDays: number | null;
+}
+
+interface StepProjectionSummary {
+  completedCount: number;
+  remainingCount: number;
+  estimatedCompletionEarliest: string | null;
+  estimatedCompletionLatest: string | null;
+  nextStepWaitDays: number | null;
+}
+
+function formatShortDate(iso: string): string {
+  return new Date(iso).toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' });
+}
+
+function formatWaitDays(days: number): string {
+  if (days === 0) return 'ma';
+  if (days === 1) return '1 nap múlva';
+  return `${days} nap múlva`;
+}
+
+function estimatedCompletionText(s: StepProjectionSummary): string | null {
+  const e = s.estimatedCompletionEarliest;
+  const l = s.estimatedCompletionLatest;
+  if (e && l) return `${formatShortDate(e)} – ${formatShortDate(l)}`;
+  if (l) return `legkésőbb ${formatShortDate(l)}`;
+  if (e) return `legkorábban ${formatShortDate(e)}`;
+  return null;
+}
+
 /** Map work-phase API row (camelCase) to local EpisodeStep shape (stepCode = work phase code). */
 function mapWorkPhaseApiToEpisodeStep(row: Record<string, unknown>): EpisodeStep {
   const code = (row.workPhaseCode ?? row.stepCode) as string;
@@ -113,6 +155,13 @@ export interface EpisodeStepsManagerProps {
   carePathwayName?: string | null;
   episodePathways?: EpisodePathwayInfo[];
   onStepChanged?: () => void;
+  /** Az epizód felelős orvosa — a terv-kártya metasorában jelenik meg. */
+  assignedProviderName?: string | null;
+  /** Kezelési út + felelős orvos szerkesztő (EpisodePathwayEditor) — a kártya
+      „Beállítások módosítása" gombja mögött nyílik. Csak jogosultnak adandó át. */
+  settingsPanel?: React.ReactNode;
+  /** Külső frissítő kulcs (pl. beállítás-mentés után) — változásra teljes újratöltés. */
+  refreshTrigger?: number;
 }
 
 const poolLabels: Record<string, string> = {
@@ -142,7 +191,7 @@ type AdderTab = 'catalog' | 'freetext' | 'tooth';
 
 function SortableStepRow({
   step, idx, isNext, stepLabel, pathwayLabel, pathwayColor,
-  mergedChildren,
+  mergedChildren, projection, bookingHref,
   onSkipConfirm, onUnskipConfirm, onDelete,
   mergeMode, mergeSelected, onToggleMerge,
   onEditTiming, onUnmerge, canDelegate, onDelegateClick, delegateOpen,
@@ -154,6 +203,8 @@ function SortableStepRow({
   pathwayLabel: string | null;
   pathwayColor: string;
   mergedChildren: EpisodeStep[];
+  projection: StepProjectionInfo | null;
+  bookingHref: string | null;
   onSkipConfirm: () => void;
   onUnskipConfirm: () => void;
   onDelete: () => void;
@@ -206,6 +257,11 @@ function SortableStepRow({
           >
             {stepLabel}
           </span>
+          {step.status === 'completed' && (step.completedAt || projection?.actualDate) && (
+            <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
+              {formatShortDate((step.completedAt ?? projection?.actualDate) as string)}
+            </span>
+          )}
           <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{config.label}</span>
           {canUnskip && !mergeMode && (
             <button
@@ -308,6 +364,38 @@ function SortableStepRow({
             <span className="text-xs text-gray-500 dark:text-gray-400">{step.defaultDaysOffset} nap offset</span>
             <span className="text-xs text-gray-400 dark:text-gray-500">·</span>
             <span className={`text-xs ${config.color}`}>{config.label}</span>
+            {/* Tervezett ütemezés — foglalt időpont / becsült időablak a vetítésből */}
+            {step.status === 'scheduled' && projection?.actualDate && (
+              <>
+                <span className="text-xs text-gray-400 dark:text-gray-500">·</span>
+                <span className="text-xs text-blue-600 dark:text-blue-300">
+                  📅 {formatShortDate(projection.actualDate)}
+                  {projection.waitFromNowDays != null && projection.waitFromNowDays > 0 &&
+                    ` (${formatWaitDays(projection.waitFromNowDays)})`}
+                </span>
+              </>
+            )}
+            {step.status === 'pending' && projection?.windowStart && projection?.windowEnd && (
+              <>
+                <span className="text-xs text-gray-400 dark:text-gray-500">·</span>
+                <span className="text-xs text-gray-600 dark:text-gray-400">
+                  🕐 {formatShortDate(projection.windowStart)} – {formatShortDate(projection.windowEnd)}
+                  {projection.waitFromNowDays != null &&
+                    ` (${projection.waitFromNowDays === 0 ? 'most ütemezendő' : formatWaitDays(projection.waitFromNowDays)})`}
+                </span>
+              </>
+            )}
+            {bookingHref && (
+              <>
+                <span className="text-xs text-gray-400 dark:text-gray-500">·</span>
+                <Link
+                  href={bookingHref}
+                  className="text-xs font-medium text-medical-primary hover:underline"
+                >
+                  Időpont foglalása →
+                </Link>
+              </>
+            )}
           </div>
           {/* Merged children list */}
           {hasMerged && (
@@ -398,7 +486,7 @@ function SortableStepRow({
 
 function StepRowWithConfirm({
   step, idx, isNext, stepLabel, pathwayLabel, pathwayColor,
-  mergedChildren,
+  mergedChildren, projection, bookingHref,
   confirmStepId, confirmAction, skipReason, saving,
   mergeMode, mergeSelected, onToggleMerge,
   onSkipConfirm, onUnskipConfirm, onDelete,
@@ -409,6 +497,8 @@ function StepRowWithConfirm({
   step: EpisodeStep; idx: number; isNext: boolean; stepLabel: string;
   pathwayLabel: string | null; pathwayColor: string;
   mergedChildren: EpisodeStep[];
+  projection: StepProjectionInfo | null;
+  bookingHref: string | null;
   confirmStepId: string | null; confirmAction: 'skip' | 'unskip' | 'delete' | 'timing' | null;
   skipReason: string; saving: boolean;
   mergeMode: boolean; mergeSelected: boolean; onToggleMerge: () => void;
@@ -429,6 +519,7 @@ function StepRowWithConfirm({
         step={step} idx={idx} isNext={isNext}
         stepLabel={stepLabel} pathwayLabel={pathwayLabel} pathwayColor={pathwayColor}
         mergedChildren={mergedChildren}
+        projection={projection} bookingHref={bookingHref}
         onSkipConfirm={onSkipConfirm} onUnskipConfirm={onUnskipConfirm} onDelete={onDelete}
         mergeMode={mergeMode} mergeSelected={mergeSelected} onToggleMerge={onToggleMerge}
         onEditTiming={onEditTiming} onUnmerge={onUnmerge}
@@ -582,6 +673,9 @@ export function EpisodeStepsManager({
   carePathwayName,
   episodePathways: initialEpisodePathways,
   onStepChanged,
+  assignedProviderName,
+  settingsPanel,
+  refreshTrigger,
 }: EpisodeStepsManagerProps) {
   const { showToast } = useToast();
   const [steps, setSteps] = useState<EpisodeStep[]>([]);
@@ -597,6 +691,12 @@ export function EpisodeStepsManager({
   const [, setReordering] = useState(false);
   const [episodePathways, setEpisodePathways] = useState<EpisodePathwayInfo[]>(initialEpisodePathways ?? []);
   const [mounted, setMounted] = useState(false);
+  const [settingsOpen, setSettingsOpen] = useState(false);
+
+  // Tervezett ütemezés (vetítés) — a lépéssorokba fésülve jelenik meg
+  const [projections, setProjections] = useState<StepProjectionInfo[]>([]);
+  const [projectionSummary, setProjectionSummary] = useState<StepProjectionSummary | null>(null);
+  const [projectionBlockedReason, setProjectionBlockedReason] = useState<string | null>(null);
 
   // Merge mode
   const [mergeMode, setMergeMode] = useState(false);
@@ -698,10 +798,27 @@ export function EpisodeStepsManager({
     } catch { /* non-critical */ }
   }, [episodeId]);
 
+  const loadProjections = useCallback(async () => {
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/step-projections`, { credentials: 'include' });
+      if (!res.ok) return;
+      const data = await res.json();
+      if (data.blocked) {
+        setProjections([]);
+        setProjectionSummary(null);
+        setProjectionBlockedReason(data.blockedReason ?? 'Ismeretlen ok');
+        return;
+      }
+      setProjections(data.steps ?? []);
+      setProjectionSummary(data.summary ?? null);
+      setProjectionBlockedReason(null);
+    } catch { /* nem kritikus — a lista dátumok nélkül is használható */ }
+  }, [episodeId]);
+
   useEffect(() => {
     setLoading(true);
     Promise.all([loadSteps(), loadLabels(), loadEpisodePathways(), loadLinkedTreatments()]).finally(() => setLoading(false));
-  }, [carePathwayId, loadSteps, loadLabels, loadEpisodePathways, loadLinkedTreatments]);
+  }, [carePathwayId, refreshTrigger, loadSteps, loadLabels, loadEpisodePathways, loadLinkedTreatments]);
 
   // ─── Step actions ────────────────────────────────────────────────────────
 
@@ -1006,6 +1123,36 @@ export function EpisodeStepsManager({
     [steps]
   );
 
+  // A vetítést a kezdeti betöltés után és minden lépés-mutáció (signature-váltás)
+  // után frissítjük — betöltés közben kihagyva, hogy mountkor ne fusson duplán.
+  useEffect(() => {
+    if (loading) return;
+    loadProjections();
+  }, [loading, planSignature, loadProjections]);
+
+  const projectionByPhaseId = useMemo(() => {
+    const m = new Map<string, StepProjectionInfo>();
+    for (const p of projections) {
+      if (p.workPhaseId) m.set(String(p.workPhaseId), p);
+    }
+    return m;
+  }, [projections]);
+
+  const pathwayDisplayName = useMemo(() => {
+    if (episodePathways.length > 0) {
+      return episodePathways
+        .map((p) => p.pathwayName + (p.jaw ? ` (${JAW_SHORT[p.jaw] ?? p.jaw})` : ''))
+        .join(', ');
+    }
+    return carePathwayName ?? null;
+  }, [episodePathways, carePathwayName]);
+
+  const nonSkippedCount = primarySteps.filter((s) => s.status !== 'skipped').length;
+  const completedCount = primarySteps.filter((s) => s.status === 'completed').length;
+  const progressPct = nonSkippedCount > 0 ? (completedCount / nonSkippedCount) * 100 : 0;
+  const completionText = projectionSummary ? estimatedCompletionText(projectionSummary) : null;
+  const bookingHref = patientId ? `/patients/${patientId}/view?tab=terv_idopont` : null;
+
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
       <button
@@ -1013,15 +1160,9 @@ export function EpisodeStepsManager({
         className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
       >
         <div>
-          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Kezelési munkafázisok</h3>
+          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Kezelési terv</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            {hasMultiplePathways
-              ? `${episodePathways.length} kezelési út összefésülve`
-              : carePathwayName
-                ? carePathwayName
-                : null}
-            {(hasMultiplePathways || carePathwayName) && ' · '}
-            Az epizódon belüli konkrét lépések, amelyekhez időpont foglalható
+            Az epizód munkafázisai, állapotuk és tervezett ütemezésük
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1043,6 +1184,79 @@ export function EpisodeStepsManager({
             </div>
           ) : (
             <>
+              {/* ─── Terv-meta: kezelési út + felelős orvos (a terv beállításai) ─── */}
+              {(assignedProviderName !== undefined || settingsPanel) && (
+                <div className="mb-3 pb-3 border-b border-gray-100 dark:border-gray-800">
+                  <div className="flex items-center gap-2 flex-wrap text-sm text-gray-700 dark:text-gray-300">
+                    <UserRound className="w-4 h-4 text-medical-primary shrink-0" />
+                    <span>
+                      Felelős orvos:{' '}
+                      <strong className="text-gray-900 dark:text-gray-100">
+                        {assignedProviderName || '— nincs beállítva'}
+                      </strong>
+                    </span>
+                    <span className="text-gray-500 dark:text-gray-400">
+                      · Kezelési út:{' '}
+                      <strong className="text-gray-700 dark:text-gray-200">
+                        {pathwayDisplayName || '— nincs beállítva'}
+                      </strong>
+                    </span>
+                    {settingsPanel && (
+                      <button
+                        type="button"
+                        onClick={() => setSettingsOpen((v) => !v)}
+                        className="ml-auto inline-flex items-center gap-1 text-medical-primary hover:underline text-sm font-medium shrink-0"
+                        aria-expanded={settingsOpen}
+                      >
+                        Beállítások módosítása
+                        <ChevronRight className={`w-4 h-4 transition-transform ${settingsOpen ? 'rotate-90' : ''}`} />
+                      </button>
+                    )}
+                  </div>
+                  {settingsOpen && settingsPanel && <div className="mt-2">{settingsPanel}</div>}
+                </div>
+              )}
+
+              {/* ─── Tervezett ütemezés — összefoglaló ────────────────── */}
+              {projectionBlockedReason && (
+                <div className="mb-3 flex items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+                  <AlertTriangle className="w-4 h-4 shrink-0" />
+                  <span>Nem tudunk ütemezést becsülni: {projectionBlockedReason}</span>
+                </div>
+              )}
+              {primarySteps.length > 0 && (
+                <div className="mb-4">
+                  <div className="h-2 bg-gray-100 dark:bg-gray-800 rounded-full overflow-hidden">
+                    <div
+                      className="h-full bg-medical-primary rounded-full transition-all duration-500"
+                      style={{ width: `${progressPct}%` }}
+                    />
+                  </div>
+                  {(completionText || (projectionSummary?.nextStepWaitDays != null && projectionSummary.nextStepWaitDays > 0)) && (
+                    <p className="mt-2 flex items-center gap-1.5 text-sm text-gray-600 dark:text-gray-400 flex-wrap">
+                      <CalendarDays className="w-4 h-4 text-medical-primary shrink-0" />
+                      {completionText && (
+                        <span>
+                          Becsült befejezés:{' '}
+                          <strong className="text-gray-900 dark:text-gray-100">{completionText}</strong>
+                        </span>
+                      )}
+                      {projectionSummary?.nextStepWaitDays != null && projectionSummary.nextStepWaitDays > 0 && (
+                        <span>· következő lépés {formatWaitDays(projectionSummary.nextStepWaitDays)}</span>
+                      )}
+                    </p>
+                  )}
+                </div>
+              )}
+
+              {/* ─── Nincs kezelési út — a lista ezért üres ───────────── */}
+              {!hasPathways && primarySteps.length === 0 && (
+                <div className="mb-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3 text-sm text-amber-800 dark:text-amber-300">
+                  Nincs kezelési út beállítva az epizódhoz, ezért a munkafázis-lista üres.
+                  {settingsPanel && ' Kezelési utat a fenti „Beállítások módosítása" gombbal választhat.'}
+                </div>
+              )}
+
               {/* ─── Terv-validáció (WP3) ─────────────────────────────── */}
               <PlanValidationPanel episodeId={episodeId} patientId={patientId} signature={planSignature} />
 
@@ -1262,7 +1476,9 @@ export function EpisodeStepsManager({
 
               {/* ─── Step list with DnD ──────────────────────────────── */}
               {primarySteps.length === 0 ? (
-                <p className="text-sm text-gray-500 dark:text-gray-400 py-2">Még nincsenek munkafázisok. Adjon hozzá a fenti űrlapon.</p>
+                hasPathways ? (
+                  <p className="text-sm text-gray-500 dark:text-gray-400 py-2">Még nincsenek munkafázisok. Adjon hozzá a fenti űrlapon.</p>
+                ) : null
               ) : (
                 <div className="space-y-1">
                   <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
@@ -1281,6 +1497,10 @@ export function EpisodeStepsManager({
                           pathwayLabel={getPathwayLabel(step.sourceEpisodePathwayId)}
                           pathwayColor={getPathwayColor(step.sourceEpisodePathwayId)}
                           mergedChildren={mergedChildrenMap.get(step.id) ?? []}
+                          projection={projectionByPhaseId.get(step.id) ?? null}
+                          bookingHref={
+                            idx === nextPendingIndex && step.status === 'pending' ? bookingHref : null
+                          }
                           confirmStepId={confirmStepId}
                           confirmAction={confirmAction}
                           skipReason={skipReason}

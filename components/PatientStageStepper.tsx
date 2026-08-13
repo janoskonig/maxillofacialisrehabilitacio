@@ -15,6 +15,8 @@ interface PatientStageStepperProps {
   onStageChanged?: () => void;
   /** A szülő refresh-kulcsa: lépés-változáskor újraszámoljuk a javaslatot. */
   refreshTrigger?: number;
+  /** Kártya-chrome nélkül, egy szülő-kártyába ágyazva (kisebb címsorral). */
+  embedded?: boolean;
 }
 
 /**
@@ -29,7 +31,15 @@ export function PatientStageStepper({
   currentStage,
   onStageChanged,
   refreshTrigger,
+  embedded = false,
 }: PatientStageStepperProps) {
+  // Beágyazott módban a szülő-kártya adja a keretet és a fő címsort.
+  const cardCls = embedded
+    ? ''
+    : 'bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6';
+  const headingCls = embedded
+    ? 'text-sm font-semibold text-gray-700 dark:text-gray-300'
+    : 'text-lg font-semibold text-gray-900 dark:text-gray-100';
   const { showToast } = useToast();
   const [episode, setEpisode] = useState<EpisodeGetResponse | null>(null);
   const [catalog, setCatalog] = useState<StageCatalogEntry[]>([]);
@@ -204,8 +214,8 @@ export function PatientStageStepper({
 
   if (loading) {
     return (
-      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Stádium</h3>
+      <div className={cardCls}>
+        <h3 className={headingCls}>Stádium</h3>
         <div className="mt-4 h-16 rounded-md bg-gray-100 dark:bg-gray-800 animate-pulse" />
       </div>
     );
@@ -213,8 +223,8 @@ export function PatientStageStepper({
 
   if (loadError || !episode || catalog.length === 0) {
     return (
-      <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Stádium</h3>
+      <div className={cardCls}>
+        <h3 className={headingCls}>Stádium</h3>
         <p className="mt-2 text-sm text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-3 rounded-md">
           A stádium-adatok most nem érhetők el.{' '}
           <button type="button" onClick={() => { setLoading(true); load(); }} className="font-medium underline">
@@ -228,9 +238,9 @@ export function PatientStageStepper({
   const currentLabel = stageLabelFor(catalog, currentStageCode);
 
   return (
-    <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
+    <div className={cardCls}>
       <div className="mb-1 flex items-baseline justify-between gap-2 flex-wrap">
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Stádium</h3>
+        <h3 className={headingCls}>Stádium</h3>
         <span className="text-sm text-gray-500 dark:text-gray-400">
           Jelenlegi: <strong className="text-gray-700 dark:text-gray-200">{currentLabel}</strong>
         </span>
