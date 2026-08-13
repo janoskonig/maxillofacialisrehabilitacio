@@ -305,7 +305,7 @@ export function EpisodePathwayEditor({
         Kezelési terv sablonok és felelős orvos
       </h3>
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-        Ehhez az epizódhoz tartozó beállítások: alkalmazd a <strong>kezelési terv sablonokat</strong> (lépéssor: konzultáció → munka → kontroll) és válaszd ki a <strong>felelős orvost</strong>. Egy epizódra több sablon is alkalmazható — lépéseik összefésülve jelennek meg, és a tervben szabadon egyéniesíthetők.
+        Ehhez az epizódhoz tartozó beállítások: alkalmazd a <strong>kezelési terv sablonokat</strong> (lépéssor: konzultáció → munkafázisok) és válaszd ki a <strong>felelős orvost</strong>. Egy epizódra több sablon is alkalmazható — lépéseik összefésülve jelennek meg, és a tervben szabadon egyéniesíthetők. A recall (kontroll) időpontok nem a terv részei — a Gyors foglalás blokkban foglalhatók.
       </p>
 
       <div className={`space-y-4 ${compact ? 'space-y-3' : ''}`}>

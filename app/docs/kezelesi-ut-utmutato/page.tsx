@@ -48,7 +48,7 @@ export default function KezelesiUtUtmutatoPage() {
 
               <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mt-4 mb-2">1.2 Vizsgálat után: kezelési terv</h3>
               <p>
-                Megtörténik a vizsgálat. Utána készül a kezelési terv. A terv kiindulópontja egy <strong>kezelési terv sablon</strong> (korábbi nevén kezelési út): pl. lenyomatvétel → próbabehelyezés → átadás → kontrollok. Ezt választod ki a rendszerben (care pathway), majd a terv szabadon egyéniesíthető.
+                Megtörténik a vizsgálat. Utána készül a kezelési terv — a betegkarton <strong>„Kezelési terv &amp; időpont”</strong> fülén. A terv kiindulópontja egy <strong>kezelési terv sablon</strong> (korábbi nevén kezelési út): pl. lenyomatvétel → próbabehelyezés → átadás. A sablont a Kezelési terv kártya „Beállítások módosítása” gombja alatt alkalmazod az epizódra, a munkafázisok ebből generálódnak, majd a terv szabadon egyéniesíthető (hozzáadás, átugrás, összevonás, átrendezés).
               </p>
               <p className="mt-2">
                 A kezelési terv <strong>munkafázis</strong>-sorozata a <strong>care_pathways.work_phases_json</strong> sémájából származik (az epizódra alkalmazott sablon); a régi <code>steps_json</code> csak visszafelé kompatibilitásra maradt. Nem generikus stage→step leképezés: a sablon determinálja a munkafázisokat. A stage_steps tábla megszűnt.
@@ -56,15 +56,20 @@ export default function KezelesiUtUtmutatoPage() {
 
               <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mt-4 mb-2">1.3 Lefoglalom az első kezelési időpontot (pl. lenyomatvétel)</h3>
               <p>
-                A Dashboard → Worklist fülön megjelenik a beteg, következő munkafázis: lenyomatvétel. Kattintasz „Következő lépés foglalása” (gombfelirat) → kiválasztod az időpontot → kész. A betegnek van egy jövőbeli work időpontja.
+                A betegkarton „Kezelési terv &amp; időpont” fülén a terv soránál kattintasz a <strong>„Foglalás”</strong> gombra → kiválasztod az időpontot → kész. A betegnek van egy jövőbeli work időpontja, a sorban megjelenik a 📅 dátum. (Ugyanez a közös munkalistáról is elérhető, több beteget átfogó nézetben.)
               </p>
 
-              <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mt-4 mb-2">1.4 A beteg még ott van — következő időpontot szeretné egyeztetni</h3>
+              <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mt-4 mb-2">1.4 A beteg még ott van — a többi időpontot is egyeztetnétek</h3>
               <p>
-                A beteg a rendelőben van, és szeretné a következő időpontot is (pl. próbabehelyezésre). <strong>Egy aktív kezelésben lévő betegnek egyszerre legfeljebb egy jövőbeli munkafázisú időpontja lehet.</strong> Tehát most nem foglalhatsz neki rögtön a próbabehelyezésre is — előbb le kell zajlania a lenyomatvételnek.
+                Ha a teljes sorozatot előre le akarjátok foglalni, a terv-kártya <strong>„Összes szükséges időpont lefoglalása”</strong> gombja egy lépésben foglalja a hátralévő munkafázisokat (ablakaik szerint). Egyesével haladva: egy lépés teljesítése után a következő sor válik foglalhatóvá.
               </p>
               <p className="mt-2">
-                <strong>Mit csinálj:</strong> A lenyomatvétel napján, amikor megcsináltátok, a rendszer frissül — a következő munkafázis (próbabehelyezés) lesz a worklisten. Akkor foglalhatod a következő időpontot. Ha azonban klinikai indok miatt már most kell mindkettőt lefoglalni, admin vagy beutaló orvos <strong>override</strong>-tal megteheti (min. 10 karakteres indoklás, audit alatt).
+                Az opcionális <code>enforce_one_hard_next</code> szabály bekapcsolása esetén egyszerre legfeljebb egy jövőbeli munkafázisú időpont lehet — ilyenkor admin vagy beutaló orvos <strong>override</strong>-tal foglalhat előre (min. 10 karakteres indoklás, audit alatt), vagy a sorozat-foglalást használjátok.
+              </p>
+
+              <h3 className="text-lg font-medium text-gray-800 dark:text-gray-200 mt-4 mb-2">1.5 Recall (kontroll)</h3>
+              <p>
+                A recall (kontroll) időpontok <strong>nem a kezelési terv részei</strong> — a sablonokból a kontroll-lépések kikerültek. Recallt a betegkarton „Kezelési terv &amp; időpont” fülének <strong>„Gyors foglalás”</strong> blokkjában foglalsz, terv nélkül, „Kontroll” típussal. (Egyedi esetben kontroll-lépés kézzel továbbra is felvehető a tervbe.)
               </p>
             </section>
 
@@ -85,7 +90,10 @@ export default function KezelesiUtUtmutatoPage() {
             <section>
               <h2 className="text-xl font-semibold text-gray-900 dark:text-gray-100 mt-6 mb-3">3. Rövid fogalomtár</h2>
               <ul className="space-y-2">
-                <li><strong>Worklist</strong> — következő munkafázist váró betegek listája. Innen foglalsz.</li>
+                <li><strong>Kezelési terv sablon</strong> — előre definiált lépéssor (konzultáció → munkafázisok), amelyből az epizód terve generálódik; az epizódra alkalmazva szabadon egyéniesíthető.</li>
+                <li><strong>Terv-hub</strong> — a betegkarton „Kezelési terv &amp; időpont” füle: itt készül a terv, és a sorai közvetlenül foglalnak.</li>
+                <li><strong>Gyors foglalás</strong> — tervfüggetlen időpontfoglalás (konzultáció, recall/kontroll) ugyanezen a fülön; itt kezelhető a beteg összes lefoglalt időpontja is.</li>
+                <li><strong>Worklist</strong> — a következő munkafázist váró betegek több beteget átfogó listája; a betegszintű foglalás a terv-hub soraiban él.</li>
                 <li><strong>One-hard-next</strong> — opcionális szabály (feature flag: <code>enforce_one_hard_next</code>): bekapcsolva max 1 jövőbeli munkafázisú időpont / epizód (kivéve átadásnál: 2). Alapból kikapcsolva.</li>
                 <li><strong>Override</strong> — admin/beutaló orvos felülírja a szabályt, indoklás kötelező.</li>
                 <li><strong>Blokk</strong> — pl. laborra várunk: addig nem foglalható a következő munkafázis.</li>
