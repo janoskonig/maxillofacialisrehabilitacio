@@ -7,7 +7,6 @@ import {
   User,
   Stethoscope,
   CalendarClock,
-  Milestone,
   MessageCircle,
   FolderOpen,
 } from 'lucide-react';
@@ -17,19 +16,17 @@ export type PatientProfileTabId =
   | 'attekintes'
   | 'torzsadatok'
   | 'anamnezis'
-  | 'terv_idopont'
   | 'kommunikacio'
   | 'adminisztracio';
 
-/** A „Kezelés menete" saját útvonalon él (/patients/[id]/stages), de a fülsor része. */
+/** A „Kezelési terv & időpont" hub saját útvonalon él (/patients/[id]/stages), de a fülsor része. */
 export type PatientTabId = PatientProfileTabId | 'stadiumok';
 
 const TABS: Array<{ id: PatientTabId; label: string; shortLabel: string; icon: ReactNode }> = [
   { id: 'attekintes', label: 'Áttekintés', shortLabel: 'Áttekintés', icon: <LayoutDashboard className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'torzsadatok', label: 'Törzsadatok', shortLabel: 'Törzs', icon: <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'anamnezis', label: 'Anamnézis & vizsgálat', shortLabel: 'Anamnézis', icon: <Stethoscope className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
-  { id: 'terv_idopont', label: 'Kezelési terv & időpont', shortLabel: 'Terv', icon: <CalendarClock className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
-  { id: 'stadiumok', label: 'Kezelés menete', shortLabel: 'Kezelés', icon: <Milestone className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
+  { id: 'stadiumok', label: 'Kezelési terv & időpont', shortLabel: 'Terv', icon: <CalendarClock className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'kommunikacio', label: 'Kommunikáció', shortLabel: 'Üzenet', icon: <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'adminisztracio', label: 'Adminisztráció', shortLabel: 'Admin', icon: <FolderOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
 ];
@@ -42,7 +39,7 @@ interface PatientTabsNavProps {
    * minden fül linkként a profil megfelelő fülére navigál (?tab=…).
    */
   onTabChange?: (tab: PatientProfileTabId) => void;
-  /** Technikus nem éri el a stádium oldalt — a fül számára elrejthető. */
+  /** Technikus nem éri el a terv-hub oldalt — a fül számára elrejthető. */
   showStadiumok?: boolean;
 }
 

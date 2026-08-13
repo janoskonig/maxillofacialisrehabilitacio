@@ -12,6 +12,8 @@ import { PatientHeaderBar } from '@/components/PatientHeaderBar';
 import { PatientTabsNav } from '@/components/PatientTabsNav';
 import { EpisodePathwayEditor } from '@/components/EpisodePathwayEditor';
 import { EpisodeStepsManager } from '@/components/EpisodeStepsManager';
+import { AppointmentBookingSection } from '@/components/AppointmentBookingSection';
+import { ConditionalAppointmentBooking } from '@/components/ConditionalAppointmentBooking';
 import { PatientStageSelector } from '@/components/PatientStageSelector';
 import { PatientStageStepper } from '@/components/PatientStageStepper';
 import { PatientCareTimeline } from '@/components/PatientCareTimeline';
@@ -41,9 +43,9 @@ function DomainGlossary() {
             <p className="mt-0.5">Egy beteg egy kezelési ciklusa az elejétől a végéig (pl. „Felső teljes fogpótlás"). Egy betegnek több epizódja is lehet (pl. felső + alsó állcsont külön).</p>
           </div>
           <div>
-            <strong className="text-gray-900 dark:text-gray-100">Kezelési út (pathway)</strong>
-            <span className="text-gray-500 dark:text-gray-400"> — az epizód sablonja</span>
-            <p className="mt-0.5">Előre definiált lépéssorrend, amely meghatározza, milyen munkafázisok szükségesek az adott típusú kezeléshez. Az adminisztrációban konfigurálható.</p>
+            <strong className="text-gray-900 dark:text-gray-100">Kezelési terv sablon (kezelési út)</strong>
+            <span className="text-gray-500 dark:text-gray-400"> — a terv kiindulópontja</span>
+            <p className="mt-0.5">Előre definiált lépéssorrend, amelyből az epizód kezelési terve generálható. Az adminisztrációban konfigurálható; az epizódra alkalmazva a terv szabadon egyéniesíthető (hozzáadás, átugrás, összevonás, átrendezés).</p>
           </div>
           <div>
             <strong className="text-gray-900 dark:text-gray-100">Munkafázis (lépés)</strong>
@@ -77,6 +79,9 @@ export default function PatientStagesPage() {
   // Kezelési út / felelős orvos mentésekor bumpoljuk — a terv-kártya erre tölt újra.
   const [settingsVersion, setSettingsVersion] = useState(0);
   const [showNewEpisodeForm, setShowNewEpisodeForm] = useState(false);
+  // Több nyitott epizódnál a felhasználó által kiválasztott epizód vezérli a
+  // terv-kártyát, a steppert és a foglalást. Alapérték: az első nyitott.
+  const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(null);
 
   const refreshStagesAndEpisodes = useCallback(() => {
     setRefreshKey((k) => k + 1);
@@ -170,8 +175,9 @@ export default function PatientStagesPage() {
 
   const handleStageChanged = () => refreshStagesAndEpisodes();
 
-  const activeEpisode = episodes.find((e) => e.status === 'open') ?? null;
   const openEpisodes = episodes.filter((e) => e.status === 'open');
+  const activeEpisode =
+    openEpisodes.find((e) => e.id === selectedEpisodeId) ?? openEpisodes[0] ?? null;
   const closedEpisodes = episodes.filter((e) => e.status !== 'open');
   const canEditEpisodeSettings = userRole === 'admin' || userRole === 'fogpótlástanász';
   const rawReason = patient?.kezelesreErkezesIndoka ?? activeEpisode?.reason ?? null;
@@ -213,7 +219,9 @@ export default function PatientStagesPage() {
         currentStage={headerStage}
         canSeeNextStep
         canAssignDoctor={userRole === 'admin' || userRole === 'fogpótlástanász'}
-        onGoToScheduling={() => router.push(`/patients/${patientId}/view?tab=terv_idopont`)}
+        onGoToScheduling={() =>
+          document.getElementById('gyors-foglalas')?.scrollIntoView({ behavior: 'smooth', block: 'start' })
+        }
       />
 
       {/* Közös fülsor a profillal — itt a „Kezelés menete" fül az aktív */}
@@ -230,17 +238,55 @@ export default function PatientStagesPage() {
               <div className="min-w-0">
                 <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Hol tart a beteg?</h3>
                 {openEpisodes.length > 0 ? (
-                  <ul className="mt-1 space-y-1 text-sm text-gray-700 dark:text-gray-300">
-                    {openEpisodes.map((ep) => (
-                      <li key={ep.id} className="flex items-center gap-2 flex-wrap">
-                        <span className="text-green-600 dark:text-green-400 font-medium">● Aktív epizód</span>
-                        <span>{ep.chiefComplaint}</span>
-                        <span className="text-gray-400 dark:text-gray-500">
-                          {new Date(ep.openedAt).toLocaleDateString('hu-HU')}
-                        </span>
-                      </li>
-                    ))}
-                  </ul>
+                  <>
+                    {openEpisodes.length > 1 && (
+                      <p className="mt-1 text-xs text-amber-700 dark:text-amber-300">
+                        Több nyitott epizód — kattintással válthatsz; a lenti terv és foglalás a
+                        kiválasztott epizódra vonatkozik.
+                      </p>
+                    )}
+                    <ul className="mt-1 space-y-1 text-sm text-gray-700 dark:text-gray-300">
+                      {openEpisodes.map((ep) => {
+                        const isSelected = activeEpisode?.id === ep.id;
+                        if (openEpisodes.length === 1) {
+                          return (
+                            <li key={ep.id} className="flex items-center gap-2 flex-wrap">
+                              <span className="text-green-600 dark:text-green-400 font-medium">● Aktív epizód</span>
+                              <span>{ep.chiefComplaint}</span>
+                              <span className="text-gray-400 dark:text-gray-500">
+                                {new Date(ep.openedAt).toLocaleDateString('hu-HU')}
+                              </span>
+                            </li>
+                          );
+                        }
+                        return (
+                          <li key={ep.id}>
+                            <button
+                              type="button"
+                              onClick={() => setSelectedEpisodeId(ep.id)}
+                              aria-pressed={isSelected}
+                              className={`w-full text-left flex items-center gap-2 flex-wrap rounded-md px-2 py-1 transition-colors ${
+                                isSelected
+                                  ? 'bg-medical-primary/5 ring-1 ring-medical-primary/30'
+                                  : 'hover:bg-gray-50 dark:hover:bg-gray-800/50'
+                              }`}
+                            >
+                              <span className="text-green-600 dark:text-green-400 font-medium">● Aktív epizód</span>
+                              <span>{ep.chiefComplaint}</span>
+                              <span className="text-gray-400 dark:text-gray-500">
+                                {new Date(ep.openedAt).toLocaleDateString('hu-HU')}
+                              </span>
+                              {isSelected && (
+                                <span className="ml-auto text-xs font-medium text-medical-primary shrink-0">
+                                  Kiválasztva ✓
+                                </span>
+                              )}
+                            </button>
+                          </li>
+                        );
+                      })}
+                    </ul>
+                  </>
                 ) : (
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
                     Nincs aktív epizód — a kezelés követéséhez indítson újat.
@@ -277,6 +323,7 @@ export default function PatientStagesPage() {
             {useNewModel && activeEpisode && (
               <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
                 <PatientStageStepper
+                  key={activeEpisode.id}
                   episodeId={activeEpisode.id}
                   currentStage={currentStage}
                   onStageChanged={handleStageChanged}
@@ -327,10 +374,11 @@ export default function PatientStagesPage() {
           )}
 
           {/* 2) Kezelési terv — munkafázisok + tervezett ütemezés EGY kártyán,
-              fejlécében a kezelési út + felelős orvos metasorral. Időpontot a
-              „Kezelési terv & időpont" fülön foglalunk (deep-link a következő lépés sorából). */}
+              fejlécében a sablon + felelős orvos metasorral. A foglalás a terv
+              soraiból történik (worklist-motor), a lánc-foglalással együtt. */}
           {activeEpisode && (
             <EpisodeStepsManager
+              key={activeEpisode.id}
               episodeId={activeEpisode.id}
               patientId={patientId}
               carePathwayId={activeEpisode.carePathwayId ?? null}
@@ -365,10 +413,37 @@ export default function PatientStagesPage() {
             />
           )}
 
-          {/* 3) Feladatok */}
+          {/* 3) Gyors foglalás — tervfüggetlen időpontfoglalás (konzultáció, kontroll)
+              + a beteg összes lefoglalt időpontjának kezelése. A terv-vezérelt
+              foglalás a fenti Kezelési terv kártya soraiban él. */}
+          <div
+            id="gyors-foglalas"
+            className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 scroll-mt-20 sm:scroll-mt-24"
+          >
+            <div className="flex items-center gap-2">
+              <Calendar className="w-5 h-5 text-medical-primary" />
+              <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Gyors foglalás</h3>
+            </div>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+              Időpont kezelési terv nélkül is foglalható (pl. konzultáció, kontroll). Itt kezelhető a
+              beteg összes lefoglalt időpontja is.
+            </p>
+            <AppointmentBookingSection
+              patientId={patientId}
+              episodeId={activeEpisode?.id ?? null}
+              pool={activeEpisode ? 'work' : undefined}
+              isViewOnly={false}
+              standalone
+            />
+            {userRole === 'admin' && (
+              <ConditionalAppointmentBooking patientId={patientId} patientEmail={patient.email || null} />
+            )}
+          </div>
+
+          {/* 4) Feladatok */}
           <PatientQuickTaskBlock patientId={patientId} />
 
-          {/* 4) Előzmények (teljes timeline) — alapból lecsukva */}
+          {/* 5) Előzmények (teljes timeline) — alapból lecsukva */}
           <details className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 group">
             <summary className="flex items-center gap-2 px-4 py-3 cursor-pointer font-semibold text-gray-900 dark:text-gray-100 list-none [&::-webkit-details-marker]:hidden">
               <Calendar className="w-5 h-5 text-medical-primary" />
