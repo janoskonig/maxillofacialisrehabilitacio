@@ -1,6 +1,7 @@
 'use client';
 
-import { BASE_OPTIONS, BASE_LABELS, type ToothConditions } from './tooth-conditions';
+import { BASE_OPTIONS, BASE_LABELS, supportsSurfaces, type ToothConditions } from './tooth-conditions';
+import { ToothSurfacePicker } from './ToothSurfacePicker';
 import type { ToothBase } from '@/hooks/usePatientAutoSave';
 
 /** Állapot-chipek (a teljes szerkesztő és a batch-mód is ezt használja). */
@@ -41,10 +42,12 @@ export function BaseChips({
  * érintőfelületeket ad mobilra.
  */
 export function ToothEditor({
+  fdi,
   conditions,
   onChange,
   touch = false,
 }: {
+  fdi: number | string;
   conditions: ToothConditions;
   onChange: (patch: Partial<ToothConditions>) => void;
   touch?: boolean;
@@ -55,6 +58,17 @@ export function ToothEditor({
       <div className="mb-3">
         <BaseChips value={conditions.base} onPick={(b) => onChange({ base: b })} touch={touch} />
       </div>
+
+      {supportsSurfaces(conditions.base) && (
+        <div className="mb-3 border-t border-gray-100 dark:border-gray-800 pt-3">
+          <ToothSurfacePicker
+            fdi={fdi}
+            conditions={conditions}
+            onChange={(surfaces) => onChange({ surfaces })}
+            touch={touch}
+          />
+        </div>
+      )}
 
       <div className={`flex flex-wrap items-center ${touch ? 'gap-3' : 'gap-4'}`}>
         <label

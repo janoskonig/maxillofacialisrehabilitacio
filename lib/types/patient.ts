@@ -119,6 +119,13 @@ export const patientSchema = z.object({
         caries: z.boolean().optional(),
         periapical: z.boolean().optional(),
         mobility: z.number().int().min(0).max(3).optional(),
+        // Felszín-szintű státusz.
+        surfaces: z
+          .record(
+            z.enum(['mesial', 'distal', 'vestibular', 'oral', 'occlusal']),
+            z.enum(['caries', 'filling'])
+          )
+          .optional(),
       })
     ])
   ).optional(),

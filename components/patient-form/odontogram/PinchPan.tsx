@@ -7,8 +7,10 @@ import { useRef, useState, type ReactNode, type PointerEvent as RPointerEvent } 
  * - A gesztus alatt közvetlenül a DOM `transform`-ot írjuk (nincs React re-render → snappy),
  *   és csak a gesztus végén kommitálunk state-be.
  * - 2 ujj: zoom + pásztázás a fókuszpont megtartásával. 1 ujj: pásztázás, ha már rá van zoomolva.
- * - Dupla koppintás: visszaáll alaphelyzetbe.
- * - Tap (mozgás nélkül) átmegy a fogakra (kijelölés), pásztázás utáni kattintást elnyeljük.
+ * - Visszaállás: a „Nagyítás vissza" gombbal. (Rejtett dupla-koppintásos reset NINCS: a
+ *   koppintások a fogakra is átmennek, így egy dupla koppintás felszín-jelöléseket írna.)
+ * - Tap (mozgás nélkül) átmegy a fogakra (kijelölés / felszín-jelölés), pásztázás utáni
+ *   kattintást elnyeljük.
  */
 export function PinchPan({ children, maxScale = 4 }: { children: ReactNode; maxScale?: number }) {
   const content = useRef<HTMLDivElement>(null);
@@ -28,7 +30,6 @@ export function PinchPan({ children, maxScale = 4 }: { children: ReactNode; maxS
     startPy: 0,
   });
   const moved = useRef(false);
-  const lastTap = useRef(0);
   const [zoomed, setZoomed] = useState(false);
 
   const apply = (animate = false) => {
@@ -122,17 +123,6 @@ export function PinchPan({ children, maxScale = 4 }: { children: ReactNode; maxS
   const onPointerUp = (e: RPointerEvent<HTMLDivElement>) => {
     pointers.current.delete(e.pointerId);
     (e.target as Element).releasePointerCapture?.(e.pointerId);
-
-    // dupla koppintás → reset
-    if (!moved.current && pointers.current.size === 0) {
-      const now = Date.now();
-      if (now - lastTap.current < 300 && view.current.scale > 1) {
-        reset();
-        lastTap.current = 0;
-        return;
-      }
-      lastTap.current = now;
-    }
 
     if (pointers.current.size < 2) gesture.current.active = false;
     if (pointers.current.size === 0) {

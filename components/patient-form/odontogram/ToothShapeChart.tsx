@@ -1,8 +1,17 @@
 'use client';
 
 import { useId } from 'react';
-import { ToothConditions, ToothGroup, toothGroup } from './tooth-conditions';
+import { ToothConditions, ToothGroup, toothGroup, surfacesOf } from './tooth-conditions';
 import { GEO } from './ToothShape';
+import {
+  SURFACE_MARK_COLORS,
+  isUpperJaw,
+  surfaceForRegion,
+  surfaceLabel,
+  hasSurfaceMark,
+  type SurfaceKey,
+  type SurfaceRegion,
+} from './tooth-surfaces';
 
 /**
  * Grafikus (arpadent-szerű) fogstátusz-nézet: a korona okkluzális
@@ -85,16 +94,10 @@ function chartGeometry(group: ToothGroup, upper: boolean): ChartGeometry {
   }
 }
 
-/** Felső állcsont-e (maradó 1x/2x és tej 5x/6x kvadránsok). */
-function isUpperJaw(fdi: number | string): boolean {
-  const q = Math.floor(Math.abs(Number(fdi)) / 10);
-  return q === 1 || q === 2 || q === 5 || q === 6;
-}
-
 const IVORY = '#F7F5EA';
 const STROKE = '#5B594F';
-const CARIES_FILL = '#E07A2A';
-const FILLING_FILL = '#3F76D8';
+const CARIES_FILL = SURFACE_MARK_COLORS.caries;
+const FILLING_FILL = SURFACE_MARK_COLORS.filling;
 const INLAY_FILL = '#EF9F27';
 const PROSTH_FILL = '#BFD9F1';
 const PROSTH_STROKE = '#3E76AC';
@@ -116,68 +119,148 @@ function trapezoids(box: Rect4, center: Rect4) {
   };
 }
 
+const FRAME_REGIONS = ['top', 'bottom', 'left', 'right'] as const satisfies readonly SurfaceRegion[];
+
+/**
+ * Kibővített találati zóna a felszín-mezőkhöz: a látható koronadoboznál nagyobb
+ * dobozból ugyanazzal a szerkesztéssel képzett trapézok. Így érintéssel is
+ * célozhatók a keskeny keret-mezők (a fog gyökér felőli része a vesztibuláris
+ * mező találati zónája lesz) — a rajz maga változatlan.
+ */
+function hitGeometry(box: Rect4): Rect4 {
+  return {
+    x0: Math.max(0, box.x0 - 2),
+    x1: Math.min(28, box.x1 + 2),
+    y0: Math.max(4, box.y0 - 12),
+    y1: Math.min(40, box.y1 + 3),
+  };
+}
+
 function SurfaceBox({
   geo,
-  frameFill,
-  centerFill,
+  fills,
   stroke,
   clipId,
+  onRegionClick,
+  regionTitle,
 }: {
   geo: ChartGeometry;
-  frameFill: string;
-  centerFill: string;
+  /** Régiónkénti kitöltés (a felszín-jelölések már fel vannak oldva). */
+  fills: Record<SurfaceRegion, string>;
   stroke: string;
   clipId: string;
+  onRegionClick?: (region: SurfaceRegion) => void;
+  regionTitle?: (region: SurfaceRegion) => string;
 }) {
   const { box, center, splitCenter } = geo;
   const t = trapezoids(box, center);
   const centerMidY = (center.y0 + center.y1) / 2;
+  const interactive = !!onRegionClick;
+  const titleFor = (region: SurfaceRegion) => {
+    const title = regionTitle?.(region);
+    return title ? <title>{title}</title> : null;
+  };
+
   return (
     <>
       <clipPath id={clipId}>
         <rect x={box.x0} y={box.y0} width={box.x1 - box.x0} height={box.y1 - box.y0} rx={2} />
       </clipPath>
-      <g clipPath={`url(#${clipId})`}>
-        <path d={t.top} fill={frameFill} />
-        <path d={t.bottom} fill={frameFill} />
-        <path d={t.left} fill={frameFill} />
-        <path d={t.right} fill={frameFill} />
+      <g clipPath={`url(#${clipId})`} pointerEvents={interactive ? 'none' : undefined}>
+        {FRAME_REGIONS.map((region) => (
+          <path key={region} d={t[region]} fill={fills[region]}>
+            {!interactive && titleFor(region)}
+          </path>
+        ))}
         <rect
           x={center.x0}
           y={center.y0}
           width={center.x1 - center.x0}
           height={center.y1 - center.y0}
-          fill={centerFill}
-        />
+          fill={fills.center}
+        >
+          {!interactive && titleFor('center')}
+        </rect>
         {/* átlós elválasztók a sarkokból a középső mezőig */}
-        <line x1={box.x0} y1={box.y0} x2={center.x0} y2={center.y0} stroke={stroke} strokeWidth="0.55" />
-        <line x1={box.x1} y1={box.y0} x2={center.x1} y2={center.y0} stroke={stroke} strokeWidth="0.55" />
-        <line x1={box.x0} y1={box.y1} x2={center.x0} y2={center.y1} stroke={stroke} strokeWidth="0.55" />
-        <line x1={box.x1} y1={box.y1} x2={center.x1} y2={center.y1} stroke={stroke} strokeWidth="0.55" />
-        {splitCenter && (
-          <line x1={center.x0} y1={centerMidY} x2={center.x1} y2={centerMidY} stroke={stroke} strokeWidth="0.55" />
-        )}
+        <g pointerEvents="none">
+          <line x1={box.x0} y1={box.y0} x2={center.x0} y2={center.y0} stroke={stroke} strokeWidth="0.55" />
+          <line x1={box.x1} y1={box.y0} x2={center.x1} y2={center.y0} stroke={stroke} strokeWidth="0.55" />
+          <line x1={box.x0} y1={box.y1} x2={center.x0} y2={center.y1} stroke={stroke} strokeWidth="0.55" />
+          <line x1={box.x1} y1={box.y1} x2={center.x1} y2={center.y1} stroke={stroke} strokeWidth="0.55" />
+          {splitCenter && (
+            <line x1={center.x0} y1={centerMidY} x2={center.x1} y2={centerMidY} stroke={stroke} strokeWidth="0.55" />
+          )}
+        </g>
       </g>
-      <rect
-        x={center.x0}
-        y={center.y0}
-        width={center.x1 - center.x0}
-        height={center.y1 - center.y0}
-        fill="none"
-        stroke={stroke}
-        strokeWidth="0.6"
-      />
-      <rect
-        x={box.x0}
-        y={box.y0}
-        width={box.x1 - box.x0}
-        height={box.y1 - box.y0}
-        rx={2}
-        fill="none"
-        stroke={stroke}
-        strokeWidth="1"
-      />
+      <g pointerEvents="none">
+        <rect
+          x={center.x0}
+          y={center.y0}
+          width={center.x1 - center.x0}
+          height={center.y1 - center.y0}
+          fill="none"
+          stroke={stroke}
+          strokeWidth="0.6"
+        />
+        <rect
+          x={box.x0}
+          y={box.y0}
+          width={box.x1 - box.x0}
+          height={box.y1 - box.y0}
+          rx={2}
+          fill="none"
+          stroke={stroke}
+          strokeWidth="1"
+        />
+      </g>
+      {interactive && (
+        <SurfaceHitLayer
+          geo={geo}
+          onRegionClick={onRegionClick!}
+          regionTitle={regionTitle}
+        />
+      )}
     </>
+  );
+}
+
+/** Átlátszó, kibővített találati zónák a felszín-mezőkhöz (csak szerkesztéskor). */
+function SurfaceHitLayer({
+  geo,
+  onRegionClick,
+  regionTitle,
+}: {
+  geo: ChartGeometry;
+  onRegionClick: (region: SurfaceRegion) => void;
+  regionTitle?: (region: SurfaceRegion) => string;
+}) {
+  const hitBox = hitGeometry(geo.box);
+  const t = trapezoids(hitBox, geo.center);
+  const props = (region: SurfaceRegion) => ({
+    fill: 'transparent',
+    style: { cursor: 'pointer' as const },
+    onClick: (e: React.MouseEvent) => {
+      e.stopPropagation();
+      onRegionClick(region);
+    },
+  });
+  return (
+    <g>
+      {FRAME_REGIONS.map((region) => (
+        <path key={region} d={t[region]} {...props(region)}>
+          {regionTitle?.(region) && <title>{regionTitle(region)}</title>}
+        </path>
+      ))}
+      <rect
+        x={geo.center.x0}
+        y={geo.center.y0}
+        width={geo.center.x1 - geo.center.x0}
+        height={geo.center.y1 - geo.center.y0}
+        {...props('center')}
+      >
+        {regionTitle?.('center') && <title>{regionTitle('center')}</title>}
+      </rect>
+    </g>
   );
 }
 
@@ -201,26 +284,64 @@ function ImplantScrew() {
   );
 }
 
-export function ToothShapeChart({ fdi, conditions }: { fdi: number | string; conditions: ToothConditions }) {
+export function ToothShapeChart({
+  fdi,
+  conditions,
+  onSurfaceClick,
+}: {
+  fdi: number | string;
+  conditions: ToothConditions;
+  /** Ha megadva, a felszín-mezők kattinthatók (szerkesztő nézet). */
+  onSurfaceClick?: (surface: SurfaceKey) => void;
+}) {
   const clipId = useId();
   const group = toothGroup(fdi);
   const upper = isUpperJaw(fdi);
   const geo = chartGeometry(group, upper);
-  const { base, caries, periapical, mobility } = conditions;
+  const { base, periapical, mobility } = conditions;
+  const surfaces = surfacesOf(conditions);
 
   const prosthetic = base === 'crown' || base === 'bridge_abutment' || base === 'bridge_pontic';
   const isBridge = base === 'bridge_abutment' || base === 'bridge_pontic';
   const noRoot = base === 'bridge_pontic';
   const stroke = prosthetic ? PROSTH_STROKE : STROKE;
 
-  const frameFill = caries ? CARIES_FILL : prosthetic ? PROSTH_FILL : IVORY;
-  const centerFill = prosthetic
+  // Fog-szintű jelölők csak akkor festik az egész keretet / középső mezőt, ha
+  // nincs pontosabb felszín-adat — így a régi (felszín nélküli) felvételek
+  // változatlanul jelennek meg, a felszín-jelölés viszont felülírja őket.
+  const cariesFallback = conditions.caries && !hasSurfaceMark(surfaces, 'caries');
+  const frameFallback = cariesFallback ? CARIES_FILL : prosthetic ? PROSTH_FILL : IVORY;
+  // A középső mező az alapállapotot mutatja (tömés / inlay), ha nincs rá
+  // felszín-jelölés. A fog-szintű szuvas-jelző — mint korábban is — csak a
+  // keretet festi, hogy megkülönböztethető maradjon a felszín-szintű adattól.
+  const centerFallback = prosthetic
     ? PROSTH_FILL
     : base === 'filled'
       ? FILLING_FILL
       : base === 'inlay'
         ? INLAY_FILL
         : IVORY;
+
+  const fillFor = (region: SurfaceRegion): string => {
+    const mark = surfaces[surfaceForRegion(fdi, region)];
+    if (mark) return SURFACE_MARK_COLORS[mark];
+    return region === 'center' ? centerFallback : frameFallback;
+  };
+  const fills: Record<SurfaceRegion, string> = {
+    top: fillFor('top'),
+    bottom: fillFor('bottom'),
+    left: fillFor('left'),
+    right: fillFor('right'),
+    center: fillFor('center'),
+  };
+  // Tooltip: szerkesztéskor minden mezőn (célzáshoz), egyébként csak a
+  // megjelölt felszíneken — így az ívben nem keletkezik 160 néma <title>.
+  const regionTitle = (region: SurfaceRegion) => {
+    const key = surfaceForRegion(fdi, region);
+    const mark = surfaces[key];
+    if (!mark && !onSurfaceClick) return '';
+    return `${fdi} · ${surfaceLabel(fdi, key)}${mark ? ` — ${mark === 'caries' ? 'szuvas' : 'tömött'}` : ''}`;
+  };
 
   const canalColor = base === 'root_canal' ? ROOT_CANAL_COLOR : base === 'necrotic' ? NECROTIC_COLOR : null;
 
@@ -276,7 +397,16 @@ export function ToothShapeChart({ fdi, conditions }: { fdi: number | string; con
             </>
           )
         )}
-        <SurfaceBox geo={geo} frameFill={frameFill} centerFill={centerFill} stroke={stroke} clipId={clipId} />
+        <SurfaceBox
+          geo={geo}
+          fills={fills}
+          stroke={stroke}
+          clipId={clipId}
+          onRegionClick={
+            onSurfaceClick ? (region) => onSurfaceClick(surfaceForRegion(fdi, region)) : undefined
+          }
+          regionTitle={regionTitle}
+        />
         {canalColor && (
           <line
             x1={geo.rootCanalX}

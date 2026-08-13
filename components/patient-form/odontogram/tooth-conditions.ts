@@ -3,6 +3,12 @@ import {
   type ToothStatus,
   type ToothBase,
 } from '@/hooks/usePatientAutoSave';
+import {
+  readSurfaces,
+  hasSurfaceMark,
+  countSurfaceMarks,
+  type SurfaceMap,
+} from './tooth-surfaces';
 
 export type ToothGroup = 'incisor' | 'canine' | 'premolar' | 'molar';
 
@@ -13,6 +19,8 @@ export interface ToothConditions {
   periapical: boolean;
   mobility: number;
   description?: string;
+  /** Felszín-szintű jelölések (hiányzó/üres térkép = nincs felszín-adat). */
+  surfaces?: SurfaceMap;
 }
 
 export const UPPER_ROW = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
@@ -39,7 +47,7 @@ function baseFromLegacyStatus(status?: 'D' | 'F' | 'M'): ToothBase {
 export function readConditions(value: ToothStatus | undefined): ToothConditions {
   const norm = normalizeToothData(value);
   if (!norm) {
-    return { base: 'sound', caries: false, periapical: false, mobility: 0 };
+    return { base: 'sound', caries: false, periapical: false, mobility: 0, surfaces: {} };
   }
   const base = norm.base ?? baseFromLegacyStatus(norm.status);
   const caries = norm.caries ?? norm.status === 'D';
@@ -49,23 +57,53 @@ export function readConditions(value: ToothStatus | undefined): ToothConditions 
     periapical: Boolean(norm.periapical),
     mobility: norm.mobility ?? 0,
     description: norm.description,
+    surfaces: readSurfaces(norm.surfaces),
   };
+}
+
+/** A felszín-jelölések a fogon (mindig érvényes térkép). */
+export function surfacesOf(c: ToothConditions): SurfaceMap {
+  return c.surfaces ?? {};
+}
+
+/**
+ * Van-e szuvasodás a fogon: a fog-szintű jelölő VAGY bármelyik felszín szuvas.
+ * A megjelenítés és a DMF-T is ezt használja, hogy a két adatfelvételi mód
+ * (gyors jelölő / felszín-szintű) ne mondjon ellent egymásnak.
+ */
+export function hasCaries(c: ToothConditions): boolean {
+  return c.caries || hasSurfaceMark(surfacesOf(c), 'caries');
+}
+
+/** Van-e tömés a fogon (alapállapot vagy felszín-szintű jelölés alapján). */
+export function hasFilling(c: ToothConditions): boolean {
+  return RESTORED.includes(c.base) || hasSurfaceMark(surfacesOf(c), 'filling');
+}
+
+/** Értelmezhetők-e felszínek ezen a fogon (hiányzó / gyökérmaradvány / retineált nem). */
+export function supportsSurfaces(base: ToothBase): boolean {
+  return !isMissingBase(base) && base !== 'root_remnant' && base !== 'impacted';
 }
 
 /** Feloldott állapot → tárolható objektum (üres → undefined, hogy ki lehessen törölni). */
 export function writeConditions(c: ToothConditions): ToothStatus | undefined {
+  // A hiányzó/roncs fogakon nincs értelmezhető felszín — ne tároljunk holt adatot.
+  const surfaces = supportsSurfaces(c.base) ? surfacesOf(c) : {};
+  const surfaceCount = countSurfaceMarks(surfaces);
   const isDefault =
     c.base === 'sound' &&
     !c.caries &&
     !c.periapical &&
     (!c.mobility || c.mobility === 0) &&
-    !c.description;
+    !c.description &&
+    surfaceCount === 0;
   if (isDefault) return undefined;
   const out: ToothStatus = { base: c.base };
   if (c.caries) out.caries = true;
   if (c.periapical) out.periapical = true;
   if (c.mobility && c.mobility > 0) out.mobility = c.mobility;
   if (c.description) out.description = c.description;
+  if (surfaceCount > 0) out.surfaces = surfaces;
   return out;
 }
 
@@ -125,9 +163,9 @@ export function computeDMFT(fogak: Record<string, ToothStatus>): {
     const c = readConditions(value);
     if (isMissingBase(c.base)) {
       m++;
-    } else if (c.caries) {
+    } else if (hasCaries(c)) {
       d++;
-    } else if (RESTORED.includes(c.base)) {
+    } else if (hasFilling(c)) {
       f++;
     }
   }

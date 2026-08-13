@@ -1,4 +1,8 @@
-import type { ToothBase } from '@/hooks/usePatientAutoSave';
+import type { ToothBase, ToothSurfaceKey, ToothSurfaceMark } from '@/hooks/usePatientAutoSave';
+
+type SurfaceMap = Partial<Record<ToothSurfaceKey, ToothSurfaceMark>>;
+
+const SURFACE_KEYS: ToothSurfaceKey[] = ['occlusal', 'mesial', 'distal', 'vestibular', 'oral'];
 
 /**
  * Egy elkészült fogkezelés következménye az adott fog odontogram-állapotára.
@@ -47,6 +51,44 @@ interface ResolvedTooth {
   periapical: boolean;
   mobility: number;
   description?: string;
+  surfaces: SurfaceMap;
+}
+
+function resolveSurfaces(value: unknown): SurfaceMap {
+  if (!value || typeof value !== 'object') return {};
+  const src = value as Record<string, unknown>;
+  const out: SurfaceMap = {};
+  for (const key of SURFACE_KEYS) {
+    const mark = src[key];
+    if (mark === 'caries' || mark === 'filling') out[key] = mark;
+  }
+  return out;
+}
+
+/**
+ * A felszín-jelölések sorsa a kezelés után:
+ *  - a fog megszűnik / teljesen fedetté válik (extrakció, implantátum, korona,
+ *    hídpillér) → nincs értelmezhető felszín-adat,
+ *  - a szuvasodást megszüntető, de felszín-szintű beavatkozás (tömés) → a szuvas
+ *    felszínekből tömött felszín lesz,
+ *  - egyébként változatlan.
+ */
+function nextSurfaces(current: SurfaceMap, rule: OutcomeRule): SurfaceMap {
+  const covered =
+    rule.base === 'missing' ||
+    rule.base === 'implant' ||
+    rule.base === 'crown' ||
+    rule.base === 'bridge_abutment' ||
+    rule.base === 'bridge_pontic';
+  if (covered) return {};
+  if (!rule.clearCaries) return { ...current };
+  const out: SurfaceMap = {};
+  for (const key of SURFACE_KEYS) {
+    const mark = current[key];
+    if (mark === 'caries') out[key] = 'filling';
+    else if (mark) out[key] = mark;
+  }
+  return out;
 }
 
 function legacyStatusToBase(status?: string): ToothBase {
@@ -57,7 +99,7 @@ function legacyStatusToBase(status?: string): ToothBase {
 
 function resolveStored(value: unknown): ResolvedTooth {
   if (!value || typeof value === 'string') {
-    return { base: 'sound', caries: false, periapical: false, mobility: 0, description: typeof value === 'string' && value.trim() ? value : undefined };
+    return { base: 'sound', caries: false, periapical: false, mobility: 0, description: typeof value === 'string' && value.trim() ? value : undefined, surfaces: {} };
   }
   const v = value as Record<string, unknown>;
   const status = typeof v.status === 'string' ? v.status : undefined;
@@ -68,19 +110,27 @@ function resolveStored(value: unknown): ResolvedTooth {
     periapical: v.periapical === true,
     mobility: typeof v.mobility === 'number' ? v.mobility : 0,
     description: typeof v.description === 'string' ? v.description : undefined,
+    surfaces: resolveSurfaces(v.surfaces),
   };
 }
 
 /** Normalizált mezők → tárolható objektum (a default-tiszta fog `undefined`). */
 function toStored(t: ResolvedTooth): Record<string, unknown> | undefined {
+  const surfaceCount = SURFACE_KEYS.filter((k) => t.surfaces[k] != null).length;
   const isDefault =
-    t.base === 'sound' && !t.caries && !t.periapical && (!t.mobility || t.mobility === 0) && !t.description;
+    t.base === 'sound' &&
+    !t.caries &&
+    !t.periapical &&
+    (!t.mobility || t.mobility === 0) &&
+    !t.description &&
+    surfaceCount === 0;
   if (isDefault) return undefined;
   const out: Record<string, unknown> = { base: t.base };
   if (t.caries) out.caries = true;
   if (t.periapical) out.periapical = true;
   if (t.mobility && t.mobility > 0) out.mobility = t.mobility;
   if (t.description) out.description = t.description;
+  if (surfaceCount > 0) out.surfaces = t.surfaces;
   return out;
 }
 
@@ -103,6 +153,7 @@ export function applyTreatmentOutcome(
     periapical: rule.clearPeriapical ? false : resolved.periapical,
     mobility: rule.clearMobility ? 0 : resolved.mobility,
     description: resolved.description,
+    surfaces: nextSurfaces(resolved.surfaces, rule),
   };
 
   const before = toStored(resolved);

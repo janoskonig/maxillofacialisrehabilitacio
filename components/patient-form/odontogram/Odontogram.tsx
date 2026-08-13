@@ -9,12 +9,15 @@ import { Tooth } from './Tooth';
 import { ToothShape } from './ToothShape';
 import { ToothShapeChart } from './ToothShapeChart';
 import { ToothEditor, BaseChips } from './ToothEditor';
+import { ToothSurfacePicker } from './ToothSurfacePicker';
 import { PinchPan } from './PinchPan';
 import { OdontogramStyleToggle, useOdontogramStyle, type OdontogramStyle } from './odontogram-style';
 import {
   readConditions,
   writeConditions,
   archSummary,
+  supportsSurfaces,
+  surfacesOf,
   BASE_LABELS,
   UPPER_ROW,
   LOWER_ROW,
@@ -22,6 +25,16 @@ import {
   LOWER_TEETH,
   type ToothConditions,
 } from './tooth-conditions';
+import {
+  cycleSurfaceMark,
+  setSurface,
+  countSurfaceMarks,
+  describeSurfaces,
+  SURFACE_MARKS,
+  SURFACE_MARK_COLORS,
+  SURFACE_MARK_LABELS,
+  type SurfaceKey,
+} from './tooth-surfaces';
 
 interface OdontogramProps {
   fogak: Record<string, ToothStatus>;
@@ -84,6 +97,32 @@ function applyTooth(
   });
 }
 
+/**
+ * Egy felszín jelölésének léptetése (ép → szuvas → tömött → ép) az íven.
+ * A ciklust az updateren belül számoljuk, hogy a gyors, egymás utáni
+ * koppintások ne dolgozzanak elavult állapotból.
+ */
+function cycleToothSurface(
+  setFogak: Dispatch<SetStateAction<Record<string, ToothStatus>>>,
+  tooth: string,
+  surface: SurfaceKey
+) {
+  setFogak((prev) => {
+    const current = readConditions(prev[tooth]);
+    if (!supportsSurfaces(current.base)) return prev;
+    const surfaces = surfacesOf(current);
+    const next: ToothConditions = {
+      ...current,
+      surfaces: setSurface(surfaces, surface, cycleSurfaceMark(surfaces[surface])),
+    };
+    const stored = writeConditions(next);
+    const ns = { ...prev };
+    if (stored === undefined) delete ns[tooth];
+    else ns[tooth] = stored;
+    return ns;
+  });
+}
+
 /** Egy alapállapotot alkalmaz több fogra egyszerre (batch). */
 function applyBaseToMany(
   setFogak: Dispatch<SetStateAction<Record<string, ToothStatus>>>,
@@ -134,6 +173,16 @@ const TW = 28; // egy fog dobozszélessége
 const GAP = 2; // fogak közti rés
 const MID = 10; // extra rés a középvonalban (8. fog után)
 const VH = 52; // viewBox magasság
+const TH = 40; // egy fog dobozmagassága
+
+/**
+ * A kiválasztott fog nagyítása. Mobilon nagyobb, mert ott a felszín-mezők
+ * érintéssel is célozhatók legyenek. A nagyítás mindig az ívtől ELFELÉ
+ * (a fogszámoktól és a szemközti ívtől távolodva) történik, így a kinagyított
+ * fog nem takarja el a fogszámot és a másik ívet.
+ */
+const FOCUS_SCALE_DESKTOP = 1.6;
+const FOCUS_SCALE_MOBILE = 2;
 
 function toothX(i: number): number {
   return i * (TW + GAP) + (i > 7 ? MID : 0);
@@ -148,6 +197,8 @@ function Arch({
   dim,
   onSelect,
   odoStyle,
+  focusScale,
+  onSurfaceClick,
 }: {
   teeth: number[];
   fogak: Record<string, ToothStatus>;
@@ -157,79 +208,112 @@ function Arch({
   dim: boolean;
   onSelect?: (t: string) => void;
   odoStyle: OdontogramStyle;
+  focusScale: number;
+  /** Ha megadva, a kiválasztott fog felszín-mezői közvetlenül kattinthatók. */
+  onSurfaceClick?: (tooth: string, surface: SurfaceKey) => void;
 }) {
   const toothY = numberPosition === 'above' ? 11 : 0;
   const numY = numberPosition === 'above' ? 8 : 48;
+  // A fogszámok a felső ívnél alul, az alsónál felül vannak: a nagyítás
+  // mindig az ellenkező irányba nő, hogy a szám olvasható maradjon.
+  const growUp = numberPosition === 'below';
   const cx = 14;
-  const cy = 20;
   const W = toothX(teeth.length - 1) + TW;
+  // Hely a kinagyított fognak, viewBox-egységben (így a konténer szélességétől
+  // függetlenül pontos, és a mobil pinch-zoom rétege sem vágja le).
+  const pad = TH * (focusScale - 1);
+
+  function renderTooth(tooth: number, i: number) {
+    const t = String(tooth);
+    const x = toothX(i);
+    const isFocus = focus === t;
+    const isBatch = batch?.has(t) ?? false;
+    const op = dim && !isFocus && !isBatch ? 0.28 : 1;
+    const s = isFocus ? focusScale : 1;
+    const pivotY = growUp ? TH : 0;
+
+    // Vízszintes korrekció: az ív szélén álló fog nagyítva se lógjon ki.
+    const scaledLeft = x + cx - cx * s;
+    const dx =
+      scaledLeft < 0 ? -scaledLeft : Math.min(0, W - (scaledLeft + TW * s));
+    const boxX = scaledLeft + dx;
+    const boxY = toothY + (growUp ? TH - TH * s : 0);
+
+    const conditions = readConditions(fogak[t]);
+    const surfacesClickable = isFocus && !!onSurfaceClick && supportsSurfaces(conditions.base);
+    // A kiválasztott, felszín-jelölhető fogon a koppintás a felszínt jelöli —
+    // ilyenkor a fogra kattintás nem szünteti meg a kiválasztást (elütés ellen).
+    const handleSelect = onSelect && !surfacesClickable ? () => onSelect(t) : undefined;
+
+    return (
+      <g
+        key={t}
+        onClick={handleSelect}
+        style={onSelect ? { cursor: 'pointer' } : undefined}
+      >
+        {/* Kattintás-felület a fog teljes oszlopán — a rajz ALATT, hogy a
+            felszín-mezők kattintása elérje a rajzot. */}
+        {onSelect && (
+          <rect x={x} y={0} width={TW} height={VH} fill="transparent">
+            <title>{t} fog</title>
+          </rect>
+        )}
+        {(isFocus || isBatch) && (
+          <rect
+            x={boxX + 1}
+            y={boxY + 0.5}
+            width={TW * s - 2}
+            height={TH * s - 1}
+            rx={6}
+            fill={isFocus ? '#2563eb' : '#6366f1'}
+            opacity={isFocus ? 0.1 : 0.18}
+            stroke={isFocus ? '#2563eb' : '#6366f1'}
+            strokeWidth={1.4}
+          />
+        )}
+        <g
+          opacity={op}
+          transform={`translate(${x + dx}, ${toothY}) translate(${cx}, ${pivotY}) scale(${s}) translate(${-cx}, ${-pivotY})`}
+          style={{ transition: 'opacity .15s' }}
+        >
+          {odoStyle === 'chart' ? (
+            <ToothShapeChart
+              fdi={tooth}
+              conditions={conditions}
+              onSurfaceClick={
+                surfacesClickable ? (surface) => onSurfaceClick!(t, surface) : undefined
+              }
+            />
+          ) : (
+            <ToothShape fdi={tooth} conditions={conditions} />
+          )}
+        </g>
+        <text
+          x={x + 14}
+          y={numY}
+          textAnchor="middle"
+          fontSize="7.5"
+          fill={isFocus ? '#1e40af' : '#9ca3af'}
+          fontWeight={isFocus ? 700 : 400}
+        >
+          {tooth}
+        </text>
+      </g>
+    );
+  }
+
+  // A kiválasztott fog rajzolódjon utoljára: nagyítva átfedi a szomszédait.
+  const order = teeth.map((tooth, i) => ({ tooth, i }));
+  order.sort((a, b) => Number(focus === String(a.tooth)) - Number(focus === String(b.tooth)));
 
   return (
     <svg
-      viewBox={`0 0 ${W} ${VH}`}
+      viewBox={`0 ${growUp ? -pad : 0} ${W} ${VH + pad}`}
       width="100%"
       preserveAspectRatio="xMidYMid meet"
       style={{ display: 'block', overflow: 'visible' }}
     >
-      {teeth.map((tooth, i) => {
-        const t = String(tooth);
-        const x = toothX(i);
-        const isFocus = focus === t;
-        const isBatch = batch?.has(t) ?? false;
-        const op = dim && !isFocus && !isBatch ? 0.28 : 1;
-        const s = isFocus ? 1.4 : 1;
-        return (
-          <g key={t}>
-            {(isFocus || isBatch) && (
-              <rect
-                x={x + 1}
-                y={toothY + 0.5}
-                width={26}
-                height={39}
-                rx={6}
-                fill={isBatch ? '#6366f1' : '#2563eb'}
-                opacity={isBatch ? 0.18 : 0.16}
-                stroke={isBatch ? '#6366f1' : '#2563eb'}
-                strokeWidth={1.4}
-              />
-            )}
-            <g
-              opacity={op}
-              transform={`translate(${x}, ${toothY}) translate(${cx}, ${cy}) scale(${s}) translate(${-cx}, ${-cy})`}
-              style={{ transition: 'opacity .15s' }}
-            >
-              {odoStyle === 'chart' ? (
-                <ToothShapeChart fdi={tooth} conditions={readConditions(fogak[t])} />
-              ) : (
-                <ToothShape fdi={tooth} conditions={readConditions(fogak[t])} />
-              )}
-            </g>
-            <text
-              x={x + 14}
-              y={numY}
-              textAnchor="middle"
-              fontSize="7.5"
-              fill={isFocus ? '#1e40af' : '#9ca3af'}
-              fontWeight={isFocus ? 700 : 400}
-            >
-              {tooth}
-            </text>
-            {onSelect && (
-              <rect
-                x={x}
-                y={0}
-                width={TW}
-                height={VH}
-                fill="transparent"
-                style={{ cursor: 'pointer' }}
-                onClick={() => onSelect(t)}
-              >
-                <title>{t} fog</title>
-              </rect>
-            )}
-          </g>
-        );
-      })}
+      {order.map(({ tooth, i }) => renderTooth(tooth, i))}
     </svg>
   );
 }
@@ -247,6 +331,9 @@ export function Odontogram({
   const [batchMode, setBatchMode] = useState(false);
   const [batch, setBatch] = useState<Set<string>>(new Set());
   const [mobileWarningDismissed, setMobileWarningDismissed] = useState(false);
+  // Mobilon a fog kiválasztása még nem nyitja meg a teljes szerkesztőt: előbb
+  // az íven lehet felszínt jelölni, a részletes szerkesztő gombbal hívható.
+  const [mobileEditorOpen, setMobileEditorOpen] = useState(false);
   const [odoStyle] = useOdontogramStyle();
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'mobile';
@@ -255,6 +342,8 @@ export function Odontogram({
   const upper = archSummary(fogak, UPPER_TEETH);
   const lower = archSummary(fogak, LOWER_TEETH);
   const sel = selected ? readConditions(fogak[selected]) : null;
+  const selSurfaces = sel ? surfacesOf(sel) : {};
+  const selSurfaceCount = countSurfaceMarks(selSurfaces);
 
   function handleSelect(t: string) {
     if (batchMode) {
@@ -266,7 +355,13 @@ export function Odontogram({
       });
     } else {
       setSelected((prev) => (prev === t ? null : t));
+      setMobileEditorOpen(false);
     }
+  }
+
+  function closeSelection() {
+    setSelected(null);
+    setMobileEditorOpen(false);
   }
 
   function exitBatch() {
@@ -281,6 +376,13 @@ export function Odontogram({
 
   const focusForArch = canEdit && !batchMode ? selected : null;
   const dim = canEdit && (!!selected || batch.size > 0);
+  const focusScale = isMobile ? FOCUS_SCALE_MOBILE : FOCUS_SCALE_DESKTOP;
+  // A grafikus nézetben a kiválasztott fog felszínei közvetlenül jelölhetők.
+  const archSurfaceClick =
+    canEdit && !batchMode && odoStyle === 'chart'
+      ? (tooth: string, surface: SurfaceKey) => cycleToothSurface(setFogak, tooth, surface)
+      : undefined;
+  const selSurfacesEditable = !!sel && supportsSurfaces(sel.base) && odoStyle === 'chart';
 
   const archBlock = (
     <>
@@ -293,8 +395,10 @@ export function Odontogram({
         dim={dim}
         onSelect={canEdit ? handleSelect : undefined}
         odoStyle={odoStyle}
+        focusScale={focusScale}
+        onSurfaceClick={archSurfaceClick}
       />
-      <div className="flex items-center gap-2 my-2">
+      <div className="flex items-center gap-2 my-1">
         <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
         <span className="text-[10px] text-gray-400 dark:text-gray-500">jobb · bal</span>
         <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
@@ -308,12 +412,15 @@ export function Odontogram({
         dim={dim}
         onSelect={canEdit ? handleSelect : undefined}
         odoStyle={odoStyle}
+        focusScale={focusScale}
+        onSurfaceClick={archSurfaceClick}
       />
     </>
   );
 
-  // A mobil szerkesztő sheet csak akkor nyíljon, ha egy fog ki van választva (nem batch).
-  const sheetOpen = isMobile && canEdit && !batchMode && !!selected;
+  // A mobil szerkesztő sheet csak külön kérésre nyílik (a kiválasztás önmagában
+  // az íven enged felszínt jelölni — a sheet elfedné az ívet).
+  const sheetOpen = isMobile && canEdit && !batchMode && !!selected && mobileEditorOpen;
   const batchSheetOpen = isMobile && canEdit && batchMode && batch.size > 0;
 
   return (
@@ -329,6 +436,50 @@ export function Odontogram({
         </div>
       </div>
 
+      {/* Mobil: a kiválasztott fog kompakt sávja közvetlenül az ív alatt —
+          a felszínek az íven jelölhetők, a teljes szerkesztő gombbal nyílik. */}
+      {isMobile && canEdit && !batchMode && selected && sel && (
+        <div className="mt-3 rounded-lg border border-blue-200 dark:border-blue-900 bg-blue-50/60 dark:bg-blue-950/30 p-3">
+          <div className="flex items-center gap-2 flex-wrap">
+            <Tooth fdi={selected} conditions={sel} size={22} showNumber={false} />
+            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{selected}. fog</span>
+            <span className="text-xs text-gray-500 dark:text-gray-400">{BASE_LABELS[sel.base]}</span>
+          </div>
+          {selSurfacesEditable && (
+            <>
+              <p className="text-[11px] text-gray-600 dark:text-gray-300 mt-1.5">
+                Koppintson a felszínekre a kinagyított fogon vagy az alábbi jelölőn.
+                {selSurfaceCount > 0 && ` — ${describeSurfaces(selected, selSurfaces)}`}
+              </p>
+              <div className="mt-2">
+                <ToothSurfacePicker
+                  fdi={selected}
+                  conditions={sel}
+                  onChange={(surfaces) => applyTooth(setFogak, selected, { surfaces })}
+                  touch
+                />
+              </div>
+            </>
+          )}
+          <div className="flex gap-2 mt-3">
+            <button
+              type="button"
+              onClick={() => setMobileEditorOpen(true)}
+              className="flex-1 min-h-[44px] px-3 text-sm rounded-md bg-medical-primary text-white font-medium"
+            >
+              Részletes szerkesztés
+            </button>
+            <button
+              type="button"
+              onClick={closeSelection}
+              className="min-h-[44px] px-4 text-sm rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-800 text-gray-700 dark:text-gray-200"
+            >
+              Kész
+            </button>
+          </div>
+        </div>
+      )}
+
       {/* Jelmagyarázat + összegzés */}
       <div className="flex items-center gap-x-4 gap-y-1 flex-wrap mt-3 text-xs text-gray-600 dark:text-gray-300 max-w-full min-w-0">
         {LEGEND.map((l) => (
@@ -337,6 +488,17 @@ export function Odontogram({
             {l.label}
           </span>
         ))}
+        {odoStyle === 'chart' &&
+          SURFACE_MARKS.map((mark) => (
+            <span key={mark} className="inline-flex items-center gap-1.5">
+              <span
+                aria-hidden
+                className="inline-block w-3 h-3 rounded-sm border border-gray-400 dark:border-gray-500"
+                style={{ backgroundColor: SURFACE_MARK_COLORS[mark] }}
+              />
+              {SURFACE_MARK_LABELS[mark].toLowerCase()} felszín
+            </span>
+          ))}
         <span className="basis-full sm:basis-auto sm:ml-auto min-w-0 text-gray-500 dark:text-gray-400">
           Felső: {upper.present} megvan · {upper.missing} hiányzó · Alsó: {lower.present} megvan · {lower.missing} hiányzó
         </span>
@@ -347,8 +509,12 @@ export function Odontogram({
           {batchMode
             ? 'Koppintson a fogakra a kijelöléshez, majd válasszon egy közös státuszt.'
             : isMobile
-              ? 'Koppintson egy fogra a szerkesztéshez · két ujjal nagyíthat a pontos célzáshoz.'
-              : 'Kattintson egy fogra a státusza beállításához.'}
+              ? selSurfacesEditable
+                ? 'A kiválasztott fog felszíneire koppintva jelölhet · két ujjal nagyíthat a pontos célzáshoz.'
+                : 'Koppintson egy fogra a kiválasztáshoz · két ujjal nagyíthat a pontos célzáshoz.'
+              : selSurfacesEditable
+                ? 'A kiválasztott fog felszíneire kattintva jelölhet szuvas / tömött felszínt (ép → szuvas → tömött).'
+                : 'Kattintson egy fogra a státusza beállításához.'}
         </p>
       )}
 
@@ -376,7 +542,7 @@ export function Odontogram({
                 if (batchMode) exitBatch();
                 else {
                   setBatchMode(true);
-                  setSelected(null);
+                  closeSelection();
                 }
               }}
               className={`px-3 py-1.5 text-xs rounded border transition-colors ${
@@ -416,13 +582,17 @@ export function Odontogram({
                 <span className="text-xs text-gray-400 dark:text-gray-500">({BASE_LABELS[sel.base]})</span>
                 <button
                   type="button"
-                  onClick={() => setSelected(null)}
+                  onClick={closeSelection}
                   className="ml-auto text-xs text-gray-500 dark:text-gray-400 hover:text-gray-700 dark:hover:text-gray-300"
                 >
                   Bezárás
                 </button>
               </div>
-              <ToothEditor conditions={sel} onChange={(patch) => applyTooth(setFogak, selected, patch)} />
+              <ToothEditor
+                fdi={selected}
+                conditions={sel}
+                onChange={(patch) => applyTooth(setFogak, selected, patch)}
+              />
             </div>
           )}
 
@@ -437,7 +607,7 @@ export function Odontogram({
       {/* Mobil: egy fog szerkesztője bottom sheetben */}
       <MobileBottomSheet
         open={sheetOpen}
-        onOpenChange={(o) => { if (!o) setSelected(null); }}
+        onOpenChange={(o) => { if (!o) setMobileEditorOpen(false); }}
         title={selected ? `${selected}. fog` : undefined}
         description={sel ? BASE_LABELS[sel.base] : undefined}
       >
@@ -460,7 +630,12 @@ export function Odontogram({
                 </button>
               </div>
             )}
-            <ToothEditor conditions={sel} onChange={(patch) => applyTooth(setFogak, selected, patch)} touch />
+            <ToothEditor
+              fdi={selected}
+              conditions={sel}
+              onChange={(patch) => applyTooth(setFogak, selected, patch)}
+              touch
+            />
           </div>
         )}
       </MobileBottomSheet>

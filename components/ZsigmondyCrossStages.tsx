@@ -6,10 +6,13 @@ import { isToothTreatmentPathwayDone } from '@/lib/tooth-treatment-pathway';
 import { Tooth } from './patient-form/odontogram/Tooth';
 import {
   readConditions,
+  hasCaries,
+  surfacesOf,
   BASE_LABELS,
   UPPER_ROW,
   LOWER_ROW,
 } from './patient-form/odontogram/tooth-conditions';
+import { describeSurfaces } from './patient-form/odontogram/tooth-surfaces';
 import { OdontogramStyleToggle } from './patient-form/odontogram/odontogram-style';
 import { ToothTreatmentProvider, ToothTreatmentInline } from './ToothTreatmentPanel';
 import { OPInlinePreview } from './OPInlinePreview';
@@ -93,7 +96,11 @@ function ToothCell({
         numberPosition={numberPosition}
         selected={isSelected}
         onClick={() => onSelect(toothStr)}
-        title={`${toothStr}. fog — ${BASE_LABELS[conditions.base]}${conditions.caries ? ' (szuvas)' : ''}`}
+        title={`${toothStr}. fog — ${BASE_LABELS[conditions.base]}${hasCaries(conditions) ? ' (szuvas)' : ''}${
+          describeSurfaces(toothStr, surfacesOf(conditions))
+            ? ` · ${describeSurfaces(toothStr, surfacesOf(conditions))}`
+            : ''
+        }`}
       />
       {activeTreatments.length > 0 ? (
         <span
@@ -214,7 +221,11 @@ export function ZsigmondyCrossStages({ patientId, patientName, meglevoFogak }: Z
 
   const selectedConditions = selectedTooth ? readConditions(meglevoFogak?.[selectedTooth]) : null;
   const statusLabel = selectedConditions
-    ? `${BASE_LABELS[selectedConditions.base]}${selectedConditions.caries ? ' · szuvas' : ''}`
+    ? `${BASE_LABELS[selectedConditions.base]}${hasCaries(selectedConditions) ? ' · szuvas' : ''}${
+        selectedTooth && describeSurfaces(selectedTooth, surfacesOf(selectedConditions))
+          ? ` · ${describeSurfaces(selectedTooth, surfacesOf(selectedConditions))}`
+          : ''
+      }`
     : 'Nincs adat';
 
   return (

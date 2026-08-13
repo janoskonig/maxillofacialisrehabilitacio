@@ -1,6 +1,7 @@
 'use client';
 
-import { ToothConditions, ToothGroup, toothGroup } from './tooth-conditions';
+import { ToothConditions, ToothGroup, toothGroup, hasCaries, surfacesOf } from './tooth-conditions';
+import { hasSurfaceMark } from './tooth-surfaces';
 
 interface ToothGeometry {
   out: string;
@@ -58,7 +59,9 @@ const ROMAN = ['', 'I', 'II', 'III'];
 export function ToothShape({ fdi, conditions }: { fdi: number | string; conditions: ToothConditions }) {
   const group = toothGroup(fdi);
   const g = GEO[group];
-  const { base, caries, periapical, mobility } = conditions;
+  const { base, periapical, mobility } = conditions;
+  // Az egyszerű nézetben a felszín-szintű szuvasodás is a fog szuvas-jelzését adja.
+  const caries = hasCaries(conditions);
 
   const crownColored =
     base === 'crown' || base === 'bridge_abutment'
@@ -73,7 +76,8 @@ export function ToothShape({ fdi, conditions }: { fdi: number | string; conditio
   const isPontic = base === 'bridge_pontic';
   const crownOnly = showImplant || isPontic;
   const showInlay = base === 'inlay';
-  const showFilled = base === 'filled';
+  // A felszín-szintű tömés az egyszerű nézetben is látszódjon (a DMF-T is számolja).
+  const showFilled = base === 'filled' || hasSurfaceMark(surfacesOf(conditions), 'filling');
   const showNecrotic = base === 'necrotic';
   const rootRemnant = base === 'root_remnant';
   const missing = base === 'missing';
