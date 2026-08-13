@@ -57,6 +57,9 @@ export interface PendingStep extends NextStepResult {
   isFirstPending: boolean;
   /** Episode step status — 'completed'/'skipped' for resolved steps, 'pending'/'scheduled' for upcoming */
   stepStatus?: 'pending' | 'scheduled' | 'completed' | 'skipped';
+  /** A lépést adó konkrét episode_work_phases sor id-ja (SSOT ág). A
+      work_phase_code nem egyedi (multi-jaw sablon), ezért az identitás ez. */
+  workPhaseRowId?: string | null;
 }
 
 export type AllPendingStepsResult = PendingStep[] | BlockedResult;
@@ -125,6 +128,10 @@ async function getCompletedAppointmentStats(
 }
 
 export interface EpisodeWorkPhaseRow {
+  /** Kanonikus episode_work_phases.id — a hívók (worklist route) töltik; a
+      lépés-identitás ezen alapul, mert a work_phase_code duplikálódhat
+      (pl. ugyanaz a sablon felső+alsó állcsontra alkalmazva). */
+  id?: string;
   work_phase_code: string;
   pathway_order_index: number;
   seq: number | null;
@@ -639,6 +646,7 @@ export function allPendingStepsWithData(
         stepSeq: -(resolvedSteps.length - i),
         isFirstPending: false,
         stepStatus: step.status as 'completed' | 'skipped',
+        workPhaseRowId: step.id ?? null,
       });
     }
 
@@ -662,6 +670,7 @@ export function allPendingStepsWithData(
         stepSeq: pendingIdx,
         isFirstPending: pendingIdx === 0,
         stepStatus: pending.status as 'pending' | 'scheduled',
+        workPhaseRowId: pending.id ?? null,
       });
 
       pendingIdx++;

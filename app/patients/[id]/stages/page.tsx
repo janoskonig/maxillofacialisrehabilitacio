@@ -435,10 +435,13 @@ export default function PatientStagesPage() {
               isViewOnly={false}
               standalone
             />
-            {userRole === 'admin' && (
-              <ConditionalAppointmentBooking patientId={patientId} patientEmail={patient.email || null} />
-            )}
           </div>
+
+          {/* Feltételes időpont (admin) — saját kártya-chrome-mal, ezért a
+              Gyors foglalás kártyán KÍVÜL áll (kártya-a-kártyában elkerülése) */}
+          {userRole === 'admin' && (
+            <ConditionalAppointmentBooking patientId={patientId} patientEmail={patient.email || null} />
+          )}
 
           {/* 4) Feladatok */}
           <PatientQuickTaskBlock patientId={patientId} />

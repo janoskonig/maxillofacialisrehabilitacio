@@ -34,6 +34,8 @@ export interface WorkPhaseBookingOverride429 {
   overrideHint?: string;
   expectedHardNext?: { stepCode: string; earliestStart: string; latestStart: string; durationMinutes: number };
   existingAppointment?: { id: string; startTime: string; providerName?: string };
+  /** A 409-et kapó sor kulcsa — a modal bezárásakor ezzel takarítjuk a lokális lockot. */
+  rowKey: string;
   retryData: {
     patientId: string;
     episodeId?: string;
@@ -85,7 +87,12 @@ export interface WorkPhaseBookingApi {
   chainBookingRequired: boolean;
   /** Van-e azonnal foglalható (READY) fázis az epizódban. */
   hasReady: boolean;
+  /** Van-e egyáltalán worklist-elem az epizódra (ha nincs: a foglalási vezérlők rejtendők). */
+  hasItems: boolean;
   planStartDate: string | null;
+  /** A worklist ténylegesen szolgáltatott plan_start_date mezőt — enélkül a
+      kezdődátum-kontroll nem renderelhető (üres mentés törölné a tárolt dátumot). */
+  planStartDateKnown: boolean;
 
   openSlotPicker: (item: WorklistItemBackend) => void;
   closeSlotPicker: () => void;
@@ -216,12 +223,19 @@ export function useWorkPhaseBooking({
     [episodeItems, rowStateFor]
   );
 
+  const hasItems = episodeItems.length > 0;
+
   const planStartDate = useMemo(() => {
     for (const item of episodeItems) {
       if (item.planStartDate !== undefined) return item.planStartDate ?? null;
     }
     return null;
   }, [episodeItems]);
+
+  const planStartDateKnown = useMemo(
+    () => episodeItems.some((i) => i.planStartDate !== undefined),
+    [episodeItems]
+  );
 
   const openSlotPicker = useCallback((item: WorklistItemBackend) => {
     setSlotPickerItem(item);
@@ -263,13 +277,16 @@ export function useWorkPhaseBooking({
         if (res.ok) {
           setSlotPickerItem(null);
           setSlotPickerRetryContext(null);
+          // A lockot csak a friss worklist megérkezése UTÁN oldjuk fel — a
+          // refetch alatt a sor „Foglalás…" maradjon, ne aktív Foglalás gomb
+          // (dupla foglalás ablaka).
+          await fetchWorklist();
           setLocal((prev) => {
             const next = { ...prev };
             next.bookingInProgressKeys = new Set(prev.bookingInProgressKeys ?? []);
             next.bookingInProgressKeys.delete(key);
             return next;
           });
-          await fetchWorklist();
           onChanged?.();
           notifyAppointmentsChanged();
           return;
@@ -300,6 +317,7 @@ export function useWorkPhaseBooking({
             overrideHint: data.overrideHint,
             expectedHardNext: data.expectedHardNext,
             existingAppointment: data.existingAppointment,
+            rowKey: key,
             retryData: {
               patientId: slotPickerItem.patientId,
               episodeId: slotPickerItem.episodeId,
@@ -337,16 +355,26 @@ export function useWorkPhaseBooking({
     [slotPickerItem, items, fetchWorklist, onChanged]
   );
 
-  const closeOverride = useCallback(() => setOverride429(null), []);
+  /** A modal bezárása (Mégse is): az OVERRIDE_REQUIRED lock takarítása, hogy a sor visszakapja a Foglalás gombot. */
+  const clearOverrideKey = useCallback((rowKey: string | undefined) => {
+    if (!rowKey) return;
+    setLocal((prev) => ({
+      ...prev,
+      overrideRequiredKeys: new Set(
+        Array.from(prev.overrideRequiredKeys ?? []).filter((k) => k !== rowKey)
+      ),
+    }));
+  }, []);
+
+  const closeOverride = useCallback(() => {
+    clearOverrideKey(override429?.rowKey);
+    setOverride429(null);
+  }, [clearOverrideKey, override429]);
 
   const handleOverrideConfirm = useCallback(
     async (overrideReason: string) => {
       if (!override429) return;
-      const { retryData } = override429;
-      const matchKey = (i: WorklistItemBackend) =>
-        i.episodeId === retryData.episodeId && i.nextStep === retryData.nextStep;
-      const removedItem = items.find(matchKey);
-      const removedKey = removedItem ? getWorklistItemKey(removedItem) : null;
+      const { retryData, rowKey } = override429;
       try {
         const res = await fetch('/api/appointments', {
           method: 'POST',
@@ -367,21 +395,18 @@ export function useWorkPhaseBooking({
         const data = await res.json();
         if (!res.ok) throw new Error(data.error ?? 'Hiba');
         setOverride429(null);
-        setLocal((prev) => ({
-          ...prev,
-          overrideRequiredKeys: removedKey
-            ? new Set(Array.from(prev.overrideRequiredKeys ?? []).filter((k) => k !== removedKey))
-            : prev.overrideRequiredKeys,
-        }));
+        // A lockot a friss worklist után oldjuk — addig a sor ne kínáljon újra foglalást.
         await fetchWorklist();
+        clearOverrideKey(rowKey);
         onChanged?.();
         notifyAppointmentsChanged();
       } catch (e) {
         setOverride429(null);
+        clearOverrideKey(rowKey);
         throw e;
       }
     },
-    [override429, items, fetchWorklist, onChanged]
+    [override429, fetchWorklist, onChanged, clearOverrideKey]
   );
 
   const convertAll = useCallback(async () => {
@@ -580,7 +605,9 @@ export function useWorkPhaseBooking({
     blockedItem,
     chainBookingRequired,
     hasReady,
+    hasItems,
     planStartDate,
+    planStartDateKnown,
     openSlotPicker,
     closeSlotPicker,
     slotPickerItem,

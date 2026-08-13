@@ -245,21 +245,28 @@ export function PatientHeaderBar({
           )}
         </div>
 
-        {/* Következő lépés + CTA */}
+        {/* Következő lépés + CTA — foglalási jog nélkül csak információs címke */}
         <div className="text-right shrink-0 hidden sm:block">
           {canSeeNextStep && nextStepLabel && (
-            <button
-              type="button"
-              onClick={onGoToScheduling}
-              className="block w-full text-right group"
-              title="Ugrás a Kezelési terv & időpont fülre"
-            >
-              <span className="block text-[11px] text-gray-400 dark:text-gray-500 leading-none">Következő lépés</span>
-              <span className="text-[13px] font-medium text-gray-900 dark:text-gray-100 group-hover:text-medical-primary inline-flex items-center gap-1">
-                {nextStepLabel}
-                <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
-              </span>
-            </button>
+            onGoToScheduling ? (
+              <button
+                type="button"
+                onClick={onGoToScheduling}
+                className="block w-full text-right group"
+                title="Ugrás a Kezelési terv & időpont fülre"
+              >
+                <span className="block text-[11px] text-gray-400 dark:text-gray-500 leading-none">Következő lépés</span>
+                <span className="text-[13px] font-medium text-gray-900 dark:text-gray-100 group-hover:text-medical-primary inline-flex items-center gap-1">
+                  {nextStepLabel}
+                  <ArrowRight className="w-3 h-3 opacity-0 group-hover:opacity-100 transition-opacity" />
+                </span>
+              </button>
+            ) : (
+              <div className="text-right">
+                <span className="block text-[11px] text-gray-400 dark:text-gray-500 leading-none">Következő lépés</span>
+                <span className="text-[13px] font-medium text-gray-900 dark:text-gray-100">{nextStepLabel}</span>
+              </div>
+            )
           )}
         </div>
 

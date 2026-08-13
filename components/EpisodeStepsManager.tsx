@@ -473,10 +473,33 @@ function SortableStepRow({
                 <AlertTriangle className="w-3 h-3" />
                 Sikertelen próba
               </button>
+              <button
+                onClick={rowBooking.onMarkDoneRetro}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                title="A munkafázis elkészült (nem itt foglalt), utólag jelölés"
+              >
+                Elkészült (utólag)
+              </button>
             </>
           )}
           {rowBooking && rowBooking.state === 'BOOKING_IN_PROGRESS' && (
             <span className="text-xs text-gray-500 dark:text-gray-400 px-1">Foglalás…</span>
+          )}
+          {rowBooking && rowBooking.state === 'OVERRIDE_REQUIRED' && (
+            <span
+              className="text-xs font-medium px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300"
+              title="A foglaláshoz felülírási megerősítés szükséges — a megnyitott ablak bezárása után újra foglalható"
+            >
+              Felülírás szükséges
+            </span>
+          )}
+          {rowBooking && rowBooking.state === 'NEEDS_REVIEW' && (
+            <span
+              className="text-xs font-medium px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300"
+              title="Hiányzó foglalási adat (időtartam, időablak vagy pool) — ellenőrizd a munkafázis beállításait"
+            >
+              Ellenőrizendő
+            </span>
           )}
           {canDelegate && !mergeMode && (
             <button
@@ -888,21 +911,31 @@ export function EpisodeStepsManager({
     } catch { /* non-critical */ }
   }, [episodeId]);
 
+  // Egyidejű hívások összevonása: a signature-effect és az explicit frissítők
+  // (booking-callback, reload-esemény) ugyanabban a körben duplán kérnék.
+  const projectionsInFlightRef = useRef<Promise<void> | null>(null);
   const loadProjections = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/episodes/${episodeId}/step-projections`, { credentials: 'include' });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.blocked) {
-        setProjections([]);
-        setProjectionSummary(null);
-        setProjectionBlockedReason(data.blockedReason ?? 'Ismeretlen ok');
-        return;
-      }
-      setProjections(data.steps ?? []);
-      setProjectionSummary(data.summary ?? null);
-      setProjectionBlockedReason(null);
-    } catch { /* nem kritikus — a lista dátumok nélkül is használható */ }
+    if (projectionsInFlightRef.current) return projectionsInFlightRef.current;
+    const run = (async () => {
+      try {
+        const res = await fetch(`/api/episodes/${episodeId}/step-projections`, { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.blocked) {
+          setProjections([]);
+          setProjectionSummary(null);
+          setProjectionBlockedReason(data.blockedReason ?? 'Ismeretlen ok');
+          return;
+        }
+        setProjections(data.steps ?? []);
+        setProjectionSummary(data.summary ?? null);
+        setProjectionBlockedReason(null);
+      } catch { /* nem kritikus — a lista dátumok nélkül is használható */ }
+    })();
+    projectionsInFlightRef.current = run.finally(() => {
+      projectionsInFlightRef.current = null;
+    });
+    return projectionsInFlightRef.current;
   }, [episodeId]);
 
   useEffect(() => {
@@ -912,12 +945,14 @@ export function EpisodeStepsManager({
 
   // ─── Sor-szintű foglalás (worklist-motor) ────────────────────────────────
 
-  // Foglalás/kész-jelölés után a lépéslistát is újratöltjük — a státusz-váltás
-  // (pending→scheduled) a planSignature-ön keresztül a vetítést is frissíti.
+  // Foglalás/kész-jelölés után a lépéslistát ÉS a vetítést is újratöltjük.
+  // A vetítés explicit kell: áthelyezésnél (scheduled→scheduled) a
+  // planSignature nem változik, a 📅 dátumok mégis elavulnak.
   const handleBookingChanged = useCallback(() => {
     void loadSteps();
+    void loadProjections();
     onStepChanged?.();
-  }, [loadSteps, onStepChanged]);
+  }, [loadSteps, loadProjections, onStepChanged]);
 
   const booking = useWorkPhaseBooking({
     patientId: patientId ?? null,
@@ -1395,7 +1430,7 @@ export function EpisodeStepsManager({
                     )}
                   </div>
                   {settingsOpen && settingsPanel && <div className="mt-2">{settingsPanel}</div>}
-                  {booking.enabled && (
+                  {booking.enabled && booking.planStartDateKnown && (
                     <div className="mt-2">
                       <PlanStartDateControl
                         episodeId={episodeId}
@@ -1414,6 +1449,24 @@ export function EpisodeStepsManager({
                     episodeIds={integrityEpisodeIds}
                     onRepaired={handleIntegrityRepaired}
                   />
+                  {booking.error && (
+                    <div className="flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <span>Foglalási műveletek betöltése sikertelen.</span>
+                      <button
+                        type="button"
+                        onClick={() => void booking.refresh()}
+                        className="underline font-medium"
+                      >
+                        Újra
+                      </button>
+                    </div>
+                  )}
+                  {booking.loading && !booking.hasItems && !booking.error && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 px-1">
+                      Foglalási lehetőségek betöltése…
+                    </p>
+                  )}
                   {booking.chainBookingRequired && (
                     <div className="rounded-lg border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-950 dark:text-amber-200">
                       <p className="font-semibold">Teljes sorozat lefoglalása kötelező lépés</p>
@@ -1433,7 +1486,7 @@ export function EpisodeStepsManager({
                     </div>
                   )}
                   {booking.convertAllMessage && (
-                    <p
+                    <div
                       className={`text-sm px-3 py-2 rounded ${
                         booking.convertAllMessage.type === 'success'
                           ? 'bg-green-50 dark:bg-green-950/40 text-green-800 dark:text-green-300'
@@ -1448,7 +1501,17 @@ export function EpisodeStepsManager({
                       >
                         Elrejt
                       </button>
-                    </p>
+                      {booking.convertAllMessage.type === 'error' && booking.hasReady && (
+                        <button
+                          type="button"
+                          onClick={() => void booking.convertAll()}
+                          disabled={booking.convertAllBusy}
+                          className="mt-2 block px-3 py-1.5 bg-medical-primary text-white rounded-md text-xs font-semibold hover:bg-medical-primary-dark disabled:opacity-50"
+                        >
+                          {booking.convertAllBusy ? 'Lefoglalás…' : 'Összes szükséges időpont lefoglalása'}
+                        </button>
+                      )}
+                    </div>
                   )}
                   {booking.blockedItem?.blockedReason &&
                     booking.blockedItem.blockedCode !== 'NO_CARE_PATHWAY' && (

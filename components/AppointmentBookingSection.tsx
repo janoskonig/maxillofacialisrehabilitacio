@@ -282,6 +282,8 @@ export function AppointmentBookingSection({
     });
     if (res.ok) {
       await refreshData();
+      // A lépés-eltolás a terv-kártya vetítését is érinti.
+      window.dispatchEvent(new Event('episode-work-phases-reload'));
       alert(`Eltolva: ${selectedIntentIds.length} tervezett lépés.`);
     } else {
       const err = await res.json().catch(() => ({}));
@@ -426,6 +428,9 @@ export function AppointmentBookingSection({
       );
     }
     await refreshData();
+    // Az átkötés az episode_work_phases.appointment_id linkeket írja át — a
+    // terv-kártya BOOKED-párosítása is frissüljön.
+    window.dispatchEvent(new Event('episode-work-phases-reload'));
   };
 
   const handleSaveStatus = async () => {

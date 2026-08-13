@@ -198,7 +198,7 @@ export function DentalStatusTimeline({ patientId }: { patientId: string }) {
           {!hasHistory && (
             <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900 rounded px-2 py-1.5 mb-3">
               Még nincs rögzített előzmény. A felvételkori állapot az első kezelés
-              befejezésekor rögzül; addig a „Jelenlegi” és a „Kezelési terv” látható.
+              befejezésekor rögzül; addig a „Jelenlegi” és a „Kezelés utáni vetítés” látható.
             </p>
           )}
 

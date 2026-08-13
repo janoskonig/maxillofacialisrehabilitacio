@@ -509,6 +509,7 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
 
       if (bookResponse.ok) {
         await reloadAll();
+        notifyWorkPhasesChanged();
         return { success: true };
       }
 

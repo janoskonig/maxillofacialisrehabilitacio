@@ -133,9 +133,15 @@ export default function PatientViewPage() {
     const tabParam = searchParams.get('tab');
     const hash = typeof window !== 'undefined' ? window.location.hash.replace(/^#/, '') : '';
 
-    // A régi terv/időpont fülre mutató linkek a terv-hub oldalra visznek.
+    // A régi terv/időpont fülre mutató linkek a terv-hub oldalra visznek —
+    // de csak foglalási jogosultságú szerepnek (a hub oldala technikust
+    // visszadobná a főoldalra); nekik a profil alap füle marad.
     if ((tabParam && STAGES_REDIRECT_TABS.has(tabParam)) || STAGES_REDIRECT_SECTIONS.has(hash)) {
-      router.replace(`/patients/${patientId}/stages`);
+      const canOpenHub =
+        userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász';
+      if (canOpenHub) {
+        router.replace(`/patients/${patientId}/stages`);
+      }
       return;
     }
 
@@ -147,7 +153,7 @@ export default function PatientViewPage() {
     if (!resolved || !VALID_TABS.includes(resolved)) return;
     setActiveTab(resolved);
     setLoadedTabs((prev) => new Set<TabType>([...Array.from(prev), resolved!]));
-  }, [authorized, searchParams, router, patientId]);
+  }, [authorized, searchParams, router, patientId, userRole]);
 
   // #section-… → görgetés a szekcióhoz a fül betöltése után.
   useEffect(() => {
