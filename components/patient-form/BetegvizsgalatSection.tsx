@@ -10,7 +10,15 @@ import { ToothTreatmentProvider, ToothTreatmentInline } from '../ToothTreatmentP
 import { OPInlinePreview } from '../OPInlinePreview';
 import { DentalStatusTimeline } from '../DentalStatusTimeline';
 import { Odontogram } from './odontogram/Odontogram';
-import { readConditions, computeDMFT, BASE_LABELS, isPresent } from './odontogram/tooth-conditions';
+import {
+  readConditions,
+  computeDMFT,
+  BASE_LABELS,
+  isPresent,
+  hasCaries,
+  surfacesOf,
+} from './odontogram/tooth-conditions';
+import { describeSurfaces } from './odontogram/tooth-surfaces';
 import { applyTreatmentOutcome } from '@/lib/tooth-treatment-outcome';
 import { PerioChart } from './perio/PerioChart';
 
@@ -338,7 +346,10 @@ export function BetegvizsgalatSection({
                         <span className="font-medium text-sm sm:text-base text-gray-900 dark:text-gray-100">{toothNumber}. fog</span>
                         <span className="text-xs text-gray-500 dark:text-gray-400">
                           {BASE_LABELS[c.base]}
-                          {c.caries ? ' · szuvas' : ''}
+                          {hasCaries(c) ? ' · szuvas' : ''}
+                          {describeSurfaces(toothNumber, surfacesOf(c))
+                            ? ` · ${describeSurfaces(toothNumber, surfacesOf(c))}`
+                            : ''}
                         </span>
                         {c.description && <span className="text-xs text-gray-500 dark:text-gray-400">· {c.description}</span>}
                       </div>

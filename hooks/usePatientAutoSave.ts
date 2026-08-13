@@ -53,7 +53,12 @@ export type ToothConditionObject = {
   periapical?: boolean;
   /** Mozgathatóság fokozata: 0–3. */
   mobility?: number;
+  /** Felszín-szintű státusz (meziális/disztális/vesztibuláris/orális/okkluzális). */
+  surfaces?: Partial<Record<ToothSurfaceKey, ToothSurfaceMark>>;
 };
+
+export type ToothSurfaceKey = 'mesial' | 'distal' | 'vestibular' | 'oral' | 'occlusal';
+export type ToothSurfaceMark = 'caries' | 'filling';
 
 export type ToothStatus = ToothConditionObject | string;
 
@@ -72,7 +77,8 @@ export function normalizeToothData(
       value.base != null ||
       value.caries === true ||
       value.periapical === true ||
-      (value.mobility != null && value.mobility > 0);
+      (value.mobility != null && value.mobility > 0) ||
+      (value.surfaces != null && Object.keys(value.surfaces).length > 0);
 
     if (meaningful) return value;
     if (Object.keys(value).length === 0) return value;
