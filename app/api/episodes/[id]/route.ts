@@ -272,7 +272,7 @@ async function handleAddPathway(
     return NextResponse.json({ error: 'Epizód nem található' }, { status: 404 });
   }
   if (ep.rows[0].status !== 'open') {
-    return NextResponse.json({ error: 'Csak aktív epizódhoz adható pathway' }, { status: 400 });
+    return NextResponse.json({ error: 'Csak aktív epizódra alkalmazható kezelési terv sablon' }, { status: 400 });
   }
 
   const pw = await pool.query(
@@ -280,7 +280,7 @@ async function handleAddPathway(
     [carePathwayId]
   );
   if (pw.rows.length === 0) {
-    return NextResponse.json({ error: 'Kezelési út nem található' }, { status: 404 });
+    return NextResponse.json({ error: 'Kezelési terv sablon nem található' }, { status: 404 });
   }
 
   const templates = pathwayTemplatesFromCarePathwayRow(pw.rows[0]) ?? [];
@@ -307,7 +307,7 @@ async function handleAddPathway(
       await client.query('ROLLBACK');
       if (typeof e === 'object' && e !== null && 'code' in e && (e as { code: string }).code === '23505') {
         const jawLabel = jaw === 'felso' ? 'felső állcsontra' : jaw === 'also' ? 'alsó állcsontra' : '';
-        return NextResponse.json({ error: `Ez a kezelési út már hozzá van rendelve ehhez az epizódhoz${jawLabel ? ` (${jawLabel})` : ''}` }, { status: 409 });
+        return NextResponse.json({ error: `Ez a sablon már alkalmazva van erre az epizódra${jawLabel ? ` (${jawLabel})` : ''}` }, { status: 409 });
       }
       throw e;
     }
@@ -389,7 +389,7 @@ async function handleRemovePathway(
       [episodePathwayIdParam, episodeId]
     );
     if (epPathway.rows.length === 0) {
-      return NextResponse.json({ error: 'Ez a pathway nincs hozzárendelve az epizódhoz' }, { status: 404 });
+      return NextResponse.json({ error: 'Ez a sablon nincs alkalmazva az epizódon' }, { status: 404 });
     }
     epPathwayId = epPathway.rows[0].id;
   } else {
@@ -401,7 +401,7 @@ async function handleRemovePathway(
       [episodeId, carePathwayId]
     );
     if (epPathway.rows.length === 0) {
-      return NextResponse.json({ error: 'Ez a pathway nincs hozzárendelve az epizódhoz' }, { status: 404 });
+      return NextResponse.json({ error: 'Ez a sablon nincs alkalmazva az epizódon' }, { status: 404 });
     }
     epPathwayId = epPathway.rows[0].id;
   }
@@ -413,7 +413,7 @@ async function handleRemovePathway(
   );
   if (activePhases.rows[0].cnt > 0) {
     return NextResponse.json(
-      { error: 'Nem távolítható el: van már időpontja vagy teljesített munkafázisa ennek a kezelési útnak' },
+      { error: 'Nem távolítható el: van már időpontja vagy teljesített munkafázisa ennek a sablonnak' },
       { status: 409 }
     );
   }

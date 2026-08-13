@@ -130,7 +130,7 @@ export function WorklistWidget() {
       const pathways = pathwaysData.pathways ?? [];
       const defaultId = pathways[0]?.id;
       if (!defaultId) {
-        throw new Error('Nincs kezelési út az adatbázisban');
+        throw new Error('Nincs kezelési terv sablon az adatbázisban');
       }
       const patchRes = await fetch(`/api/episodes/${episodeId}`, {
         method: 'PATCH',
@@ -755,7 +755,7 @@ export function WorklistWidget() {
                         disabled={pathwayAssigningEpisodeId === item.episodeId}
                         className="text-sm text-medical-primary hover:underline font-medium disabled:opacity-50"
                       >
-                        {pathwayAssigningEpisodeId === item.episodeId ? 'Beállítás…' : 'Kezelési út beállítása'}
+                        {pathwayAssigningEpisodeId === item.episodeId ? 'Alkalmazás…' : 'Sablon alkalmazása'}
                       </button>
                     )}
                     {state === 'BOOKING_IN_PROGRESS' && (

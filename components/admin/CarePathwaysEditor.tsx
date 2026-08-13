@@ -265,7 +265,7 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
       });
       const data = await res.json();
       if (!res.ok) {
-        setError(data.error ?? data.current ? 'A kezelési út közben megváltozott. Frissítse és próbálja újra.' : `Hiba (${res.status})`);
+        setError(data.error ?? data.current ? 'A sablon közben megváltozott. Frissítse és próbálja újra.' : `Hiba (${res.status})`);
         if (data.current) {
           setFormUpdatedAt(data.current.updatedAt ?? null);
         }
@@ -384,7 +384,7 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
 
   return (
     <div className="space-y-4">
-      <h3 className="text-lg font-semibold">Kezelési utak</h3>
+      <h3 className="text-lg font-semibold">Kezelési terv sablonok</h3>
       {error && (
         <div className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded text-red-800 dark:text-red-300 text-sm">
           {error}
@@ -442,7 +442,7 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
 
       {showForm && (
         <div className="p-4 border border-gray-200 dark:border-gray-800 rounded-lg bg-gray-50 dark:bg-gray-800/60 space-y-4">
-          <h4 className="font-medium">{editingId ? 'Szerkesztés' : 'Új kezelési út'}</h4>
+          <h4 className="font-medium">{editingId ? 'Szerkesztés' : 'Új sablon'}</h4>
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4">
             <div>
               <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Név</label>
@@ -645,7 +645,7 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
           onClick={startCreate}
           className="px-3 py-2 bg-medical-primary text-white rounded text-sm hover:bg-medical-primary-dark"
         >
-          + Új kezelési út
+          + Új sablon
         </button>
       )}
     </div>

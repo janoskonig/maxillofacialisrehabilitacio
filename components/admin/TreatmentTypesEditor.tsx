@@ -81,14 +81,14 @@ export function TreatmentTypesEditor({ onEditPathway }: TreatmentTypesEditorProp
     setError(null);
     try {
       const res = await fetch('/api/care-pathways', { credentials: 'include' });
-      if (!res.ok) throw new Error('Kezelési utak betöltése sikertelen');
+      if (!res.ok) throw new Error('Kezelési terv sablonok betöltése sikertelen');
       const data = await res.json();
       const pathways = data.pathways ?? [];
       const pathway = pathways.find((p: { treatmentTypeId: string | null }) => p.treatmentTypeId === item.id);
       if (pathway) {
         onEditPathway(pathway.id);
       } else {
-        setError(`Nincs kezelési út ehhez a típushoz (${item.labelHu}). Hozzon létre egyet a Kezelési utak szerkesztőjében.`);
+        setError(`Nincs kezelési terv sablon ehhez a típushoz (${item.labelHu}). Hozzon létre egyet a Kezelési terv sablonok szerkesztőjében.`);
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Hiba');
@@ -220,7 +220,7 @@ export function TreatmentTypesEditor({ onEditPathway }: TreatmentTypesEditorProp
                           onClick={() => handleEditPathway(item)}
                           disabled={pathwayLoading || saving}
                           className="px-2 py-1 bg-amber-600 text-white rounded text-sm hover:bg-amber-700 disabled:opacity-50"
-                          title="Részlépések (kezelési út) szerkesztése"
+                          title="Részlépések (kezelési terv sablon) szerkesztése"
                         >
                           {pathwayLoading ? '…' : 'Részlépések'}
                         </button>

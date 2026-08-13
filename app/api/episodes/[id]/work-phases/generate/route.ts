@@ -24,7 +24,7 @@ export const POST = authedHandler(async (_req, { params }) => {
   }
   if (result.status === 'no_pathway') {
     return NextResponse.json(
-      { error: 'Epizódhoz nincs hozzárendelve kezelési út (care_pathway). Először válasszon pathway-t.' },
+      { error: 'Az epizódra nincs kezelési terv sablon alkalmazva (care_pathway). Először válasszon sablont.' },
       { status: 409 }
     );
   }

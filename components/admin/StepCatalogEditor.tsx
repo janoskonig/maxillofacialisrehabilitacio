@@ -196,7 +196,7 @@ export function StepCatalogEditor() {
           <p className="text-sm font-medium text-amber-900 dark:text-amber-200 mb-1">Nincs címke a katalógusban (pathway-ban szereplő kódok):</p>
           <p className="text-sm text-amber-800 dark:text-amber-300 font-mono">{unmapped.join(', ')}</p>
           <p className="text-xs text-amber-700 dark:text-amber-300 mt-1">
-            Ezek a kezelési utak JSON-jából jönnek (work_phases_json / steps_json). Adjon címkét a katalógushoz vagy módosítsa a pathway-t.
+            Ezek a kezelési terv sablonok JSON-jából jönnek (work_phases_json / steps_json). Adjon címkét a katalógushoz vagy módosítsa a sablont.
           </p>
         </div>
       )}
