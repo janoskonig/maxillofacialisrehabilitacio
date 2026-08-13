@@ -10,6 +10,7 @@ import {
   UPPER_ROW,
   LOWER_ROW,
 } from './patient-form/odontogram/tooth-conditions';
+import { OdontogramStyleToggle } from './patient-form/odontogram/odontogram-style';
 import { ToothTreatmentProvider, ToothTreatmentInline } from './ToothTreatmentPanel';
 import { OPInlinePreview } from './OPInlinePreview';
 import type { ToothTreatment } from '@/lib/types';
@@ -218,9 +219,12 @@ export function ZsigmondyCrossStages({ patientId, patientName, meglevoFogak }: Z
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
-      <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 mb-3">
-        Zsigmondy-kereszt — Foganként kezelési igények
-      </h3>
+      <div className="flex items-center justify-between gap-2 flex-wrap mb-3">
+        <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">
+          Zsigmondy-kereszt — Foganként kezelési igények
+        </h3>
+        <OdontogramStyleToggle />
+      </div>
 
       <OPInlinePreview patientId={patientId} patientName={patientName} />
 

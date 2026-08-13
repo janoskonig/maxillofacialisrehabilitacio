@@ -7,8 +7,10 @@ import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { MobileBottomSheet } from '@/components/mobile/MobileBottomSheet';
 import { Tooth } from './Tooth';
 import { ToothShape } from './ToothShape';
+import { ToothShapeChart } from './ToothShapeChart';
 import { ToothEditor, BaseChips } from './ToothEditor';
 import { PinchPan } from './PinchPan';
+import { OdontogramStyleToggle, useOdontogramStyle, type OdontogramStyle } from './odontogram-style';
 import {
   readConditions,
   writeConditions,
@@ -37,15 +39,17 @@ function FabianFejerdyControl({
   field,
   options,
   isViewOnly,
+  className = '',
 }: {
   jaw: 'felso' | 'also';
   field?: UseFormRegisterReturn;
   options?: readonly string[];
   isViewOnly: boolean;
+  className?: string;
 }) {
   if (!field || !options) return null;
   return (
-    <div className={`flex items-center justify-end gap-2 ${jaw === 'felso' ? 'mb-2' : 'mt-2'}`}>
+    <div className={`flex items-center justify-end gap-2 ${className}`}>
       <span className="text-[11px] font-medium text-gray-500 dark:text-gray-400 whitespace-nowrap">
         Fábián–Fejérdy · {jaw === 'felso' ? 'felső' : 'alsó'}
       </span>
@@ -143,6 +147,7 @@ function Arch({
   batch,
   dim,
   onSelect,
+  odoStyle,
 }: {
   teeth: number[];
   fogak: Record<string, ToothStatus>;
@@ -151,6 +156,7 @@ function Arch({
   batch?: Set<string>;
   dim: boolean;
   onSelect?: (t: string) => void;
+  odoStyle: OdontogramStyle;
 }) {
   const toothY = numberPosition === 'above' ? 11 : 0;
   const numY = numberPosition === 'above' ? 8 : 48;
@@ -192,7 +198,11 @@ function Arch({
               transform={`translate(${x}, ${toothY}) translate(${cx}, ${cy}) scale(${s}) translate(${-cx}, ${-cy})`}
               style={{ transition: 'opacity .15s' }}
             >
-              <ToothShape fdi={tooth} conditions={readConditions(fogak[t])} />
+              {odoStyle === 'chart' ? (
+                <ToothShapeChart fdi={tooth} conditions={readConditions(fogak[t])} />
+              ) : (
+                <ToothShape fdi={tooth} conditions={readConditions(fogak[t])} />
+              )}
             </g>
             <text
               x={x + 14}
@@ -237,6 +247,7 @@ export function Odontogram({
   const [batchMode, setBatchMode] = useState(false);
   const [batch, setBatch] = useState<Set<string>>(new Set());
   const [mobileWarningDismissed, setMobileWarningDismissed] = useState(false);
+  const [odoStyle] = useOdontogramStyle();
   const breakpoint = useBreakpoint();
   const isMobile = breakpoint === 'mobile';
   const canEdit = editing && !isViewOnly;
@@ -281,6 +292,7 @@ export function Odontogram({
         batch={batchMode ? batch : undefined}
         dim={dim}
         onSelect={canEdit ? handleSelect : undefined}
+        odoStyle={odoStyle}
       />
       <div className="flex items-center gap-2 my-2">
         <div className="flex-1 h-px bg-gray-200 dark:bg-gray-700" />
@@ -295,6 +307,7 @@ export function Odontogram({
         batch={batchMode ? batch : undefined}
         dim={dim}
         onSelect={canEdit ? handleSelect : undefined}
+        odoStyle={odoStyle}
       />
     </>
   );
@@ -307,9 +320,12 @@ export function Odontogram({
     <div>
       <div className="bg-gray-50 dark:bg-gray-800/40 rounded-lg p-3 sm:p-4 overflow-x-clip">
         <div className="max-w-xl mx-auto min-w-0">
-          <FabianFejerdyControl jaw="felso" field={fabianFelsoField} options={fabianOptions} isViewOnly={isViewOnly} />
+          <div className="flex items-center justify-between gap-2 mb-2 flex-wrap">
+            <OdontogramStyleToggle />
+            <FabianFejerdyControl jaw="felso" field={fabianFelsoField} options={fabianOptions} isViewOnly={isViewOnly} />
+          </div>
           {isMobile ? <PinchPan>{archBlock}</PinchPan> : archBlock}
-          <FabianFejerdyControl jaw="also" field={fabianAlsoField} options={fabianOptions} isViewOnly={isViewOnly} />
+          <FabianFejerdyControl jaw="also" field={fabianAlsoField} options={fabianOptions} isViewOnly={isViewOnly} className="mt-2" />
         </div>
       </div>
 

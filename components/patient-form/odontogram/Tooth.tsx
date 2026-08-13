@@ -2,6 +2,8 @@
 
 import { ToothConditions } from './tooth-conditions';
 import { ToothShape } from './ToothShape';
+import { ToothShapeChart } from './ToothShapeChart';
+import { useOdontogramStyle } from './odontogram-style';
 
 interface ToothProps {
   fdi: number | string;
@@ -29,6 +31,7 @@ export function Tooth({
   title,
 }: ToothProps) {
   const interactive = !!onClick;
+  const [odoStyle] = useOdontogramStyle();
 
   return (
     <div className="flex flex-col items-center" style={{ width: size }}>
@@ -48,7 +51,11 @@ export function Tooth({
         {selected && (
           <rect x="1" y="0.5" width="26" height="39" rx="6" fill="#185FA5" opacity="0.12" stroke="#185FA5" strokeWidth="1" />
         )}
-        <ToothShape fdi={fdi} conditions={conditions} />
+        {odoStyle === 'chart' ? (
+          <ToothShapeChart fdi={fdi} conditions={conditions} />
+        ) : (
+          <ToothShape fdi={fdi} conditions={conditions} />
+        )}
       </svg>
       {showNumber && numberPosition === 'below' && (
         <span className="text-[9.5px] leading-none mt-0.5 text-gray-400 dark:text-gray-500">{fdi}</span>
