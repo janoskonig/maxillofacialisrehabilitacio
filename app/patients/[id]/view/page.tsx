@@ -10,7 +10,6 @@ import { AppShell } from '@/components/layout/AppShell';
 import { PatientHeaderBar } from '@/components/PatientHeaderBar';
 import { PatientOverviewTab } from '@/components/PatientOverviewTab';
 import { PatientCommunicationTab } from '@/components/PatientCommunicationTab';
-import { PatientWorklistWidget } from '@/components/PatientWorklistWidget';
 import { PatientTabsNav, type PatientProfileTabId } from '@/components/PatientTabsNav';
 
 type TabType = PatientProfileTabId;
@@ -19,7 +18,6 @@ const VALID_TABS: TabType[] = [
   'attekintes',
   'torzsadatok',
   'anamnezis',
-  'terv_idopont',
   'kommunikacio',
   'adminisztracio',
 ];
@@ -31,13 +29,18 @@ const LEGACY_TAB_MAP: Record<string, TabType> = {
   anamnezis: 'anamnezis',
   adminisztracio: 'adminisztracio',
   documents: 'adminisztracio',
-  idopont: 'terv_idopont',
-  terv_idopont: 'terv_idopont',
   konzilium: 'kommunikacio',
   uzenet: 'kommunikacio',
   kommunikacio: 'kommunikacio',
   attekintes: 'attekintes',
 };
+
+/**
+ * A régi „Kezelési terv & időpont" fül tartalma a /patients/[id]/stages hub-ra
+ * költözött — az ide mutató deep-linkeket oda irányítjuk át.
+ */
+const STAGES_REDIRECT_TABS = new Set(['idopont', 'terv_idopont']);
+const STAGES_REDIRECT_SECTIONS = new Set(['section-idopont', 'section-stadium']);
 
 /** `#section-X` horgony → melyik fülön él az adott szekció. */
 const SECTION_TAB_MAP: Record<string, TabType> = {
@@ -48,8 +51,6 @@ const SECTION_TAB_MAP: Record<string, TabType> = {
   'section-betegvizsgalat': 'anamnezis',
   'section-ohip14': 'anamnezis',
   'section-adminisztracio': 'adminisztracio',
-  'section-idopont': 'terv_idopont',
-  'section-stadium': 'terv_idopont',
 };
 
 
@@ -130,19 +131,29 @@ export default function PatientViewPage() {
   useEffect(() => {
     if (!authorized) return;
     const tabParam = searchParams.get('tab');
-    let resolved: TabType | undefined = tabParam ? LEGACY_TAB_MAP[tabParam] : undefined;
+    const hash = typeof window !== 'undefined' ? window.location.hash.replace(/^#/, '') : '';
 
-    if (!resolved && typeof window !== 'undefined') {
-      const hash = window.location.hash.replace(/^#/, '');
-      if (hash && SECTION_TAB_MAP[hash]) {
-        resolved = SECTION_TAB_MAP[hash];
+    // A régi terv/időpont fülre mutató linkek a terv-hub oldalra visznek —
+    // de csak foglalási jogosultságú szerepnek (a hub oldala technikust
+    // visszadobná a főoldalra); nekik a profil alap füle marad.
+    if ((tabParam && STAGES_REDIRECT_TABS.has(tabParam)) || STAGES_REDIRECT_SECTIONS.has(hash)) {
+      const canOpenHub =
+        userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász';
+      if (canOpenHub) {
+        router.replace(`/patients/${patientId}/stages`);
       }
+      return;
+    }
+
+    let resolved: TabType | undefined = tabParam ? LEGACY_TAB_MAP[tabParam] : undefined;
+    if (!resolved && hash && SECTION_TAB_MAP[hash]) {
+      resolved = SECTION_TAB_MAP[hash];
     }
 
     if (!resolved || !VALID_TABS.includes(resolved)) return;
     setActiveTab(resolved);
     setLoadedTabs((prev) => new Set<TabType>([...Array.from(prev), resolved!]));
-  }, [authorized, searchParams]);
+  }, [authorized, searchParams, router, patientId, userRole]);
 
   // #section-… → görgetés a szekcióhoz a fül betöltése után.
   useEffect(() => {
@@ -189,6 +200,9 @@ export default function PatientViewPage() {
     setLoadedTabs((prev) => (prev.has(tab) ? prev : new Set<TabType>([...Array.from(prev), tab])));
   }, []);
 
+  const isSchedulingRole =
+    userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász';
+
   if (loading) {
     return (
       <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex items-center justify-center">
@@ -225,15 +239,17 @@ export default function PatientViewPage() {
         currentStage={currentStage}
         canSeeNextStep
         canAssignDoctor={userRole === 'admin' || userRole === 'fogpótlástanász'}
-        onGoToScheduling={() => handleTabChange('terv_idopont')}
+        onGoToScheduling={
+          isSchedulingRole ? () => router.push(`/patients/${patientId}/stages`) : undefined
+        }
       />
 
-      {/* Fülek — közös fülsor a stádium oldallal (a „Kezelés menete" fül oda navigál) */}
+      {/* Fülek — közös fülsor a terv-hub oldallal (a „Kezelési terv & időpont" fül oda navigál) */}
       <PatientTabsNav
         patientId={patientId}
         activeTab={activeTab}
         onTabChange={handleTabChange}
-        showStadiumok={userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász'}
+        showStadiumok={isSchedulingRole}
       />
 
       {/* Fültartalom */}
@@ -242,6 +258,9 @@ export default function PatientViewPage() {
           <PatientOverviewTab
             patient={patient}
             onGoToTab={(tab) => handleTabChange(tab as TabType)}
+            onGoToScheduling={
+              isSchedulingRole ? () => router.push(`/patients/${patientId}/stages`) : undefined
+            }
             canSeeClinical
           />
         )}
@@ -264,27 +283,6 @@ export default function PatientViewPage() {
             onCancel={handleBack}
             showOnlySections={['anamnezis', 'betegvizsgalat', 'ohip14']}
           />
-        )}
-
-        {activeTab === 'terv_idopont' && loadedTabs.has('terv_idopont') && (
-          <>
-            {patient.id && (
-              <div className="space-y-2">
-                <h2 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Következő munkafázis – munkalista</h2>
-                <p className="text-sm text-gray-600 dark:text-gray-400">
-                  A beteg WIP epizódjainak következő munkafázisai. Foglalás egy kattintással.
-                </p>
-                <PatientWorklistWidget patientId={patient.id} patientName={patient.nev} visible={true} />
-              </div>
-            )}
-            <PatientForm
-              patient={patient}
-              isViewOnly={false}
-              onSave={handleSavePatient}
-              onCancel={handleBack}
-              showOnlySections={['idopont', 'stadium']}
-            />
-          </>
         )}
 
         {activeTab === 'kommunikacio' && loadedTabs.has('kommunikacio') && patient?.id && (

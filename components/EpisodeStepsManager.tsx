@@ -1,16 +1,20 @@
 'use client';
 
-import { useState, useEffect, useCallback, useMemo } from 'react';
-import Link from 'next/link';
+import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useToast } from '@/contexts/ToastContext';
 import {
   Loader2, SkipForward, RotateCcw, CheckCircle2, Circle, Clock,
   ChevronDown, ChevronUp, ChevronRight, GripVertical, Trash2,
   Plus, Search, FileText, Layers, PenLine, Merge, Unlink, Calendar, SendHorizontal,
-  AlertTriangle, CalendarDays, UserRound,
+  AlertTriangle, CalendarDays, UserRound, CalendarPlus, CalendarClock, Link2, Undo2,
 } from 'lucide-react';
 import { WorkPhaseTaskDelegateBlock } from './WorkPhaseTaskDelegateBlock';
 import { PlanValidationPanel } from './PlanValidationPanel';
+import { useWorkPhaseBooking } from '@/hooks/useWorkPhaseBooking';
+import { WorkPhaseBookingModals } from './WorkPhaseBookingModals';
+import { PlanStartDateControl } from './PlanStartDateControl';
+import { EpisodeIntegrityBanner } from './EpisodeIntegrityBanner';
+import type { WorklistRowState } from '@/lib/worklist-types';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
   type DragEndEvent, type Modifier,
@@ -187,12 +191,23 @@ const PATHWAY_COLORS = [
 
 type AdderTab = 'catalog' | 'freetext' | 'tooth';
 
+type ConfirmAction = 'skip' | 'unskip' | 'delete' | 'timing' | 'reopen';
+
+/** Terv-sorhoz párosított worklist-foglalási akciók (useWorkPhaseBooking-ból). */
+interface RowBookingActions {
+  state: WorklistRowState;
+  onBook: () => void;
+  onLink: () => void;
+  onMarkDoneRetro: () => void;
+  onMarkUnsuccessful: () => void;
+}
+
 // ─── Sortable step row ───────────────────────────────────────────────────────
 
 function SortableStepRow({
   step, idx, isNext, stepLabel, pathwayLabel, pathwayColor,
-  mergedChildren, projection, bookingHref,
-  onSkipConfirm, onUnskipConfirm, onDelete,
+  mergedChildren, projection, rowBooking,
+  onSkipConfirm, onUnskipConfirm, onDelete, onReopenConfirm,
   mergeMode, mergeSelected, onToggleMerge,
   onEditTiming, onUnmerge, canDelegate, onDelegateClick, delegateOpen,
 }: {
@@ -204,10 +219,11 @@ function SortableStepRow({
   pathwayColor: string;
   mergedChildren: EpisodeStep[];
   projection: StepProjectionInfo | null;
-  bookingHref: string | null;
+  rowBooking: RowBookingActions | null;
   onSkipConfirm: () => void;
   onUnskipConfirm: () => void;
   onDelete: () => void;
+  onReopenConfirm: () => void;
   mergeMode: boolean;
   mergeSelected: boolean;
   onToggleMerge: () => void;
@@ -263,6 +279,16 @@ function SortableStepRow({
             </span>
           )}
           <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{config.label}</span>
+          {step.status === 'completed' && !mergeMode && (
+            <button
+              onClick={onReopenConfirm}
+              className="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+              title="Mégsem kész — visszaállítás várakozóra (indoklás szükséges)"
+            >
+              <Undo2 className="w-3 h-3" />
+              Mégsem kész
+            </button>
+          )}
           {canUnskip && !mergeMode && (
             <button
               onClick={onUnskipConfirm}
@@ -290,7 +316,7 @@ function SortableStepRow({
   return (
     <div ref={setNodeRef} style={style}>
       <div
-        className={`flex items-center gap-2 px-3 py-2.5 rounded-lg transition-colors ${
+        className={`flex items-center gap-2 flex-wrap px-3 py-2.5 rounded-lg transition-colors ${
           isDragging ? 'shadow-lg ring-2 ring-medical-primary/30' : ''
         } ${isNext ? 'bg-medical-primary/5 border border-medical-primary/20' : config.bgColor}`}
       >
@@ -321,8 +347,8 @@ function SortableStepRow({
           <StatusIcon className={`w-4 h-4 ${config.color}`} />
         </div>
 
-        {/* Step info */}
-        <div className="flex-1 min-w-0">
+        {/* Step info — min szélesség alatt az akciósor új sorba törik */}
+        <div className="flex-1 min-w-[220px]">
           <div className="flex items-center gap-2 flex-wrap">
             <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
               {stepLabel}
@@ -385,17 +411,6 @@ function SortableStepRow({
                 </span>
               </>
             )}
-            {bookingHref && (
-              <>
-                <span className="text-xs text-gray-400 dark:text-gray-500">·</span>
-                <Link
-                  href={bookingHref}
-                  className="text-xs font-medium text-medical-primary hover:underline"
-                >
-                  Időpont foglalása →
-                </Link>
-              </>
-            )}
           </div>
           {/* Merged children list */}
           {hasMerged && (
@@ -411,8 +426,81 @@ function SortableStepRow({
           )}
         </div>
 
-        {/* Actions */}
-        <div className="shrink-0 flex items-center gap-1">
+        {/* Actions — egy sorban jobbra zárva; szűk helyen saját sorba törik és belül tördel */}
+        <div className="flex grow items-center gap-1 flex-wrap justify-end">
+          {rowBooking && !mergeMode && rowBooking.state === 'READY' && (
+            <>
+              <button
+                onClick={rowBooking.onBook}
+                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-medical-primary rounded hover:bg-medical-primary-dark transition-colors"
+                title="Időpont foglalása erre a munkafázisra"
+              >
+                <CalendarPlus className="w-3 h-3" />
+                Foglalás
+              </button>
+              <button
+                onClick={rowBooking.onLink}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 rounded hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
+                title="Már létező jövőbeli foglalás (pl. páciens portál) hozzárendelése ehhez a munkafázishoz"
+              >
+                <Link2 className="w-3 h-3" />
+                Meglévő foglalás
+              </button>
+              <button
+                onClick={rowBooking.onMarkDoneRetro}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                title="A munkafázis elkészült, nem itt foglalt időponttal (utólagos jelölés)"
+              >
+                Elkészült (utólag)
+              </button>
+            </>
+          )}
+          {rowBooking && !mergeMode && rowBooking.state === 'BOOKED' && (
+            <>
+              <button
+                onClick={rowBooking.onBook}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-medical-primary bg-medical-primary/10 rounded hover:bg-medical-primary/20 transition-colors"
+                title="Áthelyezés másik időpontra (a jelenlegi foglalás automatikusan törlődik)"
+              >
+                <CalendarClock className="w-3 h-3" />
+                Áthelyezés
+              </button>
+              <button
+                onClick={rowBooking.onMarkUnsuccessful}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 rounded hover:bg-orange-100 dark:hover:bg-orange-900/40 transition-colors"
+                title="A próba sikertelen volt — új próba szükséges (indok kötelező)"
+              >
+                <AlertTriangle className="w-3 h-3" />
+                Sikertelen próba
+              </button>
+              <button
+                onClick={rowBooking.onMarkDoneRetro}
+                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
+                title="A munkafázis elkészült (nem itt foglalt), utólag jelölés"
+              >
+                Elkészült (utólag)
+              </button>
+            </>
+          )}
+          {rowBooking && rowBooking.state === 'BOOKING_IN_PROGRESS' && (
+            <span className="text-xs text-gray-500 dark:text-gray-400 px-1">Foglalás…</span>
+          )}
+          {rowBooking && rowBooking.state === 'OVERRIDE_REQUIRED' && (
+            <span
+              className="text-xs font-medium px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300"
+              title="A foglaláshoz felülírási megerősítés szükséges — a megnyitott ablak bezárása után újra foglalható"
+            >
+              Felülírás szükséges
+            </span>
+          )}
+          {rowBooking && rowBooking.state === 'NEEDS_REVIEW' && (
+            <span
+              className="text-xs font-medium px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300"
+              title="Hiányzó foglalási adat (időtartam, időablak vagy pool) — ellenőrizd a munkafázis beállításait"
+            >
+              Ellenőrizendő
+            </span>
+          )}
           {canDelegate && !mergeMode && (
             <button
               onClick={onDelegateClick}
@@ -486,11 +574,11 @@ function SortableStepRow({
 
 function StepRowWithConfirm({
   step, idx, isNext, stepLabel, pathwayLabel, pathwayColor,
-  mergedChildren, projection, bookingHref,
+  mergedChildren, projection, rowBooking,
   confirmStepId, confirmAction, skipReason, saving,
   mergeMode, mergeSelected, onToggleMerge,
-  onSkipConfirm, onUnskipConfirm, onDelete,
-  onSkip, onUnskip, onDeleteConfirm, onCancel, onSkipReasonChange,
+  onSkipConfirm, onUnskipConfirm, onDelete, onReopenConfirm,
+  onSkip, onUnskip, onDeleteConfirm, onReopen, onCancel, onSkipReasonChange,
   onEditTiming, onUnmerge,
   episodeId, delegatePhaseId, setDelegatePhaseId,
 }: {
@@ -498,12 +586,14 @@ function StepRowWithConfirm({
   pathwayLabel: string | null; pathwayColor: string;
   mergedChildren: EpisodeStep[];
   projection: StepProjectionInfo | null;
-  bookingHref: string | null;
-  confirmStepId: string | null; confirmAction: 'skip' | 'unskip' | 'delete' | 'timing' | null;
+  rowBooking: RowBookingActions | null;
+  confirmStepId: string | null; confirmAction: ConfirmAction | null;
   skipReason: string; saving: boolean;
   mergeMode: boolean; mergeSelected: boolean; onToggleMerge: () => void;
   onSkipConfirm: () => void; onUnskipConfirm: () => void; onDelete: () => void;
+  onReopenConfirm: () => void;
   onSkip: () => void; onUnskip: () => void; onDeleteConfirm: () => void;
+  onReopen: () => void;
   onCancel: () => void; onSkipReasonChange: (v: string) => void;
   onEditTiming: () => void; onUnmerge: () => void;
   episodeId: string;
@@ -519,8 +609,9 @@ function StepRowWithConfirm({
         step={step} idx={idx} isNext={isNext}
         stepLabel={stepLabel} pathwayLabel={pathwayLabel} pathwayColor={pathwayColor}
         mergedChildren={mergedChildren}
-        projection={projection} bookingHref={bookingHref}
+        projection={projection} rowBooking={rowBooking}
         onSkipConfirm={onSkipConfirm} onUnskipConfirm={onUnskipConfirm} onDelete={onDelete}
+        onReopenConfirm={onReopenConfirm}
         mergeMode={mergeMode} mergeSelected={mergeSelected} onToggleMerge={onToggleMerge}
         onEditTiming={onEditTiming} onUnmerge={onUnmerge}
         canDelegate={canDelegate}
@@ -565,6 +656,25 @@ function StepRowWithConfirm({
                 <button onClick={onUnskip} disabled={saving}
                   className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-600 text-white rounded text-xs font-medium hover:bg-gray-700 disabled:opacity-50">
                   {saving && <Loader2 className="w-3 h-3 animate-spin" />} Visszaállítás
+                </button>
+                <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Mégse</button>
+              </div>
+            </>
+          )}
+          {confirmAction === 'reopen' && (
+            <>
+              <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
+                Visszaállítja a(z) <strong>{stepLabel}</strong> kész munkafázist várakozóra? Indoklás szükséges.
+              </p>
+              <input
+                type="text" value={skipReason} onChange={(e) => onSkipReasonChange(e.target.value)}
+                placeholder="Indoklás (legalább 5 karakter, pl. tévedésből jelölve késznek)"
+                className="w-full text-sm border border-gray-300 dark:border-gray-700 rounded px-2 py-1.5 mb-2"
+              />
+              <div className="flex items-center gap-2">
+                <button onClick={onReopen} disabled={saving || skipReason.trim().length < 5}
+                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-600 text-white rounded text-xs font-medium hover:bg-gray-700 disabled:opacity-50">
+                  {saving && <Loader2 className="w-3 h-3 animate-spin" />} Visszaállítás várakozóra
                 </button>
                 <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Mégse</button>
               </div>
@@ -685,7 +795,7 @@ export function EpisodeStepsManager({
   const [generating, setGenerating] = useState(false);
   const [skipReason, setSkipReason] = useState('');
   const [confirmStepId, setConfirmStepId] = useState<string | null>(null);
-  const [confirmAction, setConfirmAction] = useState<'skip' | 'unskip' | 'delete' | 'timing' | null>(null);
+  const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState(true);
   const [, setReordering] = useState(false);
@@ -708,9 +818,12 @@ export function EpisodeStepsManager({
 
   useEffect(() => { setMounted(true); }, []);
 
-  // Reload steps on timing save
+  // Reload steps on timing save / external appointment mutations. A vetítést
+  // explicit is frissítjük: külső foglalás-változásnál (pl. időpont törlése a
+  // Gyors foglalás listában) a lépés-szignatúra változatlan maradhat, a
+  // vetített dátumok mégis elavulnak.
   useEffect(() => {
-    const handler = () => { loadSteps(); onStepChanged?.(); };
+    const handler = () => { loadSteps(); loadProjections(); notifyPlanChanged(); };
     window.addEventListener('episode-work-phases-reload', handler);
     return () => window.removeEventListener('episode-work-phases-reload', handler);
   });
@@ -798,27 +911,84 @@ export function EpisodeStepsManager({
     } catch { /* non-critical */ }
   }, [episodeId]);
 
+  // Egyidejű hívások összevonása: a signature-effect és az explicit frissítők
+  // (booking-callback, reload-esemény) ugyanabban a körben duplán kérnék.
+  const projectionsInFlightRef = useRef<Promise<void> | null>(null);
   const loadProjections = useCallback(async () => {
-    try {
-      const res = await fetch(`/api/episodes/${episodeId}/step-projections`, { credentials: 'include' });
-      if (!res.ok) return;
-      const data = await res.json();
-      if (data.blocked) {
-        setProjections([]);
-        setProjectionSummary(null);
-        setProjectionBlockedReason(data.blockedReason ?? 'Ismeretlen ok');
-        return;
-      }
-      setProjections(data.steps ?? []);
-      setProjectionSummary(data.summary ?? null);
-      setProjectionBlockedReason(null);
-    } catch { /* nem kritikus — a lista dátumok nélkül is használható */ }
+    if (projectionsInFlightRef.current) return projectionsInFlightRef.current;
+    const run = (async () => {
+      try {
+        const res = await fetch(`/api/episodes/${episodeId}/step-projections`, { credentials: 'include' });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (data.blocked) {
+          setProjections([]);
+          setProjectionSummary(null);
+          setProjectionBlockedReason(data.blockedReason ?? 'Ismeretlen ok');
+          return;
+        }
+        setProjections(data.steps ?? []);
+        setProjectionSummary(data.summary ?? null);
+        setProjectionBlockedReason(null);
+      } catch { /* nem kritikus — a lista dátumok nélkül is használható */ }
+    })();
+    projectionsInFlightRef.current = run.finally(() => {
+      projectionsInFlightRef.current = null;
+    });
+    return projectionsInFlightRef.current;
   }, [episodeId]);
 
   useEffect(() => {
     setLoading(true);
     Promise.all([loadSteps(), loadLabels(), loadEpisodePathways(), loadLinkedTreatments()]).finally(() => setLoading(false));
   }, [carePathwayId, refreshTrigger, loadSteps, loadLabels, loadEpisodePathways, loadLinkedTreatments]);
+
+  // ─── Sor-szintű foglalás (worklist-motor) ────────────────────────────────
+
+  // Foglalás/kész-jelölés után a lépéslistát ÉS a vetítést is újratöltjük.
+  // A vetítés explicit kell: áthelyezésnél (scheduled→scheduled) a
+  // planSignature nem változik, a 📅 dátumok mégis elavulnak.
+  const handleBookingChanged = useCallback(() => {
+    void loadSteps();
+    void loadProjections();
+    onStepChanged?.();
+  }, [loadSteps, loadProjections, onStepChanged]);
+
+  const booking = useWorkPhaseBooking({
+    patientId: patientId ?? null,
+    episodeId,
+    onChanged: handleBookingChanged,
+  });
+  const bookingRefresh = booking.refresh;
+
+  // Terv-kártyás mutáció (skip/törlés/hozzáadás/átrendezés…) után a worklist
+  // sorai is frissülnek, hogy a Foglalás gombok állapota ne maradjon le.
+  const notifyPlanChanged = useCallback(() => {
+    onStepChanged?.();
+    void bookingRefresh();
+  }, [onStepChanged, bookingRefresh]);
+
+  // refreshTrigger-bump (pl. kezelési út mentése) → worklist újratöltés is.
+  // Az első futást kihagyjuk: mountkor a hook maga fetch-el.
+  const skipFirstBookingRefresh = useRef(true);
+  useEffect(() => {
+    if (skipFirstBookingRefresh.current) {
+      skipFirstBookingRefresh.current = false;
+      return;
+    }
+    void bookingRefresh();
+  }, [refreshTrigger, bookingRefresh]);
+
+  const integrityEpisodeIds = useMemo(() => [episodeId], [episodeId]);
+  const handleIntegrityRepaired = useCallback(() => {
+    void bookingRefresh();
+    void loadSteps();
+  }, [bookingRefresh, loadSteps]);
+  const handlePlanStartSaved = useCallback(() => {
+    void bookingRefresh();
+    void loadProjections();
+    onStepChanged?.();
+  }, [bookingRefresh, loadProjections, onStepChanged]);
 
   // ─── Step actions ────────────────────────────────────────────────────────
 
@@ -851,7 +1021,7 @@ export function EpisodeStepsManager({
       setConfirmAction(null);
       setSkipReason('');
       showToast('Munkafázis átugorva', 'success');
-      onStepChanged?.();
+      notifyPlanChanged();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba történt', 'error');
     } finally {
@@ -875,7 +1045,35 @@ export function EpisodeStepsManager({
       setConfirmStepId(null);
       setConfirmAction(null);
       showToast('Munkafázis visszaállítva', 'success');
-      onStepChanged?.();
+      notifyPlanChanged();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Hiba történt', 'error');
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** „Mégsem kész" — completed munkafázis visszaállítása várakozóra, kötelező indoklással. */
+  const handleReopen = async (stepId: string) => {
+    const reason = skipReason.trim();
+    if (reason.length < 5) return;
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/work-phases/${stepId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ status: 'pending', reason }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
+      const data = await res.json();
+      const row = data.workPhase ?? data.step;
+      setSteps((prev) => prev.map((s) => (s.id === stepId ? mapWorkPhaseApiToEpisodeStep(row) : s)));
+      setConfirmStepId(null);
+      setConfirmAction(null);
+      setSkipReason('');
+      showToast('Munkafázis visszaállítva várakozóra', 'success');
+      notifyPlanChanged();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba történt', 'error');
     } finally {
@@ -895,7 +1093,7 @@ export function EpisodeStepsManager({
       setConfirmStepId(null);
       setConfirmAction(null);
       showToast('Munkafázis törölve', 'success');
-      onStepChanged?.();
+      notifyPlanChanged();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba a törlésnél', 'error');
     } finally {
@@ -917,7 +1115,7 @@ export function EpisodeStepsManager({
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
       const data = await res.json();
       setSteps(mapWorkPhasesResponse(data.workPhases ?? data.steps));
-      onStepChanged?.();
+      notifyPlanChanged();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba az átrendezésnél', 'error');
       await loadSteps();
@@ -958,7 +1156,7 @@ export function EpisodeStepsManager({
       setMergeMode(false);
       setMergeSelection(new Set());
       showToast('Munkafázisok összevonva', 'success');
-      onStepChanged?.();
+      notifyPlanChanged();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba az összevonásnál', 'error');
     } finally {
@@ -977,7 +1175,7 @@ export function EpisodeStepsManager({
       const data = await res.json();
       setSteps(mapWorkPhasesResponse(data.workPhases ?? data.steps));
       showToast('Összevonás felbontva', 'success');
-      onStepChanged?.();
+      notifyPlanChanged();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba a szétbontásnál', 'error');
     } finally {
@@ -1001,7 +1199,7 @@ export function EpisodeStepsManager({
       setSteps(mapWorkPhasesResponse(data.workPhases ?? data.steps));
       await loadLinkedTreatments();
       showToast(`${tt.labelHu} – ${tt.toothNumber} hozzáadva`, 'success');
-      onStepChanged?.();
+      notifyPlanChanged();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba a hozzáadásnál', 'error');
     } finally {
@@ -1025,7 +1223,7 @@ export function EpisodeStepsManager({
       const row = data.workPhase ?? data.step;
       setSteps((prev) => [...prev, mapWorkPhaseApiToEpisodeStep(row)]);
       showToast(`${item.labelHu} hozzáadva`, 'success');
-      onStepChanged?.();
+      notifyPlanChanged();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba a hozzáadásnál', 'error');
     } finally {
@@ -1054,7 +1252,7 @@ export function EpisodeStepsManager({
       setFreeLabel('');
       setFreeDuration(30);
       showToast('Egyedi munkafázis hozzáadva', 'success');
-      onStepChanged?.();
+      notifyPlanChanged();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba a hozzáadásnál', 'error');
     } finally {
@@ -1117,9 +1315,10 @@ export function EpisodeStepsManager({
 
   // ─── Render ──────────────────────────────────────────────────────────────
 
-  // Re-validate the plan whenever a step's identity, status, pool or duration changes.
+  // Re-validate the plan whenever a step's identity, status, pool, duration or
+  // offset changes (az offset a vetítési ablakokat tolja el).
   const planSignature = useMemo(
-    () => steps.map((s) => `${s.id}:${s.status}:${s.pool}:${s.durationMinutes}`).join('|'),
+    () => steps.map((s) => `${s.id}:${s.status}:${s.pool}:${s.durationMinutes}:${s.defaultDaysOffset}`).join('|'),
     [steps]
   );
 
@@ -1151,7 +1350,24 @@ export function EpisodeStepsManager({
   const completedCount = primarySteps.filter((s) => s.status === 'completed').length;
   const progressPct = nonSkippedCount > 0 ? (completedCount / nonSkippedCount) * 100 : 0;
   const completionText = projectionSummary ? estimatedCompletionText(projectionSummary) : null;
-  const bookingHref = patientId ? `/patients/${patientId}/view?tab=terv_idopont` : null;
+
+  /** Terv-sor → worklist-akciók (workPhaseId-n párosítva). */
+  const buildRowBooking = (step: EpisodeStep): RowBookingActions | null => {
+    if (!booking.enabled) return null;
+    const item = booking.itemByWorkPhaseId.get(step.id);
+    if (!item) return null;
+    return {
+      state: booking.rowStateFor(item),
+      onBook: () => booking.openSlotPicker(item),
+      onLink: () => booking.openLinkAppointment(item),
+      onMarkDoneRetro: () => booking.openMarkCompleteRetro(item),
+      onMarkUnsuccessful: () => booking.openMarkUnsuccessful(item),
+    };
+  };
+
+  const pendingCount = primarySteps.filter((s) => s.status === 'pending').length;
+  const showConvertAllInAdder =
+    booking.enabled && booking.hasReady && pendingCount >= 2 && !booking.chainBookingRequired;
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
@@ -1196,9 +1412,9 @@ export function EpisodeStepsManager({
                       </strong>
                     </span>
                     <span className="text-gray-500 dark:text-gray-400">
-                      · Kezelési út:{' '}
+                      · Sablon:{' '}
                       <strong className="text-gray-700 dark:text-gray-200">
-                        {pathwayDisplayName || '— nincs beállítva'}
+                        {pathwayDisplayName || '— nincs alkalmazva'}
                       </strong>
                     </span>
                     {settingsPanel && (
@@ -1214,6 +1430,96 @@ export function EpisodeStepsManager({
                     )}
                   </div>
                   {settingsOpen && settingsPanel && <div className="mt-2">{settingsPanel}</div>}
+                  {booking.enabled && booking.planStartDateKnown && (
+                    <div className="mt-2">
+                      <PlanStartDateControl
+                        episodeId={episodeId}
+                        planStartDate={booking.planStartDate}
+                        onSaved={handlePlanStartSaved}
+                      />
+                    </div>
+                  )}
+                </div>
+              )}
+
+              {/* ─── Foglalási állapot: integritás, lánc-kötelezettség, blokk ── */}
+              {booking.enabled && (
+                <div className="mb-3 empty:mb-0 empty:hidden space-y-2">
+                  <EpisodeIntegrityBanner
+                    episodeIds={integrityEpisodeIds}
+                    onRepaired={handleIntegrityRepaired}
+                  />
+                  {booking.error && (
+                    <div className="flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+                      <AlertTriangle className="w-4 h-4 shrink-0" />
+                      <span>Foglalási műveletek betöltése sikertelen.</span>
+                      <button
+                        type="button"
+                        onClick={() => void booking.refresh()}
+                        className="underline font-medium"
+                      >
+                        Újra
+                      </button>
+                    </div>
+                  )}
+                  {booking.loading && !booking.hasItems && !booking.error && (
+                    <p className="text-xs text-gray-500 dark:text-gray-400 px-1">
+                      Foglalási lehetőségek betöltése…
+                    </p>
+                  )}
+                  {booking.chainBookingRequired && (
+                    <div className="rounded-lg border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-950 dark:text-amber-200">
+                      <p className="font-semibold">Teljes sorozat lefoglalása kötelező lépés</p>
+                      <p className="mt-1 text-amber-900/90 dark:text-amber-300/90">
+                        Az epizódhoz több munkafázis tartozik — foglald le egyszerre a szükséges
+                        időpontokat, ne csak az első lépést egyenként.
+                      </p>
+                      <button
+                        type="button"
+                        onClick={() => void booking.convertAll()}
+                        disabled={booking.convertAllBusy}
+                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white rounded-md text-xs font-semibold hover:bg-amber-600 disabled:opacity-50"
+                      >
+                        {booking.convertAllBusy && <Loader2 className="w-3 h-3 animate-spin" />}
+                        {booking.convertAllBusy ? 'Lefoglalás…' : 'Összes szükséges időpont lefoglalása'}
+                      </button>
+                    </div>
+                  )}
+                  {booking.convertAllMessage && (
+                    <div
+                      className={`text-sm px-3 py-2 rounded ${
+                        booking.convertAllMessage.type === 'success'
+                          ? 'bg-green-50 dark:bg-green-950/40 text-green-800 dark:text-green-300'
+                          : 'bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300'
+                      }`}
+                    >
+                      {booking.convertAllMessage.text}
+                      <button
+                        type="button"
+                        onClick={booking.dismissConvertAllMessage}
+                        className="ml-2 underline"
+                      >
+                        Elrejt
+                      </button>
+                      {booking.convertAllMessage.type === 'error' && booking.hasReady && (
+                        <button
+                          type="button"
+                          onClick={() => void booking.convertAll()}
+                          disabled={booking.convertAllBusy}
+                          className="mt-2 block px-3 py-1.5 bg-medical-primary text-white rounded-md text-xs font-semibold hover:bg-medical-primary-dark disabled:opacity-50"
+                        >
+                          {booking.convertAllBusy ? 'Lefoglalás…' : 'Összes szükséges időpont lefoglalása'}
+                        </button>
+                      )}
+                    </div>
+                  )}
+                  {booking.blockedItem?.blockedReason &&
+                    booking.blockedItem.blockedCode !== 'NO_CARE_PATHWAY' && (
+                      <div className="flex items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+                        <AlertTriangle className="w-4 h-4 shrink-0" />
+                        <span>Foglalás blokkolva: {booking.blockedItem.blockedReason}</span>
+                      </div>
+                    )}
                 </div>
               )}
 
@@ -1249,11 +1555,11 @@ export function EpisodeStepsManager({
                 </div>
               )}
 
-              {/* ─── Nincs kezelési út — a lista ezért üres ───────────── */}
+              {/* ─── Nincs sablon alkalmazva — a lista ezért üres ─────── */}
               {!hasPathways && primarySteps.length === 0 && (
                 <div className="mb-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3 text-sm text-amber-800 dark:text-amber-300">
-                  Nincs kezelési út beállítva az epizódhoz, ezért a munkafázis-lista üres.
-                  {settingsPanel && ' Kezelési utat a fenti „Beállítások módosítása" gombbal választhat.'}
+                  Nincs kezelési terv sablon alkalmazva az epizódra, ezért a munkafázis-lista üres.
+                  {settingsPanel && ' Sablont a fenti „Beállítások módosítása" gombbal választhat.'}
                 </div>
               )}
 
@@ -1282,6 +1588,18 @@ export function EpisodeStepsManager({
                       <Plus className="w-3.5 h-3.5" />
                       Munkafázis hozzáadása
                     </button>
+                    {showConvertAllInAdder && (
+                      <button
+                        type="button"
+                        onClick={() => void booking.convertAll()}
+                        disabled={booking.convertAllBusy}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 dark:border-gray-700 text-medical-primary rounded-md text-sm hover:border-medical-primary disabled:opacity-50 transition-colors"
+                        title="A hátralévő munkafázisok időpontjainak lefoglalása egy lépésben"
+                      >
+                        {booking.convertAllBusy && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
+                        {booking.convertAllBusy ? 'Lefoglalás…' : 'Összes szükséges időpont lefoglalása'}
+                      </button>
+                    )}
                     {primarySteps.length >= 2 && (
                       <button
                         onClick={() => { setMergeMode(!mergeMode); setMergeSelection(new Set()); }}
@@ -1498,9 +1816,7 @@ export function EpisodeStepsManager({
                           pathwayColor={getPathwayColor(step.sourceEpisodePathwayId)}
                           mergedChildren={mergedChildrenMap.get(step.id) ?? []}
                           projection={projectionByPhaseId.get(step.id) ?? null}
-                          bookingHref={
-                            idx === nextPendingIndex && step.status === 'pending' ? bookingHref : null
-                          }
+                          rowBooking={buildRowBooking(step)}
                           confirmStepId={confirmStepId}
                           confirmAction={confirmAction}
                           skipReason={skipReason}
@@ -1517,9 +1833,11 @@ export function EpisodeStepsManager({
                           onSkipConfirm={() => { setConfirmStepId(step.id); setConfirmAction('skip'); setSkipReason(''); }}
                           onUnskipConfirm={() => { setConfirmStepId(step.id); setConfirmAction('unskip'); }}
                           onDelete={() => { setConfirmStepId(step.id); setConfirmAction('delete'); }}
+                          onReopenConfirm={() => { setConfirmStepId(step.id); setConfirmAction('reopen'); setSkipReason(''); }}
                           onSkip={() => handleSkip(step.id)}
                           onUnskip={() => handleUnskip(step.id)}
                           onDeleteConfirm={() => handleDelete(step.id)}
+                          onReopen={() => handleReopen(step.id)}
                           onCancel={() => { setConfirmStepId(null); setConfirmAction(null); }}
                           onSkipReasonChange={setSkipReason}
                           onEditTiming={() => { setConfirmStepId(step.id); setConfirmAction('timing'); }}
@@ -1544,6 +1862,7 @@ export function EpisodeStepsManager({
           )}
         </div>
       )}
+      {booking.enabled && <WorkPhaseBookingModals api={booking} />}
     </div>
   );
 }

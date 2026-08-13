@@ -108,7 +108,7 @@ export default function AdminPage() {
             <nav className="sticky top-2 z-10 card !p-2 flex flex-wrap gap-1.5" aria-label="Folyamat-szekciók">
               {[
                 ['#section-treatment-types', '1. Kezeléstípusok'],
-                ['#section-care-pathways', '2. Kezelési utak'],
+                ['#section-care-pathways', '2. Kezelési terv sablonok'],
                 ['#section-step-catalog', '3. Részlépések'],
                 ['#section-stage-catalog', '4. Stádiumok'],
                 ['#section-tooth-treatment-catalog', '5. Fog-szintű típusok'],
@@ -133,7 +133,7 @@ export default function AdminPage() {
                   </p>
                   <ol className="text-sm text-blue-900 dark:text-blue-200 space-y-2 list-decimal list-inside">
                     <li><strong>Kezeléstípusok</strong> — A „Tervezett fogpótlás típusa" legördülő opciói.</li>
-                    <li><strong>Kezelési utak</strong> — Lépéssor egy típus vagy indikációhoz.</li>
+                    <li><strong>Kezelési terv sablonok</strong> — Lépéssor egy típus vagy indikációhoz.</li>
                     <li><strong>Részlépések</strong> — A lépések megjelenítési nevei.</li>
                     <li><strong>Stádiumok</strong> — Stádium katalógus indikáció szerint.</li>
                     <li><strong>Fog-szintű kezelési típusok</strong> — Kezelések fogakhoz rendelése.</li>
@@ -154,7 +154,7 @@ export default function AdminPage() {
             </section>
 
             <section ref={carePathwaysRef} className="card" aria-labelledby="section-care-pathways">
-              <div className="mb-4"><h2 id="section-care-pathways" className="text-lg font-semibold text-gray-900 dark:text-gray-100">2. Kezelési utak</h2></div>
+              <div className="mb-4"><h2 id="section-care-pathways" className="text-lg font-semibold text-gray-900 dark:text-gray-100">2. Kezelési terv sablonok</h2></div>
               <CarePathwaysEditor editPathwayId={editPathwayId} onEditPathwayIdClear={() => setEditPathwayId(null)} />
             </section>
 

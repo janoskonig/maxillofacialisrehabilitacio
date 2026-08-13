@@ -29,7 +29,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   );
 
   if (pathwayResult.rows.length === 0) {
-    return NextResponse.json({ error: 'Kezelési út nem található' }, { status: 404 });
+    return NextResponse.json({ error: 'Kezelési terv sablon nem található' }, { status: 404 });
   }
 
   const pathway = pathwayResult.rows[0];
@@ -86,7 +86,7 @@ export const DELETE = roleHandler(['admin', 'fogpótlástanász'], async (req, {
     [pathwayId]
   );
   if (exists.rows.length === 0) {
-    return NextResponse.json({ error: 'Kezelési út nem található' }, { status: 404 });
+    return NextResponse.json({ error: 'Kezelési terv sablon nem található' }, { status: 404 });
   }
 
   const refs = await pool.query(
@@ -96,7 +96,7 @@ export const DELETE = roleHandler(['admin', 'fogpótlástanász'], async (req, {
   if ((refs.rows[0]?.cnt ?? 0) > 0) {
     return NextResponse.json(
       {
-        error: 'Nem törölhető: legalább egy epizód hivatkozik erre a kezelési útra.',
+        error: 'Nem törölhető: legalább egy epizód hivatkozik erre a sablonra.',
         code: 'PATHWAY_IN_USE',
       },
       { status: 409 }
@@ -138,7 +138,7 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász'], async (req, { 
     [pathwayId]
   );
   if (beforeResult.rows.length === 0) {
-    return NextResponse.json({ error: 'Kezelési út nem található' }, { status: 404 });
+    return NextResponse.json({ error: 'Kezelési terv sablon nem található' }, { status: 404 });
   }
   const before = beforeResult.rows[0];
 
@@ -148,7 +148,7 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász'], async (req, { 
     if (Math.abs(expected - actual) > 1000) {
       return NextResponse.json(
         {
-          error: 'A kezelési út közben megváltozott. Kérjük frissítse és próbálja újra.',
+          error: 'A sablon közben megváltozott. Kérjük frissítse és próbálja újra.',
           code: 'CONFLICT',
           current: before,
         },

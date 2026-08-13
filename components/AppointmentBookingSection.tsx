@@ -47,17 +47,20 @@ interface AppointmentBookingSectionProps {
   isPatientDirty?: boolean;
   isNewPatient?: boolean;
   onPatientSaved?: (savedPatient: Patient) => void;
+  /** Önálló kártyában renderelve (terv-hub): nincs felső elválasztó és belső címsor. */
+  standalone?: boolean;
 }
 
-export function AppointmentBookingSection({ 
-  patientId, 
+export function AppointmentBookingSection({
+  patientId,
   episodeId,
   pool = 'consult',
   isViewOnly = false,
   onSavePatientBeforeBooking,
   isPatientDirty = false,
   isNewPatient = false,
-  onPatientSaved
+  onPatientSaved,
+  standalone = false
 }: AppointmentBookingSectionProps) {
   const {
     availableSlots,
@@ -279,6 +282,8 @@ export function AppointmentBookingSection({
     });
     if (res.ok) {
       await refreshData();
+      // A lépés-eltolás a terv-kártya vetítését is érinti.
+      window.dispatchEvent(new Event('episode-work-phases-reload'));
       alert(`Eltolva: ${selectedIntentIds.length} tervezett lépés.`);
     } else {
       const err = await res.json().catch(() => ({}));
@@ -423,6 +428,9 @@ export function AppointmentBookingSection({
       );
     }
     await refreshData();
+    // Az átkötés az episode_work_phases.appointment_id linkeket írja át — a
+    // terv-kártya BOOKED-párosítása is frissüljön.
+    window.dispatchEvent(new Event('episode-work-phases-reload'));
   };
 
   const handleSaveStatus = async () => {
@@ -520,16 +528,18 @@ export function AppointmentBookingSection({
   
   const availableSlotsOnly = availableSlots.filter(slot => slot.status === 'available');
 
+  const wrapperClass = standalone ? 'pt-2' : 'border-t pt-6 mt-6';
+
   if (loading) {
     return (
-      <div className="border-t pt-6 mt-6">
+      <div className={wrapperClass}>
         <p className="text-gray-500 dark:text-gray-400 text-sm">Betöltés...</p>
       </div>
     );
   }
 
   return (
-    <div className="border-t pt-6 mt-6">
+    <div className={wrapperClass}>
       {/* Modification Modal */}
       {editingAppointment && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -824,10 +834,12 @@ export function AppointmentBookingSection({
           </div>
         </div>
       )}
-      <div className="flex items-center gap-2 mb-4">
-        <Calendar className="w-5 h-5 text-medical-primary" />
-        <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Időpont foglalás</h3>
-      </div>
+      {!standalone && (
+        <div className="flex items-center gap-2 mb-4">
+          <Calendar className="w-5 h-5 text-medical-primary" />
+          <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100">Időpont foglalás</h3>
+        </div>
+      )}
 
       {loadError && (
         <div className="mb-4 flex items-start gap-2 p-3 rounded-md bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 text-sm text-red-800 dark:text-red-300">

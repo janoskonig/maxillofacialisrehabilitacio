@@ -128,7 +128,7 @@ export function EpisodePathwayEditor({
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Hiba történt');
-      showToast('Nem sikerült betölteni a kezelési utakat vagy orvosokat', 'error');
+      showToast('Nem sikerült betölteni a sablonokat vagy orvosokat', 'error');
     } finally {
       setLoadingLists(false);
     }
@@ -156,11 +156,11 @@ export function EpisodePathwayEditor({
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error ?? 'Hiba a kezelési út hozzáadásakor');
+        throw new Error(data.error ?? 'Hiba a sablon alkalmazásakor');
       }
       setEpisodePathways(data.episodePathways ?? []);
       setNewPathwayId('');
-      showToast('Kezelési út hozzáadva', 'success');
+      showToast('Sablon alkalmazva', 'success');
       await onSaved?.();
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Hiba';
@@ -184,10 +184,10 @@ export function EpisodePathwayEditor({
       });
       const data = await res.json();
       if (!res.ok) {
-        throw new Error(data.error ?? 'Hiba a kezelési út eltávolításakor');
+        throw new Error(data.error ?? 'Hiba a sablon eltávolításakor');
       }
       setEpisodePathways(data.episodePathways ?? []);
-      showToast('Kezelési út eltávolítva', 'success');
+      showToast('Sablon eltávolítva', 'success');
       await onSaved?.();
     } catch (e) {
       const msg = e instanceof Error ? e.message : 'Hiba';
@@ -302,10 +302,10 @@ export function EpisodePathwayEditor({
       aria-labelledby="episode-pathway-heading"
     >
       <h3 id="episode-pathway-heading" className={`font-semibold text-gray-900 dark:text-gray-100 ${compact ? 'text-sm mb-2' : 'text-base mb-3'}`}>
-        Kezelési utak és felelős orvos
+        Kezelési terv sablonok és felelős orvos
       </h3>
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-        Ehhez az epizódhoz tartozó beállítások: add hozzá a <strong>kezelési utakat</strong> (lépéssor: konzultáció → munka → kontroll) és válaszd ki a <strong>felelős orvost</strong>. Egy epizódhoz több kezelési út is rendelhető — lépéseik összefésülve jelennek meg.
+        Ehhez az epizódhoz tartozó beállítások: alkalmazd a <strong>kezelési terv sablonokat</strong> (lépéssor: konzultáció → munkafázisok) és válaszd ki a <strong>felelős orvost</strong>. Egy epizódra több sablon is alkalmazható — lépéseik összefésülve jelennek meg, és a tervben szabadon egyéniesíthetők. A recall (kontroll) időpontok nem a terv részei — a Gyors foglalás blokkban foglalhatók.
       </p>
 
       <div className={`space-y-4 ${compact ? 'space-y-3' : ''}`}>
@@ -313,7 +313,7 @@ export function EpisodePathwayEditor({
         {episodePathways.length > 0 && (
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1.5">
-              Hozzárendelt kezelési utak
+              Alkalmazott sablonok
             </label>
             <ul className="space-y-1.5">
               {episodePathways.map((ep) => (
@@ -333,7 +333,7 @@ export function EpisodePathwayEditor({
                     onClick={() => handleRemovePathway(ep.id)}
                     disabled={removingPathwayId === ep.id}
                     className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-950/40 rounded hover:bg-red-100 dark:hover:bg-red-900/40 disabled:opacity-50 transition-colors shrink-0"
-                    title="Kezelési út eltávolítása"
+                    title="Sablon eltávolítása"
                   >
                     {removingPathwayId === ep.id ? (
                       <Loader2 className="w-3 h-3 animate-spin" />
@@ -352,7 +352,7 @@ export function EpisodePathwayEditor({
         {availablePathways.length > 0 && (
           <div>
             <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" htmlFor="episode-add-pathway-select">
-              Kezelési út hozzáadása
+              Sablon alkalmazása
             </label>
             <div className="flex items-center gap-2 flex-wrap">
               <select
@@ -362,7 +362,7 @@ export function EpisodePathwayEditor({
                 className="flex-1 min-w-[180px] rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm disabled:opacity-50"
                 disabled={addingPathway}
               >
-                <option value="">— Válassz kezelési utat</option>
+                <option value="">— Válassz sablont</option>
                 {availablePathways.map((p) => {
                   const isSuggested = p.treatmentTypeCode && suggestedTreatmentTypeCodes.includes(p.treatmentTypeCode);
                   return (
@@ -470,7 +470,7 @@ export function EpisodePathwayEditor({
         )}
         {episodePathways.length === 0 && (
           <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-2 rounded">
-            Adj hozzá legalább egy kezelési utat, hogy a lépések generálhatók legyenek.
+            Alkalmazz legalább egy sablont, hogy a lépések generálhatók legyenek.
           </p>
         )}
 

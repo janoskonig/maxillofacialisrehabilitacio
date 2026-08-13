@@ -88,7 +88,7 @@ export const DELETE = roleHandler(['admin', 'fogpótlástanász'], async (req, {
   if ((refs.rows[0]?.cnt ?? 0) > 0) {
     return NextResponse.json(
       {
-        error: 'Nem törölhető: legalább egy kezelési út hivatkozik erre a típusra.',
+        error: 'Nem törölhető: legalább egy kezelési terv sablon hivatkozik erre a típusra.',
         code: 'TREATMENT_TYPE_IN_USE',
       },
       { status: 409 }

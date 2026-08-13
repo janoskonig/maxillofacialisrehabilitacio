@@ -147,12 +147,14 @@ export function DentalStatusTimeline({ patientId }: { patientId: string }) {
       fogak: data.current,
     });
 
-    // Kezelési terv: élő vetítés, mai dátummal címkézve + szintetikus azonosítóval.
+    // Kezelés utáni vetítés: élő projekció, mai dátummal címkézve + szintetikus
+    // azonosítóval. (Nem tévesztendő össze az epizód kezelési tervével — ez a
+    // nyitott fogankénti kezelések teljesülése utáni cél-fogstátusz.)
     const today = new Date().toISOString().slice(0, 10);
     points.push({
       key: 'plan',
       kind: 'plan',
-      label: 'Kezelési terv',
+      label: 'Kezelés utáni vetítés',
       date: today,
       code: `${today}/terv`,
       note: 'A nyitott kezelési igények teljesülése utáni célállapot (vetítés)',
@@ -178,7 +180,7 @@ export function DentalStatusTimeline({ patientId }: { patientId: string }) {
         Fogazati státusz idővonal
       </h3>
       <p className="text-xs text-gray-500 dark:text-gray-400 mb-3">
-        Felvételkori állapot → datált státuszok → jelenlegi → kezelési terv. Minden
+        Felvételkori állapot → datált státuszok → jelenlegi → kezelés utáni vetítés. Minden
         bejegyzés dátummal és azonosítóval (pl. <code className="font-mono">2026-06-15/1</code>)
         hivatkozható. Egy kezelés „Kész”-re állításakor automatikusan új datált státusz keletkezik.
       </p>
@@ -196,7 +198,7 @@ export function DentalStatusTimeline({ patientId }: { patientId: string }) {
           {!hasHistory && (
             <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/50 border border-amber-200 dark:border-amber-900 rounded px-2 py-1.5 mb-3">
               Még nincs rögzített előzmény. A felvételkori állapot az első kezelés
-              befejezésekor rögzül; addig a „Jelenlegi” és a „Kezelési terv” látható.
+              befejezésekor rögzül; addig a „Jelenlegi” és a „Kezelés utáni vetítés” látható.
             </p>
           )}
 

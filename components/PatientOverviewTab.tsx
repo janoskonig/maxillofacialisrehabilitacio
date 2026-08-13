@@ -42,6 +42,8 @@ interface PatientOverviewTabProps {
   patient: Patient;
   /** A beteg ablakai közti navigáció (deep-link más fülre). */
   onGoToTab: (tab: string) => void;
+  /** Ugrás a terv-hub oldalra (/patients/[id]/stages) — foglalási jogosultsággal. */
+  onGoToScheduling?: () => void;
   canSeeClinical?: boolean;
 }
 
@@ -85,6 +87,7 @@ function CardShell({
 export function PatientOverviewTab({
   patient,
   onGoToTab,
+  onGoToScheduling,
   canSeeClinical = true,
 }: PatientOverviewTabProps) {
   const [nextStep, setNextStep] = useState<WorklistItemBackend | null>(null);
@@ -195,7 +198,7 @@ export function PatientOverviewTab({
           <CardShell
             icon={<CalendarClock className="w-4 h-4" />}
             title="Következő lépés"
-            action={{ label: 'Időpont', onClick: () => onGoToTab('terv_idopont') }}
+            action={onGoToScheduling ? { label: 'Időpont', onClick: onGoToScheduling } : undefined}
           >
             {nextStep ? (
               <div className="space-y-1">
@@ -213,14 +216,16 @@ export function PatientOverviewTab({
                     {nextStep.overdueByDays} napja esedékes
                   </p>
                 )}
-                <button
-                  type="button"
-                  onClick={() => onGoToTab('terv_idopont')}
-                  className="mt-1 inline-flex items-center gap-1 text-[13px] font-medium text-medical-primary hover:underline"
-                >
-                  Foglalás a munkalistán
-                  <ArrowUpRight className="w-3.5 h-3.5" />
-                </button>
+                {onGoToScheduling && (
+                  <button
+                    type="button"
+                    onClick={onGoToScheduling}
+                    className="mt-1 inline-flex items-center gap-1 text-[13px] font-medium text-medical-primary hover:underline"
+                  >
+                    Foglalás a kezelési tervnél
+                    <ArrowUpRight className="w-3.5 h-3.5" />
+                  </button>
+                )}
               </div>
             ) : (
               <p className="text-[13px] text-gray-400 dark:text-gray-500">Nincs következő munkafázis.</p>

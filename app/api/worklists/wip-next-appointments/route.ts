@@ -541,10 +541,18 @@ export const GET = authedHandler(async (req, { auth }) => {
       const priorityScore = Math.min(100, 50 + overdueByDays * 5);
 
       const phasesForEpisode = episodeWorkPhasesMap.get(episodeId) ?? [];
-      const stepRowForBooking = phasesForEpisode.find(
-        (r: { work_phase_code: string; status: string }) =>
-          r.work_phase_code === step.work_phase_code && (r.status === 'pending' || r.status === 'scheduled')
-      );
+      // Elsődleges identitás: az engine által kitöltött sor-id. A code-alapú
+      // find csak legacy fallback — duplikált work_phase_code-nál (ugyanaz a
+      // sablon felső+alsó állcsontra) mindkét item az ELSŐ sor id-ját kapná.
+      const rowById = step.workPhaseRowId
+        ? phasesForEpisode.find((r) => (r as { id?: string }).id === step.workPhaseRowId)
+        : undefined;
+      const stepRowForBooking =
+        rowById ??
+        phasesForEpisode.find(
+          (r: { work_phase_code: string; status: string }) =>
+            r.work_phase_code === step.work_phase_code && (r.status === 'pending' || r.status === 'scheduled')
+        );
 
       const stepRowForMergeLookup =
         stepRowForBooking ??
@@ -563,7 +571,7 @@ export const GET = authedHandler(async (req, { auth }) => {
       // útvonalak (POST /api/appointments) a státuszt nem ellenőrzik, csak a
       // létezést és az episode-egyezést, a Foglalás gomb pedig COMPLETED soron
       // úgyse jelenik meg (state derivation a stepStatus-on alapul).
-      const workPhaseId = mergeLookupId;
+      const workPhaseId = step.workPhaseRowId ?? mergeLookupId;
 
       const item: WorklistItemBackend = {
         episodeId,
