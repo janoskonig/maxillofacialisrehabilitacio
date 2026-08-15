@@ -107,9 +107,13 @@ export function writeConditions(c: ToothConditions): ToothStatus | undefined {
   return out;
 }
 
-/** A természetes fog hiányzik-e (a hídtest is hiányzó természetes fogat jelöl). */
+/**
+ * A természetes fog hiányzik-e. A hídtest és a kivehető pótlás műfoga is hiányzó
+ * természetes fogat jelöl — a pótlás nem tesz vissza fogat, csak kitölti a helyét.
+ * Ezen múlik, hogy a DMF-T és az ív-összegzés helyes marad-e.
+ */
 export function isMissingBase(base: ToothBase): boolean {
-  return base === 'missing' || base === 'bridge_pontic';
+  return base === 'missing' || base === 'bridge_pontic' || base === 'denture_tooth';
 }
 
 export function isPresent(c: ToothConditions): boolean {
@@ -129,6 +133,7 @@ export const BASE_LABELS: Record<ToothBase, string> = {
   root_remnant: 'Gyökérmaradvány',
   impacted: 'Retineált / nem tört elő',
   necrotic: 'Nekrotizált pulpa',
+  denture_tooth: 'Műfog (kivehető pótlás)',
 };
 
 /** Az editorban felkínált alapállapotok sorrendje. */
@@ -142,6 +147,7 @@ export const BASE_OPTIONS: ToothBase[] = [
   'implant',
   'bridge_abutment',
   'bridge_pontic',
+  'denture_tooth',
   'root_remnant',
   'impacted',
   'necrotic',

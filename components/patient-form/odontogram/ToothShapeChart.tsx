@@ -301,9 +301,12 @@ export function ToothShapeChart({
   const { base, periapical, mobility } = conditions;
   const surfaces = surfacesOf(conditions);
 
-  const prosthetic = base === 'crown' || base === 'bridge_abutment' || base === 'bridge_pontic';
+  const prosthetic =
+    base === 'crown' || base === 'bridge_abutment' || base === 'bridge_pontic' || base === 'denture_tooth';
+  // A híd-összekötő sáv SZÁNDÉKOSAN nem jár a műfognak: a kivehető pótlás nincs a
+  // szomszédos fogakhoz rögzítve, egy összekötő sáv rögzített hidat sugallna.
   const isBridge = base === 'bridge_abutment' || base === 'bridge_pontic';
-  const noRoot = base === 'bridge_pontic';
+  const noRoot = base === 'bridge_pontic' || base === 'denture_tooth';
   const stroke = prosthetic ? PROSTH_STROKE : STROKE;
 
   // Fog-szintű jelölők csak akkor festik az egész keretet / középső mezőt, ha
