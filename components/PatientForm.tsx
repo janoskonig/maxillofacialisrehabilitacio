@@ -31,6 +31,8 @@ import { tajHasChecksumError } from '@/lib/taj-validation';
 import { isSearchableTaj, type DuplicateMatch } from '@/lib/patient-duplicate-check';
 import { usePatientAutoSave, normalizeToothData, buildSavePayload, type ToothStatus } from '@/hooks/usePatientAutoSave';
 import { usePatientConflictResolution } from '@/hooks/usePatientConflictResolution';
+import { parseLockToken, shouldAdoptLockToken } from '@/lib/patient-lock-token';
+import type { ToothTreatmentCompletionResult } from '@/components/ToothTreatmentPanel';
 import { PatientDocuments } from './PatientDocuments';
 import { PatientQuickTaskBlock } from './PatientQuickTaskBlock';
 import { useToast } from '@/contexts/ToastContext';
@@ -107,6 +109,12 @@ interface PatientFormProps {
   minimalNewPatient?: boolean;
   /** Üzenetből érkező dokumentum-link: megnyitja az előnézetet betöltés után. */
   highlightDocumentId?: string | null;
+  /**
+   * A beteg szerveroldali frissülése MENTÉS NÉLKÜL (pl. egy fog-kezelés lezárása
+   * átírta a fogtérképet és a zár-tokent). A szülőnek ilyenkor is frissítenie kell a
+   * `patient` state-jét, különben a fülváltásos remount elavult adattal indul.
+   */
+  onPatientRefreshed?: (patient: Patient) => void;
 }
 
 export function PatientForm({
@@ -117,6 +125,7 @@ export function PatientForm({
   showOnlySections,
   minimalNewPatient = false,
   highlightDocumentId = null,
+  onPatientRefreshed,
 }: PatientFormProps) {
   const router = useRouter();
   const { confirm: confirmDialog, showToast } = useToast();
@@ -397,12 +406,69 @@ export function PatientForm({
   const formValues = useWatch({ control });
 
   // ----- Conflict resolution hook -----
+  const applyRefreshedPatient = useCallback((refreshed: Patient) => {
+    // A reset() csak az RHF-mezőket írja; a fogtérkép és az implantátumok külön
+    // state-ben élnek. Enélkül az „Adatok frissítése" friss tokent adna ELAVULT
+    // fogtérképpel, és a következő mentés felülírná a szerver vetítését.
+    setFogak((refreshed.meglevoFogak || {}) as Record<string, ToothStatus>);
+    setImplantatumok((refreshed.meglevoImplantatumok || {}) as Record<string, string>);
+  }, []);
+
   const conflict = usePatientConflictResolution({
     patientId,
     updateCurrentPatient,
     reset,
     showToast,
+    applyRefreshedPatient,
   });
+
+  /**
+   * A `patient` prop-ból érkező objektumra ráteszi a nálunk lévő tokent, ha az
+   * frissebb. A prop csak az `onSave`-en át frissül, a fog-lezárás viszont nem megy
+   * át azon — enélkül a prop-szinkronizáló effekt (ami minden `savingSource`-váltásnál
+   * kétszer is lefut) csendben visszaléptetné a tokent egy régebbire, és a következő
+   * mentés indokolatlan 409-be futna.
+   */
+  const preserveNewerLockToken = useCallback((incoming: Patient): Patient => {
+    const held = currentPatientRef.current?.updatedAt;
+    const heldToken = parseLockToken(held);
+    const incomingToken = parseLockToken(incoming.updatedAt);
+    if (heldToken && (!incomingToken || heldToken.getTime() > incomingToken.getTime())) {
+      return { ...incoming, updatedAt: held as string };
+    }
+    return incoming;
+  }, []);
+
+  /**
+   * Egy fog-kezelés lezárása után a szerver érvényteleníti a beteg zár-tokenjét
+   * (a fogtérkép a form birtokában lévő adat). Ha EZ a fül volt naprakész, átvesszük
+   * az új tokent — így a felhasználó nem a saját műveletétől kap 409-et; a többi
+   * megnyitott lap viszont továbbra is konfliktust jelez.
+   *
+   * A feltételeket a `shouldAdoptLockToken` dönti el: a lezárás előtti szerver-token
+   * egyezzen a miénkkel (bizonyíték), és az új szigorúan újabb legyen (monotonitás).
+   */
+  const handlePatientLockTokenRefreshed = useCallback(
+    (result: ToothTreatmentCompletionResult, nextFogak: Record<string, ToothStatus>) => {
+      const current = currentPatientRef.current;
+      if (!current) return;
+      if (!shouldAdoptLockToken(current.updatedAt, result.patientPreviousUpdatedAt, result.patientUpdatedAt)) {
+        return;
+      }
+      const refreshed: Patient = {
+        ...current,
+        updatedAt: result.patientUpdatedAt as string,
+        meglevoFogak: nextFogak,
+      };
+      updateCurrentPatient(refreshed);
+      // A szülő `patient` state-jét is frissítjük: a fülváltás unmountolja ezt a
+      // formot, és a remount a prop-ból inicializál. Enélkül a lezárás után átváltva
+      // a form a RÉGI tokennel és a RÉGI fogtérképpel indulna — az első autosave 409-et
+      // kapna, „Felülírás"-nál pedig visszaírná a szerver vetítése fölé a régi állapotot.
+      onPatientRefreshed?.(refreshed);
+    },
+    [updateCurrentPatient, onPatientRefreshed]
+  );
 
   // ----- Auto-save hook -----
   const {
@@ -488,20 +554,18 @@ export function PatientForm({
     }
 
     if (savingSource && previousPatientIdRef.current === patient.id) {
-      const patientWithPreservedKezelesreErkezesIndoka = {
+      updateCurrentPatient(preserveNewerLockToken({
         ...patient,
         kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
-      };
-      updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
+      }));
       return;
     }
 
-    const patientWithPreservedKezelesreErkezesIndoka = {
+    updateCurrentPatient(preserveNewerLockToken({
       ...patient,
       kezelesreErkezesIndoka: patient.kezelesreErkezesIndoka ?? currentPatientRef.current?.kezelesreErkezesIndoka ?? null,
-    };
-    updateCurrentPatient(patientWithPreservedKezelesreErkezesIndoka);
-  }, [patient?.id, patient?.updatedAt, isViewOnly, reset, savingSource]);
+    }));
+  }, [patient?.id, patient?.updatedAt, isViewOnly, reset, savingSource, preserveNewerLockToken]);
 
   // Sync implantatumok/fogak from patient prop (skip during auto-save)
   useEffect(() => {
@@ -1890,6 +1954,7 @@ export function PatientForm({
             patient={patient}
             showToast={showToast}
             sectionErrors={sectionErrors}
+            onPatientLockTokenRefreshed={handlePatientLockTokenRefreshed}
           />
         )}
 
@@ -2059,7 +2124,9 @@ export function PatientForm({
         onRefresh={() => conflict.refreshPatient()}
         onOverwrite={(userRole === 'admin' || userRole === 'fogpótlástanász') ? async () => {
           const confirmed = await confirmDialog(
-            'Biztosan felülírja a másik felhasználó módosításait? Ez a művelet nem vonható vissza.',
+            'Biztosan felülírja a közben történt módosításokat? A fogazati státusz a szerver ' +
+              'aktuális állapotával indul (pl. egy időközben lezárt fog-kezelés vetítése megmarad), ' +
+              'a többi mező viszont az itt látható értékekkel íródik felül. Ez a művelet nem vonható vissza.',
             { title: 'Felülírás megerősítése', type: 'warning' }
           );
           if (!confirmed) return;
@@ -2078,17 +2145,27 @@ export function PatientForm({
             // különben a felülírás megint elavult tokennel megy és újra 409-et
             // dob. A buildSavePayload a form updatedAt-jét (a régit) vinné, ezért
             // felülírjuk a frissen lekért szerver-verzióval.
-            const freshUpdatedAt = (refreshed?.patient ?? refreshed)?.updatedAt;
+            const freshPatient = (refreshed?.patient ?? refreshed) as Patient | undefined;
+            const freshUpdatedAt = freshPatient?.updatedAt;
+
+            // A FOGTÉRKÉPET a szerverről vesszük, nem a lokális állapotból. A konfliktus
+            // tipikus forrása itt már nem másik felhasználó, hanem a szerver saját
+            // fogkezelés-vetítése; a lokális (lezárás előtti) térképet friss tokennel
+            // visszaírni pont az a néma felülírás lenne, ami ellen a CAS-kapu szól —
+            // csak épp legálisan átjutna rajta, és a dental_status_snapshots-szal
+            // ellentmondó idővonalat hagyna.
+            const serverFogak = (freshPatient?.meglevoFogak ?? fogakRef.current) as Record<string, ToothStatus>;
 
             const currentFormData = getValues();
             const payload = buildSavePayload(
               currentFormData,
-              fogakRef.current,
+              serverFogak,
               implantatumokRef.current,
               vanBeutaloRef.current,
               patientId
             );
             if (freshUpdatedAt) payload.updatedAt = freshUpdatedAt;
+            setFogak(serverFogak);
 
             const saved = await savePatient(payload, { source: 'manual' });
             updateCurrentPatient(saved);

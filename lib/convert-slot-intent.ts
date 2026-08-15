@@ -17,6 +17,7 @@ import {
   probeAppointmentsWorkPhaseIdColumn,
 } from '@/lib/active-appointment';
 import { nextAttemptNumber, probeAttemptColumns } from '@/lib/appointment-attempts';
+import { lockPatientKeyShare } from '@/lib/patient-lock-token';
 
 export interface ConvertIntentOptions {
   /** Pre-selected time slot id; if not set, a free slot is found in the window */
@@ -154,6 +155,14 @@ export async function convertIntentToAppointment(
         await client.query('ROLLBACK');
         return { ok: false, status: 404, error: 'Intent nem található vagy már nem open' };
       }
+
+      // Zár-sorrend kánon: a `patients` sort MINDIG az epizód előtt zároljuk (lásd
+      // lib/appointment-service.ts és lib/patient-episode-create.ts). Enélkül ez az út
+      // epizódot zárolt először, majd az `INSERT INTO appointments` FK-ellenőrzése
+      // kért `FOR KEY SHARE`-t a betegre — a patients→epizód sorrendű utakkal ez zárt
+      // holtpont-kört alkotott. A `FOR KEY SHARE` pontosan az a zár, amit az FK úgyis
+      // felvesz, tehát sorrendet állít új blokkolás nélkül. (2026-08-15)
+      await lockPatientKeyShare(client, intent.patientId);
 
       // Batch convert-all: skip episode row FOR UPDATE — it contends with other requests (UI, appointment-service)
       // and caused statement_timeout (57014) while waiting. Intent + slot rows still serialize this flow.

@@ -14,6 +14,12 @@ import { applyKezeleoorvosFromForm } from '@/lib/kezeleoorvos-assignment';
 import { getPatientCompletenessRow } from '@/lib/patient-data-completeness';
 import { getPlausibilityWarnings } from '@/lib/data-plausibility';
 import { PATIENT_SELECT_FIELDS } from '@/lib/queries/patient-fields';
+import {
+  compareLockToken,
+  parseLockToken,
+  restoreUpdatedAtTrigger,
+  SKIP_UPDATED_AT_TRIGGER,
+} from '@/lib/patient-lock-token';
 import { logger } from '@/lib/logger';
 import type { Pool } from 'pg';
 import type { z } from 'zod';
@@ -164,21 +170,100 @@ const DB_TO_CAMEL: Record<string, string> = {
   meglevo_implantatumok: 'meglevoImplantatumok',
 };
 
-/** Per-table UPDATE queries for normalized patients schema. */
+/**
+ * A beteg-mentés eredménye. A konfliktust NEM kivételként adjuk vissza: a
+ * `handleApiError` lapos `{ error: string }` alakot építene, a kliens
+ * (lib/storage.ts) viszont csak objektum-`error`-ból olvassa ki a `code`-ot —
+ * `HttpError`-ral a STALE_WRITE banner némán elmaradna.
+ */
+type PatientUpdateResult =
+  | { ok: true; patient: Record<string, unknown>; lockToken: Date | null }
+  | { ok: false; reason: 'not_found' }
+  | { ok: false; reason: 'stale'; serverUpdatedAt: Date | null; clientUpdatedAt: Date | null };
+
+/**
+ * Per-table UPDATE queries for normalized patients schema.
+ *
+ * Az optimista zár ellenőrzése **ebben a tranzakcióban**, compare-and-swap
+ * formában történik: az `If-Match` token bekerül a `patients` UPDATE `WHERE`
+ * ágába, így az ellenőrzés és az írás atomi. A korábbi megoldás a tranzakción
+ * kívül olvasott és hasonlított, az írás pedig csak utána indult — a kettő között
+ * egy fog-kezelés lezárása felülírhatta a fogtérképet, és a már jóváhagyott
+ * autosave némán visszaírta a régit. (2026-08-15)
+ *
+ * Szándékosan nincs explicit `SELECT ... FOR UPDATE`: a kulcsot nem érintő UPDATE
+ * `FOR NO KEY UPDATE` zárat vesz, ami nem ütközik a `patients(id)`-re hivatkozó
+ * gyermektáblák INSERT-jeinek `FOR KEY SHARE` zárával — egy erősebb zár a chat-,
+ * időpont- és dokumentum-írásokat is a mentés mögé sorolná.
+ */
 async function executePatientUpdate(
   pool: Pool,
   patientId: string,
   patient: ValidatedPatient,
-  userEmail: string
-): Promise<Record<string, unknown>> {
+  userEmail: string,
+  ifMatch: string | null,
+  correlationId: string
+): Promise<PatientUpdateResult> {
+  const casToken = ifMatch ? parseLockToken(ifMatch) : null;
+  if (ifMatch && !casToken) {
+    logger.warn(`[PUT /api/patients/${patientId}] Invalid If-Match date format: ${ifMatch}`, {
+      correlationId,
+      userEmail,
+    });
+  }
+
+  let lockToken: Date | null = null;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    // 1) CAS-kapu. A `$19 IS NULL` ág a hiányzó/olvashatatlan If-Match backward-compat
+    //    átengedése; az `updated_at IS NULL` ág azt a mai viselkedést tartja, hogy
+    //    szerveroldali token hiányában nincs konfliktus.
+    //
+    //    MINDKÉT OLDAL EZREDMÁSODPERCRE IGAZÍTVA. A `patients.updated_at` teljes
+    //    (mikroszekundumos) `timestamptz`, a token viszont körbejár egy JS `Date`-en,
+    //    ami ms-re csonkol — nyers `updated_at = $19` összehasonlítással a predikátum
+    //    gyakorlatilag SOHA nem találna egyezést, és minden mentés hamis 409-et kapna.
+    //    Ezért a tárolt érték is ms-igazítottan íródik (`date_trunc`), a `GREATEST` ág
+    //    pedig garantálja, hogy a token szigorúan növekedjen akkor is, ha két írás
+    //    ugyanabba az ezredmásodpercbe esik.
+    const casResult = await client.query(
+      `UPDATE patients SET nev=$2, taj=$3, telefonszam=$4, szuletesi_datum=$5, nem=$6, email=$7, cim=$8, varos=$9, iranyitoszam=$10, kezeleoorvos=$11, kezeleoorvos_intezete=$12, felvetel_datuma=$13, halal_datum=$14, torvenyes_kepviselo_nev=$15, torvenyes_kepviselo_kapcsolat=$16, torvenyes_kepviselo_email=$17,
+             updated_at = GREATEST(
+               date_trunc('milliseconds', clock_timestamp()),
+               date_trunc('milliseconds', updated_at) + interval '1 millisecond'
+             ),
+             updated_by=$18
+        WHERE id=$1
+          AND ($19::timestamptz IS NULL OR updated_at IS NULL OR date_trunc('milliseconds', updated_at) = $19::timestamptz)
+          AND ${SKIP_UPDATED_AT_TRIGGER}
+       RETURNING updated_at`,
+      [patientId, patient.nev, patient.taj||null, patient.telefonszam||null, patient.szuletesiDatum||null, patient.nem||null, patient.email||null, patient.cim||null, patient.varos||null, patient.iranyitoszam||null, patient.kezeleoorvos||null, patient.kezeleoorvosIntezete||null, patient.felvetelDatuma||null, patient.halalDatum||null, patient.torvenyesKepviseloNev||null, patient.torvenyesKepviseloKapcsolat||null, patient.torvenyesKepviseloEmail||null, userEmail, casToken]
+    );
+    // A skip-flag tranzakció-lokális: a gyermektáblák írása előtt vissza kell adni
+    // a triggernek a saját dolgát.
+    await restoreUpdatedAtTrigger(client);
+
+    if (casResult.rows.length === 0) {
+      // Nem írtunk semmit. Két oka lehet: nincs ilyen beteg, vagy elavult a token.
+      const probe = await client.query(`SELECT updated_at FROM patients WHERE id = $1`, [patientId]);
+      await client.query('ROLLBACK');
+      if (probe.rows.length === 0) {
+        return { ok: false, reason: 'not_found' };
+      }
+      return {
+        ok: false,
+        reason: 'stale',
+        serverUpdatedAt: parseLockToken(probe.rows[0].updated_at),
+        clientUpdatedAt: casToken,
+      };
+    }
+
+    lockToken = parseLockToken(casResult.rows[0].updated_at);
+
+    // 2) A gyermektáblák csak a kapun túl íródnak — elavult tokennél semmi nem változik.
     await Promise.all([
-      client.query(
-        `UPDATE patients SET nev=$2, taj=$3, telefonszam=$4, szuletesi_datum=$5, nem=$6, email=$7, cim=$8, varos=$9, iranyitoszam=$10, kezeleoorvos=$11, kezeleoorvos_intezete=$12, felvetel_datuma=$13, halal_datum=$14, torvenyes_kepviselo_nev=$15, torvenyes_kepviselo_kapcsolat=$16, torvenyes_kepviselo_email=$17, updated_at=CURRENT_TIMESTAMP, updated_by=$18 WHERE id=$1`,
-        [patientId, patient.nev, patient.taj||null, patient.telefonszam||null, patient.szuletesiDatum||null, patient.nem||null, patient.email||null, patient.cim||null, patient.varos||null, patient.iranyitoszam||null, patient.kezeleoorvos||null, patient.kezeleoorvosIntezete||null, patient.felvetelDatuma||null, patient.halalDatum||null, patient.torvenyesKepviseloNev||null, patient.torvenyesKepviseloKapcsolat||null, patient.torvenyesKepviseloEmail||null, userEmail]
-      ),
       client.query(
         `INSERT INTO patient_referral (patient_id, beutalo_orvos, beutalo_intezmeny, beutalo_indokolas, primer_mutet_leirasa, mutet_ideje, szovettani_diagnozis, nyaki_blokkdisszekcio)
          VALUES ($1,$2,$3,$4,$5,$6,$7,$8)
@@ -212,11 +297,27 @@ async function executePatientUpdate(
     client.release();
   }
 
+  // A visszaolvasás KÍVÜL van a try/finally-n: a tranzakció kliense addigra már
+  // vissza van adva a poolnak. Ha bent maradna, minden párhuzamos beteg-PUT egy
+  // kapcsolatot fogva kérne egy másodikat — `DB_POOL_MAX` (alap: 5) darab elég a
+  // kölcsönös várakozáshoz, amit csak a 10 s-os connection timeout oldana fel.
+  // (Mellékhatásként a `catch` sem küldene ROLLBACK-et egy már commitolt kapcsolatra.)
   const full = await pool.query(
     `SELECT ${PATIENT_SELECT_FIELDS} FROM patients_full WHERE id = $1`,
     [patientId]
   );
-  return full.rows[0];
+  const row = full.rows[0] as Record<string, unknown> | undefined;
+  if (!row) {
+    // A beteget a COMMIT és ezen olvasás között törölték. Üres objektumot adni
+    // 200-zal adatvesztés lenne a kliensen (a form elveszítené az azonosítóját).
+    return { ok: false, reason: 'not_found' };
+  }
+  // A tokent a tranzakcióból vesszük, nem ebből az olvasásból: a COMMIT után egy
+  // sorban álló fog-lezárás azonnal commitolhat, és akkor ez az olvasás az ŐK
+  // tokenjét adná vissza — amit a kliens a következő If-Match-ként küldve
+  // csendben megkerülné a most bevezetett ellenőrzést.
+  if (lockToken) row.updatedAt = lockToken.toISOString();
+  return { ok: true, patient: row, lockToken };
 }
 
 // ─── Private utility functions ──────────────────────────────────────────────
@@ -351,6 +452,33 @@ async function validateAndNormalizeTreatmentPlan(
  * If-Match / stale-write conflict detection.
  * Returns an error response when a conflict is detected, otherwise null.
  */
+function buildStaleWriteResponse(
+  serverUpdatedAt: Date | null,
+  clientUpdatedAt: Date | null,
+  correlationId: string
+): NextResponse {
+  // A beágyazott (objektum-) `error` alak KÖTELEZŐ: a kliens (lib/storage.ts) csak
+  // ebből olvassa ki a `code`-ot, és a konfliktus-banner a STALE_WRITE kódra sül el.
+  const response = NextResponse.json(
+    {
+      error: {
+        name: 'ConflictError',
+        status: 409,
+        code: 'STALE_WRITE',
+        message: 'Másik felhasználó módosította a beteg adatait közben. Kérjük, frissítse az oldalt és próbálja újra.',
+        details: {
+          serverUpdatedAt: serverUpdatedAt ? serverUpdatedAt.toISOString() : null,
+          clientUpdatedAt: clientUpdatedAt ? clientUpdatedAt.toISOString() : null,
+        },
+        correlationId,
+      },
+    },
+    { status: 409 }
+  );
+  response.headers.set('x-correlation-id', correlationId);
+  return response;
+}
+
 function checkStaleWrite(
   ifMatch: string | null,
   oldPatient: Record<string, unknown>,
@@ -358,45 +486,24 @@ function checkStaleWrite(
   correlationId: string,
   userEmail: string
 ): NextResponse | null {
-  if (ifMatch) {
-    try {
-      const clientUpdatedAt = new Date(ifMatch.trim());
-      const serverUpdatedAt = oldPatient.updated_at
-        ? new Date(oldPatient.updated_at as string)
-        : null;
+  const comparison = compareLockToken(ifMatch, oldPatient.updated_at as string | null);
 
-      if (serverUpdatedAt && clientUpdatedAt.getTime() !== serverUpdatedAt.getTime()) {
-        const response = NextResponse.json(
-          {
-            error: {
-              name: 'ConflictError',
-              status: 409,
-              code: 'STALE_WRITE',
-              message: 'Másik felhasználó módosította a beteg adatait közben. Kérjük, frissítse az oldalt és próbálja újra.',
-              details: {
-                serverUpdatedAt: serverUpdatedAt.toISOString(),
-                clientUpdatedAt: clientUpdatedAt.toISOString(),
-              },
-              correlationId,
-            },
-          },
-          { status: 409 }
-        );
-        response.headers.set('x-correlation-id', correlationId);
-        return response;
-      }
-    } catch (dateParseError) {
+  if (comparison.verdict === 'stale') {
+    return buildStaleWriteResponse(comparison.server, comparison.client, correlationId);
+  }
+
+  if (comparison.verdict === 'skipped') {
+    if (!ifMatch) {
+      logger.warn(`[PUT /api/patients/${patientId}] If-Match header missing - allowing update (backward compat)`, {
+        correlationId,
+        userEmail,
+      });
+    } else if (!comparison.client) {
       logger.warn(`[PUT /api/patients/${patientId}] Invalid If-Match date format: ${ifMatch}`, {
         correlationId,
         userEmail,
-        error: dateParseError,
       });
     }
-  } else {
-    logger.warn(`[PUT /api/patients/${patientId}] If-Match header missing - allowing update (backward compat)`, {
-      correlationId,
-      userEmail,
-    });
   }
   return null;
 }
@@ -651,7 +758,11 @@ export const PUT = authedHandler(async (req, { auth, params, correlationId }) =>
 
     const oldPatient = oldPatientResult.rows[0];
 
-    // 3. Conflict detection (If-Match / stale write)
+    // 3. Conflict detection (If-Match / stale write) — ELŐSZŰRŐ.
+    //    A döntő ellenőrzés az írási tranzakcióban van (executePatientUpdate CAS-kapuja);
+    //    ez az ág megmarad, mert (a) kapcsolat- és tranzakciónyitás nélkül ad 409-et, és
+    //    (b) a 409 precedenciáját tartja a DUPLICATE_TAJ (5. lépés) előtt — a kliens
+    //    konfliktus-bannere csak a STALE_WRITE kódra sül el.
     const conflictResponse = checkStaleWrite(ifMatch, oldPatient, patientId, correlationId, userEmail);
     if (conflictResponse) return conflictResponse;
 
@@ -663,15 +774,42 @@ export const PUT = authedHandler(async (req, { auth, params, correlationId }) =>
     const tajResponse = await checkTajUniqueness(pool, validatedPatient.taj, oldPatient.taj, patientId, correlationId);
     if (tajResponse) return tajResponse;
 
-    // 6. Execute per-table updates in a transaction
-    let newPatient = await executePatientUpdate(pool, patientId, validatedPatient, userEmail);
+    // 6. Execute per-table updates in a transaction (a CAS-kapuval együtt)
+    const updateResult = await executePatientUpdate(
+      pool,
+      patientId,
+      validatedPatient,
+      userEmail,
+      ifMatch,
+      correlationId
+    );
 
-    if (!newPatient) {
-      return NextResponse.json(
-        { error: 'Beteg nem található' },
-        { status: 404 }
+    if (!updateResult.ok) {
+      if (updateResult.reason === 'not_found') {
+        // Verseny: a beteget a 2. lépés olvasása és a CAS között törölték. Korábban
+        // ez az FK-sértésen 500-at adott, amit a kliens újra is próbált.
+        const response = NextResponse.json(
+          {
+            error: {
+              name: 'NotFoundError',
+              status: 404,
+              message: 'Beteg nem található',
+              correlationId,
+            },
+          },
+          { status: 404 }
+        );
+        response.headers.set('x-correlation-id', correlationId);
+        return response;
+      }
+      return buildStaleWriteResponse(
+        updateResult.serverUpdatedAt,
+        updateResult.clientUpdatedAt,
+        correlationId
       );
     }
+
+    let newPatient = updateResult.patient;
 
     // 7. Change tracking & audit logging
     try {
@@ -695,21 +833,28 @@ export const PUT = authedHandler(async (req, { auth, params, correlationId }) =>
       logger.error('Kezelőorvos hozzárendelés sikertelen (update):', assignErr);
     }
 
-    // 7c. KRITIKUS: az applyKezeleoorvosFromForm egy MÁSODIK `UPDATE patients`-et
-    //     futtat, amit az `update_patients_updated_at` BEFORE UPDATE trigger
-    //     újabb `updated_at`-re bumpol — a fenti `newPatient` viszont még a
-    //     korábbi (T1) verziót tartalmazza. Ha ezt a stale verziót küldjük
-    //     vissza, a kliens If-Match-e azonnal elavul, és a KÖVETKEZŐ mentése
-    //     409 STALE_WRITE-tal bukik (önkonfliktus minden 2. mentésnél). Ezért a
-    //     kezelőorvos-szinkron UTÁN újraolvassuk a beteget a végleges
-    //     updated_at-tel (és a friss kezelőorvos-mezőkkel).
+    // 7c. Az applyKezeleoorvosFromForm egy MÁSODIK `UPDATE patients`-et futtat, ami a
+    //     kezelőorvos-mezőket írja — ezeket újra kell olvasni, hogy a válasz a friss
+    //     értéket hordozza.
+    //
+    //     A ZÁR-TOKENT viszont NEM vesszük át ebből az olvasásból. Két oka van:
+    //     (1) a kezelőorvos-írás a 062 óta `app.skip_updated_at`-tel megy
+    //         (lib/kezeleoorvos-assignment.ts), tehát nem is bumpol — a korábbi
+    //         „önkonfliktus minden 2. mentésnél" indoklás elavult;
+    //     (2) ez az olvasás a COMMIT után, zár nélkül fut, így egy közben commitolt
+    //         IDEGEN írás (pl. fog-lezárás) tokenjét adhatná vissza. A kliens azt
+    //         küldené következő If-Match-ként, és csendben megkerülné a CAS-kaput.
     if (kezeleoorvosTouchedPatients) {
       try {
         const fresh = await pool.query(
           `SELECT ${PATIENT_SELECT_FIELDS} FROM patients_full WHERE id = $1`,
           [patientId]
         );
-        if (fresh.rows[0]) newPatient = fresh.rows[0];
+        if (fresh.rows[0]) {
+          const ownToken = newPatient.updatedAt;
+          newPatient = fresh.rows[0];
+          newPatient.updatedAt = ownToken;
+        }
       } catch (rereadErr) {
         logger.error('Failed to re-read patient after kezelőorvos sync:', rereadErr);
       }

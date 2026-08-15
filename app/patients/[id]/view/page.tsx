@@ -270,6 +270,7 @@ export default function PatientViewPage() {
             patient={patient}
             isViewOnly={false}
             onSave={handleSavePatient}
+            onPatientRefreshed={handleSavePatient}
             onCancel={handleBack}
             showOnlySections={['alapadatok', 'szemelyes', 'beutalo']}
           />
@@ -280,6 +281,7 @@ export default function PatientViewPage() {
             patient={patient}
             isViewOnly={false}
             onSave={handleSavePatient}
+            onPatientRefreshed={handleSavePatient}
             onCancel={handleBack}
             showOnlySections={['anamnezis', 'betegvizsgalat', 'ohip14']}
           />
@@ -299,6 +301,7 @@ export default function PatientViewPage() {
             patient={patient}
             isViewOnly={false}
             onSave={handleSavePatient}
+            onPatientRefreshed={handleSavePatient}
             onCancel={handleBack}
             showOnlySections={['adminisztracio']}
             highlightDocumentId={highlightDocumentId}

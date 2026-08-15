@@ -6,7 +6,11 @@ import { Patient, kezelesiTervOptions, fabianFejerdyProtetikaiOsztalyOptions } f
 import { REQUIRED_FIELDS } from '@/lib/clinical-rules';
 import { type ToothStatus } from '@/hooks/usePatientAutoSave';
 import { Calendar, Download, Check, CircleDashed, AlertTriangle, AlertCircle, Activity, Layers, type LucideIcon } from 'lucide-react';
-import { ToothTreatmentProvider, ToothTreatmentInline } from '../ToothTreatmentPanel';
+import {
+  ToothTreatmentProvider,
+  ToothTreatmentInline,
+  type ToothTreatmentCompletionResult,
+} from '../ToothTreatmentPanel';
 import { OPInlinePreview } from '../OPInlinePreview';
 import { DentalStatusTimeline } from '../DentalStatusTimeline';
 import { Odontogram } from './odontogram/Odontogram';
@@ -230,6 +234,15 @@ interface BetegvizsgalatSectionProps {
   patient: Patient | null | undefined;
   showToast: (message: string, type?: 'success' | 'error' | 'info', duration?: number) => string;
   sectionErrors: Record<string, number>;
+  /**
+   * A fog-kezelés lezárása után a szerver érvényteleníti a beteg zár-tokenjét.
+   * Ezen keresztül jut vissza az új token a formhoz — az átvétel feltételeit a
+   * fogadó oldal dönti el (lásd PatientForm).
+   */
+  onPatientLockTokenRefreshed?: (
+    result: ToothTreatmentCompletionResult,
+    nextFogak: Record<string, ToothStatus>
+  ) => void;
 }
 
 export function BetegvizsgalatSection({
@@ -249,6 +262,7 @@ export function BetegvizsgalatSection({
   patient,
   showToast,
   sectionErrors,
+  onPatientLockTokenRefreshed,
 }: BetegvizsgalatSectionProps) {
   const [showPerio, setShowPerio] = useState(false);
   return (
@@ -363,18 +377,24 @@ export function BetegvizsgalatSection({
             return patientId ? (
               <ToothTreatmentProvider
                 patientId={patientId}
-                onTreatmentCompleted={(toothNumber, treatmentCode) => {
+                onTreatmentCompleted={(toothNumber, treatmentCode, result) => {
                   // Egy kezelés "Kész"-re állításakor a szerver már frissítette a
                   // tárolt állapotot; itt a helyi (autosave-elt) odontogramot is
                   // átvezetjük, hogy a két oldal ne kerüljön ellentmondásba.
-                  setFogak((prev) => {
-                    const { changed, next } = applyTreatmentOutcome(prev[toothNumber], treatmentCode);
-                    if (!changed) return prev;
-                    const ns = { ...prev };
-                    if (next === undefined) delete ns[toothNumber];
-                    else ns[toothNumber] = next as ToothStatus;
-                    return ns;
-                  });
+                  const { changed, next } = applyTreatmentOutcome(fogak[toothNumber], treatmentCode);
+                  let nextFogak = fogak;
+                  if (changed) {
+                    nextFogak = { ...fogak };
+                    if (next === undefined) delete nextFogak[toothNumber];
+                    else nextFogak[toothNumber] = next as ToothStatus;
+                    setFogak(nextFogak);
+                  }
+                  // A szerver érvénytelenítette a beteg zár-tokenjét (a fogtérkép a
+                  // form birtokában lévő adat). Ha ez a fül volt naprakész, átvesszük
+                  // az új tokent — így nem 409-el a saját műveletétől. A fogtérképet is
+                  // felküldjük, mert a szülő `patient` prop-ja különben elavult marad,
+                  // és egy fülváltásos remount a lezárás ELŐTTI állapottal indulna.
+                  if (result) onPatientLockTokenRefreshed?.(result, nextFogak);
                 }}
               >
                 {content}

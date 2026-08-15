@@ -13,6 +13,7 @@ import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-ep
 import { translateUniqueViolation } from '@/lib/appointment-constraint-errors';
 import { probeAppointmentsWorkPhaseIdColumn } from '@/lib/active-appointment';
 import { nextAttemptNumber, probeAttemptColumns } from '@/lib/appointment-attempts';
+import { lockPatientKeyShare } from '@/lib/patient-lock-token';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -136,7 +137,16 @@ export async function createAppointment(
   let committed = false;
 
   try {
-    // 1) Lock episode first (consistent lock order) and enforce one-hard-next + care_pathway check
+    // 0) Zár-sorrend kánon: a `patients` sort MINDIG előbb zároljuk, mint az epizódot.
+    //
+    //    Enélkül holtpont-pár áll fenn: ez az út epizódot zárolt először, majd az
+    //    `appointments` INSERT FK-ellenőrzése `FOR KEY SHARE`-t vesz a beteg során —
+    //    a `lib/patient-episode-create.ts` viszont fordítva (patients → epizód).
+    //    A `FOR KEY SHARE` pontosan az a zár, amit az FK úgyis felvesz, tehát ez
+    //    sorrendet állít anélkül, hogy bármilyen új blokkolást vezetne be.
+    await lockPatientKeyShare(client, patientId);
+
+    // 1) Lock episode (consistent lock order) and enforce one-hard-next + care_pathway check
     if (episodeId && poolValue === 'work') {
       const episodeLock = await client.query(
         `SELECT id, care_pathway_id, assigned_provider_id FROM patient_episodes WHERE id = $1 FOR UPDATE`,

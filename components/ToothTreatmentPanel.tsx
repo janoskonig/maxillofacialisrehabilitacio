@@ -71,7 +71,26 @@ interface ToothTreatmentContextValue {
    * tárolt állapotát, amikor egy kezelés "Kész" lesz — különben az autosave
    * visszaírná a régi alapállapotot a szerver automatikus frissítése fölé.
    */
-  onTreatmentCompleted?: (toothNumber: string, treatmentCode: string) => void;
+  onTreatmentCompleted?: (
+    toothNumber: string,
+    treatmentCode: string,
+    result?: ToothTreatmentCompletionResult
+  ) => void;
+}
+
+/**
+ * A „Kész" lezárás szerver-válaszának zár-token része.
+ *
+ * A `previous` azért kell, mert ezen a végponton nincs `If-Match`: a friss token
+ * önmagában NEM bizonyítja, hogy a kliens beteg-snapshotja aktuális volt. A hívó
+ * csak akkor veheti át az újat, ha a `previous` egyezik azzal, amit ő tart —
+ * különben egy elavult fül „megmosná" vele a saját tokenjét, és a következő mentése
+ * némán felülírna egy idegen írást.
+ */
+export interface ToothTreatmentCompletionResult {
+  patientPreviousUpdatedAt: string | null;
+  patientUpdatedAt: string | null;
+  dentalStatusUpdated: boolean;
 }
 
 const ToothTreatmentContext = createContext<ToothTreatmentContextValue | null>(null);
@@ -79,7 +98,11 @@ const ToothTreatmentContext = createContext<ToothTreatmentContextValue | null>(n
 interface ToothTreatmentProviderProps {
   patientId: string;
   children: ReactNode;
-  onTreatmentCompleted?: (toothNumber: string, treatmentCode: string) => void;
+  onTreatmentCompleted?: (
+    toothNumber: string,
+    treatmentCode: string,
+    result?: ToothTreatmentCompletionResult
+  ) => void;
 }
 
 export function ToothTreatmentProvider({ patientId, children, onTreatmentCompleted }: ToothTreatmentProviderProps) {
@@ -561,10 +584,17 @@ export function ToothTreatmentInline({ toothNumber, isViewOnly }: ToothTreatment
         credentials: 'include',
         body: JSON.stringify({ status: 'completed' }),
       });
-      if (!res.ok) { const data = await res.json(); setError(data.error ?? `Hiba`); return; }
+      const data = await res.json().catch(() => null);
+      if (!res.ok) { setError(data?.error ?? `Hiba`); return; }
       // Az élő odontogramot a szerver már frissítette; a szerkeszthető beteglapon
       // a helyi állapotot is átvezetjük, hogy az autosave ne írja vissza a régit.
-      onTreatmentCompleted?.(toothNumber, treatment.treatmentCode);
+      // A zár-tokent a `reload()` ELŐTT adjuk tovább, hogy a token-frissítés
+      // megelőzze a következő autosave-et.
+      onTreatmentCompleted?.(toothNumber, treatment.treatmentCode, data ? {
+        patientPreviousUpdatedAt: data.patientPreviousUpdatedAt ?? null,
+        patientUpdatedAt: data.patientUpdatedAt ?? null,
+        dentalStatusUpdated: data.dentalStatusUpdated === true,
+      } : undefined);
       await reload();
       notifyToothTreatmentsChanged();
     } catch (e) {
