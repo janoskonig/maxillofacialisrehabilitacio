@@ -3,7 +3,9 @@
  * VARCHAR mező) az új recompute szabály szerint, MINDEN beteghez.
  *
  * Logika tükör — lásd lib/recompute-kezeleoorvos.ts:
- *   B-eset:  legutóbb nyitott AKTÍV `patient_episodes` provider nyer.
+ *   B-eset:  legutóbb nyitott NYITOTT (`status = 'open'`) `patient_episodes`
+ *            provider nyer. (2026-08-15: korábban `'active'`-ot kérdezett, amit a
+ *            CHECK constraint nem enged, így az ág soha nem futott le.)
  *   A-eset:  ha B nincs → now()-hoz időben legközelebbi nem-cancelled,
  *            nem-rejected appointment dentist_email → users.id (ablak:
  *            jövőbeli ∪ utolsó 30 nap).
@@ -11,9 +13,11 @@
  *
  * A script idempotens — ismételten futtatható, csak a változó sorokat írja.
  *
- * Felülírás: a felhasználó döntése szerint (kérdéssorozat 3. pont) az új
- * szabály felülírja a meglévő `kezeleoorvos` értékeket. Ezt a recompute
- * SQL-ek természetesen megteszik (a write feltétele a user_id változás).
+ * HATÓKÖR: csak a hozzárendelés NÉLKÜLI betegek (`kezeleoorvos_assigned_at IS NULL`).
+ * A kézi (ragadós) delegálásokat nem bántja — a recompute seed-only, lásd 051.
+ * (2026-08-15: korábban a batch-SELECT nem szűrt erre, így egy futtatás elmosta
+ * volna az összes kézi delegálást. A fejléc korábbi „az új szabály felülírja a
+ * meglévő értékeket" állítása ezzel érvényét vesztette.)
  *
  * Env:
  *   DATABASE_URL              required
@@ -63,7 +67,7 @@ async function computeCandidate(pool, patientId) {
        FROM patient_episodes pe
        JOIN users u ON u.id = pe.assigned_provider_id
       WHERE pe.patient_id = $1
-        AND pe.status = 'active'
+        AND pe.status = 'open'
         AND pe.assigned_provider_id IS NOT NULL
       ORDER BY pe.opened_at DESC NULLS LAST, pe.created_at DESC NULLS LAST
       LIMIT 1`,
@@ -139,9 +143,14 @@ async function main() {
 
     while (true) {
       const batch = await pool.query(
+        // A kézi (ragadós) delegálásokat KIHAGYJUK: a `kezeleoorvos_assigned_at`
+        // nem null azt jelenti, hogy valaki kézzel rendelte hozzá az orvost, és a
+        // recompute seed-only (051). Enélkül egy mai futtatás elmosná az összes
+        // delegálást. (2026-08-15)
         `SELECT id, kezeleoorvos_user_id, kezeleoorvos
            FROM patients
           WHERE id > $1
+            AND kezeleoorvos_assigned_at IS NULL
           ORDER BY id ASC
           LIMIT $2`,
         [lastId, batchSize]

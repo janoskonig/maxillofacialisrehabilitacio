@@ -17,6 +17,7 @@
 import type { Pool, PoolClient } from 'pg';
 import { getDbPool } from './db';
 import { validateUUID } from './validation';
+import { normalizePersonName, resolveUniqueByName } from './normalize-person-name';
 
 export interface DbQueryable {
   query: (sql: string, params?: unknown[]) => Promise<{ rows: any[]; rowCount?: number | null }>;
@@ -33,29 +34,37 @@ export interface AssignKezeleoorvosResult {
   intezmeny: string | null;
 }
 
-/** Aktív kezelőorvos-jelölt feloldása NÉV alapján (a form dropdown a nevet küldi). */
+/**
+ * Aktív kezelőorvos-jelölt feloldása NÉV alapján (a form dropdown a nevet küldi).
+ *
+ * **Kétértelműt sosem tippelünk.** Korábban ez a függvény
+ * `ORDER BY (role = 'fogpótlástanász') DESC, created_at ASC LIMIT 1`-gyel csendben
+ * kiválasztott egyet több azonos nevű orvos közül. A kezelőorvos viszont
+ * jogosultsági és számonkérhetőségi tény — ott a rossz találat rosszabb, mint a
+ * semmi. Több (vagy nulla) találatnál `null`, és a hívó a nevet legacy szövegként
+ * őrzi tovább. (2026-08-15)
+ *
+ * A jelölteket teljes egészében lekérjük és JS-ben normalizálunk: normalizált
+ * paramétert nyers oszlophoz hasonlítani nem lehet, egy SQL-oldali `LIMIT 2` pedig
+ * a normalizálás *előtt* szűrne, tehát nem bizonyítana egyértelműséget. A lista a
+ * `users` orvos-részhalmaza — nem lapozunk.
+ */
 export async function resolveDoctorByName(
   name: string,
   db?: DbQueryable | Pool | PoolClient
 ): Promise<{ id: string; name: string; intezmeny: string | null } | null> {
-  const trimmed = (name ?? '').trim();
-  if (trimmed === '') return null;
+  if (normalizePersonName(name) === '') return null;
   const queryable: DbQueryable = (db as DbQueryable) ?? (getDbPool() as unknown as DbQueryable);
-  // A fogpótlástanász/admin orvosok közül a megjelenített név (doktor_neve,
-  // fallback email) alapján. A form dropdown ugyanezt a listát használja
-  // (/api/users/fogpotlastanasz), így a név itt egyezni fog.
   const res = await queryable.query(
     `SELECT id, COALESCE(doktor_neve, email) AS name, intezmeny
        FROM users
       WHERE active = true
-        AND (role = 'fogpótlástanász' OR role = 'admin')
-        AND COALESCE(doktor_neve, email) = $1
-      ORDER BY (role = 'fogpótlástanász') DESC, created_at ASC
-      LIMIT 1`,
-    [trimmed]
+        AND (role = 'fogpótlástanász' OR role = 'admin')`
   );
-  if (res.rows.length === 0) return null;
-  return { id: res.rows[0].id, name: res.rows[0].name, intezmeny: res.rows[0].intezmeny ?? null };
+  const rows = res.rows as Array<{ id: string; name: string | null; intezmeny: string | null }>;
+  const match = resolveUniqueByName(name, rows, (r) => r.name);
+  if (!match || !match.name) return null;
+  return { id: match.id, name: match.name, intezmeny: match.intezmeny ?? null };
 }
 
 /**

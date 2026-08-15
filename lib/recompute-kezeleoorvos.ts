@@ -5,8 +5,12 @@
  * VARCHAR mező) automatikus karbantartása. A logikát a megrendelő határozta
  * meg (lásd database/migrations/027_kezeleoorvos_user_id.sql fejléce):
  *
- *   B-eset (epizód): legutóbb nyitott AKTÍV `patient_episodes` sor
- *                    `assigned_provider_id`-je nyer.
+ *   B-eset (epizód): legutóbb nyitott NYITOTT (`status = 'open'`) `patient_episodes`
+ *                    sor `assigned_provider_id`-je nyer.
+ *                    (2026-08-15: az ág korábban `status = 'active'`-ot kérdezett,
+ *                    amit a `patient_episodes.status` CHECK nem is enged
+ *                    — csak `open`/`closed`/`paused` —, így soha nem talált sort,
+ *                    és minden seedelés az A-eset fallbackre esett.)
  *   A-eset (időpont): ha B nincs, a `now()`-hoz időben legközelebbi nem
  *                    lemondott (`appointment_status` ≠ cancelled_*) és nem
  *                    elutasított (`approval_status` ≠ rejected) appointment
@@ -96,7 +100,7 @@ export async function recomputeKezeleoorvos(
        FROM patient_episodes pe
        JOIN users u ON u.id = pe.assigned_provider_id
       WHERE pe.patient_id = $1
-        AND pe.status = 'active'
+        AND pe.status = 'open'
         AND pe.assigned_provider_id IS NOT NULL
       ORDER BY pe.opened_at DESC NULLS LAST, pe.created_at DESC NULLS LAST
       LIMIT 1`,

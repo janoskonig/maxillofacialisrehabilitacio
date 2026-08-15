@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { TOOTH_BASES } from '../tooth-base';
 
 /** DB / űrlap null értékeket adhat vissza; Zod default csak undefined-re vonatkozik. */
 function patientBoolean(defaultValue: boolean) {
@@ -110,12 +111,9 @@ export const patientSchema = z.object({
         // Régi modell — visszafelé kompatibilitásra megtartva.
         status: z.enum(['D', 'F', 'M']).optional(),
         description: z.string().optional(),
-        // Új odontogram modell.
-        base: z.enum([
-          'sound', 'missing', 'filled', 'crown', 'root_canal', 'inlay',
-          'implant', 'bridge_abutment', 'bridge_pontic', 'root_remnant',
-          'impacted', 'necrotic',
-        ]).optional(),
+        // Új odontogram modell. A lista forrása a lib/tooth-base.ts — ne írd ide
+        // kézzel, különben a kliens és a szerver elcsúszik egymástól.
+        base: z.enum(TOOTH_BASES).optional(),
         caries: z.boolean().optional(),
         periapical: z.boolean().optional(),
         mobility: z.number().int().min(0).max(3).optional(),
@@ -300,11 +298,6 @@ export interface PatientAnamnesis {
 export const nyakiBlokkdisszekcioOptions = ['nem volt', 'volt, egyoldali', 'volt, kétoldali'];
 
 export const fabianFejerdyProtetikaiOsztalyOptions = ['0', '1A', '1B', '2A', '2A/1', '2B', '3', 'T'];
-
-export const kezeleoorvosOptions = [
-  'Dr. Herczeg', 'Dr. Jász', 'Dr. Kádár', 'Dr. Kaposi', 'Dr. Karsai',
-  'Dr. König', 'Dr. Körmendi', 'Dr. Kivovics', 'Dr. Orsós', 'Dr. Takács', 'Dr. Tasi', 'Dr. Vánkos'
-];
 
 export const kezelesiTervOptions = [
   'zárólemez', 'részleges akrilátlemezes fogpótlás', 'teljes lemezes fogpótlás',
