@@ -139,8 +139,19 @@ async function syncCalendar(retries = 3, delayMs = 5000) {
   }
 }
 
+/** A futás során hibázott hívások — a végén ezek döntik el az exit kódot. */
+const failures = [];
+
+function recordFailure(label, detail) {
+  failures.push(`${label}: ${detail}`);
+  console.error(`[${new Date().toISOString()}] ${label} FAILED — ${detail}`);
+}
+
 /**
- * Fire a one-shot GET to an API endpoint (non-critical — failures logged but don't abort cron).
+ * Fire a one-shot GET to an API endpoint. Egy hívás hibája nem szakítja meg a futást,
+ * de bekerül a `failures` listába, és a futás végén nem-nulla exit kóddal zárunk —
+ * különben a Render "finished successfully"-t ír ki akkor is, ha minden végpont
+ * 401-gyel elszállt, és a heti OHIP-14 emlékeztető hetekig némán kimarad.
  */
 async function callEndpoint(path, label) {
   return new Promise((resolve) => {
@@ -163,15 +174,20 @@ async function callEndpoint(path, label) {
       let data = '';
       res.on('data', (c) => { data += c; });
       res.on('end', () => {
+        const ok = res.statusCode >= 200 && res.statusCode < 300;
         console.log(`[${new Date().toISOString()}] ${label}: status ${res.statusCode} — ${data.slice(0, 300)}`);
-        // #region agent log
-        fetch('http://127.0.0.1:7480/ingest/422ab24a-0338-4af3-8664-a47d0382f7d8',{method:'POST',headers:{'Content-Type':'application/json','X-Debug-Session-Id':'fff823'},body:JSON.stringify({sessionId:'fff823',runId:'pre-fix',hypothesisId:'H2',location:'scripts/cron-sync.js:167',message:'Cron endpoint call finished',data:{path,label,statusCode:res.statusCode},timestamp:Date.now()})}).catch(()=>{});
-        // #endregion
+        if (!ok) {
+          const hint =
+            res.statusCode === 401 || res.statusCode === 403
+              ? ' — a cron API kulcs nem egyezik: a GOOGLE_CALENDAR_SYNC_API_KEY értékének KARAKTERRE azonosnak kell lennie a cron és a web service-en (figyelj a beillesztéskor maradt szóközre/újsorra)'
+              : '';
+          recordFailure(label, `HTTP ${res.statusCode}${hint}`);
+        }
         resolve();
       });
     });
-    req.on('error', (e) => { console.error(`[${new Date().toISOString()}] ${label} error:`, e.message); resolve(); });
-    req.on('timeout', () => { req.destroy(); console.error(`[${new Date().toISOString()}] ${label} timeout`); resolve(); });
+    req.on('error', (e) => { recordFailure(label, e.message); resolve(); });
+    req.on('timeout', () => { req.destroy(); recordFailure(label, 'timeout'); resolve(); });
     req.end();
   });
 }
@@ -244,13 +260,31 @@ async function callEndpoint(path, label) {
     // Admin összegyűjtő email: minden cron futáskor hívjuk; a szerver max. ADMIN_NOTIFICATION_BATCH_INTERVAL_HOURS (alap 3) szerint küld.
     await callEndpoint('/api/admin/daily-summary', 'Admin notification batch summary');
 
-    await syncCalendar();
+    try {
+      await syncCalendar();
+    } catch (error) {
+      recordFailure('Google Calendar sync', error.message);
+    }
 
-    console.log(`[${new Date().toISOString()}] Cron job completed successfully`);
-    process.exit(0);
+    finish();
   } catch (error) {
-    console.error(`[${new Date().toISOString()}] Cron job failed after retries:`, error.message);
-    process.exit(0);
+    recordFailure('Cron job', error.message);
+    finish();
   }
 })();
+
+/**
+ * Összegzés + exit kód. Nem-nulla kóddal zárunk, ha bármelyik végpont hibázott,
+ * hogy a Render a futást sikertelennek jelölje (és értesítsen) — a néma 401-ek
+ * miatt maradtak ki hetekig az OHIP-14 emlékeztetők.
+ */
+function finish() {
+  if (failures.length === 0) {
+    console.log(`[${new Date().toISOString()}] Cron job completed successfully`);
+    process.exit(0);
+  }
+  console.error(`[${new Date().toISOString()}] Cron job completed with ${failures.length} failure(s):`);
+  for (const f of failures) console.error(`  - ${f}`);
+  process.exit(1);
+}
 

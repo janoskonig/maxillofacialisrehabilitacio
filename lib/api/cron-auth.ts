@@ -1,9 +1,21 @@
+import { createHash } from 'node:crypto';
 import { HttpError } from '@/lib/auth-server';
+import { logger } from '@/lib/logger';
 
 type CronRequest = {
   headers: { get(name: string): string | null };
   nextUrl: { searchParams: URLSearchParams };
 };
+
+/**
+ * Non-reversible fingerprint for log output: hossz + a SHA-256 első 8 hex jegye.
+ * Ennyiből össze lehet hasonlítani a cron service és a web service kulcsát anélkül,
+ * hogy a titok bekerülne a logba.
+ */
+function fingerprint(value: string | null | undefined): string {
+  if (!value) return 'none';
+  return `len=${value.length} sha=${createHash('sha256').update(value).digest('hex').slice(0, 8)}`;
+}
 
 /**
  * Returns true only when a cron API key is configured (the env var is set) AND the
@@ -18,15 +30,33 @@ type CronRequest = {
  *
  * Accepts the key via the `x-api-key` header or the `api_key` / `apiKey` query param
  * (both spellings were used across the existing endpoints).
+ *
+ * Mindkét oldalt trimmeljük: a Render dashboardba beillesztett kulcs végén maradt
+ * szóköz/újsor egyébként néma, állandó 401-et okoz minden cron végponton (a heti
+ * OHIP-14 emlékeztetőn is), amit a hívó oldal csak státuszkódként lát.
+ * Sikertelen egyeztetéskor ujjlenyomatot logolunk, hogy a "nincs beállítva" és a
+ * "más a kulcs" eset megkülönböztethető legyen a szerver logból.
  */
 export function hasValidCronKey(req: CronRequest, envName: string): boolean {
-  const expected = process.env[envName];
-  if (!expected) return false;
-  const provided =
+  const expected = process.env[envName]?.trim();
+  const provided = (
     req.headers.get('x-api-key') ||
     req.nextUrl.searchParams.get('api_key') ||
-    req.nextUrl.searchParams.get('apiKey');
-  return !!provided && provided === expected;
+    req.nextUrl.searchParams.get('apiKey') ||
+    ''
+  ).trim();
+
+  if (expected && provided && provided === expected) return true;
+
+  // Kulcs nélküli hívás (pl. bejelentkezett admin a böngészőből) nem naplózandó —
+  // csak az érdekel, amikor valaki kulccsal próbálkozott és mégsem ment át.
+  if (!provided) return false;
+
+  logger.error(
+    `[cron-auth] Elutasított cron hívás — env=${envName} ` +
+      `elvárt=${expected ? fingerprint(expected) : 'NINCS BEÁLLÍTVA'} kapott=${fingerprint(provided)}`,
+  );
+  return false;
 }
 
 /**
