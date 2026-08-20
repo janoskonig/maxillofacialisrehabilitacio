@@ -88,6 +88,70 @@ export function isEmailDryRun(env: {
 }
 
 /**
+ * Közös levél-váz (fejléc, tartalom, lábléc) — minden kimenő e-mail ezt kapja.
+ * Exportált, hogy előnézet/teszt is pontosan azt renderelje, ami kimegy.
+ */
+export function wrapEmailHtml(contentHtml: string): string {
+  return `
+<!DOCTYPE html>
+<html lang="hu">
+<head>
+  <meta charset="UTF-8">
+  <meta name="viewport" content="width=device-width, initial-scale=1.0">
+  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
+  <style>
+    /* Mobil: a 40px-es oldalpárna 360px-en elvenné a tartalom felét. */
+    @media only screen and (max-width: 600px) {
+      .mx-shell { padding: 8px 0 !important; }
+      .mx-header { padding: 20px 18px !important; }
+      .mx-header h1 { font-size: 18px !important; }
+      .mx-content { padding: 22px 18px !important; }
+      .mx-footer { padding: 20px 18px !important; }
+    }
+  </style>
+</head>
+<body style="margin: 0; padding: 0; font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; background-color: #f5f5f5;">
+  <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f5f5f5; padding: 20px 0;">
+    <tr>
+      <td align="center" class="mx-shell" style="padding: 20px 0;">
+        <!--[if mso]><table role="presentation" width="600" align="center" style="border-collapse:collapse;"><tr><td><![endif]-->
+        <!-- width:100% + max-width:600px: mobilon a levél a képernyő szélességére húzódik, nem 600px-t zsugorít le a levelezo (apró betű) -->
+        <table role="presentation" style="width: 100%; max-width: 600px; border-collapse: collapse; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
+          <!-- Header -->
+          <tr>
+            <td class="mx-header" style="padding: 30px 40px; background-color: #2563eb; border-radius: 8px 8px 0 0;">
+              <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">Maxillofaciális Rehabilitáció Rendszer</h1>
+            </td>
+          </tr>
+          <!-- Content -->
+          <tr>
+            <td class="mx-content" style="padding: 40px;">
+              ${contentHtml}
+            </td>
+          </tr>
+          <!-- Footer -->
+          <tr>
+            <td class="mx-footer" style="padding: 30px 40px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;">
+              <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 14px; line-height: 1.6;">
+                Üdvözlettel,<br>
+                <strong style="color: #111827;">König János</strong>
+              </p>
+              <p style="margin: 10px 0 0 0; color: #9ca3af; font-size: 12px; line-height: 1.5;">
+                Maxillofaciális Rehabilitáció Rendszer<br>
+                Semmelweis Egyetem
+              </p>
+            </td>
+          </tr>
+        </table>
+        <!--[if mso]></td></tr></table><![endif]-->
+      </td>
+    </tr>
+  </table>
+</body>
+</html>`.trim();
+}
+
+/**
  * Send an email using the configured SMTP settings
  * Includes spam prevention best practices:
  * - Reply-To header
@@ -130,50 +194,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
       ? [...toRecipients, ...bccRecipients]
       : toRecipients;
 
-    const htmlWithMeta = `
-<!DOCTYPE html>
-<html lang="hu">
-<head>
-  <meta charset="UTF-8">
-  <meta name="viewport" content="width=device-width, initial-scale=1.0">
-  <meta http-equiv="Content-Type" content="text/html; charset=UTF-8">
-</head>
-<body style="margin: 0; padding: 0; font-family: Arial, 'Helvetica Neue', Helvetica, sans-serif; background-color: #f5f5f5;">
-  <table role="presentation" style="width: 100%; border-collapse: collapse; background-color: #f5f5f5; padding: 20px 0;">
-    <tr>
-      <td align="center" style="padding: 20px 0;">
-        <table role="presentation" style="width: 600px; max-width: 100%; border-collapse: collapse; background-color: #ffffff; border-radius: 8px; box-shadow: 0 2px 4px rgba(0,0,0,0.1);">
-          <!-- Header -->
-          <tr>
-            <td style="padding: 30px 40px; background-color: #2563eb; border-radius: 8px 8px 0 0;">
-              <h1 style="margin: 0; color: #ffffff; font-size: 24px; font-weight: 600;">Maxillofaciális Rehabilitáció Rendszer</h1>
-            </td>
-          </tr>
-          <!-- Content -->
-          <tr>
-            <td style="padding: 40px;">
-              ${options.html}
-            </td>
-          </tr>
-          <!-- Footer -->
-          <tr>
-            <td style="padding: 30px 40px; background-color: #f9fafb; border-top: 1px solid #e5e7eb; border-radius: 0 0 8px 8px;">
-              <p style="margin: 0 0 10px 0; color: #6b7280; font-size: 14px; line-height: 1.6;">
-                Üdvözlettel,<br>
-                <strong style="color: #111827;">König János</strong>
-              </p>
-              <p style="margin: 10px 0 0 0; color: #9ca3af; font-size: 12px; line-height: 1.5;">
-                Maxillofaciális Rehabilitáció Rendszer<br>
-                Semmelweis Egyetem
-              </p>
-            </td>
-          </tr>
-        </table>
-      </td>
-    </tr>
-  </table>
-</body>
-</html>`.trim();
+    const htmlWithMeta = wrapEmailHtml(options.html);
 
     const mailOptions: any = {
       from: fromAddress,
