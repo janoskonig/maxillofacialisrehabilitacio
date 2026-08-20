@@ -29,32 +29,36 @@ function fingerprint(value: string | null | undefined): string {
  * of .env.example documented).
  *
  * Accepts the key via the `x-api-key` header or the `api_key` / `apiKey` query param
- * (both spellings were used across the existing endpoints).
+ * (both spellings were used across the existing endpoints). A hívó (scripts/cron-sync.js)
+ * MINDHÁRMAT elküldi, ezért mindegyiket megvizsgáljuk: korábban az első nem-üres érték
+ * nyert, így egy proxy/WAF által átírt `x-api-key` fejléc kizárta a helyes query paramot
+ * is — néma, állandó 401 minden cron végponton.
  *
  * Mindkét oldalt trimmeljük: a Render dashboardba beillesztett kulcs végén maradt
- * szóköz/újsor egyébként néma, állandó 401-et okoz minden cron végponton (a heti
- * OHIP-14 emlékeztetőn is), amit a hívó oldal csak státuszkódként lát.
- * Sikertelen egyeztetéskor ujjlenyomatot logolunk, hogy a "nincs beállítva" és a
- * "más a kulcs" eset megkülönböztethető legyen a szerver logból.
+ * szóköz/újsor egyébként szintén néma 401-et okoz, amit a hívó oldal csak
+ * státuszkódként lát.
+ * Sikertelen egyeztetéskor ujjlenyomatot logolunk, hogy a "nincs beállítva", a "más a
+ * kulcs" és a "csak az egyik csatorna romlott el" eset megkülönböztethető legyen.
  */
 export function hasValidCronKey(req: CronRequest, envName: string): boolean {
   const expected = process.env[envName]?.trim();
-  const provided = (
-    req.headers.get('x-api-key') ||
-    req.nextUrl.searchParams.get('api_key') ||
-    req.nextUrl.searchParams.get('apiKey') ||
-    ''
-  ).trim();
+  const candidates: Array<[string, string]> = [
+    ['x-api-key', (req.headers.get('x-api-key') ?? '').trim()],
+    ['api_key', (req.nextUrl.searchParams.get('api_key') ?? '').trim()],
+    ['apiKey', (req.nextUrl.searchParams.get('apiKey') ?? '').trim()],
+  ];
+  const supplied = candidates.filter(([, value]) => value !== '');
 
-  if (expected && provided && provided === expected) return true;
+  if (expected && supplied.some(([, value]) => value === expected)) return true;
 
   // Kulcs nélküli hívás (pl. bejelentkezett admin a böngészőből) nem naplózandó —
   // csak az érdekel, amikor valaki kulccsal próbálkozott és mégsem ment át.
-  if (!provided) return false;
+  if (supplied.length === 0) return false;
 
   logger.error(
     `[cron-auth] Elutasított cron hívás — env=${envName} ` +
-      `elvárt=${expected ? fingerprint(expected) : 'NINCS BEÁLLÍTVA'} kapott=${fingerprint(provided)}`,
+      `elvárt=${expected ? fingerprint(expected) : 'NINCS BEÁLLÍTVA'} ` +
+      `kapott=[${supplied.map(([name, value]) => `${name}: ${fingerprint(value)}`).join(', ')}]`,
   );
   return false;
 }
