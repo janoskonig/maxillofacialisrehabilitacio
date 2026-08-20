@@ -43,6 +43,42 @@ describe('hasValidCronKey', () => {
     process.env[ENV] = 'secret';
     expect(hasValidCronKey(makeReq({ header: 'wrong' }), ENV)).toBe(false);
   });
+
+  // A Render dashboardba beillesztett kulcs végén maradt szóköz/újsor korábban
+  // néma, állandó 401-et okozott minden cron végponton.
+  it('tolerates surrounding whitespace on the configured key', () => {
+    process.env[ENV] = ' secret\n';
+    expect(hasValidCronKey(makeReq({ header: 'secret' }), ENV)).toBe(true);
+  });
+
+  it('tolerates surrounding whitespace on the supplied key', () => {
+    process.env[ENV] = 'secret';
+    expect(hasValidCronKey(makeReq({ header: 'secret\n' }), ENV)).toBe(true);
+    expect(hasValidCronKey(makeReq({ api_key: ' secret ' }), ENV)).toBe(true);
+  });
+
+  it('rejects a whitespace-only key', () => {
+    process.env[ENV] = 'secret';
+    expect(hasValidCronKey(makeReq({ header: '   ' }), ENV)).toBe(false);
+  });
+
+  it('rejects when the configured key is whitespace only', () => {
+    process.env[ENV] = '   ';
+    expect(hasValidCronKey(makeReq({ header: '   ' }), ENV)).toBe(false);
+  });
+
+  // A cron mindhárom csatornán elküldi a kulcsot; ha az egyiket egy proxy átírja,
+  // a többinek még át kell engednie a hívást (korábban az első nem-üres érték nyert).
+  it('accepts a valid query param even when the header carries a wrong value', () => {
+    process.env[ENV] = 'secret';
+    expect(hasValidCronKey(makeReq({ header: 'mangled', api_key: 'secret' }), ENV)).toBe(true);
+    expect(hasValidCronKey(makeReq({ header: 'mangled', apiKey: 'secret' }), ENV)).toBe(true);
+  });
+
+  it('rejects when every supplied channel is wrong', () => {
+    process.env[ENV] = 'secret';
+    expect(hasValidCronKey(makeReq({ header: 'mangled', api_key: 'also-wrong' }), ENV)).toBe(false);
+  });
 });
 
 describe('requireCronKey', () => {

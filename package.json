@@ -19,6 +19,7 @@
     "vapid:generate": "node scripts/generate-vapid-keys.mjs",
     "test": "vitest run",
     "test:watch": "vitest",
+    "diagnose:ohip-reminder": "tsx scripts/diagnose-ohip-reminder.ts",
     "sim:scenarios": "tsx scripts/sim/treatment-plan-scenarios.ts",
     "sim:edge": "tsx scripts/sim/edge-cases.ts",
     "sim:shots": "node scripts/sim/screenshots.mjs",
