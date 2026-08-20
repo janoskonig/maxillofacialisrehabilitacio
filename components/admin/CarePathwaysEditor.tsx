@@ -5,8 +5,12 @@ import { useRouter } from 'next/navigation';
 import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
 
 const REASONS = ['traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot'] as const;
-const POOLS = ['consult', 'work', 'control'] as const;
-const POOL_LABELS: Record<string, string> = { consult: 'Konzultáció', work: 'Munka', control: 'Kontroll' };
+// A recall (kontroll) időpont nem a kezelési terv része — a betegkarton
+// terv-hub „Gyors foglalás” blokkjában foglalható, sablon nélkül. Ezért a
+// sablonokban 'control' pool már nem választható (migráció 075 a meglévőket
+// ki is vette a sablonokból).
+const POOLS = ['consult', 'work'] as const;
+const POOL_LABELS: Record<string, string> = { consult: 'Konzultáció', work: 'Munka', control: 'Kontroll (elavult)' };
 
 type PathwayStep = {
   label: string;
@@ -531,6 +535,11 @@ export function CarePathwaysEditor({ editPathwayId, onEditPathwayIdClear }: Care
                     {POOLS.map((pool) => (
                       <option key={pool} value={pool}>{POOL_LABELS[pool]}</option>
                     ))}
+                    {/* Régi sablonban maradt kontroll-lépés — ne néma értékvesztéssel
+                        váltson át; a mentéshez át kell állítani. */}
+                    {!POOLS.includes(step.pool as (typeof POOLS)[number]) && (
+                      <option value={step.pool}>{POOL_LABELS[step.pool] ?? step.pool}</option>
+                    )}
                   </select>
                   <input
                     type="number"

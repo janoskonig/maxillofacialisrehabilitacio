@@ -210,6 +210,7 @@ function SortableStepRow({
   onSkipConfirm, onUnskipConfirm, onDelete, onReopenConfirm,
   mergeMode, mergeSelected, onToggleMerge,
   onEditTiming, onUnmerge, canDelegate, onDelegateClick, delegateOpen,
+  onDeleteChild,
 }: {
   step: EpisodeStep;
   idx: number;
@@ -232,6 +233,7 @@ function SortableStepRow({
   canDelegate: boolean;
   onDelegateClick: () => void;
   delegateOpen: boolean;
+  onDeleteChild: (child: EpisodeStep) => void;
 }) {
   const {
     attributes, listeners, setNodeRef, setActivatorNodeRef,
@@ -250,7 +252,9 @@ function SortableStepRow({
   const StatusIcon = config.icon;
   const canSkip = step.status === 'pending' || step.status === 'scheduled';
   const canUnskip = step.status === 'skipped';
-  const canDelete = step.status === 'pending' || step.status === 'skipped';
+  // A tervből bármelyik sor elhagyható — a foglalt időpontot a szerver mondja
+  // le, a kész fázis pedig az előzményekből is kikerül.
+  const canDelete = true;
   const isAdHoc = !step.sourceEpisodePathwayId;
   const isTooth = !!step.toothTreatmentId;
   const hasMerged = mergedChildren.length > 0;
@@ -420,6 +424,15 @@ function SortableStepRow({
                   <Merge className="w-3 h-3" />
                   <span>{child.customLabel || child.treatmentLabel || child.stepCode.replace(/_/g, ' ')}</span>
                   {child.toothNumber && <span className="text-violet-400 dark:text-violet-500">(fog #{child.toothNumber})</span>}
+                  {!mergeMode && (
+                    <button
+                      onClick={() => onDeleteChild(child)}
+                      className="p-0.5 text-violet-400 dark:text-violet-500 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 rounded transition-colors"
+                      title="Ez az összevont alfázis elhagyása a tervből"
+                    >
+                      <Trash2 className="w-3 h-3" />
+                    </button>
+                  )}
                 </div>
               ))}
             </div>
@@ -579,7 +592,7 @@ function StepRowWithConfirm({
   mergeMode, mergeSelected, onToggleMerge,
   onSkipConfirm, onUnskipConfirm, onDelete, onReopenConfirm,
   onSkip, onUnskip, onDeleteConfirm, onReopen, onCancel, onSkipReasonChange,
-  onEditTiming, onUnmerge,
+  onEditTiming, onUnmerge, onDeleteChild,
   episodeId, delegatePhaseId, setDelegatePhaseId,
 }: {
   step: EpisodeStep; idx: number; isNext: boolean; stepLabel: string;
@@ -592,15 +605,23 @@ function StepRowWithConfirm({
   mergeMode: boolean; mergeSelected: boolean; onToggleMerge: () => void;
   onSkipConfirm: () => void; onUnskipConfirm: () => void; onDelete: () => void;
   onReopenConfirm: () => void;
-  onSkip: () => void; onUnskip: () => void; onDeleteConfirm: () => void;
+  onSkip: () => void; onUnskip: () => void; onDeleteConfirm: (stepId: string) => void;
   onReopen: () => void;
   onCancel: () => void; onSkipReasonChange: (v: string) => void;
   onEditTiming: () => void; onUnmerge: () => void;
+  onDeleteChild: (child: EpisodeStep) => void;
   episodeId: string;
   delegatePhaseId: string | null;
   setDelegatePhaseId: (id: string | null) => void;
 }) {
-  const isConfirming = confirmStepId === step.id;
+  // A törlés-megerősítés a sorhoz tartozó összevont alfázisra is vonatkozhat —
+  // azok nem külön sorként, hanem a szülő alatt jelennek meg.
+  const confirmChild = mergedChildren.find((c) => c.id === confirmStepId) ?? null;
+  const isConfirming = confirmStepId === step.id || confirmChild !== null;
+  const deleteTarget = confirmChild ?? step;
+  const deleteTargetLabel = confirmChild
+    ? confirmChild.customLabel || confirmChild.treatmentLabel || confirmChild.stepCode.replace(/_/g, ' ')
+    : stepLabel;
   const canDelegate = step.status === 'pending' || step.status === 'scheduled';
   const delegateOpen = delegatePhaseId === step.id;
   return (
@@ -614,6 +635,7 @@ function StepRowWithConfirm({
         onReopenConfirm={onReopenConfirm}
         mergeMode={mergeMode} mergeSelected={mergeSelected} onToggleMerge={onToggleMerge}
         onEditTiming={onEditTiming} onUnmerge={onUnmerge}
+        onDeleteChild={onDeleteChild}
         canDelegate={canDelegate}
         delegateOpen={delegateOpen}
         onDelegateClick={() => setDelegatePhaseId(delegateOpen ? null : step.id)}
@@ -683,10 +705,25 @@ function StepRowWithConfirm({
           {confirmAction === 'delete' && (
             <>
               <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-                Biztosan elhagyja a(z) <strong>{stepLabel}</strong> munkafázist a tervből? Ez a művelet nem vonható vissza.
+                Biztosan elhagyja a(z) <strong>{deleteTargetLabel}</strong> munkafázist a tervből? Ez a művelet nem vonható vissza.
               </p>
+              {deleteTarget.status === 'scheduled' && (
+                <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">
+                  Ehhez a munkafázishoz foglalt időpont tartozik — a törléssel az időpont is lemondásra kerül.
+                </p>
+              )}
+              {deleteTarget.status === 'completed' && (
+                <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">
+                  Ez a munkafázis teljesítettként van jelölve — törléssel a terv előzményéből is eltűnik.
+                </p>
+              )}
+              {!confirmChild && mergedChildren.length > 0 && (
+                <p className="text-sm text-violet-700 dark:text-violet-300 mb-2">
+                  Az összevont {mergedChildren.length} alfázis nem törlődik: önálló terv-sorként marad meg.
+                </p>
+              )}
               <div className="flex items-center gap-2">
-                <button onClick={onDeleteConfirm} disabled={saving}
+                <button onClick={() => onDeleteConfirm(deleteTarget.id)} disabled={saving}
                   className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 disabled:opacity-50">
                   {saving && <Loader2 className="w-3 h-3 animate-spin" />} Elhagyás
                 </button>
@@ -1089,10 +1126,23 @@ export function EpisodeStepsManager({
         credentials: 'include',
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
-      setSteps((prev) => prev.filter((s) => s.id !== stepId));
+      const data = await res.json().catch(() => ({} as { cancelledAppointments?: number }));
+      setSteps((prev) =>
+        prev
+          .filter((s) => s.id !== stepId)
+          // Összevont blokk szülőjének törlésekor a gyerekek önálló sorrá válnak
+          // (a szerveren FK ON DELETE SET NULL) — a lista ne rejtse el őket.
+          .map((s) => (s.mergedIntoStepId === stepId ? { ...s, mergedIntoStepId: null } : s))
+      );
       setConfirmStepId(null);
       setConfirmAction(null);
-      showToast('Munkafázis törölve', 'success');
+      const cancelled = typeof data.cancelledAppointments === 'number' ? data.cancelledAppointments : 0;
+      showToast(
+        cancelled > 0
+          ? `Munkafázis törölve, ${cancelled} foglalt időpont lemondva`
+          : 'Munkafázis törölve',
+        'success'
+      );
       notifyPlanChanged();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba a törlésnél', 'error');
@@ -1836,12 +1886,13 @@ export function EpisodeStepsManager({
                           onReopenConfirm={() => { setConfirmStepId(step.id); setConfirmAction('reopen'); setSkipReason(''); }}
                           onSkip={() => handleSkip(step.id)}
                           onUnskip={() => handleUnskip(step.id)}
-                          onDeleteConfirm={() => handleDelete(step.id)}
+                          onDeleteConfirm={(id) => handleDelete(id)}
                           onReopen={() => handleReopen(step.id)}
                           onCancel={() => { setConfirmStepId(null); setConfirmAction(null); }}
                           onSkipReasonChange={setSkipReason}
                           onEditTiming={() => { setConfirmStepId(step.id); setConfirmAction('timing'); }}
                           onUnmerge={() => handleUnmerge(step.id)}
+                          onDeleteChild={(child) => { setConfirmStepId(child.id); setConfirmAction('delete'); }}
                           episodeId={episodeId}
                           delegatePhaseId={delegatePhaseId}
                           setDelegatePhaseId={setDelegatePhaseId}

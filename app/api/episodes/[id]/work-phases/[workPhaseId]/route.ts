@@ -9,11 +9,21 @@ import {
 } from '@/lib/episode-work-phase-select';
 import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 import { SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT } from '@/lib/active-appointment';
+import { releaseWorkPhasesForDelete } from '@/lib/work-phase-delete';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * DELETE /api/episodes/:id/work-phases/:workPhaseId
+ *
+ * A kezelési tervből bármelyik munkafázis elhagyható — státusztól függetlenül
+ * (pending / scheduled / completed / skipped). Ha a fázishoz foglalt időpont
+ * vagy nyitott slot intent tartozik, azok a törléssel egy tranzakcióban
+ * lemondásra / lezárásra kerülnek (lib/work-phase-delete.ts).
+ *
+ * Összevont (merged) blokk szülőjének törlésekor a gyerek-fázisok nem tűnnek
+ * el: az FK ON DELETE SET NULL miatt önálló terv-sorként maradnak, és külön
+ * törölhetők.
  */
 export const DELETE = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const episodeId = params.id;
@@ -45,18 +55,25 @@ export const DELETE = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász
       return NextResponse.json({ error: 'Csak aktív epizód munkafázisai törölhetők' }, { status: 400 });
     }
 
-    if (phase.status !== 'pending' && phase.status !== 'skipped') {
-      await client.query('ROLLBACK');
-      return NextResponse.json(
-        { error: `Csak várakozó (pending) vagy átugrott (skipped) munkafázis hagyható el. Jelenlegi státusz: ${phase.status}` },
-        { status: 400 }
-      );
-    }
+    // Foglalt időpont / nyitott intent / párhuzamos plan item felszabadítása,
+    // hogy bármely státuszú sor törölhető legyen.
+    const released = await releaseWorkPhasesForDelete(client, episodeId, [
+      { id: workPhaseId, workPhaseCode: phase.work_phase_code ?? null },
+    ]);
 
     await client.query(
       `INSERT INTO episode_work_phase_audit (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
        VALUES ($1, $2, $3, $4, $5, $6)`,
-      [workPhaseId, episodeId, phase.status, 'deleted', auth.email ?? auth.userId ?? 'unknown', 'Manuálisan törölve']
+      [
+        workPhaseId,
+        episodeId,
+        phase.status,
+        'deleted',
+        auth.email ?? auth.userId ?? 'unknown',
+        released.cancelledAppointments > 0
+          ? `Manuálisan törölve (${released.cancelledAppointments} foglalás lemondva)`
+          : 'Manuálisan törölve',
+      ]
     );
 
     await client.query(`DELETE FROM episode_work_phases WHERE id = $1`, [workPhaseId]);
@@ -74,12 +91,22 @@ export const DELETE = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász
     await client.query('COMMIT');
 
     try {
+      await projectRemainingSteps(episodeId);
+    } catch {
+      /* non-blocking */
+    }
+    try {
       await emitSchedulingEvent('episode', episodeId, 'step_deleted');
     } catch {
       /* non-blocking */
     }
 
-    return NextResponse.json({ deleted: true, workPhaseId });
+    return NextResponse.json({
+      deleted: true,
+      workPhaseId,
+      cancelledAppointments: released.cancelledAppointments,
+      expiredIntents: released.expiredIntents,
+    });
   } catch (txError) {
     await client.query('ROLLBACK').catch(() => {});
     throw txError;

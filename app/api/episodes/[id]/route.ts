@@ -11,6 +11,7 @@ import { recomputeKezeleoorvosSilent } from '@/lib/recompute-kezeleoorvos';
 import { probeColumnExists } from '@/lib/schema-probe';
 import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
+import { releaseWorkPhasesForDelete } from '@/lib/work-phase-delete';
 
 export const dynamic = 'force-dynamic';
 
@@ -118,7 +119,7 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     return await handleAddPathway(pool, episodeId, body.carePathwayId, jaw);
   }
   if (body.action === 'removePathway') {
-    return await handleRemovePathway(pool, episodeId, body.carePathwayId, body.episodePathwayId);
+    return await handleRemovePathway(pool, episodeId, body.carePathwayId, body.episodePathwayId, body.force === true);
   }
 
   const { carePathwayId, carePathwayVersion, assignedProviderId, treatmentTypeId, planStartDate } = body;
@@ -375,11 +376,20 @@ async function handleAddPathway(
   }
 }
 
+/**
+ * Sablon eltávolítása az epizódról.
+ *
+ * Alapesetben csak akkor megy, ha a sablonból nincs foglalt vagy teljesített
+ * munkafázis — ilyenkor 409 + `code: 'PATHWAY_HAS_ACTIVE_PHASES'` jön vissza,
+ * és a kliens a felhasználó megerősítése után `force: true`-val ismételheti.
+ * Force esetén a foglalások lemondásra kerülnek, a fázisok pedig törlődnek.
+ */
 async function handleRemovePathway(
   pool: Awaited<ReturnType<typeof getDbPool>>,
   episodeId: string,
   carePathwayId: unknown,
-  episodePathwayIdParam?: unknown
+  episodePathwayIdParam?: unknown,
+  force = false
 ) {
   let epPathwayId: string;
 
@@ -407,13 +417,24 @@ async function handleRemovePathway(
   }
 
   const activePhases = await pool.query(
-    `SELECT COUNT(*)::int as cnt FROM episode_work_phases
-     WHERE source_episode_pathway_id = $1 AND status IN ('scheduled', 'completed')`,
+    `SELECT
+       COUNT(*) FILTER (WHERE status = 'scheduled')::int as scheduled_cnt,
+       COUNT(*) FILTER (WHERE status = 'completed')::int as completed_cnt
+     FROM episode_work_phases
+     WHERE source_episode_pathway_id = $1`,
     [epPathwayId]
   );
-  if (activePhases.rows[0].cnt > 0) {
+  const scheduledCnt = activePhases.rows[0].scheduled_cnt as number;
+  const completedCnt = activePhases.rows[0].completed_cnt as number;
+  if (!force && scheduledCnt + completedCnt > 0) {
     return NextResponse.json(
-      { error: 'Nem távolítható el: van már időpontja vagy teljesített munkafázisa ennek a sablonnak' },
+      {
+        error:
+          'A sablonnak van foglalt vagy teljesített munkafázisa. Megerősítés után eltávolítható — a foglalások lemondásra kerülnek.',
+        code: 'PATHWAY_HAS_ACTIVE_PHASES',
+        scheduledCount: scheduledCnt,
+        completedCount: completedCnt,
+      },
       { status: 409 }
     );
   }
@@ -421,6 +442,19 @@ async function handleRemovePathway(
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    const phasesToDelete = await client.query(
+      `SELECT id, work_phase_code FROM episode_work_phases WHERE source_episode_pathway_id = $1 FOR UPDATE`,
+      [epPathwayId]
+    );
+    await releaseWorkPhasesForDelete(
+      client,
+      episodeId,
+      (phasesToDelete.rows as Array<{ id: string; work_phase_code: string | null }>).map((r) => ({
+        id: r.id,
+        workPhaseCode: r.work_phase_code,
+      }))
+    );
 
     await client.query(`DELETE FROM episode_work_phases WHERE source_episode_pathway_id = $1`, [epPathwayId]);
 
@@ -460,6 +494,7 @@ async function handleRemovePathway(
     return NextResponse.json({
       episodePathways: mapEpisodePathwayRows(epPathways.rows as EpisodePathwayApiRow[]),
       removed: true,
+      removedPhaseCount: phasesToDelete.rows.length,
     });
   } catch (txError) {
     await client.query('ROLLBACK');

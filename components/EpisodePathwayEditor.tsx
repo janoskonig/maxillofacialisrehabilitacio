@@ -171,7 +171,13 @@ export function EpisodePathwayEditor({
     }
   };
 
-  const handleRemovePathway = async (epPathwayId: string) => {
+  /**
+   * Sablon eltávolítása. Ha a sablonból már van foglalt vagy teljesített
+   * munkafázis, a szerver 409 + PATHWAY_HAS_ACTIVE_PHASES-szel válaszol —
+   * ilyenkor megerősítés után `force`-szal ismételjük, és a foglalások
+   * lemondásra kerülnek.
+   */
+  const handleRemovePathway = async (epPathwayId: string, force = false) => {
     if (removingPathwayId) return;
     setRemovingPathwayId(epPathwayId);
     setError(null);
@@ -180,10 +186,22 @@ export function EpisodePathwayEditor({
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ action: 'removePathway', episodePathwayId: epPathwayId }),
+        body: JSON.stringify({ action: 'removePathway', episodePathwayId: epPathwayId, force }),
       });
       const data = await res.json();
       if (!res.ok) {
+        if (res.status === 409 && data.code === 'PATHWAY_HAS_ACTIVE_PHASES' && !force) {
+          const parts: string[] = [];
+          if (data.scheduledCount > 0) parts.push(`${data.scheduledCount} foglalt`);
+          if (data.completedCount > 0) parts.push(`${data.completedCount} teljesített`);
+          const confirmed = window.confirm(
+            `Ennek a sablonnak ${parts.join(' és ')} munkafázisa van.\n\n` +
+              'Eltávolítja mindenestül? A foglalt időpontok lemondásra kerülnek, a teljesített fázisok pedig kikerülnek a tervből. A művelet nem vonható vissza.'
+          );
+          setRemovingPathwayId(null);
+          if (confirmed) await handleRemovePathway(epPathwayId, true);
+          return;
+        }
         throw new Error(data.error ?? 'Hiba a sablon eltávolításakor');
       }
       setEpisodePathways(data.episodePathways ?? []);

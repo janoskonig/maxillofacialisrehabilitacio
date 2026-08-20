@@ -6,7 +6,13 @@
 import { z } from 'zod';
 
 const STEP_CODE_REGEX = /^[a-z0-9_]+$/;
-const POOL_VALUES = ['consult', 'work', 'control'] as const;
+/**
+ * Sablon-lépés pool-jai. A recall (kontroll) szándékosan hiányzik: a kontroll
+ * időpont nem a kezelési terv része, a „Gyors foglalás” blokkban foglalható
+ * (lásd 075_remove_control_steps_from_pathway_templates.sql). Az epizód-szintű
+ * munkafázisokon a 'control' pool továbbra is létező, érvényes érték.
+ */
+const POOL_VALUES = ['consult', 'work'] as const;
 
 /** Canonicalize step_code: trim, lowercase, spaces→underscore */
 export function canonicalizeStepCode(raw: string): string {
@@ -32,7 +38,12 @@ export function slugifyLabel(label: string): string {
 export const pathwayStepSchema = z.object({
   label: z.string().min(1, 'Lépés neve kötelező').max(255),
   step_code: z.string().optional(),
-  pool: z.enum(POOL_VALUES),
+  pool: z.enum(POOL_VALUES, {
+    errorMap: () => ({
+      message:
+        'A pool csak „consult” vagy „work” lehet — a kontroll (recall) időpont nem a kezelési terv része.',
+    }),
+  }),
   duration_minutes: z.number().int().min(5, 'duration_minutes minimum 5'),
   default_days_offset: z.number().int().min(0).nullable().optional(),
   requires_precommit: z.boolean().optional().default(false),
