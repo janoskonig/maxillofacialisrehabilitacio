@@ -554,7 +554,7 @@ export async function getPatientForNotification(patientId: string): Promise<{
   const validatedPatientId = validateUUID(patientId, 'Beteg ID');
 
   const result = await pool.query(
-    `SELECT id, email, nev, nem FROM patients WHERE id = $1`,
+    `SELECT id, email, nev, nem FROM patients WHERE id = $1 AND halal_datum IS NULL`,
     [validatedPatientId]
   );
 
@@ -621,4 +621,3 @@ export async function getDoctorForNotification(patientId: string): Promise<{
     name: fallbackResult.rows[0].doktor_neve || row.kezeleoorvos,
   };
 }
-

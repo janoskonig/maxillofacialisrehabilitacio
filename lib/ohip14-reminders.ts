@@ -46,6 +46,7 @@ export async function sendOhipReminders(): Promise<ReminderResult> {
     FROM patients p
     JOIN patient_episodes pe ON pe.patient_id = p.id AND pe.status = 'open'
     WHERE p.email IS NOT NULL AND p.email != ''
+      AND p.halal_datum IS NULL
     ORDER BY p.id
   `);
 
@@ -128,12 +129,12 @@ export async function sendOhipReminders(): Promise<ReminderResult> {
         pendingTp,
         pendingAvail.closesAt ?? null,
         portalUrl,
-        undefined,
         {
           patientId: patient_id,
           episodeId: episode_id,
           sentBy: 'system',
         },
+        undefined,
       );
 
       await queueAdminNotification(

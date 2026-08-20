@@ -209,7 +209,7 @@ async function pushConsentReminder(pool: Pool, patientId: string): Promise<void>
       icon: '/icon-192x192.png',
       tag: 'consent-nudge',
       data: { url: '/patient-portal/profile', type: 'reminder' },
-    });
+    }, { patientId });
   } catch (err) {
     logger.error(`[consent-reminders] push hiba (${patientId}):`, err);
   }

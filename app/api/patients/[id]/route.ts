@@ -21,6 +21,7 @@ import {
   SKIP_UPDATED_AT_TRIGGER,
 } from '@/lib/patient-lock-token';
 import { logger } from '@/lib/logger';
+import { closePatientCareOnDeath } from '@/lib/patient-death-care';
 import type { Pool } from 'pg';
 import type { z } from 'zod';
 
@@ -261,6 +262,14 @@ async function executePatientUpdate(
     }
 
     lockToken = parseLockToken(casResult.rows[0].updated_at);
+
+    // A halálozási dátum egyben ellátási zárás: minden nyitott epizódot,
+    // recall/egyéb epizódfeladatot és nyitott ütemezési szándékot ugyanebben
+    // a tranzakcióban lezárunk. A DB-trigger ugyanezt az invariánst védi a
+    // nem alkalmazáson keresztüli írásoknál; a művelet idempotens.
+    if (patient.halalDatum) {
+      await closePatientCareOnDeath(client, patientId);
+    }
 
     // 2) A gyermektáblák csak a kapun túl íródnak — elavult tokennél semmi nem változik.
     await Promise.all([

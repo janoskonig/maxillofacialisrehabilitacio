@@ -6,6 +6,7 @@ import {
   createOpenEpisodeWithInitialStageZero,
   EPISODE_REASON_VALUES,
 } from '@/lib/patient-episode-create';
+import { isDeceasedPatientEpisodeError } from '@/lib/patient-death-care';
 
 /**
  * Új ellátási epizód (ugyanaz, mint POST /api/patients/[id]/episodes).
@@ -89,7 +90,13 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
       },
       { status: 201 },
     );
-  } catch {
+  } catch (error) {
+    if (isDeceasedPatientEpisodeError(error)) {
+      return NextResponse.json(
+        { error: error.message, code: error.code },
+        { status: 409 },
+      );
+    }
     return NextResponse.json({ error: 'Epizód létrehozása sikertelen' }, { status: 500 });
   }
 });

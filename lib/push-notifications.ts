@@ -1,5 +1,6 @@
 import webpush from 'web-push';
 import { getDbPool } from './db';
+import { canContactPatient } from './patient-contact-policy';
 
 // VAPID konfiguráció betöltése
 const vapidPublicKey = process.env.VAPID_PUBLIC_KEY;
@@ -35,8 +36,17 @@ export interface PushNotificationPayload {
  */
 export async function sendPushNotification(
   userId: string,
-  payload: PushNotificationPayload
+  payload: PushNotificationPayload,
+  options?: { patientId?: string },
 ): Promise<void> {
+  if (options?.patientId) {
+    const contactAllowed = await canContactPatient(options.patientId);
+    if (!contactAllowed) {
+      console.warn(`[Push] Betegnek szánt értesítés kihagyva (nem kontaktálható): patientId=${options.patientId}`);
+      return;
+    }
+  }
+
   if (!vapidPublicKey || !vapidPrivateKey) {
     console.warn('[Push] VAPID keys not configured, skipping push notification');
     return;

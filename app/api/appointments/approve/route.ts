@@ -265,9 +265,10 @@ export const GET = apiHandler(async (req, { params }) => {
             dentistFullName,
             appointment.dentist_email,
             icsFile,
+            appointment.patient_id,
             appointmentCim,
             appointmentTeremszam,
-            adminEmail
+            adminEmail,
           );
         }
 
@@ -292,7 +293,7 @@ export const GET = apiHandler(async (req, { params }) => {
                   type: "appointment",
                   id: appointment.id,
                 },
-              });
+              }, { patientId: appointment.patient_id });
             }
           }
         } catch (pushError) {
@@ -382,4 +383,3 @@ export const GET = apiHandler(async (req, { params }) => {
       client.release();
     }
 });
-

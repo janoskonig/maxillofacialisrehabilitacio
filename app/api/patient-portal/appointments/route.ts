@@ -319,9 +319,10 @@ async function handleDirectBooking(patientId: string, timeSlotId: string) {
               dentistFullName,
               timeSlot.dentist_email,
               icsFile,
+              patientId,
               appointmentCim,
               appointmentTeremszam,
-              adminEmail
+              adminEmail,
             )
           : Promise.resolve(),
         adminEmails.length > 0

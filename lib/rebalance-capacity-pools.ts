@@ -55,7 +55,13 @@ export async function runRebalance(jobRunId?: string): Promise<{
         (SELECT COUNT(*)::int FROM patient_episodes pe
          LEFT JOIN (SELECT DISTINCT ON (episode_id) episode_id, stage_code FROM stage_events ORDER BY episode_id, at DESC) se ON pe.id = se.episode_id
          WHERE pe.status = 'open' AND se.stage_code = 'STAGE_0') as consult,
-        (SELECT COUNT(*)::int FROM episode_tasks WHERE task_type = 'recall_due' AND completed_at IS NULL AND due_at <= CURRENT_TIMESTAMP + INTERVAL '7 days') as recall`
+        (SELECT COUNT(*)::int
+           FROM episode_tasks et
+           JOIN patient_episodes pe ON pe.id = et.episode_id AND pe.status = 'open'
+           JOIN patients p ON p.id = pe.patient_id AND p.halal_datum IS NULL
+          WHERE et.task_type = 'recall_due'
+            AND et.completed_at IS NULL
+            AND et.due_at <= CURRENT_TIMESTAMP + INTERVAL '7 days') as recall`
     ),
     pool.query(
       `SELECT id, slot_purpose FROM available_time_slots

@@ -1,5 +1,6 @@
 import nodemailer from 'nodemailer';
 import { logOutboundEmail, type EmailLogMetadata } from './outbound-log';
+import { canContactPatient } from '@/lib/patient-contact-policy';
 
 // Trim whitespace to avoid authentication issues from copy/paste
 const SMTP_HOST = process.env.SMTP_HOST?.trim();
@@ -48,6 +49,8 @@ export interface SendEmailOptions {
   emailType?: string;
   metadata?: EmailLogMetadata;
   sentBy?: string;
+  /** Ha a címzett beteg, a központi elhunyt-beteg kapuhoz kötelező megadni. */
+  patientId?: string;
 }
 
 /**
@@ -162,6 +165,14 @@ export function wrapEmailHtml(contentHtml: string): string {
  * - Message-ID and Date headers (handled by nodemailer)
  */
 export async function sendEmail(options: SendEmailOptions): Promise<void> {
+  if (options.patientId) {
+    const contactAllowed = await canContactPatient(options.patientId);
+    if (!contactAllowed) {
+      console.warn(`[Email] Betegnek szánt levél kihagyva (nem kontaktálható): patientId=${options.patientId}`);
+      return;
+    }
+  }
+
   if (isEmailDryRun()) {
     const to = Array.isArray(options.to) ? options.to.join(', ') : options.to;
     console.log(`[Email DRY-RUN] NEM küldött levél — to=${to} subject="${options.subject}"`);

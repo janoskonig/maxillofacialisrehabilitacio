@@ -42,6 +42,7 @@ export const GET = apiHandler(async (req, { correlationId }) => {
       AND ats.start_time <= $2
       AND a.appointment_status IS NULL
       AND a.approval_status != 'rejected'
+      AND p.halal_datum IS NULL
     ORDER BY ats.start_time`,
     [reminderStart, reminderEnd]
   );
@@ -75,7 +76,7 @@ export const GET = apiHandler(async (req, { correlationId }) => {
                 id: appointment.id,
               },
               requireInteraction: true,
-            });
+            }, { patientId: appointment.patient_id });
           }
         } catch (pushError) {
           logger.error(`Failed to send push reminder to patient ${appointment.patient_email}:`, pushError);
@@ -88,8 +89,9 @@ export const GET = apiHandler(async (req, { correlationId }) => {
             appointment.patient_nem,
             appointmentTime,
             appointment.dentist_name || appointment.dentist_email,
+            appointment.patient_id,
             appointment.cim || DEFAULT_CIM,
-            appointment.teremszam
+            appointment.teremszam,
           );
         } catch (emailError) {
           logger.error(`Failed to send email reminder to patient ${appointment.patient_email}:`, emailError);

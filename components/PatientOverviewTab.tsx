@@ -165,6 +165,7 @@ export function PatientOverviewTab({
           patientId={patientId}
           patientName={patient.nev}
           patientReason={patient.kezelesreErkezesIndoka}
+          isDeceased={Boolean(patient.halalDatum)}
         />
       )}
 

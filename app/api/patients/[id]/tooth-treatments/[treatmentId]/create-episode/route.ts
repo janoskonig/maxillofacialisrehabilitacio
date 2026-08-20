@@ -32,7 +32,24 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   try {
     await client.query('BEGIN');
 
-    await client.query('SELECT id FROM patients WHERE id = $1 FOR UPDATE', [patientId]);
+    const patientResult = await client.query(
+      'SELECT id, halal_datum FROM patients WHERE id = $1 FOR UPDATE',
+      [patientId],
+    );
+    if (patientResult.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return NextResponse.json({ error: 'Beteg nem található' }, { status: 404 });
+    }
+    if (patientResult.rows[0].halal_datum) {
+      await client.query('ROLLBACK');
+      return NextResponse.json(
+        {
+          error: 'Elhunyt beteghez nem nyitható új ellátási epizód.',
+          code: 'DECEASED_PATIENT_EPISODE_FORBIDDEN',
+        },
+        { status: 409 },
+      );
+    }
 
     const ttResult = await client.query(
       `SELECT tt.id, tt.tooth_number, tt.treatment_code, tt.status, tt.episode_id,

@@ -258,7 +258,8 @@ export const POST = apiHandler(async (req) => {
           'doctor',
           finalSubject,
           finalMessage,
-          baseUrl
+          baseUrl,
+          finalPatientId,
         );
         
         try {
@@ -280,7 +281,7 @@ export const POST = apiHandler(async (req) => {
                 type: "message",
                 id: newMessage.id,
               },
-            });
+            }, { patientId: finalPatientId });
           }
         } catch (pushError) {
           logger.error('Failed to send push notification to patient:', pushError);

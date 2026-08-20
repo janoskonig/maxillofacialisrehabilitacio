@@ -20,7 +20,12 @@ export async function ensureRecallTasksForEpisode(episodeId: string): Promise<nu
   const pool = getDbPool();
 
   const episodeResult = await pool.query(
-    `SELECT pe.id FROM patient_episodes pe WHERE pe.id = $1`,
+    `SELECT pe.id
+       FROM patient_episodes pe
+       JOIN patients p ON p.id = pe.patient_id
+      WHERE pe.id = $1
+        AND pe.status = 'open'
+        AND p.halal_datum IS NULL`,
     [episodeId]
   );
   if (episodeResult.rows.length === 0) return 0;

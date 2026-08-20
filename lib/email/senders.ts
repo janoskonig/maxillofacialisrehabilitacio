@@ -132,9 +132,10 @@ export async function sendAppointmentBookingNotificationToPatient(
   dentistFullName: string,
   dentistEmail: string,
   icsFile: Buffer,
+  patientId: string,
   cim?: string | null,
   teremszam?: string | null,
-  adminEmail?: string | null
+  adminEmail?: string | null,
 ): Promise<void> {
   const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
   const displayCim = cim || DEFAULT_CIM;
@@ -196,6 +197,7 @@ export async function sendAppointmentBookingNotificationToPatient(
         contentType: 'text/calendar',
       },
     ],
+    patientId,
   });
 }
 
@@ -256,7 +258,8 @@ export async function sendAppointmentCancellationNotificationToPatient(
   patientEmail: string,
   patientName: string | null,
   appointmentTime: Date,
-  dentistName: string
+  dentistName: string,
+  patientId: string,
 ): Promise<void> {
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -276,6 +279,7 @@ export async function sendAppointmentCancellationNotificationToPatient(
     to: patientEmail,
     subject: 'Időpont lemondva - Maxillofaciális Rehabilitáció',
     html,
+    patientId,
   });
 }
 
@@ -331,7 +335,8 @@ export async function sendAppointmentModificationNotificationToPatient(
   oldAppointmentTime: Date,
   newAppointmentTime: Date,
   dentistName: string,
-  icsFile: Buffer
+  icsFile: Buffer,
+  patientId: string,
 ): Promise<void> {
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
@@ -360,6 +365,7 @@ export async function sendAppointmentModificationNotificationToPatient(
         contentType: 'text/calendar',
       },
     ],
+    patientId,
   });
 }
 
@@ -469,10 +475,11 @@ export async function sendConditionalAppointmentRequestToPatient(
   dentistFullName: string,
   approvalToken: string,
   baseUrl: string,
+  patientId: string,
   alternativeSlots?: Array<{ id: string; startTime: Date; cim: string | null; teremszam: string | null }>,
   cim?: string | null,
   teremszam?: string | null,
-  showAlternatives?: boolean
+  showAlternatives?: boolean,
 ): Promise<void> {
   const formattedDate = formatDateForEmail(appointmentTime);
   const greeting = patientGreeting(patientName, patientNem);
@@ -542,6 +549,7 @@ export async function sendConditionalAppointmentRequestToPatient(
     to: patientEmail,
     subject: 'Időpontválasztás jóváhagyása - Maxillofaciális Rehabilitáció',
     html,
+    patientId,
   });
 }
 
@@ -605,7 +613,8 @@ export async function sendNewMessageNotification(
   senderType: 'doctor' | 'patient',
   messageSubject: string | null,
   messagePreview: string,
-  baseUrl: string
+  baseUrl: string,
+  patientId?: string,
 ): Promise<void> {
   const fallback = senderType === 'doctor' ? 'Betegünk' : 'Doktor Úr/Hölgy';
   const greeting = patientGreeting(recipientName, recipientNem, fallback);
@@ -643,6 +652,7 @@ export async function sendNewMessageNotification(
       ? `Új üzenet: ${messageSubject} - Maxillofaciális Rehabilitáció`
       : 'Új üzenet - Maxillofaciális Rehabilitáció',
     html,
+    patientId: senderType === 'doctor' ? patientId : undefined,
   });
 }
 
@@ -958,8 +968,9 @@ export async function sendAppointmentReminderEmail(
   patientNem: string | null,
   appointmentTime: Date,
   dentistName: string,
+  patientId: string,
   cim?: string | null,
-  teremszam?: string | null
+  teremszam?: string | null,
 ): Promise<void> {
   const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
   const displayCim = cim || DEFAULT_CIM;
@@ -995,6 +1006,7 @@ export async function sendAppointmentReminderEmail(
     to: patientEmail,
     subject: 'Időpont emlékeztető - Maxillofaciális Rehabilitáció',
     html,
+    patientId,
   });
 }
 
@@ -1008,12 +1020,12 @@ export async function sendOhipReminderEmail(
   timepoint: string,
   windowClosesAt: Date | null,
   portalUrl: string,
-  adminEmails?: string[],
-  logContext?: {
+  logContext: {
     patientId: string;
     episodeId: string;
     sentBy?: string;
   },
+  adminEmails?: string[],
 ): Promise<void> {
   const label =
     ohip14TimepointOptions.find((tp) => tp.value === timepoint)?.description || timepoint;
@@ -1069,6 +1081,7 @@ export async function sendOhipReminderEmail(
     bcc: adminEmails && adminEmails.length > 0 ? adminEmails : undefined,
     emailType: 'ohip_reminder',
     sentBy: logContext?.sentBy ?? 'system',
+    patientId: logContext?.patientId,
     metadata: logContext
       ? {
           patientId: logContext.patientId,
@@ -1089,7 +1102,7 @@ export async function sendConsentRequestEmail(
   patientName: string | null,
   patientNem: string | null,
   needs: { needsNoticeAck: boolean; needsResearch: boolean },
-  logContext?: { patientId: string; sentBy?: string; isReminder?: boolean },
+  logContext: { patientId: string; sentBy?: string; isReminder?: boolean },
 ): Promise<void> {
   const greeting = patientGreeting(patientName, patientNem);
   const baseUrl = getBaseUrlForEmail();
@@ -1150,6 +1163,7 @@ export async function sendConsentRequestEmail(
     html,
     emailType: 'consent_request',
     sentBy: logContext?.sentBy ?? 'system',
+    patientId: logContext?.patientId,
     metadata: {
       patientId: logContext?.patientId ?? null,
       needsNoticeAck: needs.needsNoticeAck,

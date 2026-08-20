@@ -105,7 +105,8 @@ export const GET = apiHandler(async (req, { correlationId }) => {
           patientInfo.email,
           patientInfo.name,
           new Date(),
-          ipAddress
+          ipAddress,
+          verification.patientId,
         );
         logger.info('Login notification email sent to:', patientInfo.email);
 

@@ -212,10 +212,11 @@ export const POST = roleHandler(['admin'], async (req, { auth }) => {
           dentistFullName,
           approvalToken,
           baseUrl,
+          patientId,
           alternativeSlots,
           timeSlot.cim,
           timeSlot.teremszam,
-          false
+          false,
         ),
         adminEmails.length > 0 ? sendConditionalAppointmentNotificationToAdmin(
           adminEmails,

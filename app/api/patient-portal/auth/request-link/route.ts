@@ -59,7 +59,7 @@ export const POST = apiHandler(async (req, { correlationId }) => {
   const pool = getDbPool();
 
   const patientResult = await pool.query(
-    `SELECT id, email, nev, taj 
+    `SELECT id, email, nev, taj, halal_datum
      FROM patients 
      WHERE REPLACE(REPLACE(taj, '-', ''), ' ', '') = $1`,
     [cleanTaj]
@@ -67,6 +67,15 @@ export const POST = apiHandler(async (req, { correlationId }) => {
 
   let patientId: string;
   const isNewPatient = patientResult.rows.length === 0;
+
+  // Ne fedjük fel a halálozási státuszt, de ne módosítsuk a rekordot, ne
+  // hozzunk létre tokent és semmilyen levelet se küldjünk.
+  if (!isNewPatient && patientResult.rows[0].halal_datum) {
+    return NextResponse.json({
+      success: true,
+      message: 'Ha az adatok egyeznek, a bejelentkezési linket elküldtük az email címére',
+    });
+  }
 
   if (isNewPatient) {
     const formattedTaj = `${cleanTaj.slice(0, 3)}-${cleanTaj.slice(3, 6)}-${cleanTaj.slice(6)}`;
@@ -229,7 +238,7 @@ export const POST = apiHandler(async (req, { correlationId }) => {
     }
   }
 
-  await sendPatientMagicLink(email.trim(), patientInfo.name, token, baseUrl);
+  await sendPatientMagicLink(email.trim(), patientInfo.name, token, patientId, baseUrl);
 
   return NextResponse.json({
     success: true,

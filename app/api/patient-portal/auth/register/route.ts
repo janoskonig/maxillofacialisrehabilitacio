@@ -225,8 +225,9 @@ export const POST = apiHandler(async (req, { correlationId }) => {
     newPatient.email,
     newPatient.nev,
     token,
+    newPatient.id,
     baseUrl,
-    waitingTimeStats
+    waitingTimeStats,
   );
 
   try {

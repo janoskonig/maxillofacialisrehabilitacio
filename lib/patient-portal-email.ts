@@ -27,7 +27,8 @@ export async function sendPatientMagicLink(
   patientEmail: string,
   patientName: string | null,
   token: string,
-  baseUrl?: string
+  patientId: string,
+  baseUrl?: string,
 ): Promise<void> {
   const portalBaseUrl = getBaseUrl(baseUrl);
   // Ensure we always use production URL, never localhost
@@ -66,6 +67,7 @@ export async function sendPatientMagicLink(
     to: patientEmail,
     subject,
     html,
+    patientId,
   });
 }
 
@@ -76,8 +78,9 @@ export async function sendPatientVerificationEmail(
   patientEmail: string,
   patientName: string | null,
   token: string,
+  patientId: string,
   baseUrl?: string,
-  waitingTimeStats?: { atlagNapokban: number; szorasNapokban: number } | null
+  waitingTimeStats?: { atlagNapokban: number; szorasNapokban: number } | null,
 ): Promise<void> {
   const portalBaseUrl = getBaseUrl(baseUrl);
   const verificationLink = `${portalBaseUrl}/api/patient-portal/auth/verify-email?token=${token}`;
@@ -128,6 +131,7 @@ export async function sendPatientVerificationEmail(
     to: patientEmail,
     subject,
     html,
+    patientId,
   });
 }
 
@@ -140,7 +144,7 @@ export async function getPatientEmailInfo(patientId: string): Promise<{
 } | null> {
   const pool = getDbPool();
   const result = await pool.query(
-    'SELECT email, nev FROM patients WHERE id = $1',
+    'SELECT email, nev FROM patients WHERE id = $1 AND halal_datum IS NULL',
     [patientId]
   );
 
@@ -161,7 +165,8 @@ export async function sendPatientLoginNotification(
   patientEmail: string,
   patientName: string | null,
   loginTime: Date,
-  ipAddress: string | null
+  ipAddress: string | null,
+  patientId: string,
 ): Promise<void> {
   // Import formatDateForEmail from email.ts
   // We'll format the date manually to avoid circular dependency
@@ -210,7 +215,6 @@ export async function sendPatientLoginNotification(
     to: patientEmail,
     subject,
     html,
+    patientId,
   });
 }
-
-

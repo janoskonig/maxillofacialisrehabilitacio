@@ -12,6 +12,7 @@ interface EpisodeStageCardProps {
   patientId: string;
   patientName?: string | null;
   patientReason?: string | null;
+  isDeceased?: boolean;
   onStageChanged?: () => void;
 }
 
@@ -34,6 +35,7 @@ export function EpisodeStageCard({
   patientId,
   patientName,
   patientReason,
+  isDeceased = false,
   onStageChanged,
 }: EpisodeStageCardProps) {
   const [episodes, setEpisodes] = useState<PatientEpisode[]>([]);
@@ -135,6 +137,22 @@ export function EpisodeStageCard({
   }
 
   if (!activeEpisode) {
+    if (isDeceased) {
+      return (
+        <div className="bg-gray-50 dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4 sm:p-6">
+          <div className="flex items-start gap-3">
+            <CheckCircle className="w-5 h-5 text-gray-500 dark:text-gray-400 flex-shrink-0 mt-0.5" />
+            <div>
+              <h3 className="font-semibold text-gray-900 dark:text-gray-100">Az ellátás lezárult</h3>
+              <p className="text-sm text-gray-600 dark:text-gray-400 mt-1">
+                A halálozási dátum rögzítve van. Új ellátási epizód és recall-ütemezés nem indítható.
+              </p>
+            </div>
+          </div>
+        </div>
+      );
+    }
+
     return (
       <div className="bg-amber-50 dark:bg-amber-950/30 rounded-lg border border-amber-200 dark:border-amber-800/60 p-4 sm:p-6">
         <div className="flex items-start gap-3">

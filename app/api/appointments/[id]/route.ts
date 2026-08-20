@@ -365,7 +365,8 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
             oldStartTime,
             newStartTime,
             newTimeSlot.dentist_email,
-            icsFile
+            icsFile,
+            appointment.patient_id,
           );
         } catch (emailError) {
           logger.error('Failed to send modification email to patient:', emailError);
@@ -574,7 +575,8 @@ export const DELETE = authedHandler(async (req, { auth, params }) => {
             appointment.patient_email,
             appointment.patient_name,
             startTime,
-            appointment.dentist_email
+            appointment.dentist_email,
+            appointment.patient_id,
           );
         } catch (emailError) {
           logger.error('Failed to send cancellation email to patient:', emailError);

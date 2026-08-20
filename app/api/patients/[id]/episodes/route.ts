@@ -5,6 +5,7 @@ import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import type { PatientEpisode } from '@/lib/types';
 import { logActivity } from '@/lib/activity';
 import { createOpenEpisodeWithInitialStageZero, EPISODE_REASON_VALUES } from '@/lib/patient-episode-create';
+import { isDeceasedPatientEpisodeError } from '@/lib/patient-death-care';
 
 const REASON_VALUES = [...EPISODE_REASON_VALUES];
 const REASON_SET = new Set<string>(REASON_VALUES);
@@ -187,7 +188,13 @@ export const POST = roleHandler(
         treatmentTypeId,
         createdBy: auth.email,
       });
-    } catch {
+    } catch (error) {
+      if (isDeceasedPatientEpisodeError(error)) {
+        return NextResponse.json(
+          { error: error.message, code: error.code },
+          { status: 409 },
+        );
+      }
       return NextResponse.json({ error: 'Epizód létrehozása sikertelen' }, { status: 500 });
     }
 

@@ -426,7 +426,7 @@ export const PATCH = roleHandler(
                 id: appointmentId,
               },
               requireInteraction: false,
-            });
+            }, { patientId: appointment.patient_id as string });
           }
         }
       } catch (pushError) {

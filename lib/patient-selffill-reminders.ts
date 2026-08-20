@@ -52,7 +52,11 @@ export async function sendPatientSelfFillReminders(): Promise<SelfFillReminderRe
 
   // Csak nyitott epizódú betegeket nudge-olunk (lezárt ellátásnál nem).
   const openRes = await pool.query(
-    `SELECT DISTINCT patient_id FROM patient_episodes WHERE status = 'open'`,
+    `SELECT DISTINCT pe.patient_id
+       FROM patient_episodes pe
+       JOIN patients p ON p.id = pe.patient_id
+      WHERE pe.status = 'open'
+        AND p.halal_datum IS NULL`,
   );
   const openIds = new Set<string>(openRes.rows.map((r: any) => r.patient_id));
   if (openIds.size === 0) return result;
@@ -105,6 +109,7 @@ export async function sendPatientSelfFillReminders(): Promise<SelfFillReminderRe
         to: email,
         subject: 'Kérjük, egészítse ki egészségi adatait — Maxillofaciális Rehabilitáció',
         html: selfFillEmailHtml(row.patientName, selfFillMissing, `${baseUrl}/patient-portal/profile`),
+        patientId: row.patientId,
       });
       await pool.query(
         `INSERT INTO patient_selffill_reminder_log (patient_id, email_to, missing_keys)
@@ -181,7 +186,7 @@ async function pushSelfFillReminder(patientId: string, missing: MissingItem[]): 
       icon: '/icon-192x192.png',
       tag: 'patient-selffill',
       data: { url: '/patient-portal/profile', type: 'reminder' },
-    });
+    }, { patientId });
   } catch (err) {
     logger.error(`[selffill-reminders] push hiba (${patientId}):`, err);
   }

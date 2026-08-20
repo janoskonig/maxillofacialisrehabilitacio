@@ -153,10 +153,11 @@ export const POST = apiHandler(async (req, { correlationId, params }) => {
           dentistFullName,
           appointment.approval_token,
           baseUrl,
+          appointment.patient_id,
           remainingAlternatives,
           nextAltSlot.cim,
           nextAltSlot.teremszam,
-          false
+          false,
         );
       } catch (emailError) {
         logger.error('Failed to send alternative appointment email:', emailError);

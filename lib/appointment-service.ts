@@ -863,6 +863,7 @@ export async function sendAppointmentNotifications(
         dentistFullName,
         dentistEmail,
         icsFile,
+        appointment.patientId,
         appointmentCim,
         appointmentTeremszam,
         adminEmail,
@@ -895,7 +896,7 @@ export async function sendAppointmentNotifications(
           type: 'appointment',
           id: appointment.id,
         },
-      });
+      }, { patientId: appointment.patientId });
     }
   } catch (pushError) {
     logger.error('Failed to send push notification to patient:', pushError);

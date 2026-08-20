@@ -179,6 +179,7 @@ export default function PatientStagesPage() {
   const activeEpisode =
     openEpisodes.find((e) => e.id === selectedEpisodeId) ?? openEpisodes[0] ?? null;
   const closedEpisodes = episodes.filter((e) => e.status !== 'open');
+  const isDeceased = Boolean(patient?.halalDatum);
   const canEditEpisodeSettings = userRole === 'admin' || userRole === 'fogpótlástanász';
   const rawReason = patient?.kezelesreErkezesIndoka ?? activeEpisode?.reason ?? null;
   const patientReason =
@@ -289,11 +290,13 @@ export default function PatientStagesPage() {
                   </>
                 ) : (
                   <p className="text-sm text-gray-500 dark:text-gray-400 mt-1">
-                    Nincs aktív epizód — a kezelés követéséhez indítson újat.
+                    {isDeceased
+                      ? 'Az ellátás a halálozási dátum rögzítésével lezárult; új epizód nem indítható.'
+                      : 'Nincs aktív epizód — a kezelés követéséhez indítson újat.'}
                   </p>
                 )}
               </div>
-              {!showNewEpisodeForm && (
+              {!isDeceased && !showNewEpisodeForm && (
                 <button
                   type="button"
                   onClick={() => setShowNewEpisodeForm(true)}
@@ -306,7 +309,7 @@ export default function PatientStagesPage() {
             </div>
 
             {/* Új epizód űrlap — a kártyába ágyazva */}
-            {showNewEpisodeForm && (
+            {!isDeceased && showNewEpisodeForm && (
               <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
                 <PatientEpisodeForm
                   patientId={patientId}

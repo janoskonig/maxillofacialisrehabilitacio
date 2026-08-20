@@ -473,23 +473,27 @@ export const POST = authedHandler(async (req, { auth }) => {
   // felvételét: logolunk és megyünk tovább.
   let episode = null;
   try {
-    episode = await openIntakeEpisode(pool, {
-      patientId: result.rows[0].id as string,
-      createdBy: userEmail,
-      source: validatedPatient,
-    });
-    if (episode) {
-      await logActivity(
-        req,
-        userEmail,
-        'patient_episode_created',
-        JSON.stringify({
-          patientId: result.rows[0].id,
-          episodeId: episode.id,
-          reason: episode.reason,
-          auto: true,
-        })
-      );
+    if (validatedPatient.halalDatum) {
+      logger.info(`Elhunyt beteghez automatikus epizód nem nyílik: ${result.rows[0].id}`);
+    } else {
+      episode = await openIntakeEpisode(pool, {
+        patientId: result.rows[0].id as string,
+        createdBy: userEmail,
+        source: validatedPatient,
+      });
+      if (episode) {
+        await logActivity(
+          req,
+          userEmail,
+          'patient_episode_created',
+          JSON.stringify({
+            patientId: result.rows[0].id,
+            episodeId: episode.id,
+            reason: episode.reason,
+            auto: true,
+          })
+        );
+      }
     }
   } catch (episodeErr) {
     logger.error('Automatikus epizódnyitás sikertelen (create):', episodeErr);

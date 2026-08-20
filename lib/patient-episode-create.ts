@@ -7,6 +7,7 @@ import {
   closeOpenOhipPatientTasksSilent,
   closeOpenOhipEscalationTasksSilent,
 } from '@/lib/ohip14-patient-tasks';
+import { DeceasedPatientEpisodeError } from '@/lib/patient-death-care';
 
 export const EPISODE_REASON_VALUES = [
   'traumás sérülés',
@@ -67,7 +68,16 @@ export async function createOpenEpisodeWithInitialStageZero(
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query(`SELECT id FROM patients WHERE id = $1 FOR UPDATE`, [input.patientId]);
+    const patientResult = await client.query(
+      `SELECT id, halal_datum FROM patients WHERE id = $1 FOR UPDATE`,
+      [input.patientId],
+    );
+    if (patientResult.rows.length === 0) {
+      throw new Error('Beteg nem található');
+    }
+    if (patientResult.rows[0].halal_datum) {
+      throw new DeceasedPatientEpisodeError();
+    }
 
     const closingResult = await client.query(
       `SELECT id FROM patient_episodes WHERE patient_id = $1 AND status = 'open'`,

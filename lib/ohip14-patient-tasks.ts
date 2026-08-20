@@ -149,7 +149,7 @@ export async function pushPatientOhipReminder(
       icon: '/icon-192x192.png',
       tag: `ohip14-${timepoint}`,
       data: { url: '/patient-portal/ohip14', type: 'reminder' },
-    });
+    }, { patientId });
   } catch (err) {
     logger.error(`[ohip-tasks] push hiba (${patientId}):`, err);
   }

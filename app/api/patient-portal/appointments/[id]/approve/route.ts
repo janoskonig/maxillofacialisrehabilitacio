@@ -159,9 +159,10 @@ export const POST = apiHandler(async (req, { correlationId, params }) => {
           dentistFullName,
           appointment.dentist_email,
           icsFile,
+          appointment.patient_id,
           appointmentCim,
           appointmentTeremszam,
-          adminEmail
+          adminEmail,
         );
       }
 
