@@ -2,6 +2,7 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
 import { applyCompletedTreatmentToDentalStatus } from '@/lib/dental-status-snapshots';
+import { bumpPatientLockToken, lockPatientForWrite } from '@/lib/patient-lock-token';
 
 export const dynamic = 'force-dynamic';
 
@@ -52,6 +53,18 @@ export const PATCH = authedHandler(async (req, { auth, params }) => {
   try {
     await client.query('BEGIN');
 
+    // Zár-sorrend kánon: ahol egy tranzakció a beteget és egy gyermektáblát is
+    // érint, a `patients` zárat kell ELŐSZÖR felvenni — különben azonnali
+    // holtpont-pár keletkezik azokkal az utakkal, amelyek fordítva teszik
+    // (pl. lib/patient-episode-create.ts). `FOR NO KEY UPDATE`, hogy a párhuzamos
+    // gyermek-INSERT-eket (üzenet, időpont, dokumentum) ne blokkoljuk.
+    const patientLock = await lockPatientForWrite(client, params.id);
+    if (!patientLock) {
+      await client.query('ROLLBACK');
+      return NextResponse.json({ error: 'Beteg nem található' }, { status: 404 });
+    }
+    const previousUpdatedAt = patientLock.updatedAt;
+
     // A státuszváltás iránya kell az automatikus odontogram-frissítéshez:
     // csak a "valami → completed" átmenetnél vezetjük át a fog állapotát.
     const prevRes = await client.query(
@@ -93,8 +106,27 @@ export const PATCH = authedHandler(async (req, { auth, params }) => {
       dentalStatusUpdated = updated;
     }
 
+    // A fogtérkép a beteg-űrlap BIRTOKÁBAN lévő adat: ha a szerver átírta, a nyitva
+    // hagyott űrlapoknak 409-et kell kapniuk a néma felülírás helyett. Csak akkor
+    // bumpolunk, ha tényleg változott valami — a szabály nélküli kódok (pl. csiszolás)
+    // korai return-nel távoznak, és egy no-op lezárás nem küldheti 409-be a többi fület.
+    let patientUpdatedAt = previousUpdatedAt;
+    if (dentalStatusUpdated) {
+      patientUpdatedAt = (await bumpPatientLockToken(client, params.id)) ?? previousUpdatedAt;
+    }
+
     await client.query('COMMIT');
-    return NextResponse.json({ item: row, dentalStatusUpdated });
+    return NextResponse.json({
+      item: row,
+      dentalStatusUpdated,
+      // A kliens csak akkor veheti át az új tokent, ha a `previous` egyezik azzal,
+      // amit ő tart — különben egy elavult fül „megmosná" vele a saját tokenjét, és
+      // a következő mentése némán felülírna egy idegen írást. Ezen a végponton
+      // nincs If-Match, tehát a friss token önmagában NEM bizonyítja, hogy a kliens
+      // beteg-snapshotja aktuális volt.
+      patientPreviousUpdatedAt: previousUpdatedAt ? previousUpdatedAt.toISOString() : null,
+      patientUpdatedAt: patientUpdatedAt ? patientUpdatedAt.toISOString() : null,
+    });
   } catch (err) {
     await client.query('ROLLBACK');
     throw err;
