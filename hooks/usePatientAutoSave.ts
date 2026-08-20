@@ -3,6 +3,7 @@
 import { useState, useRef, useEffect, useCallback, useMemo } from 'react';
 import type { ZodType, ZodTypeDef } from 'zod';
 import { Patient, patientSchema } from '@/lib/types';
+import type { ToothBase } from '@/lib/tooth-base';
 import { savePatient, ApiError, TimeoutError } from '@/lib/storage';
 import { logEvent } from '@/lib/event-logger';
 import { formatDateForInput } from '@/lib/dateUtils';
@@ -28,20 +29,12 @@ if (typeof window !== 'undefined' && process.env.ENABLE_SENTRY === 'true') {
 // Shared types & pure utilities (exported for PatientForm and other consumers)
 // ---------------------------------------------------------------------------
 
-/** Odontogram alapállapot — egy fog egy alapállapota (a `caries` ettől függetlenül rátehető). */
-export type ToothBase =
-  | 'sound'
-  | 'missing'
-  | 'filled'
-  | 'crown'
-  | 'root_canal'
-  | 'inlay'
-  | 'implant'
-  | 'bridge_abutment'
-  | 'bridge_pontic'
-  | 'root_remnant'
-  | 'impacted'
-  | 'necrotic';
+/**
+ * Odontogram alapállapot — egy fog egy alapállapota (a `caries` ettől függetlenül
+ * rátehető). A lista forrása a `lib/tooth-base.ts`; itt csak re-exportáljuk, hogy a
+ * meglévő `@/hooks/usePatientAutoSave` importok változatlanul működjenek.
+ */
+export type { ToothBase };
 
 export type ToothConditionObject = {
   /** Régi modell — visszafelé kompatibilitásra megtartva (D=szuvas, F=tömött, M=hiányzó). */

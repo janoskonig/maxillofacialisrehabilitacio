@@ -10,6 +10,8 @@
  * Tisztán (DB nélkül) tesztelhető: a beteg-névsort paraméterként kapja.
  */
 
+import { foldAccents } from './normalize-person-name';
+
 /** A felismeréshez szükséges minimális beteg-mező halmaz. */
 export interface PatientRosterEntry {
   id: string;
@@ -43,13 +45,12 @@ interface Token {
   end: number;
 }
 
-/** Kisbetűsít és eltávolítja az ékezeteket (NFD + combining mark strip). */
-export function normalizeName(value: string): string {
-  return value
-    .toLowerCase()
-    .normalize('NFD')
-    .replace(/[̀-ͯ]/g, '');
-}
+/**
+ * Kisbetűsít és eltávolítja az ékezeteket (NFD + combining mark strip).
+ * A szabály forrása a `lib/normalize-person-name.ts` — itt csak a modul saját
+ * nevén tesszük elérhetővé, hogy a névegyezés mindenhol ugyanúgy viselkedjen.
+ */
+export const normalizeName = foldAccents;
 
 /** Csak a számjegyeket tartja meg (TAJ-összevetéshez). */
 function normalizeTaj(value: string): string {

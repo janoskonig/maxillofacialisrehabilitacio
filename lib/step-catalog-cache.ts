@@ -3,6 +3,7 @@
  */
 
 import { getDbPool } from './db';
+import { tableExists } from './catalog-coverage';
 
 const UNMAPPED_CACHE_TTL_MS = 5 * 60 * 1000; // 5 perc
 
@@ -27,10 +28,10 @@ export async function getUnmappedStepCodes(): Promise<string[]> {
 
   const pool = getDbPool();
 
-  const wpCatalogExists = await pool.query(
-    `SELECT 1 FROM information_schema.tables WHERE table_schema = 'public' AND table_name = 'work_phase_catalog'`
-  );
-  if (wpCatalogExists.rows.length === 0) {
+  // A táblalét-guard a közös lib/catalog-coverage.ts-ből — ugyanaz a védelem, mint
+  // a fog-katalógus oldalán. (Az ellenőrzés iránya viszont más: itt a pathway
+  // JSON-ban használt kódokat vetjük össze a katalógussal, nem fordítva.)
+  if (!(await tableExists(pool, 'work_phase_catalog'))) {
     return [];
   }
 

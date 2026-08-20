@@ -208,7 +208,7 @@ describe('recomputeKezeleoorvos', () => {
   });
 
   describe('episode query semantics', () => {
-    it('orders by opened_at DESC and filters status=active + provider not null', async () => {
+    it("orders by opened_at DESC and filters status='open' + provider not null", async () => {
       const { db, calls } = makeDb([
         { rows: [{ kezeleoorvos_user_id: null }] },
         { rows: [] },
@@ -216,10 +216,25 @@ describe('recomputeKezeleoorvos', () => {
       ]);
       await recomputeKezeleoorvos(PATIENT_ID, db);
       const episodeSql = calls[1].sql;
-      expect(episodeSql).toContain("status = 'active'");
+      expect(episodeSql).toContain("status = 'open'");
       expect(episodeSql).toContain('assigned_provider_id IS NOT NULL');
       expect(episodeSql).toMatch(/ORDER BY pe\.opened_at DESC/);
       expect(episodeSql).toContain('LIMIT 1');
+    });
+
+    it("nem kérdez 'active' státuszt — azt a CHECK constraint nem is engedi", async () => {
+      // 2026-08-15: a B-ág korábban `status = 'active'`-ot kérdezett, a
+      // patient_episodes.status CHECK viszont csak open/closed/paused-ot enged,
+      // így az epizód-ág soha nem talált sort és minden seedelés az A-eset
+      // időpont-fallbackre esett — pedig a dokumentáció végig azt állította,
+      // hogy az epizód providere nyer.
+      const { db, calls } = makeDb([
+        { rows: [{ kezeleoorvos_user_id: null }] },
+        { rows: [] },
+        { rows: [] },
+      ]);
+      await recomputeKezeleoorvos(PATIENT_ID, db);
+      expect(calls[1].sql).not.toContain("'active'");
     });
   });
 });
