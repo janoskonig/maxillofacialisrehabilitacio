@@ -76,3 +76,6 @@ presentation/
 .env.sim
 
 sim-out/
+
+# admin digest e-mail előnézet (npm run preview:admin-digest)
+admin-digest-preview.html

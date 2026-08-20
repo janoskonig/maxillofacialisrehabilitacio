@@ -18,6 +18,7 @@
     "pwa:icons": "node scripts/generate-pwa-icons.mjs",
     "vapid:generate": "node scripts/generate-vapid-keys.mjs",
     "test": "vitest run",
+    "preview:admin-digest": "tsx scripts/preview-admin-digest.ts",
     "test:watch": "vitest",
     "diagnose:ohip-reminder": "tsx scripts/diagnose-ohip-reminder.ts",
     "sim:scenarios": "tsx scripts/sim/treatment-plan-scenarios.ts",
