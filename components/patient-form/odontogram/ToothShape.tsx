@@ -66,7 +66,7 @@ export function ToothShape({ fdi, conditions }: { fdi: number | string; conditio
   const crownColored =
     base === 'crown' || base === 'bridge_abutment'
       ? { fill: CROWN_FILL, stroke: CROWN_STROKE }
-      : base === 'bridge_pontic'
+      : base === 'bridge_pontic' || base === 'denture_tooth'
         ? { fill: PONTIC_FILL, stroke: PONTIC_STROKE }
         : null;
 
@@ -74,7 +74,10 @@ export function ToothShape({ fdi, conditions }: { fdi: number | string; conditio
   const showImplant = base === 'implant';
   // Hídtest = hiányzó természetes fog (gyökér nélkül, lebegő korona).
   const isPontic = base === 'bridge_pontic';
-  const crownOnly = showImplant || isPontic;
+  // Kivehető pótlás műfoga: szintén lebegő korona, de SZAGGATOTT kontúrral —
+  // a szaggatás a „nem rögzített" jelentést hordozza, ez különbözteti meg a hídtesttől.
+  const isDentureTooth = base === 'denture_tooth';
+  const crownOnly = showImplant || isPontic || isDentureTooth;
   const showInlay = base === 'inlay';
   // A felszín-szintű tömés az egyszerű nézetben is látszódjon (a DMF-T is számolja).
   const showFilled = base === 'filled' || hasSurfaceMark(surfacesOf(conditions), 'filling');
@@ -130,7 +133,13 @@ export function ToothShape({ fdi, conditions }: { fdi: number | string; conditio
           )}
 
           {/* körvonal felül */}
-          <path d={crownOnly ? g.crown : g.out} fill="none" stroke={outlineStroke} strokeWidth="1" />
+          <path
+            d={crownOnly ? g.crown : g.out}
+            fill="none"
+            stroke={outlineStroke}
+            strokeWidth="1"
+            strokeDasharray={isDentureTooth ? '2 1.5' : undefined}
+          />
           {showRootCanal && <line x1={g.cej[0]} y1={18} x2={g.cej[1]} y2={18} stroke={ROOT_STROKE} strokeWidth="0.8" />}
 
           {/* inlay/onlay */}

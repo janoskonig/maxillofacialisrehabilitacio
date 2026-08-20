@@ -25,10 +25,18 @@ interface OutcomeRule {
 }
 
 /**
- * Kezeléskód → eredmény. A `csiszolás` szándékosan nincs benne: önmagában
- * (a végleges pótlás előtti előkészítés) nem változtatja a tárolt alapállapotot.
+ * Kezeléskód → eredmény.
+ *
+ * Az érték **explicit `null`**, ha a kód szándékosan nem változtatja a tárolt
+ * alapállapotot (pl. a csiszolás önmagában a végleges pótlás előtti előkészítés).
+ * Ez nem stiláris döntés: a katalógus-lefedettség ellenőrzője (lib/catalog-coverage.ts)
+ * a registry KULCSAIT veti össze a `tooth_treatment_catalog` sorokkal. Ha a
+ * „nincs hatás" eset kulcs nélküli hiányként jelenne meg, ezek a kódok állandó
+ * hamis riasztást adnának — így viszont a `null` egy kimondott, felülvizsgálható
+ * döntés, és tényleg csak a registryből teljesen hiányzó kód számít hiánynak.
+ * (2026-08-15)
  */
-export const TREATMENT_OUTCOME_RULES: Record<string, OutcomeRule> = {
+export const TREATMENT_OUTCOME_RULES: Record<string, OutcomeRule | null> = {
   huzas: { base: 'missing', clearCaries: true, clearPeriapical: true, clearMobility: true },
   implantacio: { base: 'implant', clearCaries: true, clearPeriapical: true, clearMobility: true },
   korona: { base: 'crown', clearCaries: true },
@@ -37,7 +45,26 @@ export const TREATMENT_OUTCOME_RULES: Record<string, OutcomeRule> = {
   hid_pillerkezeles: { base: 'bridge_abutment', clearCaries: true },
   csonk_felepites: { base: 'root_canal' },
   devitalizalas: { base: 'necrotic' },
+  // Protetikai szerepek (079-es migráció). A hézagfog és a műfog hiányzó
+  // természetes fog helyére kerül, ezért a fog-szintű jelzők törlődnek.
+  hezagfog: { base: 'bridge_pontic', clearCaries: true, clearPeriapical: true, clearMobility: true },
+  mufog: { base: 'denture_tooth', clearCaries: true, clearPeriapical: true, clearMobility: true },
+  kapocstarto_korona: { base: 'crown', clearCaries: true },
+
+  // Szándékosan nincs odontogram-hatás — az igény rögzül és a fogankénti listában
+  // látszik, de az alapállapotot nem írja át.
+  csiszolas: null,
+  /** A kapocs a pótláson van, a támfog maga nem változik. */
+  kapocstarto_tamfog: null,
+  /** A rejtett elhorgonyzási elem a pótlás része, nem a fog alapállapota. */
+  rejtett_elhorgonyzas: null,
 };
+
+/**
+ * Minden ismert kezeléskód — beleértve a szándékosan hatás nélkülieket is.
+ * A katalógus-lefedettség ellenőrzője ezt használja referenciahalmazként.
+ */
+export const KNOWN_TREATMENT_CODES: readonly string[] = Object.keys(TREATMENT_OUTCOME_RULES);
 
 /** Az adott kezeléskód eredmény-alapállapota, vagy null, ha nincs automatikus váltás. */
 export function outcomeBaseFor(code: string): ToothBase | null {
@@ -79,7 +106,8 @@ function nextSurfaces(current: SurfaceMap, rule: OutcomeRule): SurfaceMap {
     rule.base === 'implant' ||
     rule.base === 'crown' ||
     rule.base === 'bridge_abutment' ||
-    rule.base === 'bridge_pontic';
+    rule.base === 'bridge_pontic' ||
+    rule.base === 'denture_tooth';
   if (covered) return {};
   if (!rule.clearCaries) return { ...current };
   const out: SurfaceMap = {};

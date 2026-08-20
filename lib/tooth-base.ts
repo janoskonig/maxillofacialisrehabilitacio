@@ -24,6 +24,9 @@ export const TOOTH_BASES = [
   'root_remnant',
   'impacted',
   'necrotic',
+  // Kivehető pótlás műfoga: hiányzó természetes fog helyén ül, de — a rögzített
+  // hídtesttel (`bridge_pontic`) ellentétben — nincs a szomszédokhoz kötve.
+  'denture_tooth',
 ] as const;
 
 /** Egy fog egy alapállapota (a `caries` ettől függetlenül rátehető). */

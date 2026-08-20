@@ -1,6 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
+import { buildPathwayClosedExpr } from '@/lib/pathway-closed-expr';
 
 export const dynamic = 'force-dynamic';
 
@@ -18,39 +19,10 @@ export const GET = authedHandler(async (req, { params }) => {
     return NextResponse.json({ items: [] });
   }
 
-  const ewpTable = await pool.query(
-    `SELECT 1 FROM information_schema.tables
-     WHERE table_schema = 'public' AND table_name = 'episode_work_phases' LIMIT 1`
-  );
-  let mergedIntoCol = false;
-  if (ewpTable.rows.length > 0) {
-    const col = await pool.query(
-      `SELECT 1 FROM information_schema.columns
-       WHERE table_schema = 'public' AND table_name = 'episode_work_phases'
-         AND column_name = 'merged_into_episode_work_phase_id' LIMIT 1`
-    );
-    mergedIntoCol = col.rows.length > 0;
-  }
-
-  const pathwayClosedExpr =
-    ewpTable.rows.length === 0
-      ? 'false AS "pathwayClosed"'
-      : mergedIntoCol
-        ? `COALESCE(
-             (SELECT (prim.status IN ('completed', 'skipped'))
-              FROM episode_work_phases ewp
-              JOIN episode_work_phases prim ON prim.id = COALESCE(ewp.merged_into_episode_work_phase_id, ewp.id)
-              WHERE ewp.tooth_treatment_id = tt.id
-              LIMIT 1),
-             false
-           ) AS "pathwayClosed"`
-        : `COALESCE(
-             (SELECT (ewp.status IN ('completed', 'skipped'))
-              FROM episode_work_phases ewp
-              WHERE ewp.tooth_treatment_id = tt.id
-              LIMIT 1),
-             false
-           ) AS "pathwayClosed"`;
+  // A kifejezés séma-próbáktól függ (van-e episode_work_phases tábla, és rajta
+  // merged_into_episode_work_phase_id oszlop), ezért közös helperből jön — a próbákat
+  // másolni ugyanolyan hiba lenne, mint a kifejezést.
+  const pathwayClosedExpr = await buildPathwayClosedExpr(pool, 'tt');
 
   const result = await pool.query(
     `SELECT tt.id, tt.patient_id as "patientId", tt.tooth_number as "toothNumber",
