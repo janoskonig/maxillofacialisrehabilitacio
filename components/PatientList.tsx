@@ -24,6 +24,7 @@ interface PatientListProps {
   sortDirection?: 'asc' | 'desc';
   onSort?: (field: 'nev' | 'idopont' | 'createdAt' | 'kezeleoorvos') => void;
   searchQuery?: string;
+  isFiltered?: boolean;
 }
 
 interface AppointmentInfo {
@@ -36,7 +37,7 @@ interface AppointmentInfo {
   isLate?: boolean;
 }
 
-function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, onViewFoto, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort, searchQuery = '' }: PatientListProps) {
+function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, onViewFoto, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort, searchQuery = '', isFiltered = false }: PatientListProps) {
   const [appointments, setAppointments] = useState<Record<string, AppointmentInfo>>({});
   const [loadingAppointments, setLoadingAppointments] = useState(false);
   const [opDocuments, setOpDocuments] = useState<Record<string, number>>({});
@@ -142,10 +143,9 @@ function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, on
       <FileText className="w-8 h-8 text-gray-400 dark:text-gray-500 mx-auto mb-2" />
       <h3 className="text-base font-medium text-gray-900 dark:text-gray-100 mb-1">Nincs találat</h3>
       <p className="text-sm text-gray-500 dark:text-gray-400">
-        {patients.length === 0 
-          ? "Kezdje az első betegadat hozzáadásával."
-          : "Próbálja módosítani a keresési feltételeket."
-        }
+        {isFiltered || searchQuery.trim()
+          ? 'Próbálja módosítani a keresési feltételeket.'
+          : 'Kezdje az első betegadat hozzáadásával.'}
       </p>
     </div>
   );
@@ -562,6 +562,8 @@ export const PatientList = memo(PatientListComponent, (prevProps, nextProps) => 
     prevProps.userRole === nextProps.userRole &&
     prevProps.sortField === nextProps.sortField &&
     prevProps.sortDirection === nextProps.sortDirection &&
+    prevProps.searchQuery === nextProps.searchQuery &&
+    prevProps.isFiltered === nextProps.isFiltered &&
     prevProps.onView === nextProps.onView &&
     prevProps.onEdit === nextProps.onEdit &&
     prevProps.onDelete === nextProps.onDelete &&

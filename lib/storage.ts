@@ -342,8 +342,22 @@ export async function getAllPatients(): Promise<Patient[]> {
 // Beteg keresése (opcionális lapozással)
 export async function searchPatients(
   query: string,
-  options?: { view?: 'neak_pending' | 'missing_docs'; limit?: number; offset?: number; sort?: string; direction?: 'asc' | 'desc' }
-): Promise<Patient[] | { patients: Patient[]; total: number }> {
+  options?: {
+    view?: 'neak_pending' | 'missing_docs';
+    scope?: import('./patient-list-filters').PatientScope;
+    phase?: import('./patient-list-filters').PatientQuickView;
+    filters?: import('./patient-list-filters').PatientAdditionalFilter[];
+    includeFilterCounts?: boolean;
+    limit?: number;
+    offset?: number;
+    sort?: string;
+    direction?: 'asc' | 'desc';
+  }
+): Promise<Patient[] | {
+  patients: Patient[];
+  total: number;
+  filterCounts?: import('./patient-list-filters').PatientFilterCounts;
+}> {
   try {
     const params = new URLSearchParams();
     if (query.trim()) {
@@ -351,6 +365,18 @@ export async function searchPatients(
     }
     if (options?.view) {
       params.append('view', options.view);
+    }
+    if (options?.scope) {
+      params.append('scope', options.scope);
+    }
+    if (options?.phase) {
+      params.append('phase', options.phase);
+    }
+    if (options?.filters?.length) {
+      params.append('filters', options.filters.join(','));
+    }
+    if (options?.includeFilterCounts != null) {
+      params.append('includeFilterCounts', String(options.includeFilterCounts));
     }
     if (options?.limit != null) {
       params.append('limit', String(options.limit));
@@ -372,9 +398,13 @@ export async function searchPatients(
       },
       30000 // 30 másodperc timeout
     );
-    const data = await handleApiResponse<{ patients: Patient[]; total?: number }>(response);
+    const data = await handleApiResponse<{
+      patients: Patient[];
+      total?: number;
+      filterCounts?: import('./patient-list-filters').PatientFilterCounts;
+    }>(response);
     if (options?.limit != null && typeof data.total === 'number') {
-      return { patients: data.patients, total: data.total };
+      return { patients: data.patients, total: data.total, filterCounts: data.filterCounts };
     }
     return data.patients;
   } catch (error) {

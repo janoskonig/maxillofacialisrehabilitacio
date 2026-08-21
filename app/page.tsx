@@ -5,15 +5,24 @@ import dynamic from 'next/dynamic';
 import { useRouter } from 'next/navigation';
 import Link from 'next/link';
 import { Patient } from '@/lib/types';
-import { getAllPatients, searchPatients, getPatientById } from '@/lib/storage';
+import { searchPatients } from '@/lib/storage';
 import { PatientList } from '@/components/PatientList';
 import { useToast } from '@/contexts/ToastContext';
-import { Plus, Search, Settings, Calendar, Filter, Download, Bell, X, BookOpen } from 'lucide-react';
+import { Plus, Search, Settings, Filter, Download, Bell, X, BookOpen, RotateCcw } from 'lucide-react';
 import { IntakeRecommendationBadge } from '@/components/widgets/IntakeRecommendationBadge';
-import { getCurrentUser, getUserEmail, getUserRole } from '@/lib/auth';
+import { getCurrentUser } from '@/lib/auth';
 import { AppShell } from '@/components/layout/AppShell';
 import { Dashboard } from '@/components/Dashboard';
 import { ReferredPatientsPanel } from '@/components/staff/ReferredPatientsPanel';
+import {
+  isPatientAdditionalFilter,
+  isPatientQuickView,
+  isPatientScope,
+  type PatientAdditionalFilter,
+  type PatientFilterCounts,
+  type PatientQuickView,
+  type PatientScope,
+} from '@/lib/patient-list-filters';
 
 const OPImageViewer = dynamic(() => import('@/components/OPImageViewer').then(mod => ({ default: mod.OPImageViewer })), {
   loading: () => <div className="fixed inset-0 bg-black/50 flex items-center justify-center z-50"><p className="text-white">Kép betöltése...</p></div>,
@@ -31,7 +40,9 @@ interface ListState {
   patients: Patient[];
   totalPatients: number;
   searchQuery: string;
-  selectedView: 'all' | 'neak_pending' | 'missing_docs';
+  scope: PatientScope;
+  quickView: PatientQuickView;
+  additionalFilters: PatientAdditionalFilter[];
   sortField: 'nev' | 'idopont' | 'createdAt' | 'kezeleoorvos' | null;
   sortDirection: 'asc' | 'desc';
   page: number;
@@ -41,7 +52,16 @@ interface ListState {
 type ListAction =
   | { type: 'SEARCH_RESULTS'; patients: Patient[]; total: number }
   | { type: 'SET_SEARCH'; query: string }
-  | { type: 'SET_VIEW'; view: ListState['selectedView'] }
+  | {
+      type: 'INITIALIZE_FILTERS';
+      scope: PatientScope;
+      quickView: PatientQuickView;
+      additionalFilters: PatientAdditionalFilter[];
+    }
+  | { type: 'SET_SCOPE'; scope: PatientScope }
+  | { type: 'SET_QUICK_VIEW'; quickView: PatientQuickView }
+  | { type: 'TOGGLE_ADDITIONAL_FILTER'; filter: PatientAdditionalFilter }
+  | { type: 'RESET_FILTERS'; defaultScope: PatientScope }
   | { type: 'TOGGLE_SORT'; field: 'nev' | 'idopont' | 'createdAt' | 'kezeleoorvos' }
   | { type: 'SET_PAGE'; page: number }
   | { type: 'REFRESH' };
@@ -52,8 +72,28 @@ function listReducer(state: ListState, action: ListAction): ListState {
       return { ...state, patients: action.patients, totalPatients: action.total };
     case 'SET_SEARCH':
       return { ...state, searchQuery: action.query, page: 1 };
-    case 'SET_VIEW':
-      return { ...state, selectedView: action.view, page: 1 };
+    case 'INITIALIZE_FILTERS':
+      return {
+        ...state,
+        scope: action.scope,
+        quickView: action.quickView,
+        additionalFilters: action.additionalFilters,
+        page: 1,
+      };
+    case 'SET_SCOPE':
+      return { ...state, scope: action.scope, page: 1 };
+    case 'SET_QUICK_VIEW':
+      return { ...state, quickView: action.quickView, page: 1 };
+    case 'TOGGLE_ADDITIONAL_FILTER':
+      return {
+        ...state,
+        additionalFilters: state.additionalFilters.includes(action.filter)
+          ? state.additionalFilters.filter((filter) => filter !== action.filter)
+          : [...state.additionalFilters, action.filter],
+        page: 1,
+      };
+    case 'RESET_FILTERS':
+      return { ...state, scope: action.defaultScope, quickView: 'all', additionalFilters: [], page: 1 };
     case 'TOGGLE_SORT': {
       const sameField = state.sortField === action.field;
       return {
@@ -75,17 +115,55 @@ const initialListState: ListState = {
   patients: [],
   totalPatients: 0,
   searchQuery: '',
-  selectedView: 'all',
+  scope: 'all',
+  quickView: 'all',
+  additionalFilters: [],
   sortField: 'createdAt',
   sortDirection: 'desc',
   page: 1,
   refreshKey: 0,
 };
 
+const FILTER_PREFERENCES_KEY = 'patient-list-filters-v1';
+
+const QUICK_VIEWS: Array<{ value: PatientQuickView; label: string }> = [
+  { value: 'all', label: 'Összes' },
+  { value: 'consult', label: 'Konzultációra vár' },
+  { value: 'preparatory', label: 'Előkészítés' },
+  { value: 'prosthetic', label: 'Protetikai fázis' },
+  { value: 'followup', label: 'Átadás után / gondozás' },
+  { value: 'action_required', label: 'Teendőt igényel' },
+];
+
+const ADDITIONAL_FILTERS: Array<{
+  value: PatientAdditionalFilter;
+  label: string;
+  adminOnly?: boolean;
+}> = [
+  { value: 'no_next_appointment', label: 'Nincs következő időpont' },
+  { value: 'next_consilium', label: 'Következő konzíliumra beírva' },
+  { value: 'missing_data', label: 'Hiányzó klinikai adat' },
+  { value: 'missing_docs', label: 'Hiányzó dokumentum' },
+  { value: 'stale_stage', label: '60+ napja nem lépett tovább' },
+  { value: 'no_doctor', label: 'Nincs kezelőorvos', adminOnly: true },
+  { value: 'no_active_episode', label: 'Nincs aktív epizód' },
+];
+
 export default function Home() {
   const router = useRouter();
   const [list, dispatch] = useReducer(listReducer, initialListState);
-  const { patients, totalPatients, searchQuery, selectedView, sortField, sortDirection, page, refreshKey } = list;
+  const {
+    patients,
+    totalPatients,
+    searchQuery,
+    scope,
+    quickView,
+    additionalFilters,
+    sortField,
+    sortDirection,
+    page,
+    refreshKey,
+  } = list;
   const PAGE_SIZE = 25;
 
   const [searchInput, setSearchInput] = useState('');
@@ -94,6 +172,8 @@ export default function Home() {
   const [userRole, setUserRole] = useState<UserRoleType>('admin');
   const [isAuthorized, setIsAuthorized] = useState(false);
   const [isCheckingAuth, setIsCheckingAuth] = useState(true);
+  const [filtersInitialized, setFiltersInitialized] = useState(false);
+  const [filterCounts, setFilterCounts] = useState<PatientFilterCounts | null>(null);
   const [opViewerPatient, setOpViewerPatient] = useState<Patient | null>(null);
   const [fotoViewerPatient, setFotoViewerPatient] = useState<Patient | null>(null);
   const [showPWAAnnouncement, setShowPWAAnnouncement] = useState(false);
@@ -116,6 +196,63 @@ export default function Home() {
         const role = user.role;
         setUserEmail(email);
         setUserRole(role);
+
+        const canUseOwnScope = role === 'admin' || role === 'fogpótlástanász';
+        const defaultScope: PatientScope = role === 'fogpótlástanász' ? 'mine' : 'all';
+        const urlParams = new URLSearchParams(window.location.search);
+        let stored: {
+          scope?: string;
+          quickView?: string;
+          additionalFilters?: string[];
+        } = {};
+        try {
+          stored = JSON.parse(window.localStorage.getItem(FILTER_PREFERENCES_KEY) ?? '{}');
+        } catch {}
+
+        const urlScope = urlParams.get('scope');
+        const storedScope = typeof stored.scope === 'string' ? stored.scope : null;
+        const initialScope = canUseOwnScope
+          ? isPatientScope(urlScope)
+            ? urlScope
+            : isPatientScope(storedScope)
+              ? storedScope
+              : defaultScope
+          : 'all';
+
+        const urlQuickView = urlParams.get('phase');
+        const storedQuickView = typeof stored.quickView === 'string' ? stored.quickView : null;
+        const initialQuickView = isPatientQuickView(urlQuickView)
+          ? urlQuickView
+          : isPatientQuickView(storedQuickView)
+            ? storedQuickView
+            : 'all';
+
+        const urlFilters = (urlParams.get('filters') ?? '')
+          .split(',')
+          .map((value) => value.trim())
+          .filter(isPatientAdditionalFilter);
+        const storedFilters = Array.isArray(stored.additionalFilters)
+          ? stored.additionalFilters.filter(
+              (value): value is PatientAdditionalFilter =>
+                typeof value === 'string' && isPatientAdditionalFilter(value),
+            )
+          : [];
+        const legacyView = urlParams.get('view');
+        const initialAdditionalFilters = urlFilters.length > 0
+          ? urlFilters
+          : legacyView === 'missing_docs'
+            ? ['missing_docs' as const]
+            : storedFilters;
+
+        dispatch({
+          type: 'INITIALIZE_FILTERS',
+          scope: initialScope,
+          quickView: initialQuickView,
+          additionalFilters: initialAdditionalFilters.filter(
+            (filter) => filter !== 'no_doctor' || role === 'admin',
+          ),
+        });
+        setFiltersInitialized(true);
         setIsAuthorized(true);
         setIsCheckingAuth(false);
         // Ne töltse be automatikusan a betegeket - csak kereséskor
@@ -173,45 +310,49 @@ export default function Home() {
     }
   };
 
-  // Sync view from URL on mount
-  useEffect(() => {
-    const urlParams = new URLSearchParams(window.location.search);
-    const viewParam = urlParams.get('view');
-    if (viewParam === 'neak_pending' || viewParam === 'missing_docs') {
-      dispatch({ type: 'SET_VIEW', view: viewParam });
-    }
-  }, []);
-
   useEffect(() => {
     // Ne töltsünk be adatot és főleg ne írjuk át a böngésző history-t (replaceState),
     // amíg az auth ellenőrzés fut vagy a felhasználó nincs bejelentkezve. Különben a
     // history.replaceState elnyomná a checkAuth router.replace('/login') navigációját,
     // és inkognitóban üres oldalon ragadnánk a login képernyő helyett.
-    if (isCheckingAuth || !isAuthorized) {
+    if (isCheckingAuth || !isAuthorized || !filtersInitialized) {
       return;
     }
     const loadPatientsData = async () => {
       try {
-        const viewOption = selectedView !== 'all' ? { view: selectedView } : undefined;
         const result = await searchPatients(searchQuery, {
-          ...viewOption,
+          scope,
+          phase: quickView,
+          filters: additionalFilters,
+          includeFilterCounts: true,
           limit: PAGE_SIZE,
           offset: (page - 1) * PAGE_SIZE,
           sort: sortField || undefined,
           direction: sortDirection,
         });
         const isPaginated = typeof result === 'object' && 'patients' in result && 'total' in result;
-        const pList = isPaginated ? (result as { patients: Patient[]; total: number }).patients : (result as Patient[]);
-        const total = isPaginated ? (result as { patients: Patient[]; total: number }).total : pList.length;
+        const paginated = isPaginated
+          ? (result as { patients: Patient[]; total: number; filterCounts?: PatientFilterCounts })
+          : null;
+        const pList = paginated ? paginated.patients : (result as Patient[]);
+        const total = paginated ? paginated.total : pList.length;
         dispatch({ type: 'SEARCH_RESULTS', patients: pList, total });
+        setFilterCounts(paginated?.filterCounts ?? null);
 
         const url = new URL(window.location.href);
-        if (selectedView !== 'all') {
-          url.searchParams.set('view', selectedView);
-        } else {
-          url.searchParams.delete('view');
-        }
+        url.searchParams.delete('view');
+        url.searchParams.set('scope', scope);
+        if (quickView !== 'all') url.searchParams.set('phase', quickView);
+        else url.searchParams.delete('phase');
+        if (additionalFilters.length > 0) url.searchParams.set('filters', additionalFilters.join(','));
+        else url.searchParams.delete('filters');
         window.history.replaceState({}, '', url.toString());
+        try {
+          window.localStorage.setItem(
+            FILTER_PREFERENCES_KEY,
+            JSON.stringify({ scope, quickView, additionalFilters }),
+          );
+        } catch {}
       } catch (error) {
         console.error('Hiba a betegek betöltésekor:', error);
         showToast('Hiba történt a betegek betöltésekor. Kérjük, próbálja újra.', 'error');
@@ -219,7 +360,19 @@ export default function Home() {
     };
 
     loadPatientsData();
-  }, [searchQuery, selectedView, sortField, sortDirection, refreshKey, page, isAuthorized, isCheckingAuth]);
+  }, [
+    searchQuery,
+    scope,
+    quickView,
+    additionalFilters,
+    sortField,
+    sortDirection,
+    refreshKey,
+    page,
+    isAuthorized,
+    isCheckingAuth,
+    filtersInitialized,
+  ]);
 
   const loadPatients = useCallback(() => {
     dispatch({ type: 'REFRESH' });
@@ -333,6 +486,11 @@ export default function Home() {
     return null;
   }
 
+  const canUseOwnScope = userRole === 'admin' || userRole === 'fogpótlástanász';
+  const defaultScope: PatientScope = userRole === 'fogpótlástanász' ? 'mine' : 'all';
+  const hasNonDefaultFilters =
+    scope !== defaultScope || quickView !== 'all' || additionalFilters.length > 0;
+
   return (
     <AppShell
       title="Főoldal"
@@ -431,8 +589,119 @@ export default function Home() {
 
           {/* Patient Management Section - shown for all roles */}
           <>
-              {/* Search and View Filter */}
+              {/* Kombinálható betegkör-, betegút- és operatív szűrők. */}
               <div className="space-y-3">
+                <section className="card p-3 sm:p-4 space-y-3" aria-label="Beteglista szűrők">
+                  {canUseOwnScope && (
+                    <div className="flex flex-col sm:flex-row sm:items-center gap-2 sm:gap-3">
+                      <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:w-24">
+                        Betegkör
+                      </span>
+                      <div className="flex flex-wrap gap-2" role="group" aria-label="Betegkör">
+                        {([
+                          { value: 'all' as const, label: 'Összes beteg' },
+                          { value: 'mine' as const, label: 'Saját betegeim' },
+                        ]).map((item) => {
+                          const active = scope === item.value;
+                          const count = filterCounts?.scopes[item.value];
+                          return (
+                            <button
+                              key={item.value}
+                              type="button"
+                              aria-pressed={active}
+                              onClick={() => dispatch({ type: 'SET_SCOPE', scope: item.value })}
+                              className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                                active
+                                  ? 'border-medical-primary bg-medical-primary text-white'
+                                  : 'border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:border-medical-primary/60'
+                              }`}
+                            >
+                              {item.label}{count != null ? ` (${count})` : ''}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </div>
+                  )}
+
+                  <div className="flex flex-col sm:flex-row sm:items-start gap-2 sm:gap-3">
+                    <span className="text-xs font-semibold uppercase tracking-wide text-gray-500 dark:text-gray-400 sm:w-24 sm:pt-2">
+                      Gyorsnézet
+                    </span>
+                    <div className="flex flex-wrap gap-2 flex-1" role="group" aria-label="Betegúti gyorsnézet">
+                      {QUICK_VIEWS.map((item) => {
+                        const active = quickView === item.value;
+                        const count = filterCounts?.quickViews[item.value];
+                        return (
+                          <button
+                            key={item.value}
+                            type="button"
+                            aria-pressed={active}
+                            onClick={() => dispatch({ type: 'SET_QUICK_VIEW', quickView: item.value })}
+                            className={`rounded-full border px-3 py-1.5 text-sm font-medium transition-colors ${
+                              active
+                                ? item.value === 'action_required'
+                                  ? 'border-amber-600 bg-amber-600 text-white'
+                                  : 'border-medical-primary bg-medical-primary text-white'
+                                : item.value === 'action_required'
+                                  ? 'border-amber-300 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 text-amber-800 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-900/40'
+                                  : 'border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:border-medical-primary/60'
+                            }`}
+                          >
+                            {item.label}{count != null ? ` (${count})` : ''}
+                          </button>
+                        );
+                      })}
+                    </div>
+                  </div>
+
+                  <div className="flex flex-wrap items-start gap-2 sm:pl-[108px]">
+                    <details className="group">
+                      <summary className="list-none cursor-pointer inline-flex items-center gap-1.5 rounded-lg border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-3 py-1.5 text-sm font-medium text-gray-700 dark:text-gray-300 hover:border-medical-primary/60">
+                        <Filter className="w-4 h-4" />
+                        További szűrők
+                        {additionalFilters.length > 0 && (
+                          <span className="rounded-full bg-medical-primary px-1.5 py-0.5 text-[11px] leading-none text-white">
+                            {additionalFilters.length}
+                          </span>
+                        )}
+                      </summary>
+                      <div className="mt-2 flex max-w-3xl flex-wrap gap-2 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/50 p-3">
+                        {ADDITIONAL_FILTERS.filter((item) => !item.adminOnly || userRole === 'admin').map((item) => {
+                          const active = additionalFilters.includes(item.value);
+                          const count = filterCounts?.additional[item.value];
+                          return (
+                            <button
+                              key={item.value}
+                              type="button"
+                              aria-pressed={active}
+                              onClick={() => dispatch({ type: 'TOGGLE_ADDITIONAL_FILTER', filter: item.value })}
+                              className={`rounded-full border px-3 py-1.5 text-sm transition-colors ${
+                                active
+                                  ? 'border-medical-primary bg-medical-primary/10 text-medical-primary font-medium'
+                                  : 'border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:border-medical-primary/60'
+                              }`}
+                            >
+                              {item.label}{count != null ? ` (${count})` : ''}
+                            </button>
+                          );
+                        })}
+                      </div>
+                    </details>
+
+                    {hasNonDefaultFilters && (
+                      <button
+                        type="button"
+                        onClick={() => dispatch({ type: 'RESET_FILTERS', defaultScope })}
+                        className="inline-flex items-center gap-1.5 px-2 py-1.5 text-sm text-gray-500 dark:text-gray-400 hover:text-medical-primary"
+                      >
+                        <RotateCcw className="w-3.5 h-3.5" />
+                        Alaphelyzet
+                      </button>
+                    )}
+                  </div>
+                </section>
+
                 {/* Search */}
                 <div className="relative">
                   <Search className="absolute left-4 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-5 h-5 z-10" />
@@ -448,7 +717,7 @@ export default function Home() {
 
               {/* Találatszám — kompakt felirat a lista fölött (a külön „Páciensek" kártya helyett) */}
               <p className="text-body-sm text-gray-500 dark:text-gray-400">
-                {searchQuery.trim() || selectedView !== 'all' ? (
+                {searchQuery.trim() || scope !== 'all' || quickView !== 'all' || additionalFilters.length > 0 ? (
                   <>
                     <span className="font-semibold text-gray-900 dark:text-gray-100">{totalPatients}</span> találat
                   </>
@@ -474,6 +743,7 @@ export default function Home() {
                 sortDirection={sortDirection}
                 onSort={handleSort}
                 searchQuery={searchQuery}
+                isFiltered={scope !== 'all' || quickView !== 'all' || additionalFilters.length > 0}
               />
 
               {/* Pagination - 25 per page */}
@@ -504,7 +774,7 @@ export default function Home() {
               )}
 
               {/* Empty state */}
-              {totalPatients === 0 && !searchQuery.trim() && selectedView === 'all' && (
+              {totalPatients === 0 && !searchQuery.trim() && scope === 'all' && quickView === 'all' && additionalFilters.length === 0 && (
                 <div className="card text-center py-12">
                   <Search className="w-16 h-16 mx-auto mb-4 text-gray-300 dark:text-gray-600" />
                   <h3 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
