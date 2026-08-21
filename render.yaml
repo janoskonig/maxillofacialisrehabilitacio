@@ -33,6 +33,8 @@ services:
       # A következő környezeti változókat a Render Dashboard-ban kell beállítani:
       # - GOOGLE_CALENDAR_SYNC_API_KEY: API kulcs a cron endpoint védelméhez
       # - APP_URL: A web service URL-je (pl. https://maxillofacial-rehab.onrender.com)
+      # - FEEDBACK_TRIAGE_API_KEY: külön, szűk worker-kulcs a Codex triázshoz
+      #   (ugyanaz az érték kell a web service és a Codex automatizmus környezetében)
       #   Megjegyzés: A RENDER_EXTERNAL_URL automatikusan be lesz állítva, de ha nem működik,
       #   akkor manuálisan állítsd be az APP_URL-t a web service URL-jére
       # Feedback: minden új ticket azonnali push; kritikus backlog digest naponta egyszer 07:30-kor.
