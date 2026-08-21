@@ -30,6 +30,10 @@ export interface OutcomeAppointment {
   attemptNumber?: number | null;
   stepLabel?: string | null;
   rebookNeeded?: boolean | null;
+  isDeliveryStep?: boolean;
+  currentStageCode?: string | null;
+  currentStageLabel?: string | null;
+  stageOptions?: Array<{ code: string; labelHu: string; orderIndex: number }>;
 }
 
 export interface StatusForm {
@@ -38,6 +42,8 @@ export interface StatusForm {
   isLate: boolean;
   appointmentType: string;
   typeLabel: string;
+  clinicalEvent: '' | 'delivery';
+  stageCode: string;
 }
 
 const EMPTY_FORM: StatusForm = {
@@ -46,6 +52,8 @@ const EMPTY_FORM: StatusForm = {
   isLate: false,
   appointmentType: '',
   typeLabel: '',
+  clinicalEvent: '',
+  stageCode: '',
 };
 
 export function useAppointmentOutcomes(initial: OutcomeAppointment[], onUpdate?: () => void) {
@@ -56,6 +64,7 @@ export function useAppointmentOutcomes(initial: OutcomeAppointment[], onUpdate?:
   const [retryReason, setRetryReason] = useState('');
   const [retrySaving, setRetrySaving] = useState(false);
   const [statusForm, setStatusForm] = useState<StatusForm>(EMPTY_FORM);
+  const [stageNotices, setStageNotices] = useState<Record<string, string>>({});
 
   useEffect(() => {
     setAppointments(initial);
@@ -92,6 +101,8 @@ export function useAppointmentOutcomes(initial: OutcomeAppointment[], onUpdate?:
       isLate: appointment.isLate || false,
       appointmentType: appointment.appointmentType || '',
       typeLabel: appointment.typeLabel || '',
+      clinicalEvent: appointment.isDeliveryStep ? 'delivery' : '',
+      stageCode: '',
     });
   }, []);
 
@@ -105,6 +116,32 @@ export function useAppointmentOutcomes(initial: OutcomeAppointment[], onUpdate?:
       alert('A "mi történt?" mező kitöltése kötelező sikeresen teljesült időpont esetén.');
       return;
     }
+    const editedAppointment = appointments.find((appointment) => appointment.id === appointmentId);
+    if (
+      statusForm.appointmentStatus === 'completed' &&
+      (statusForm.clinicalEvent || statusForm.stageCode) &&
+      !editedAppointment?.episodeId
+    ) {
+      alert('Ehhez az időponthoz nincs aktív ellátási epizód, ezért innen nem váltható stádium.');
+      return;
+    }
+
+    if (statusForm.stageCode && editedAppointment?.stageOptions?.length) {
+      const current = editedAppointment.stageOptions.find(
+        (option) => option.code === editedAppointment.currentStageCode,
+      );
+      const target = editedAppointment.stageOptions.find((option) => option.code === statusForm.stageCode);
+      if (
+        current &&
+        target &&
+        target.orderIndex < current.orderIndex &&
+        !window.confirm(
+          `Biztosan visszaállítja a stádiumot „${target.labelHu}” állapotra? A jelenlegi stádium: „${current.labelHu}”.`,
+        )
+      ) {
+        return;
+      }
+    }
     try {
       const response = await fetch(`/api/appointments/${appointmentId}/status`, {
         method: 'PATCH',
@@ -116,22 +153,47 @@ export function useAppointmentOutcomes(initial: OutcomeAppointment[], onUpdate?:
           isLate: statusForm.isLate,
           appointmentType: statusForm.appointmentType || null,
           typeLabel: statusForm.typeLabel,
+          clinicalEvent: statusForm.clinicalEvent || null,
+          stageCode: statusForm.stageCode || null,
         }),
       });
       if (response.ok) {
         const data = await response.json();
+        const stageTransition = data.stageTransition as
+          | { changed?: boolean; stageCode?: string | null; stageLabel?: string | null; message?: string | null }
+          | null
+          | undefined;
         setAppointments((prev) => prev.map((apt) =>
-          apt.id === appointmentId
+          apt.id === appointmentId || (stageTransition?.changed && apt.episodeId === editedAppointment?.episodeId)
             ? {
                 ...apt,
-                appointmentStatus: data.appointment.appointmentStatus,
-                completionNotes: data.appointment.completionNotes,
-                isLate: data.appointment.isLate || false,
-                appointmentType: data.appointment.appointmentType ?? apt.appointmentType,
-                typeLabel: data.appointment.typeLabel ?? statusForm.typeLabel ?? apt.typeLabel,
+                ...(apt.id === appointmentId
+                  ? {
+                      appointmentStatus: data.appointment.appointmentStatus,
+                      completionNotes: data.appointment.completionNotes,
+                      isLate: data.appointment.isLate || false,
+                      appointmentType: data.appointment.appointmentType ?? apt.appointmentType,
+                      typeLabel: data.appointment.typeLabel ?? statusForm.typeLabel ?? apt.typeLabel,
+                    }
+                  : {}),
+                ...(stageTransition?.changed
+                  ? {
+                      currentStageCode: stageTransition.stageCode ?? apt.currentStageCode,
+                      currentStageLabel: stageTransition.stageLabel ?? apt.currentStageLabel,
+                    }
+                  : {}),
               }
             : apt,
         ));
+        if (stageTransition?.message) {
+          setStageNotices((prev) => ({ ...prev, [appointmentId]: stageTransition.message! }));
+        } else {
+          setStageNotices((prev) => {
+            const next = { ...prev };
+            delete next[appointmentId];
+            return next;
+          });
+        }
         setEditingId(null);
         setStatusForm(EMPTY_FORM);
         onUpdate?.();
@@ -142,7 +204,7 @@ export function useAppointmentOutcomes(initial: OutcomeAppointment[], onUpdate?:
       console.error('Error updating appointment status:', error);
       alert('Hiba történt az időpont státuszának frissítésekor');
     }
-  }, [statusForm, onUpdate]);
+  }, [appointments, statusForm, onUpdate]);
 
   const quickStatus = useCallback(async (appointmentId: string, status: 'completed' | 'no_show') => {
     // 'completed' requires notes → open the edit form with status pre-selected.
@@ -236,6 +298,7 @@ export function useAppointmentOutcomes(initial: OutcomeAppointment[], onUpdate?:
     retrySaving,
     statusForm,
     setStatusForm,
+    stageNotices,
     openPatient,
     rebook,
     startEdit,

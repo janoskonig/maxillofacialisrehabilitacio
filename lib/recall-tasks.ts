@@ -20,7 +20,12 @@ export async function ensureRecallTasksForEpisode(episodeId: string): Promise<nu
   const pool = getDbPool();
 
   const episodeResult = await pool.query(
-    `SELECT pe.id
+    `SELECT pe.id,
+            (SELECT se.at
+               FROM stage_events se
+              WHERE se.episode_id = pe.id AND se.stage_code = 'STAGE_6'
+              ORDER BY se.at DESC
+              LIMIT 1) AS delivery_at
        FROM patient_episodes pe
        JOIN patients p ON p.id = pe.patient_id
       WHERE pe.id = $1
@@ -31,6 +36,11 @@ export async function ensureRecallTasksForEpisode(episodeId: string): Promise<nu
   if (episodeResult.rows.length === 0) return 0;
 
   const recallDays = RECALL_SCHEDULE_DAYS;
+  // Utólag rögzített átadásnál is a klinikai átadás dátumától számoljunk,
+  // ne attól a naptól, amikor valaki bepótolta a stádiumbejegyzést.
+  const deliveryAt = episodeResult.rows[0].delivery_at
+    ? new Date(episodeResult.rows[0].delivery_at)
+    : new Date();
 
   const existing = await pool.query(
     `SELECT task_type FROM episode_tasks WHERE episode_id = $1 AND task_type = 'recall_due'`,
@@ -40,7 +50,7 @@ export async function ensureRecallTasksForEpisode(episodeId: string): Promise<nu
 
   let created = 0;
   for (const days of recallDays) {
-    const dueAt = new Date();
+    const dueAt = new Date(deliveryAt);
     dueAt.setDate(dueAt.getDate() + days);
     const exists = await pool.query(
       `SELECT 1 FROM episode_tasks WHERE episode_id = $1 AND task_type = 'recall_due' AND ABS(EXTRACT(EPOCH FROM (due_at - $2::timestamptz))) < 86400`,

@@ -1,6 +1,6 @@
 'use client';
 
-import { Clock, MapPin, Edit2, AlertCircle, RotateCcw, ArrowRight } from 'lucide-react';
+import { Clock, MapPin, Edit2, AlertCircle, RotateCcw, ArrowRight, CheckCircle2 } from 'lucide-react';
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { getAppointmentTypeChip, APPOINTMENT_TYPE_OPTIONS } from '@/lib/appointment-constants';
@@ -29,6 +29,8 @@ export function AppointmentOutcomeRow({ appointment, c }: Props) {
   const isPlanStep = !!(appointment.episodeId && appointment.stepCode);
   const showRebook = !!appointment.rebookNeeded;
   const StatusIcon = display.Icon;
+  const stageNotice = c.stageNotices[appointment.id];
+  const stageOptions = appointment.stageOptions ?? [];
 
   return (
     <div
@@ -129,6 +131,13 @@ export function AppointmentOutcomeRow({ appointment, c }: Props) {
             </div>
           )}
 
+          {!isEditing && !isRetrying && stageNotice && (
+            <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
+              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              <span>{stageNotice}</span>
+            </div>
+          )}
+
           {/* Rebook-banner */}
           {!isEditing && !isRetrying && showRebook && (
             <div className="mt-2 pt-2 border-t border-dashed border-amber-400/50 flex items-center gap-2">
@@ -211,6 +220,9 @@ export function AppointmentOutcomeRow({ appointment, c }: Props) {
                       ...c.statusForm,
                       appointmentStatus: value as any,
                       completionNotes: value === 'completed' ? c.statusForm.completionNotes : '',
+                      clinicalEvent:
+                        value === 'completed' && appointment.isDeliveryStep ? 'delivery' : '',
+                      stageCode: '',
                     });
                   }}
                   className="form-input text-xs"
@@ -234,6 +246,67 @@ export function AppointmentOutcomeRow({ appointment, c }: Props) {
                     rows={2}
                     placeholder="Rövid leírás arról, hogy mi történt..."
                   />
+                </div>
+              )}
+              {c.statusForm.appointmentStatus === 'completed' && appointment.episodeId && (
+                <div className="space-y-2 rounded-md border border-blue-200 bg-blue-50/70 p-2.5 dark:border-blue-800 dark:bg-blue-950/30">
+                  <div className="text-xs text-blue-900 dark:text-blue-100">
+                    Jelenlegi stádium:{' '}
+                    <strong>{appointment.currentStageLabel ?? appointment.currentStageCode ?? 'nincs megadva'}</strong>
+                  </div>
+
+                  {appointment.isDeliveryStep ? (
+                    <div className="flex items-start gap-1.5 text-xs font-medium text-emerald-800 dark:text-emerald-200">
+                      <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+                      <span>
+                        Ez átadás munkafázis: mentéskor a stádium automatikusan „Átadás” állapotra vált.
+                      </span>
+                    </div>
+                  ) : (
+                    <div>
+                      <label className="form-label text-xs">Klinikai esemény</label>
+                      <select
+                        value={c.statusForm.clinicalEvent}
+                        onChange={(e) =>
+                          c.setStatusForm({
+                            ...c.statusForm,
+                            clinicalEvent: e.target.value as '' | 'delivery',
+                            stageCode: e.target.value === 'delivery' ? '' : c.statusForm.stageCode,
+                          })
+                        }
+                        className="form-input text-xs"
+                      >
+                        <option value="">Nincs külön esemény</option>
+                        <option value="delivery">Átadás történt → automatikus stádiumváltás</option>
+                      </select>
+                    </div>
+                  )}
+
+                  {!appointment.isDeliveryStep && c.statusForm.clinicalEvent !== 'delivery' && (
+                    <div>
+                      <label className="form-label text-xs">Stádium az időpont után (opcionális)</label>
+                      <select
+                        value={c.statusForm.stageCode}
+                        onChange={(e) => c.setStatusForm({ ...c.statusForm, stageCode: e.target.value })}
+                        className="form-input text-xs"
+                      >
+                        <option value="">Nem változik</option>
+                        {stageOptions.map((option) => (
+                          <option key={option.code} value={option.code}>
+                            {option.labelHu}{option.code === appointment.currentStageCode ? ' (jelenlegi)' : ''}
+                          </option>
+                        ))}
+                      </select>
+                      <p className="mt-1 text-[11px] text-blue-700 dark:text-blue-300">
+                        Rendhagyó esetben innen kézzel is módosítható; a váltás bekerül a stádiumelőzményekbe.
+                      </p>
+                    </div>
+                  )}
+                </div>
+              )}
+              {c.statusForm.appointmentStatus === 'completed' && !appointment.episodeId && (
+                <div className="rounded-md border border-amber-200 bg-amber-50 px-2.5 py-2 text-xs text-amber-800 dark:border-amber-800 dark:bg-amber-950/30 dark:text-amber-200">
+                  Ehhez az időponthoz nincs ellátási epizód kapcsolva, ezért innen nem váltható stádium.
                 </div>
               )}
               <div>

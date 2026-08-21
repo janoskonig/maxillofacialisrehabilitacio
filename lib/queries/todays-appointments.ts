@@ -26,6 +26,10 @@ export interface TodaysAppointmentRow {
   attemptNumber: number | null;
   stepLabel: string | null;
   rebookNeeded: boolean | null;
+  isDeliveryStep: boolean;
+  currentStageCode: string | null;
+  currentStageLabel: string | null;
+  stageOptions: Array<{ code: string; labelHu: string; orderIndex: number }>;
 }
 
 // "Rebook needed": a plan-step appointment whose outcome released the step
@@ -54,6 +58,13 @@ export const TODAYS_APPOINTMENTS_QUERY = `
     a.attempt_number as "attemptNumber",
     COALESCE(ewp.custom_label, ewp.work_phase_code, a.step_code) as "stepLabel",
     (
+      lower(COALESCE(a.step_code, '')) IN ('delivery', 'atadas')
+      OR lower(COALESCE(a.step_code, '')) LIKE '%\\_atadas' ESCAPE '\\'
+    ) as "isDeliveryStep",
+    current_stage.stage_code as "currentStageCode",
+    current_stage.label_hu as "currentStageLabel",
+    COALESCE(stage_options.options, '[]'::jsonb) as "stageOptions",
+    (
       a.episode_id IS NOT NULL
       AND a.appointment_status IN ('no_show','cancelled_by_doctor','cancelled_by_patient','unsuccessful')
       AND EXISTS (
@@ -75,6 +86,26 @@ export const TODAYS_APPOINTMENTS_QUERY = `
   JOIN available_time_slots ats ON a.time_slot_id = ats.id
   JOIN patients p ON a.patient_id = p.id
   LEFT JOIN users u ON a.dentist_email = u.email
+  LEFT JOIN patient_episodes pe ON pe.id = a.episode_id
+  LEFT JOIN LATERAL (
+    SELECT se.stage_code, sc.label_hu
+    FROM stage_events se
+    LEFT JOIN stage_catalog sc ON sc.code = se.stage_code AND sc.reason = pe.reason
+    WHERE se.episode_id = a.episode_id
+    ORDER BY se.at DESC, se.created_at DESC
+    LIMIT 1
+  ) current_stage ON true
+  LEFT JOIN LATERAL (
+    SELECT jsonb_agg(
+      jsonb_build_object(
+        'code', sc.code,
+        'labelHu', sc.label_hu,
+        'orderIndex', sc.order_index
+      ) ORDER BY sc.order_index
+    ) AS options
+    FROM stage_catalog sc
+    WHERE sc.reason = pe.reason
+  ) stage_options ON true
   LEFT JOIN LATERAL (
     SELECT ewp.custom_label, ewp.work_phase_code
     FROM episode_work_phases ewp

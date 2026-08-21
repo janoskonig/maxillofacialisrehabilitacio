@@ -12,13 +12,30 @@ import {
   findEwpForAppointmentRevert,
   revertWorkPhaseLinkToPending,
 } from '@/lib/episode-work-phase-revert-lookup';
+import {
+  applyAppointmentStageTransition,
+  parseAppointmentClinicalEvent,
+  type AppointmentStageTransitionResult,
+} from '@/lib/appointment-stage-transition';
+import { clearSuggestion } from '@/lib/stage-suggestion-service';
+import { ensureRecallTasksForEpisode } from '@/lib/recall-tasks';
+import { logActivity } from '@/lib/activity';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
 export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'], async (req, { auth, params }) => {
   const appointmentId = params.id;
   const body = await req.json();
-  const { appointmentStatus, completionNotes, isLate, appointmentType, typeLabel } = body;
+  const {
+    appointmentStatus,
+    completionNotes,
+    isLate,
+    appointmentType,
+    typeLabel,
+    clinicalEvent: clinicalEventRaw,
+    stageCode: requestedStageCodeRaw,
+  } = body;
 
   // Pipe through the canonical taxonomy guard so any new status value added to
   // the SQL CHECK constraint requires updating lib/appointment-status.ts AND
@@ -34,6 +51,38 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
     );
   }
   const normalisedStatus = parsed.status;
+  const clinicalEvent = parseAppointmentClinicalEvent(clinicalEventRaw);
+  const requestedStageCode =
+    typeof requestedStageCodeRaw === 'string' && requestedStageCodeRaw.trim()
+      ? requestedStageCodeRaw.trim()
+      : null;
+
+  if (clinicalEventRaw != null && clinicalEventRaw !== '' && !clinicalEvent) {
+    return NextResponse.json(
+      { error: 'Érvénytelen klinikai esemény', code: 'INVALID_CLINICAL_EVENT' },
+      { status: 400 },
+    );
+  }
+
+  if ((clinicalEvent || requestedStageCode) && normalisedStatus !== 'completed') {
+    return NextResponse.json(
+      {
+        error: 'Klinikai esemény vagy stádiumváltás csak teljesült időponthoz rögzíthető',
+        code: 'STAGE_CHANGE_REQUIRES_COMPLETED_APPOINTMENT',
+      },
+      { status: 400 },
+    );
+  }
+
+  if (clinicalEvent === 'delivery' && requestedStageCode && requestedStageCode !== 'STAGE_6') {
+    return NextResponse.json(
+      {
+        error: 'Átadás eseménynél a célstádium automatikusan STAGE_6',
+        code: 'DELIVERY_STAGE_CONFLICT',
+      },
+      { status: 400 },
+    );
+  }
 
   if (normalisedStatus === 'completed' && (!completionNotes || completionNotes.trim() === '')) {
     return NextResponse.json(
@@ -60,6 +109,8 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
 
   const pool = getDbPool();
   const client = await pool.connect();
+  let stageTransition: AppointmentStageTransitionResult | null = null;
+  let episodeIdForStage: string | null = null;
 
   try {
     await client.query('BEGIN');
@@ -69,7 +120,8 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
               appointment_status AS "appointmentStatus",
               episode_id         AS "episodeId",
               step_code          AS "stepCode",
-              work_phase_id      AS "workPhaseId"
+              work_phase_id      AS "workPhaseId",
+              COALESCE(start_time, created_at) AS "appointmentAt"
        FROM appointments WHERE id = $1 FOR UPDATE`,
       [appointmentId]
     );
@@ -85,6 +137,7 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
     const apptBefore = appointmentResult.rows[0];
     const oldStatus = apptBefore.appointmentStatus ?? null;
     const episodeIdForEwp: string | null = apptBefore.episodeId ?? null;
+    episodeIdForStage = episodeIdForEwp;
     const stepCodeForEwp: string | null = apptBefore.stepCode ?? null;
     const workPhaseIdForEwp: string | null = apptBefore.workPhaseId ?? null;
 
@@ -96,6 +149,19 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
       updateFields.push(`appointment_status = $${paramIndex}`);
       updateValues.push(normalisedStatus);
       paramIndex++;
+    }
+
+    if (normalisedStatus === 'completed') {
+      stageTransition = await applyAppointmentStageTransition({
+        client,
+        appointmentId,
+        episodeId: episodeIdForStage,
+        appointmentAt: new Date(apptBefore.appointmentAt),
+        appointmentStepCode: apptBefore.stepCode ?? null,
+        clinicalEvent,
+        requestedStageCode,
+        changedBy: auth.email ?? auth.userId ?? 'unknown',
+      });
     }
 
     if (completionNotes !== undefined) {
@@ -288,8 +354,38 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
       }
     }
 
-    return NextResponse.json({ 
-      appointment
+
+    if (stageTransition?.changed && episodeIdForStage) {
+      try {
+        await clearSuggestion(episodeIdForStage);
+        if (stageTransition.stageCode === 'STAGE_6') {
+          await ensureRecallTasksForEpisode(episodeIdForStage);
+        }
+      } catch (error) {
+        logger.error('[appointment-status] Stádium utómunkálat sikertelen', {
+          appointmentId,
+          episodeId: episodeIdForStage,
+          error: error instanceof Error ? error.message : String(error),
+        });
+      }
+
+      await logActivity(
+        req,
+        auth.email ?? auth.userId ?? 'unknown',
+        'patient_stage_changed_from_appointment',
+        JSON.stringify({
+          appointmentId,
+          episodeId: episodeIdForStage,
+          stageCode: stageTransition.stageCode,
+          at: stageTransition.at,
+          source: stageTransition.source,
+        }),
+      );
+    }
+
+    return NextResponse.json({
+      appointment,
+      stageTransition,
     }, { status: 200 });
   } catch (txError) {
     try {
@@ -297,6 +393,26 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
     } catch {
       /* már bezárt connection — felejtsük el */
     }
+    const stageErrorMap: Record<string, { error: string; code: string }> = {
+      STAGE_TRANSITION_REQUIRES_EPISODE: {
+        error: 'Ehhez az időponthoz nincs aktív ellátási epizód, ezért a stádium nem váltható.',
+        code: 'STAGE_TRANSITION_REQUIRES_EPISODE',
+      },
+      STAGE_EPISODE_NOT_FOUND: {
+        error: 'Az időponthoz kapcsolt ellátási epizód nem található.',
+        code: 'STAGE_EPISODE_NOT_FOUND',
+      },
+      STAGE_EPISODE_NOT_OPEN: {
+        error: 'Csak aktív ellátási epizód stádiuma módosítható.',
+        code: 'STAGE_EPISODE_NOT_OPEN',
+      },
+      INVALID_STAGE_FOR_EPISODE: {
+        error: 'A kiválasztott stádium nem érvényes ehhez az ellátási epizódhoz.',
+        code: 'INVALID_STAGE_FOR_EPISODE',
+      },
+    };
+    const mapped = txError instanceof Error ? stageErrorMap[txError.message] : undefined;
+    if (mapped) return NextResponse.json(mapped, { status: 400 });
     throw txError;
   } finally {
     client.release();
