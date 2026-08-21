@@ -19,6 +19,7 @@ import { PatientStageStepper } from '@/components/PatientStageStepper';
 import { PatientCareTimeline } from '@/components/PatientCareTimeline';
 import { PatientEpisodeForm } from '@/components/PatientEpisodeForm';
 import { PatientQuickTaskBlock } from '@/components/PatientQuickTaskBlock';
+import { EpisodeRecallPanel } from '@/components/EpisodeRecallPanel';
 import { useToast } from '@/contexts/ToastContext';
 
 function DomainGlossary() {
@@ -414,6 +415,10 @@ export default function PatientStagesPage() {
               }
               onStepChanged={refreshStagesAndEpisodes}
             />
+          )}
+
+          {activeEpisode && (
+            <EpisodeRecallPanel episodeId={activeEpisode.id} patientId={patientId} />
           )}
 
           {/* 3) Gyors foglalás — tervfüggetlen időpontfoglalás (konzultáció, kontroll)

@@ -14,6 +14,10 @@ import { translateUniqueViolation } from '@/lib/appointment-constraint-errors';
 import { probeAppointmentsWorkPhaseIdColumn } from '@/lib/active-appointment';
 import { nextAttemptNumber, probeAttemptColumns } from '@/lib/appointment-attempts';
 import { lockPatientKeyShare } from '@/lib/patient-lock-token';
+import {
+  linkRecallTaskToAppointment,
+  validateRecallTaskForBooking,
+} from '@/lib/recall-task-lifecycle';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -41,6 +45,8 @@ export interface CreateAppointmentParams {
    * are still written as legacy denormalized columns for backward compat.
    */
   workPhaseId?: string | null;
+  /** Canonical recall task linked atomically to this control appointment. */
+  recallTaskId?: string | null;
 }
 
 export interface CreateAppointmentAuth {
@@ -108,6 +114,7 @@ export async function createAppointment(
     stepSeq: stepSeqRaw,
     requiresPrecommit: bodyRequiresPrecommit,
     workPhaseId: workPhaseIdRaw,
+    recallTaskId: recallTaskIdRaw,
   } = params;
 
   const durationMinutes = 30;
@@ -145,6 +152,38 @@ export async function createAppointment(
     //    A `FOR KEY SHARE` pontosan az a zár, amit az FK úgyis felvesz, tehát ez
     //    sorrendet állít anélkül, hogy bármilyen új blokkolást vezetne be.
     await lockPatientKeyShare(client, patientId);
+
+    const effectiveRecallTaskId =
+      typeof recallTaskIdRaw === 'string' && recallTaskIdRaw.length > 0 ? recallTaskIdRaw : null;
+    if (effectiveRecallTaskId) {
+      if (poolValue !== 'control' || appointmentType !== 'recall') {
+        await client.query('ROLLBACK');
+        return {
+          ok: false,
+          validationError: {
+            error: 'Recall-feladathoz csak recall típusú, control pool időpont foglalható.',
+            code: 'RECALL_BOOKING_TYPE_MISMATCH',
+            status: 400,
+          },
+        };
+      }
+      const recallCheck = await validateRecallTaskForBooking(client, {
+        taskId: effectiveRecallTaskId,
+        patientId,
+        episodeId,
+      });
+      if (!recallCheck.ok) {
+        await client.query('ROLLBACK');
+        return {
+          ok: false,
+          validationError: {
+            error: recallCheck.error ?? 'A recall-feladat nem foglalható.',
+            code: recallCheck.code,
+            status: recallCheck.status ?? 409,
+          },
+        };
+      }
+    }
 
     // 1) Lock episode (consistent lock order) and enforce one-hard-next + care_pathway check
     if (episodeId && poolValue === 'work') {
@@ -333,6 +372,21 @@ export async function createAppointment(
     if (slotState !== 'free') {
       await client.query('ROLLBACK');
       return { ok: false, validationError: { error: 'Ez az időpont már le van foglalva', code: 'SLOT_ALREADY_BOOKED', status: 400 } };
+    }
+
+    if (effectiveRecallTaskId) {
+      const slotPurpose = timeSlot.slot_purpose ?? 'flexible';
+      if (slotPurpose !== 'control' && slotPurpose !== 'flexible') {
+        await client.query('ROLLBACK');
+        return {
+          ok: false,
+          validationError: {
+            error: 'Recall csak kontroll vagy rugalmas célú szabad időpontba foglalható.',
+            code: 'RECALL_SLOT_PURPOSE_MISMATCH',
+            status: 409,
+          },
+        };
+      }
     }
 
     if (episodeId) {
@@ -603,6 +657,10 @@ export async function createAppointment(
          WHERE id = $2`,
         [appointment.id, effectiveWorkPhaseId]
       );
+    }
+
+    if (effectiveRecallTaskId) {
+      await linkRecallTaskToAppointment(client, effectiveRecallTaskId, appointment.id);
     }
 
     await client.query('COMMIT');

@@ -6,6 +6,7 @@ import { generateIcsFile } from '@/lib/calendar';
 import { deleteGoogleCalendarEvent, updateGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
+import { isAppointmentType } from '@/lib/appointment-constants';
 
 // Update an appointment (change time slot)
 export const dynamic = 'force-dynamic';
@@ -22,6 +23,13 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
 
     const body = await req.json();
     const { timeSlotId, startTime, teremszam, appointmentType } = body;
+
+    if (appointmentType !== undefined && !isAppointmentType(appointmentType)) {
+      return NextResponse.json(
+        { error: 'Érvénytelen időpont típus érték', code: 'INVALID_APPOINTMENT_TYPE' },
+        { status: 400 }
+      );
+    }
 
     // Either timeSlotId or startTime must be provided
     if (!timeSlotId && !startTime) {
@@ -42,6 +50,11 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
         a.created_by,
         a.dentist_email,
         a.google_calendar_event_id,
+        a.appointment_type,
+        EXISTS (
+          SELECT 1 FROM episode_tasks et
+           WHERE et.appointment_id = a.id AND et.task_type = 'recall_due'
+        ) as is_recall_linked,
         ats.start_time as old_start_time,
         ats.user_id as time_slot_user_id,
         ats.source as old_time_slot_source,
@@ -65,6 +78,13 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
     }
 
     const appointment = appointmentResult.rows[0];
+
+    if (appointment.is_recall_linked && appointmentType !== undefined && appointmentType !== 'recall') {
+      return NextResponse.json(
+        { error: 'Recall-feladathoz kapcsolt időpont típusa nem módosítható', code: 'RECALL_TYPE_LOCKED' },
+        { status: 409 }
+      );
+    }
 
     if (auth.role === 'fogpótlástanász' && appointment.time_slot_user_email !== auth.email) {
       return NextResponse.json(
@@ -114,10 +134,10 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
 
       // Create new time slot
       const newSlotResult = await pool.query(
-        `INSERT INTO available_time_slots (user_id, start_time, status, cim, teremszam)
-         VALUES ($1, $2, 'booked', $3, $4)
+        `INSERT INTO available_time_slots (user_id, start_time, status, cim, teremszam, slot_purpose)
+         VALUES ($1, $2, 'booked', $3, $4, $5)
          RETURNING id, start_time, cim, teremszam`,
-        [dentistUserId, startTime, DEFAULT_CIM, teremszam || null]
+        [dentistUserId, startTime, DEFAULT_CIM, teremszam || null, appointment.is_recall_linked ? 'control' : null]
       );
 
       finalTimeSlotId = newSlotResult.rows[0].id;
@@ -154,6 +174,18 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
         return NextResponse.json(
           { error: 'Az új időpont már le van foglalva' },
           { status: 400 }
+        );
+      }
+
+      if (
+        appointment.is_recall_linked &&
+        newTimeSlot.slot_purpose != null &&
+        newTimeSlot.slot_purpose !== 'control' &&
+        newTimeSlot.slot_purpose !== 'flexible'
+      ) {
+        return NextResponse.json(
+          { error: 'Recall-időpont csak kontroll kapacitásba helyezhető át', code: 'RECALL_CONTROL_SLOT_REQUIRED' },
+          { status: 409 }
         );
       }
 
@@ -452,6 +484,13 @@ export const DELETE = authedHandler(async (req, { auth, params }) => {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      // A lemondott/törölt recall-időpont feladata újra foglalhatóvá válik.
+      await client.query(
+        `UPDATE episode_tasks
+            SET appointment_id = NULL, completed_at = NULL
+          WHERE appointment_id = $1 AND task_type = 'recall_due'`,
+        [id]
+      );
       // Delete the appointment
       await client.query('DELETE FROM appointments WHERE id = $1', [id]);
 

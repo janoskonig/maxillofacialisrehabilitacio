@@ -17,6 +17,7 @@ export const GET = authedHandler(async (req, { auth }) => {
   const offset = (page - 1) * limit;
 
   const onlyAvailable = searchParams.get('onlyAvailable') === 'true';
+  const slotPurpose = searchParams.get('slotPurpose');
   /**
    * `from` paraméter — ha megadott ISO dátum, csak az ettől kezdődő slotokat
    * adjuk vissza. A `useAppointmentBooking` korábban kliens-oldalon szűrt
@@ -35,6 +36,10 @@ export const GET = authedHandler(async (req, { auth }) => {
   if (hasFrom) {
     params.push(fromDate!.toISOString());
     whereParts.push(`ats.start_time >= $${params.length}`);
+  }
+  if (slotPurpose && ['consult', 'work', 'control'].includes(slotPurpose)) {
+    params.push(slotPurpose);
+    whereParts.push(`COALESCE(ats.slot_purpose, 'flexible') IN ($${params.length}, 'flexible')`);
   }
   const whereClause = whereParts.length > 0 ? `WHERE ${whereParts.join(' AND ')}` : '';
 

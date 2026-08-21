@@ -21,6 +21,7 @@ import { clearSuggestion } from '@/lib/stage-suggestion-service';
 import { ensureRecallTasksForEpisode } from '@/lib/recall-tasks';
 import { logActivity } from '@/lib/activity';
 import { logger } from '@/lib/logger';
+import { syncRecallTaskForAppointmentStatus } from '@/lib/recall-task-lifecycle';
 
 export const dynamic = 'force-dynamic';
 
@@ -186,6 +187,22 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
           );
         }
       }
+      if (appointmentType !== 'recall') {
+        const linkedRecall = await client.query(
+          `SELECT 1
+             FROM episode_tasks
+            WHERE appointment_id = $1 AND task_type = 'recall_due'
+            FOR UPDATE`,
+          [appointmentId],
+        );
+        if (linkedRecall.rows.length > 0) {
+          await client.query('ROLLBACK');
+          return NextResponse.json(
+            { error: 'Recall-feladathoz kapcsolt időpont típusa nem módosítható', code: 'RECALL_TYPE_LOCKED' },
+            { status: 409 },
+          );
+        }
+      }
       updateFields.push(`appointment_type = $${paramIndex}`);
       updateValues.push(appointmentType || null);
       paramIndex++;
@@ -245,6 +262,12 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
       } else {
         console.warn('[appointment_status_events] Skipping emit: UPDATE succeeded but RETURNING did not contain appointmentStatus', { appointmentId });
       }
+
+      await syncRecallTaskForAppointmentStatus(client, {
+        appointmentId,
+        oldStatus,
+        newStatus: newStatus ?? null,
+      });
     }
 
     // "Inactive or no-show" → expire the converted slot intent and reproject

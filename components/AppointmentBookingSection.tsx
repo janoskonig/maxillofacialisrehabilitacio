@@ -37,6 +37,7 @@ import {
 } from './UnsuccessfulAttemptModal';
 import { RevertUnsuccessfulModal } from './RevertUnsuccessfulModal';
 import type { WorklistItemBackend } from '@/lib/worklist-types';
+import { APPOINTMENT_TYPE_OPTIONS, getAppointmentTypeLabel } from '@/lib/appointment-constants';
 
 interface AppointmentBookingSectionProps {
   patientId: string | null | undefined;
@@ -49,6 +50,10 @@ interface AppointmentBookingSectionProps {
   onPatientSaved?: (savedPatient: Patient) => void;
   /** Önálló kártyában renderelve (terv-hub): nincs felső elválasztó és belső címsor. */
   standalone?: boolean;
+  bookingOnly?: boolean;
+  fixedAppointmentType?: AppointmentType;
+  recallTaskId?: string | null;
+  onBooked?: () => void;
 }
 
 export function AppointmentBookingSection({
@@ -60,7 +65,11 @@ export function AppointmentBookingSection({
   isPatientDirty = false,
   isNewPatient = false,
   onPatientSaved,
-  standalone = false
+  standalone = false,
+  bookingOnly = false,
+  fixedAppointmentType,
+  recallTaskId = null,
+  onBooked,
 }: AppointmentBookingSectionProps) {
   const {
     availableSlots,
@@ -81,7 +90,7 @@ export function AppointmentBookingSection({
     createAndBookSlot,
     downloadCalendar,
     refreshData,
-  } = useAppointmentBooking(patientId);
+  } = useAppointmentBooking(patientId, pool);
 
   // UI form state
   const [selectedSlot, setSelectedSlot] = useState<string>('');
@@ -89,10 +98,10 @@ export function AppointmentBookingSection({
   const [newSlotDateTime, setNewSlotDateTime] = useState<Date | null>(null);
   const [newSlotTeremszam, setNewSlotTeremszam] = useState<string>('');
   const [newSlotCim, setNewSlotCim] = useState<string>('');
-  const [newSlotAppointmentType, setNewSlotAppointmentType] = useState<AppointmentType | null>(null);
+  const [newSlotAppointmentType, setNewSlotAppointmentType] = useState<AppointmentType | null>(fixedAppointmentType ?? null);
   const [customCim, setCustomCim] = useState<string>('');
   const [customTeremszam, setCustomTeremszam] = useState<string>('');
-  const [selectedAppointmentType, setSelectedAppointmentType] = useState<AppointmentType | null>(null);
+  const [selectedAppointmentType, setSelectedAppointmentType] = useState<AppointmentType | null>(fixedAppointmentType ?? null);
   const [editingAppointment, setEditingAppointment] = useState<Appointment | null>(null);
   const [newModifyDateTime, setNewModifyDateTime] = useState<Date | null>(null);
   const [newModifyTeremszam, setNewModifyTeremszam] = useState<string>('');
@@ -174,13 +183,15 @@ export function AppointmentBookingSection({
       cim: customCim || (availableCims.length === 1 ? DEFAULT_CIM : null),
       teremszam: customTeremszam.trim() || null,
       appointmentType: selectedAppointmentType || null,
+      recallTaskId,
     });
 
     if (result.success) {
       setSelectedSlot('');
       setCustomCim('');
       setCustomTeremszam('');
-      setSelectedAppointmentType(null);
+      setSelectedAppointmentType(fixedAppointmentType ?? null);
+      onBooked?.();
       alert('Időpont sikeresen lefoglalva! A fogpótlástanász értesítést kapott.');
     } else {
       alert(result.error || 'Hiba történt az időpont foglalásakor');
@@ -504,15 +515,17 @@ export function AppointmentBookingSection({
       cim: newSlotCim || DEFAULT_CIM,
       teremszam: newSlotTeremszam.trim() || null,
       appointmentType: newSlotAppointmentType || null,
+      recallTaskId,
     });
 
     if (result.success) {
       setNewSlotDateTime(null);
       setNewSlotCim('');
       setNewSlotTeremszam('');
-      setNewSlotAppointmentType(null);
+      setNewSlotAppointmentType(fixedAppointmentType ?? null);
       setShowNewSlotForm(false);
       alert('Új időpont sikeresen létrehozva és lefoglalva a betegnek!');
+      onBooked?.();
     } else {
       alert(result.error || 'Hiba történt az időpont létrehozásakor vagy foglalásakor');
     }
@@ -596,9 +609,9 @@ export function AppointmentBookingSection({
                   className="form-input w-full"
                 >
                   <option value="">Nincs megadva</option>
-                  <option value="elso_konzultacio">Első konzultáció</option>
-                  <option value="munkafazis">Munkafázis</option>
-                  <option value="kontroll">Kontroll</option>
+                  {APPOINTMENT_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
                 </select>
               </div>
               <div className="flex gap-2 justify-end">
@@ -792,9 +805,9 @@ export function AppointmentBookingSection({
                   className="form-input w-full"
                 >
                   <option value="">Nincs megadva</option>
-                  <option value="elso_konzultacio">Első konzultáció</option>
-                  <option value="munkafazis">Munkafázis</option>
-                  <option value="kontroll">Kontroll</option>
+                  {APPOINTMENT_TYPE_OPTIONS.map((option) => (
+                    <option key={option.value} value={option.value}>{option.label}</option>
+                  ))}
                 </select>
               </div>
               <div>
@@ -861,7 +874,7 @@ export function AppointmentBookingSection({
       )}
 
       {/* Existing Appointments */}
-      {appointments.length > 0 && (
+      {!bookingOnly && appointments.length > 0 && (
         <div className="mb-6">
           <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Lefoglalt időpontok</h4>
           <div className="space-y-2">
@@ -933,11 +946,7 @@ export function AppointmentBookingSection({
                       {appointment.appointmentType && (
                         <div className="mt-1">
                           <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Típus: </span>
-                          <span className="text-xs text-gray-700 dark:text-gray-300">
-                            {appointment.appointmentType === 'elso_konzultacio' && 'Első konzultáció'}
-                            {appointment.appointmentType === 'munkafazis' && 'Munkafázis'}
-                            {appointment.appointmentType === 'kontroll' && 'Kontroll'}
-                          </span>
+                          <span className="text-xs text-gray-700 dark:text-gray-300">{getAppointmentTypeLabel(appointment.appointmentType)}</span>
                         </div>
                       )}
                       <div className={`mt-2 pt-2 border-t ${metaBorder} space-y-1`}>
@@ -1203,12 +1212,13 @@ export function AppointmentBookingSection({
                     <select
                       value={newSlotAppointmentType || ''}
                       onChange={(e) => setNewSlotAppointmentType(e.target.value as any || null)}
+                      disabled={Boolean(fixedAppointmentType)}
                       className="form-input w-full"
                     >
                       <option value="">Nincs megadva</option>
-                      <option value="elso_konzultacio">Első konzultáció</option>
-                      <option value="munkafazis">Munkafázis</option>
-                      <option value="kontroll">Kontroll</option>
+                      {APPOINTMENT_TYPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
                     </select>
                   </div>
                   <div className="flex gap-2">
@@ -1356,12 +1366,13 @@ export function AppointmentBookingSection({
                     <select
                       value={selectedAppointmentType || ''}
                       onChange={(e) => setSelectedAppointmentType(e.target.value as any || null)}
+                      disabled={Boolean(fixedAppointmentType)}
                       className="form-input w-full text-sm"
                     >
                       <option value="">Nincs megadva</option>
-                      <option value="elso_konzultacio">Első konzultáció</option>
-                      <option value="munkafazis">Munkafázis</option>
-                      <option value="kontroll">Kontroll</option>
+                      {APPOINTMENT_TYPE_OPTIONS.map((option) => (
+                        <option key={option.value} value={option.value}>{option.label}</option>
+                      ))}
                     </select>
                   </div>
                 </div>

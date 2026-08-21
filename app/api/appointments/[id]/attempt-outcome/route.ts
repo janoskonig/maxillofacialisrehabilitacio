@@ -33,6 +33,7 @@ import {
 import { APPOINTMENT_STATUS_EVENT_PENDING_AUDIT } from '@/lib/appointment-status';
 import { sendPushNotification } from '@/lib/push-notifications';
 import { logger } from '@/lib/logger';
+import { syncRecallTaskForAppointmentStatus } from '@/lib/recall-task-lifecycle';
 
 export const dynamic = 'force-dynamic';
 
@@ -184,6 +185,12 @@ export const PATCH = roleHandler(
       // Validációs hiba esetén nem írunk audit-eseményt és nem nyúlunk az
       // EWP-hez — a finally a ROLLBACK-et és a release-t garantálja.
       if (!earlyResponse) {
+        await syncRecallTaskForAppointmentStatus(client, {
+          appointmentId,
+          oldStatus,
+          newStatus,
+        });
+
         // Audit: appointment_status_events. Az indok itt nem szerepel közvetlenül
         // (a tábla schema nem tartja), de a `attempt_failed_reason` (mark) ill.
         // a `episode_work_phase_audit` (EWP-átmenet, lent) hordozza.

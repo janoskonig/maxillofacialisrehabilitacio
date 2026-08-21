@@ -112,6 +112,7 @@ export const POST = roleHandler(['beutalo_orvos', 'admin', 'fogpótlástanász']
     slotIntentId,
     stepSeq,
     workPhaseId,
+    recallTaskId,
   } = body;
   const bodyRequiresPrecommit = body.requiresPrecommit === true;
 
@@ -168,6 +169,7 @@ export const POST = roleHandler(['beutalo_orvos', 'admin', 'fogpótlástanász']
     stepSeq: typeof stepSeq === 'number' ? stepSeq : null,
     requiresPrecommit: bodyRequiresPrecommit,
     workPhaseId: typeof workPhaseId === 'string' && workPhaseId.length > 0 ? workPhaseId : null,
+    recallTaskId: typeof recallTaskId === 'string' && recallTaskId.length > 0 ? recallTaskId : null,
   }, {
     email: auth.email,
     userId: auth.userId,

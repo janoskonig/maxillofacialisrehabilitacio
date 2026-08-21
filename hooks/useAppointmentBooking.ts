@@ -4,8 +4,9 @@ import { useState, useEffect } from 'react';
 import { getCurrentUser } from '@/lib/auth';
 import { toLocalISOString } from '@/lib/dateUtils';
 import { toUserMessage } from '@/lib/extract-api-error';
+import type { AppointmentType } from '@/lib/appointment-constants';
 
-export type AppointmentType = 'elso_konzultacio' | 'munkafazis' | 'kontroll';
+export type { AppointmentType };
 export type AppointmentStatus =
   | 'cancelled_by_doctor'
   | 'cancelled_by_patient'
@@ -22,6 +23,7 @@ export interface TimeSlot {
   teremszam?: string | null;
   userEmail?: string;
   dentistName?: string | null;
+  slotPurpose?: 'consult' | 'work' | 'control' | 'flexible' | null;
 }
 
 export interface Appointment {
@@ -66,6 +68,7 @@ export interface BookAppointmentParams {
   teremszam?: string | null;
   appointmentType?: AppointmentType | null;
   createdVia?: string;
+  recallTaskId?: string | null;
 }
 
 export interface CreateAndBookSlotParams {
@@ -77,6 +80,7 @@ export interface CreateAndBookSlotParams {
   teremszam?: string | null;
   appointmentType?: AppointmentType | null;
   createdVia?: string;
+  recallTaskId?: string | null;
 }
 
 export interface ModifyAppointmentParams {
@@ -128,7 +132,10 @@ export interface UseAppointmentBookingReturn {
   downloadCalendar: (appointmentId: string) => Promise<OperationResult>;
 }
 
-export function useAppointmentBooking(patientId: string | null | undefined): UseAppointmentBookingReturn {
+export function useAppointmentBooking(
+  patientId: string | null | undefined,
+  slotPurpose?: Pool,
+): UseAppointmentBookingReturn {
   const [availableSlots, setAvailableSlots] = useState<TimeSlot[]>([]);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [loading, setLoading] = useState(true);
@@ -148,6 +155,7 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
         from: fourHoursAgoISO,
         limit: '500',
       });
+      if (slotPurpose) baseQuery.set('slotPurpose', slotPurpose);
 
       let allSlots: TimeSlot[] = [];
       let page = 1;
@@ -319,6 +327,7 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
           teremszam: params.teremszam || null,
           appointmentType: params.appointmentType || null,
           createdVia: params.createdVia || 'patient_form',
+          recallTaskId: params.recallTaskId ?? null,
         }),
       });
 
@@ -480,6 +489,7 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
           startTime: isoDateTime,
           cim: params.cim || DEFAULT_CIM,
           teremszam: params.teremszam || null,
+          slotPurpose: params.pool ?? 'consult',
         }),
       });
 
@@ -504,6 +514,7 @@ export function useAppointmentBooking(patientId: string | null | undefined): Use
           teremszam: params.teremszam || null,
           appointmentType: params.appointmentType || null,
           createdVia: params.createdVia || 'patient_form',
+          recallTaskId: params.recallTaskId ?? null,
         }),
       });
 
