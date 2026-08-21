@@ -1,10 +1,11 @@
 'use client';
 
 import { useState, useEffect, useMemo } from 'react';
-import { useRouter } from 'next/navigation';
+import { useRouter, useSearchParams } from 'next/navigation';
 import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown, User, LogIn, Search, UserCircle } from 'lucide-react';
 
 type UserRole = 'admin' | 'fogpótlástanász' | 'technikus' | 'beutalo_orvos';
+type FeedbackPriority = 'critical' | 'high' | 'medium' | 'low';
 
 type UserRow = {
   id: string;
@@ -33,6 +34,10 @@ type Feedback = {
   user_agent: string | null;
   url: string | null;
   status: 'open' | 'in_progress' | 'resolved' | 'closed';
+  priority: FeedbackPriority;
+  priority_score: number;
+  priority_reasons: string[];
+  triaged_at: string | null;
   admin_response: string | null;
   admin_note: string | null;
   ai_draft_response: string | null;
@@ -45,13 +50,20 @@ type Feedback = {
 
 export function UserManagementTab() {
   const router = useRouter();
+  const searchParams = useSearchParams();
+  const linkedFeedbackId = searchParams.get('feedback');
   const [users, setUsers] = useState<UserRow[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
   const [usage, setUsage] = useState<Array<{ user_email: string; last_seen: string | null; last_7d: number; last_30d: number; last_90d: number }>>([]);
   const [usageLoading, setUsageLoading] = useState(false);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
   const [feedbackLoading, setFeedbackLoading] = useState(false);
-  const [feedbackStatusFilter, setFeedbackStatusFilter] = useState('');
+  const [feedbackStatusFilter, setFeedbackStatusFilter] = useState(
+    searchParams.get('feedbackStatus') || ''
+  );
+  const [feedbackPriorityFilter, setFeedbackPriorityFilter] = useState(
+    searchParams.get('feedbackPriority') || ''
+  );
   const [expandedFeedback, setExpandedFeedback] = useState<Set<string>>(new Set());
   const [responseDraft, setResponseDraft] = useState<Record<string, string>>({});
   const [noteDraft, setNoteDraft] = useState<Record<string, string>>({});
@@ -150,12 +162,23 @@ export function UserManagementTab() {
     (async () => {
       setFeedbackLoading(true);
       try {
-        const url = feedbackStatusFilter ? `/api/feedback?status=${feedbackStatusFilter}` : '/api/feedback';
+        const query = new URLSearchParams();
+        if (feedbackStatusFilter) query.set('status', feedbackStatusFilter);
+        if (feedbackPriorityFilter) query.set('priority', feedbackPriorityFilter);
+        const url = query.size > 0 ? `/api/feedback?${query.toString()}` : '/api/feedback';
         const res = await fetch(url, { credentials: 'include' });
         if (res.ok) { const data = await res.json(); setFeedback(data.feedback || []); }
       } catch { setFeedback([]); } finally { setFeedbackLoading(false); }
     })();
-  }, [feedbackStatusFilter]);
+  }, [feedbackStatusFilter, feedbackPriorityFilter]);
+
+  useEffect(() => {
+    if (!linkedFeedbackId || !feedback.some((item) => item.id === linkedFeedbackId)) return;
+    setExpandedFeedback((previous) => new Set(previous).add(linkedFeedbackId));
+    requestAnimationFrame(() => {
+      document.getElementById(`feedback-${linkedFeedbackId}`)?.scrollIntoView({ behavior: 'smooth', block: 'center' });
+    });
+  }, [feedback, linkedFeedbackId]);
 
   const updateRole = async (userId: string, role: UserRole) => {
     try {
@@ -187,6 +210,16 @@ export function UserManagementTab() {
       const res = await fetch(`/api/feedback/${feedbackId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ status: newStatus }) });
       if (res.ok) { setFeedback(prev => prev.map(f => f.id === feedbackId ? { ...f, status: newStatus as Feedback['status'], updated_at: new Date().toISOString() } : f)); }
     } catch { alert('Hiba történt a status frissítésekor'); }
+  };
+
+  const updateFeedbackPriority = async (feedbackId: string, priority: FeedbackPriority) => {
+    try {
+      const res = await fetch(`/api/feedback/${feedbackId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ priority }) });
+      if (res.ok) {
+        const data = await res.json();
+        setFeedback(prev => prev.map(f => f.id === feedbackId ? { ...f, ...data.feedback } : f));
+      }
+    } catch { alert('Hiba történt a prioritás frissítésekor'); }
   };
 
   const saveFeedbackResponse = async (item: Feedback) => {
@@ -298,6 +331,19 @@ export function UserManagementTab() {
       case 'open': return 'bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300';
       case 'in_progress': return 'bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300';
       case 'resolved': return 'bg-green-100 dark:bg-green-950/50 text-green-800 dark:text-green-300';
+      default: return 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200';
+    }
+  };
+
+  const priorityLabel: Record<FeedbackPriority, string> = {
+    critical: 'Kritikus', high: 'Magas', medium: 'Közepes', low: 'Alacsony',
+  };
+
+  const getPriorityColor = (priority: FeedbackPriority) => {
+    switch (priority) {
+      case 'critical': return 'bg-red-100 dark:bg-red-950/50 text-red-800 dark:text-red-300';
+      case 'high': return 'bg-orange-100 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300';
+      case 'medium': return 'bg-blue-100 dark:bg-blue-950/50 text-blue-800 dark:text-blue-300';
       default: return 'bg-gray-100 dark:bg-gray-800 text-gray-800 dark:text-gray-200';
     }
   };
@@ -462,28 +508,29 @@ export function UserManagementTab() {
       </div>
 
       {/* Feedback log */}
-      <div className="card mt-6">
+      <div id="feedback-log" className="card mt-6 scroll-mt-4">
         <div className="flex justify-between items-center mb-4">
           <h2 className="text-xl font-semibold">Visszajelzések napló</h2>
-          <div className="flex items-center gap-2"><label className="text-sm text-gray-600 dark:text-gray-400">Szűrés:</label><select value={feedbackStatusFilter} onChange={e => setFeedbackStatusFilter(e.target.value)} className="form-input text-sm"><option value="">Összes</option><option value="open">Nyitott</option><option value="in_progress">Folyamatban</option><option value="resolved">Megoldva</option><option value="closed">Lezárva</option></select></div>
+          <div className="flex items-center gap-2 flex-wrap"><label className="text-sm text-gray-600 dark:text-gray-400">Szűrés:</label><select value={feedbackPriorityFilter} onChange={e => setFeedbackPriorityFilter(e.target.value)} className="form-input text-sm"><option value="">Minden prioritás</option><option value="critical">Kritikus</option><option value="high">Magas</option><option value="medium">Közepes</option><option value="low">Alacsony</option></select><select value={feedbackStatusFilter} onChange={e => setFeedbackStatusFilter(e.target.value)} className="form-input text-sm"><option value="">Minden státusz</option><option value="unresolved">Lezáratlan</option><option value="open">Nyitott</option><option value="in_progress">Folyamatban</option><option value="resolved">Megoldva</option><option value="closed">Lezárva</option></select></div>
         </div>
         {feedbackLoading ? <p className="text-gray-600 dark:text-gray-400">Betöltés...</p> : feedback.length === 0 ? <p className="text-gray-600 dark:text-gray-400">Nincsenek visszajelzések.</p> : (
           <div className="space-y-3">
             {feedback.map(item => {
               const isExpanded = expandedFeedback.has(item.id);
               return (
-                <div key={item.id} className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden">
+                <div id={`feedback-${item.id}`} key={item.id} className="border border-gray-200 dark:border-gray-800 rounded-lg overflow-hidden scroll-mt-4">
                   <div className="bg-gray-50 dark:bg-gray-800/60 p-4 cursor-pointer hover:bg-gray-100 dark:hover:bg-gray-700 transition-colors" onClick={() => setExpandedFeedback(prev => { const s = new Set(prev); s.has(item.id) ? s.delete(item.id) : s.add(item.id); return s; })}>
                     <div className="flex items-start justify-between">
                       <div className="flex items-start gap-3 flex-1">
                         <div className="mt-1">{getTypeIcon(item.type)}</div>
                         <div className="flex-1 min-w-0">
-                          <div className="flex items-center gap-2 mb-1"><span className="font-medium text-gray-900 dark:text-gray-100">{item.title || `${item.type} jelentés`}</span><span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>{item.status === 'open' ? 'Nyitott' : item.status === 'in_progress' ? 'Folyamatban' : item.status === 'resolved' ? 'Megoldva' : 'Lezárva'}</span></div>
+                          <div className="flex items-center gap-2 mb-1 flex-wrap"><span className="font-medium text-gray-900 dark:text-gray-100">{item.title || `${item.type} jelentés`}</span><span className={`px-2 py-1 rounded-full text-xs font-medium ${getPriorityColor(item.priority || 'medium')}`}>{priorityLabel[item.priority || 'medium']}</span><span className={`px-2 py-1 rounded-full text-xs font-medium ${getStatusColor(item.status)}`}>{item.status === 'open' ? 'Nyitott' : item.status === 'in_progress' ? 'Folyamatban' : item.status === 'resolved' ? 'Megoldva' : 'Lezárva'}</span></div>
                           <p className="text-sm text-gray-600 dark:text-gray-400 line-clamp-2">{item.description}</p>
                           <div className="flex items-center gap-4 mt-2 text-xs text-gray-500 dark:text-gray-400"><span>{item.user_email || 'Névtelen'}</span><span>•</span><span>{new Date(item.created_at).toLocaleString('hu-HU')}</span>{(item.type === 'error' || item.type === 'crash') && <><span>•</span><span className="text-red-600 dark:text-red-300 font-medium">Hiba log elérhető</span></>}</div>
                         </div>
                       </div>
                       <div className="flex items-center gap-2 ml-4">
+                        <select value={item.priority || 'medium'} onChange={e => { e.stopPropagation(); updateFeedbackPriority(item.id, e.target.value as FeedbackPriority); }} onClick={e => e.stopPropagation()} className="form-input text-xs"><option value="critical">Kritikus</option><option value="high">Magas</option><option value="medium">Közepes</option><option value="low">Alacsony</option></select>
                         <select value={item.status} onChange={e => { e.stopPropagation(); updateFeedbackStatus(item.id, e.target.value); }} onClick={e => e.stopPropagation()} className="form-input text-xs"><option value="open">Nyitott</option><option value="in_progress">Folyamatban</option><option value="resolved">Megoldva</option><option value="closed">Lezárva</option></select>
                         {isExpanded ? <ChevronUp className="w-5 h-5 text-gray-400 dark:text-gray-500" /> : <ChevronDown className="w-5 h-5 text-gray-400 dark:text-gray-500" />}
                       </div>
@@ -494,6 +541,8 @@ export function UserManagementTab() {
                       <div><h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Leírás</h4><p className="text-sm text-gray-900 dark:text-gray-100 whitespace-pre-wrap">{item.description}</p></div>
                       {(item.error_log || item.error_stack) && <div><h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Error log</h4><pre className="text-xs bg-gray-100 dark:bg-gray-800 p-3 rounded overflow-auto max-h-64">{item.error_log || item.error_stack}</pre></div>}
                       <div className="grid grid-cols-2 gap-4 text-sm">
+                        <div><span className="font-medium text-gray-700 dark:text-gray-300">Prioritás:</span><span className="ml-2 text-gray-600 dark:text-gray-400">{priorityLabel[item.priority || 'medium']} ({item.priority_score ?? 40}/100)</span></div>
+                        <div><span className="font-medium text-gray-700 dark:text-gray-300">Besorolás oka:</span><span className="ml-2 text-gray-600 dark:text-gray-400">{Array.isArray(item.priority_reasons) && item.priority_reasons.length > 0 ? item.priority_reasons.join(', ') : 'alapértelmezett'}</span></div>
                         <div><span className="font-medium text-gray-700 dark:text-gray-300">URL:</span><span className="ml-2 text-gray-600 dark:text-gray-400">{item.url || 'N/A'}</span></div>
                         <div><span className="font-medium text-gray-700 dark:text-gray-300">User Agent:</span><span className="ml-2 text-gray-600 dark:text-gray-400 text-xs">{item.user_agent || 'N/A'}</span></div>
                         <div><span className="font-medium text-gray-700 dark:text-gray-300">Létrehozva:</span><span className="ml-2 text-gray-600 dark:text-gray-400">{new Date(item.created_at).toLocaleString('hu-HU')}</span></div>

@@ -31,6 +31,22 @@ export interface PushNotificationPayload {
   }>;
 }
 
+export interface PushDeliveryResult {
+  attempted: number;
+  sent: number;
+  failed: number;
+  expired: number;
+  skipped: number;
+}
+
+const emptyPushDeliveryResult = (): PushDeliveryResult => ({
+  attempted: 0,
+  sent: 0,
+  failed: 0,
+  expired: 0,
+  skipped: 0,
+});
+
 /**
  * Push notification küldése egy felhasználónak
  */
@@ -38,18 +54,21 @@ export async function sendPushNotification(
   userId: string,
   payload: PushNotificationPayload,
   options?: { patientId?: string },
-): Promise<void> {
+): Promise<PushDeliveryResult> {
+  const delivery = emptyPushDeliveryResult();
   if (options?.patientId) {
     const contactAllowed = await canContactPatient(options.patientId);
     if (!contactAllowed) {
       console.warn(`[Push] Betegnek szánt értesítés kihagyva (nem kontaktálható): patientId=${options.patientId}`);
-      return;
+      delivery.skipped++;
+      return delivery;
     }
   }
 
   if (!vapidPublicKey || !vapidPrivateKey) {
     console.warn('[Push] VAPID keys not configured, skipping push notification');
-    return;
+    delivery.skipped++;
+    return delivery;
   }
 
   const pool = getDbPool();
@@ -61,10 +80,12 @@ export async function sendPushNotification(
   );
 
   if (result.rows.length === 0) {
-    return; // Nincs subscription
+    delivery.skipped++;
+    return delivery; // Nincs subscription
   }
 
   const subscriptions = result.rows;
+  delivery.attempted = subscriptions.length;
   console.log(`[Push] Sending notification to ${subscriptions.length} subscription(s) for user ${userId}`);
   
   const pushPromises = subscriptions.map(async (sub: any) => {
@@ -79,16 +100,19 @@ export async function sendPushNotification(
 
       console.log(`[Push] Sending to endpoint: ${sub.endpoint.substring(0, 50)}...`);
       await webpush.sendNotification(subscription, JSON.stringify(payload));
+      delivery.sent++;
       console.log(`[Push] Notification sent successfully to endpoint: ${sub.endpoint.substring(0, 50)}...`);
     } catch (error: any) {
       // Ha a subscription expired vagy invalid, töröljük
       if (error.statusCode === 410 || error.statusCode === 404) {
+        delivery.expired++;
         console.log(`[Push] Removing expired subscription for user ${userId}, endpoint: ${sub.endpoint.substring(0, 50)}...`);
         await pool.query(
           'DELETE FROM push_subscriptions WHERE endpoint = $1',
           [sub.endpoint]
         );
       } else {
+        delivery.failed++;
         console.error(`[Push] Error sending notification to user ${userId}:`, error);
         console.error(`[Push] Error details:`, {
           statusCode: error.statusCode,
@@ -100,6 +124,7 @@ export async function sendPushNotification(
   });
 
   await Promise.allSettled(pushPromises);
+  return delivery;
 }
 
 /**
@@ -108,11 +133,23 @@ export async function sendPushNotification(
 export async function sendPushNotificationToMultiple(
   userIds: string[],
   payload: PushNotificationPayload
-): Promise<void> {
-  if (userIds.length === 0) return;
+): Promise<PushDeliveryResult> {
+  if (userIds.length === 0) return emptyPushDeliveryResult();
 
   const promises = userIds.map(userId => sendPushNotification(userId, payload));
-  await Promise.allSettled(promises);
+  const results = await Promise.allSettled(promises);
+  return results.reduce<PushDeliveryResult>((total, result) => {
+    if (result.status === 'fulfilled') {
+      total.attempted += result.value.attempted;
+      total.sent += result.value.sent;
+      total.failed += result.value.failed;
+      total.expired += result.value.expired;
+      total.skipped += result.value.skipped;
+    } else {
+      total.failed++;
+    }
+    return total;
+  }, emptyPushDeliveryResult());
 }
 
 /**

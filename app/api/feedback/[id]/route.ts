@@ -3,10 +3,12 @@ import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { sendFeedbackResponseEmail } from '@/lib/email';
 import { logger } from '@/lib/logger';
+import { scoreForPriority, type FeedbackPriority } from '@/lib/feedback-priority';
 
 export const dynamic = 'force-dynamic';
 
 const VALID_STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
+const VALID_PRIORITIES: FeedbackPriority[] = ['critical', 'high', 'medium', 'low'];
 
 /**
  * PUT /api/feedback/[id]
@@ -17,28 +19,33 @@ const VALID_STATUSES = ['open', 'in_progress', 'resolved', 'closed'];
  *  - adminNote      : belső jegyzet (sosem megy ki a bejelentőnek)
  *  - aiDraftResponse: AI-javasolt válasz-piszkozat (tárolódik, SOHA nem küld emailt,
  *                     nem zár — emberi jóváhagyásra vár; a triage-routine ezt írja)
+ *  - priority       : az automatikus prioritás adminisztrátori felülírása
  *  - notifyReporter : ha true ÉS van adminResponse ÉS a ticketnek van user_email-je,
  *                     emailt küld a bejelentőnek a válasszal (alap: true)
  */
 export const PUT = roleHandler(['admin'], async (req, { auth, params, correlationId }) => {
   const { id } = params;
   const body = await req.json();
-  const { status, adminResponse, adminNote, aiDraftResponse, notifyReporter = true } = body;
+  const { status, priority, adminResponse, adminNote, aiDraftResponse, notifyReporter = true } = body;
 
   // Legalább egy értelmes mezőt módosítani kell.
   const hasStatus = typeof status === 'string';
   const hasResponse = typeof adminResponse === 'string';
   const hasNote = typeof adminNote === 'string';
   const hasDraft = typeof aiDraftResponse === 'string';
-  if (!hasStatus && !hasResponse && !hasNote && !hasDraft) {
+  const hasPriority = typeof priority === 'string';
+  if (!hasStatus && !hasPriority && !hasResponse && !hasNote && !hasDraft) {
     return NextResponse.json(
-      { error: 'Nincs módosítandó mező (status, adminResponse, adminNote vagy aiDraftResponse)' },
+      { error: 'Nincs módosítandó mező (status, priority, adminResponse, adminNote vagy aiDraftResponse)' },
       { status: 400 }
     );
   }
 
   if (hasStatus && !VALID_STATUSES.includes(status)) {
     return NextResponse.json({ error: 'Érvénytelen status' }, { status: 400 });
+  }
+  if (hasPriority && !VALID_PRIORITIES.includes(priority as FeedbackPriority)) {
+    return NextResponse.json({ error: 'Érvénytelen priority' }, { status: 400 });
   }
 
   // Dinamikus UPDATE az átadott mezőkből.
@@ -49,6 +56,16 @@ export const PUT = roleHandler(['admin'], async (req, { auth, params, correlatio
   if (hasStatus) {
     sets.push(`status = $${i++}`);
     values.push(status);
+  }
+  if (hasPriority) {
+    const manualPriority = priority as FeedbackPriority;
+    sets.push(`priority = $${i++}`);
+    values.push(manualPriority);
+    sets.push(`priority_score = $${i++}`);
+    values.push(scoreForPriority(manualPriority));
+    sets.push(`priority_reasons = $${i++}`);
+    values.push(JSON.stringify([`Admin felülbírálat: ${auth.email}`]));
+    sets.push(`triaged_at = CURRENT_TIMESTAMP`);
   }
   if (hasResponse) {
     const trimmed = adminResponse.trim();
@@ -84,6 +101,7 @@ export const PUT = roleHandler(['admin'], async (req, { auth, params, correlatio
         SET ${sets.join(', ')}
       WHERE id = $${i}
       RETURNING id, user_email, type, title, description, status,
+                priority, priority_score, priority_reasons, triaged_at,
                 admin_response, admin_note, ai_draft_response, ai_draft_at,
                 responded_at, responded_by, updated_at`,
     values

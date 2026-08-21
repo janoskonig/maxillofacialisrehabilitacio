@@ -243,11 +243,11 @@ async function callEndpoint(path, label) {
       await callEndpoint('/api/patients/completeness-snapshot/record', 'Completeness snapshot');
     }
 
-    // Nyitott visszajelzések (bug/error/crash/javaslat) napi háromszori push-összesítője —
-    // 09:00, 13:00 és 17:00 Budapest körül. A végpont 2h cooldownja (feedback_summary_state)
-    // garantálja, hogy az órán belüli percenkénti futások közül ablakonként csak egy szóljon.
-    if (hour === 9 || hour === 13 || hour === 17) {
-      await callEndpoint('/api/feedback/summary/cron', 'Feedback summary');
+    // Lezáratlan kritikus feedbackek napi egyszeri push-összesítője 07:30 Budapest
+    // körül. A 07:30–07:59 biztonsági ablak elvisel egy rövid cron-kimaradást; a
+    // végpont Budapest szerinti naptári napra atomi deduplikációt végez.
+    if (hour === 7 && minute >= 30) {
+      await callEndpoint('/api/feedback/summary/cron', 'Critical feedback summary');
     }
 
     // Stuck-slot reaper — 5 percenként. Felszabadítja a jövőbeli, 'held'/'offered'
@@ -287,4 +287,3 @@ function finish() {
   for (const f of failures) console.error(`  - ${f}`);
   process.exit(1);
 }
-

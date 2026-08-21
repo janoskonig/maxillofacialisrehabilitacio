@@ -9,44 +9,21 @@ export const runtime = 'nodejs';
 export const maxDuration = 120;
 export const dynamic = 'force-dynamic';
 
-/**
- * Legkisebb időköz (óra) két összesítő push között. A cron-sync.js percenként hív
- * a megcélzott órákban (09/13/17 Budapest), így a `last_sent_at` cooldown akadályozza
- * meg, hogy az órán belüli ~60 ismétlés mind push-t küldjön. 2h < a legszűkebb
- * ablakköz (4h), így mindhárom napi ablak pontosan egyszer szól.
- */
-const MIN_INTERVAL_HOURS = 2;
-
-/** Magyar címkék a feedback.type értékekhez (lásd components/FeedbackButton.tsx). */
-const TYPE_LABELS: Record<string, string> = {
-  bug: 'Hiba',
-  error: 'Hiba (error)',
-  crash: 'Összeomlás',
-  suggestion: 'Javaslat',
-  other: 'Egyéb',
-};
-
-type SummaryRow = {
-  open_count: number;
+type CriticalSummaryRow = {
+  critical_count: number;
   new_24h: number;
-  bug_count: number;
-  error_count: number;
-};
-
-type LatestRow = {
-  title: string | null;
-  type: string;
+  oldest_created_at: Date | null;
 };
 
 /**
  * GET /api/feedback/summary/cron
  *
- * Külső / belső ütemező (cron-sync.js, naponta háromszor: 09/13/17 Budapest) hívja
- * `x-api-key`-jel (GOOGLE_CALENDAR_SYNC_API_KEY). Ha van nyitott (`status='open'`)
- * visszajelzés, push-emlékeztetőt küld minden aktív adminnak a nyitott bejelentések
- * számával és a legutóbbi tételével. A `feedback_summary_state.last_sent_at` cooldown
- * (alap 2h) garantálja, hogy a percenkénti cron-futások közül ablakonként csak egy
- * küldjön. `?force=1` megkerüli a cooldownt (teszteléshez).
+ * A cron óránként többször is meghívhatja, de a Budapest szerinti naptári napra
+ * atomikusan csak egy kritikus digest mehet ki. Csak a lezáratlan (`open` vagy
+ * `in_progress`) és `critical` prioritású ticketek kerülnek bele.
+ *
+ * `?detail=1`: tisztán olvasó mód az automatizált triage számára.
+ * `?force=1`: az aznapi korlát megkerülése kizárólag cron-kulccsal végzett teszthez.
  */
 export const GET = apiHandler(async (req, { correlationId }) => {
   const startTime = Date.now();
@@ -55,146 +32,159 @@ export const GET = apiHandler(async (req, { correlationId }) => {
   const force = req.nextUrl.searchParams.get('force') === '1';
   const pool = getDbPool();
 
-  // Részletes JSON mód (?detail=1): a triage-routine ezt hívja a cron-kulccsal,
-  // hogy a nyitott bejelentések tartalmát is megkapja. Tisztán olvasás — nem küld
-  // push-t és nem írja a cooldownt (azt a push-mód kezeli).
   if (req.nextUrl.searchParams.get('detail') === '1') {
     const { rows: items } = await pool.query(`
       SELECT id, type, title, description,
              LEFT(COALESCE(error_log, ''), 4000)   AS error_log,
              LEFT(COALESCE(error_stack, ''), 4000) AS error_stack,
-             url, user_email, status, created_at
+             url, user_email, status, priority, priority_score,
+             priority_reasons, triaged_at, created_at, updated_at
       FROM feedback
-      WHERE status = 'open'
-      ORDER BY created_at DESC
+      WHERE status IN ('open', 'in_progress')
+      ORDER BY priority_score DESC, created_at DESC
       LIMIT 200
     `);
-    logger.info(`[feedback-summary][${correlationId}] detail mód: ${items.length} nyitott tétel.`);
+    logger.info(`[feedback-summary][${correlationId}] detail mód: ${items.length} lezáratlan tétel.`);
     return NextResponse.json({
       success: true,
       mode: 'detail',
-      openCount: items.length,
+      unresolvedCount: items.length,
       items,
       generatedAt: new Date().toISOString(),
       duration: Date.now() - startTime,
     });
   }
 
-  // Cooldown-állapot tábla (lusta létrehozás — nincs külön migráció, lásd
-  // admin_notification_batch_state mintát a daily-summary-ben).
-  await pool.query(`
-    CREATE TABLE IF NOT EXISTS feedback_summary_state (
-      id INT PRIMARY KEY DEFAULT 1,
-      last_sent_at TIMESTAMPTZ
-    )
-  `);
+  const client = await pool.connect();
+  let transactionOpen = false;
+  try {
+    await client.query('BEGIN');
+    transactionOpen = true;
 
-  // Nyitott visszajelzések összesítése.
-  const { rows: summaryRows } = await pool.query<SummaryRow>(`
-    SELECT
-      COUNT(*)::int                                                              AS open_count,
-      COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours')::int      AS new_24h,
-      COUNT(*) FILTER (WHERE type = 'bug')::int                                   AS bug_count,
-      COUNT(*) FILTER (WHERE type IN ('error', 'crash'))::int                     AS error_count
-    FROM feedback
-    WHERE status = 'open'
-  `);
-  const summary = summaryRows[0] ?? { open_count: 0, new_24h: 0, bug_count: 0, error_count: 0 };
+    // A tranzakciós advisory lock kizárja a párhuzamos cronpéldányok kettős küldését.
+    await client.query("SELECT pg_advisory_xact_lock(hashtext('feedback-critical-digest'))");
+    await client.query(`
+      CREATE TABLE IF NOT EXISTS feedback_critical_digest_state (
+        id INT PRIMARY KEY CHECK (id = 1),
+        last_sent_on DATE,
+        last_sent_at TIMESTAMPTZ
+      )
+    `);
 
-  if (summary.open_count === 0) {
-    logger.info(`[feedback-summary][${correlationId}] Nincs nyitott visszajelzés, kihagyva.`);
-    return NextResponse.json({
-      success: true,
-      sent: false,
-      reason: 'no_open_feedback',
-      openCount: 0,
-      duration: Date.now() - startTime,
-    });
-  }
+    const { rows: summaryRows } = await client.query<CriticalSummaryRow>(`
+      SELECT
+        COUNT(*)::int                                                         AS critical_count,
+        COUNT(*) FILTER (WHERE created_at >= NOW() - INTERVAL '24 hours')::int AS new_24h,
+        MIN(created_at)                                                        AS oldest_created_at
+      FROM feedback
+      WHERE status IN ('open', 'in_progress')
+        AND priority = 'critical'
+    `);
+    const summary = summaryRows[0] ?? { critical_count: 0, new_24h: 0, oldest_created_at: null };
 
-  // Cooldown ellenőrzés (force kihagyja).
-  if (!force) {
-    const { rows: stateRows } = await pool.query<{ last_sent_at: Date | null }>(
-      'SELECT last_sent_at FROM feedback_summary_state WHERE id = 1'
-    );
-    const lastSent = stateRows[0]?.last_sent_at;
-    if (lastSent) {
-      const hoursSince = (Date.now() - new Date(lastSent).getTime()) / 3_600_000;
-      if (hoursSince < MIN_INTERVAL_HOURS) {
-        logger.info(
-          `[feedback-summary][${correlationId}] Cooldown (utolsó küldés ${hoursSince.toFixed(1)}h, min ${MIN_INTERVAL_HOURS}h), kihagyva.`
-        );
+    if (summary.critical_count === 0) {
+      await client.query('COMMIT');
+      transactionOpen = false;
+      logger.info(`[feedback-summary][${correlationId}] Nincs lezáratlan kritikus feedback.`);
+      return NextResponse.json({
+        success: true,
+        sent: false,
+        reason: 'no_critical_feedback',
+        criticalCount: 0,
+        duration: Date.now() - startTime,
+      });
+    }
+
+    if (!force) {
+      const { rows: stateRows } = await client.query<{ already_sent: boolean }>(`
+        SELECT EXISTS (
+          SELECT 1
+          FROM feedback_critical_digest_state
+          WHERE id = 1
+            AND last_sent_on = (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Budapest')::date
+        ) AS already_sent
+      `);
+      if (stateRows[0]?.already_sent) {
+        await client.query('COMMIT');
+        transactionOpen = false;
         return NextResponse.json({
           success: true,
           sent: false,
-          reason: 'cooldown',
-          openCount: summary.open_count,
+          reason: 'already_sent_today',
+          criticalCount: summary.critical_count,
           duration: Date.now() - startTime,
         });
       }
     }
+
+    const { rows: adminRows } = await client.query<{ id: string }>(
+      "SELECT id FROM users WHERE role = 'admin' AND active = true"
+    );
+    const oldestAgeDays = summary.oldest_created_at
+      ? Math.max(0, Math.floor((Date.now() - new Date(summary.oldest_created_at).getTime()) / 86_400_000))
+      : 0;
+    const newText = summary.new_24h > 0 ? `, ebből ${summary.new_24h} új 24 órán belül` : '';
+    const ageText = oldestAgeDays > 0 ? ` A legrégebbi ${oldestAgeDays} napos.` : '';
+
+    const delivery = await sendPushNotificationToMultiple(
+      adminRows.map((row) => row.id),
+      {
+        title: 'Kritikus feedbackek · napi emlékeztető',
+        body: `${summary.critical_count} lezáratlan kritikus ticket${newText}.${ageText}`,
+        tag: 'feedback-critical-digest',
+        data: {
+          type: 'reminder',
+          url: '/admin?feedbackPriority=critical&feedbackStatus=unresolved#feedback-log',
+        },
+      }
+    );
+
+    // Csak tényleges kézbesítés után tekintjük elküldöttnek. Ha nincs aktív
+    // subscription, az órán belüli következő cronfutás még próbálkozhat.
+    if (delivery.sent === 0) {
+      await client.query('COMMIT');
+      transactionOpen = false;
+      logger.error(
+        `[feedback-summary][${correlationId}] Kritikus digest nem kézbesült: ` +
+          `admins=${adminRows.length} failed=${delivery.failed} expired=${delivery.expired} skipped=${delivery.skipped}`
+      );
+      return NextResponse.json({
+        success: true,
+        sent: false,
+        reason: 'no_push_delivery',
+        criticalCount: summary.critical_count,
+        duration: Date.now() - startTime,
+      });
+    }
+
+    await client.query(`
+      INSERT INTO feedback_critical_digest_state (id, last_sent_on, last_sent_at)
+      VALUES (1, (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Budapest')::date, NOW())
+      ON CONFLICT (id) DO UPDATE
+      SET last_sent_on = EXCLUDED.last_sent_on,
+          last_sent_at = EXCLUDED.last_sent_at
+    `);
+    await client.query('COMMIT');
+    transactionOpen = false;
+
+    const duration = Date.now() - startTime;
+    logger.info(
+      `[feedback-summary][${correlationId}] Kritikus digest: count=${summary.critical_count} ` +
+        `sent=${delivery.sent} failed=${delivery.failed} duration=${duration}ms`
+    );
+    return NextResponse.json({
+      success: true,
+      sent: true,
+      criticalCount: summary.critical_count,
+      new24h: summary.new_24h,
+      deliveredSubscriptions: delivery.sent,
+      failedSubscriptions: delivery.failed,
+      duration,
+    });
+  } catch (error) {
+    if (transactionOpen) await client.query('ROLLBACK').catch(() => undefined);
+    throw error;
+  } finally {
+    client.release();
   }
-
-  // Legutóbbi nyitott tétel a push törzséhez.
-  const { rows: latestRows } = await pool.query<LatestRow>(`
-    SELECT title, type
-    FROM feedback
-    WHERE status = 'open'
-    ORDER BY created_at DESC
-    LIMIT 1
-  `);
-  const latest = latestRows[0];
-  const latestLabel = latest
-    ? (latest.title?.trim() || TYPE_LABELS[latest.type] || latest.type)
-    : null;
-
-  // Aktív adminok.
-  const { rows: adminRows } = await pool.query<{ id: string }>(
-    "SELECT id FROM users WHERE role = 'admin' AND active = true"
-  );
-  const adminIds = adminRows.map((r) => r.id);
-
-  // Push törzs összeállítása.
-  const parts: string[] = [];
-  if (summary.bug_count > 0) parts.push(`${summary.bug_count} hiba`);
-  if (summary.error_count > 0) parts.push(`${summary.error_count} error/crash`);
-  const breakdown = parts.length > 0 ? ` (${parts.join(', ')})` : '';
-  const newSuffix = summary.new_24h > 0 ? ` — ${summary.new_24h} új az elmúlt napban` : '';
-  const latestSuffix = latestLabel ? ` Legutóbbi: „${latestLabel}".` : '';
-
-  const body =
-    `${summary.open_count} nyitott visszajelzés${breakdown}${newSuffix}.${latestSuffix}`;
-
-  await sendPushNotificationToMultiple(adminIds, {
-    title: 'Nyitott visszajelzések',
-    body,
-    tag: 'feedback-summary',
-    data: {
-      type: 'reminder',
-      url: '/admin',
-    },
-  });
-
-  // Cooldown frissítése.
-  await pool.query(`
-    INSERT INTO feedback_summary_state (id, last_sent_at)
-    VALUES (1, NOW())
-    ON CONFLICT (id) DO UPDATE SET last_sent_at = NOW()
-  `);
-
-  const duration = Date.now() - startTime;
-  logger.info(
-    `[feedback-summary][${correlationId}] Push kiküldve ${adminIds.length} adminnak: ${summary.open_count} nyitott (${summary.new_24h} új) ${duration}ms.`
-  );
-
-  return NextResponse.json({
-    success: true,
-    sent: true,
-    openCount: summary.open_count,
-    new24h: summary.new_24h,
-    bugCount: summary.bug_count,
-    errorCount: summary.error_count,
-    recipients: adminIds.length,
-    duration,
-  });
 });
