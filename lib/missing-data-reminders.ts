@@ -1,5 +1,5 @@
 import { getDbPool } from '@/lib/db';
-import { sendMissingDataReminderEmail, sendEmail, getBaseUrlForEmail } from '@/lib/email';
+import { sendMissingDataDigestEmail, type MissingDataDigestKind } from '@/lib/email';
 import { queueAdminNotification } from '@/lib/email/admin-notification-queue';
 import { insertUserTask } from '@/lib/user-tasks';
 import {
@@ -14,14 +14,23 @@ import { logger } from '@/lib/logger';
  *
  * Minden olyan betegnél, akinek hiányzó klinikai vagy kutatási adata van,
  * értesítjük (e-mailben + feladatként):
- *  - a beutaló orvost (ha a `patient_referral.beutalo_orvos` név egy
- *    `beutalo_orvos` szerepű felhasználóra illeszthető — ha nem, kihagyjuk), és
- *  - a legutóbbi fogpótlástanászt, akinél a betegnek időpontja volt.
+ *  - a kezelőorvost (elsődleges és egyetlen rendes felelős), vagy ha nincs
+ *    kijelölve, a beutaló orvost (ha a `patient_referral.beutalo_orvos` név egy
+ *    `beutalo_orvos` szerepű felhasználóra illeszthető) + a legutóbbi
+ *    fogpótlástanászt, akinél a betegnek időpontja volt.
+ *
+ * ÖSSZESÍTETT (digest) KÜLDÉS: egy futásból egy címzett típusonként (kezelő-
+ * orvosi / beutalói / eszkalációs) PONTOSAN EGY e-mailt kap, amely az összes
+ * érintett betegét felsorolja. Korábban betegenként külön levél ment, ami
+ * e-mail-dömpingként érkezett és elnyomta a tényleges információt. A ciklus
+ * ezért csak összegyűjti a tételeket (`queueDigestEntry`), a kiküldés a végén,
+ * egyben történik (`flushDigests`).
  *
  * Idempotens / ismétlődő: a `missing_data_reminder_log` garantálja, hogy egy
- * (beteg, címzett) párnak 7 naponta legfeljebb egy e-mail menjen ki. Ha egy hét
- * után is hiányzik az adat, a következő futás új ("ismételt") értesítőt küld.
- * Ha az adat pótlásra kerül, a nyitott `missing_data` feladatokat lezárjuk.
+ * (beteg, címzett) párnak 7 naponta legfeljebb egyszer kelljen szerepelnie egy
+ * levélben. Ha egy hét után is hiányzik az adat, a következő futás összesítője
+ * "ismételt" jelöléssel hozza a beteget. Ha az adat pótlásra kerül, a nyitott
+ * `missing_data` feladatokat lezárjuk.
  */
 
 const REMINDER_COOLDOWN_DAYS = 7;
@@ -47,9 +56,11 @@ export function shouldEscalate(priorReminderCount: number): boolean {
 
 export interface MissingDataReminderResult {
   patientsWithMissing: number;
+  /** Ténylegesen kiküldött e-mailek száma (címzettenként/típusonként EGY összesítő). */
   emailsSent: number;
   tasksCreated: number;
   tasksClosed: number;
+  /** Eszkalált betegek száma (nem levélszám — az adminok is összesítőt kapnak). */
   escalations: number;
   /** Hiányos betegek kijelölt kezelőorvos nélkül (adminhoz jelezve). */
   noOwner: number;
@@ -152,6 +163,40 @@ export function splitByResponsible(items: MissingItem[]): {
   };
 }
 
+/** Egy beteg tétele egy címzett összesítőjében. */
+export interface DigestEntry {
+  patientId: string;
+  patientName: string | null;
+  items: MissingItem[];
+  /** Ment már erről a betegről emlékeztető ennek a címzettnek? */
+  isFollowUp: boolean;
+}
+
+type DigestBucket = { recipient: Recipient; kind: MissingDataDigestKind; entries: DigestEntry[] };
+type DigestMap = Map<string, DigestBucket>;
+
+/**
+ * Digest-kulcs: címzettenként ÉS levéltípusonként pontosan egy összesítő megy ki
+ * (a beutalói lista más hangvételű és más mezőkről szól, mint a kezelőorvosi,
+ * ezért nem olvad össze — de mindkettőből legfeljebb egy levél).
+ */
+export function digestKey(kind: MissingDataDigestKind, userId: string): string {
+  return `${kind}:${userId}`;
+}
+
+/** Beteg hozzáadása egy címzett összesítőjéhez (e-mail még nem megy ki). */
+function queueDigestEntry(
+  digests: DigestMap,
+  kind: MissingDataDigestKind,
+  recipient: Recipient,
+  entry: DigestEntry
+): void {
+  const key = digestKey(kind, recipient.userId);
+  const bucket = digests.get(key) ?? { recipient, kind, entries: [] };
+  bucket.entries.push(entry);
+  digests.set(key, bucket);
+}
+
 export async function sendMissingDataReminders(): Promise<MissingDataReminderResult> {
   const pool = getDbPool();
   const result: MissingDataReminderResult = {
@@ -190,18 +235,16 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
     result.tasksClosed = closed.rowCount ?? 0;
   }
 
-  // 2) Hiányos betegenként az érintett orvosok értesítése.
+  // 2) Hiányos betegenként az érintett orvosok feladatainak karbantartása és a
+  //    címzettenkénti összesítők ÖSSZEÁLLÍTÁSA — e-mail ebben a ciklusban NEM
+  //    megy ki. Egy orvos egy futásból pontosan egy levelet kap (típusonként),
+  //    az összes érintett betegével; korábban betegenként külön levél ment, ami
+  //    e-mail-dömpingként érkezett.
   //    A beutaló orvos által pótolható tételek (REFERRER_FILLABLE_KEYS)
-  //    elsődlegesen a BEUTALÓHOZ kerülnek (heti összesített e-mail); a
-  //    kezelőorvosra csak eszkalációként vagy feloldhatatlan beutalónál
-  //    szállnak vissza. Minden más tétel a kezelőorvosé marad.
-  const referrerDigests = new Map<
-    string,
-    {
-      recipient: Recipient;
-      entries: { patientId: string; patientName: string | null; items: MissingItem[] }[];
-    }
-  >();
+  //    elsődlegesen a BEUTALÓHOZ kerülnek; a kezelőorvosra csak eszkalációként
+  //    vagy feloldhatatlan beutalónál szállnak vissza. Minden más tétel a
+  //    kezelőorvosé marad.
+  const digests: DigestMap = new Map();
 
   for (const row of incomplete) {
     const patientId = row.patientId;
@@ -224,20 +267,20 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
             kezeloItems = [...kezeloItems, ...referrerItems];
             result.escalations++;
           } else {
-            const refSummary = formatMissingSummary(referrerItems);
             const taskCreated = await ensureMissingDataTask(
               pool,
               patientId,
               row.patientName,
               referrer,
-              refSummary
+              formatMissingSummary(referrerItems)
             );
             if (taskCreated) result.tasksCreated++;
-            // Az e-mail NEM itt megy ki: beutalónként EGY heti összesítőt
-            // küldünk a ciklus után (betegenkénti cooldownnal).
-            const digest = referrerDigests.get(referrer.userId) ?? { recipient: referrer, entries: [] };
-            digest.entries.push({ patientId, patientName: row.patientName, items: referrerItems });
-            referrerDigests.set(referrer.userId, digest);
+            queueDigestEntry(digests, 'beutalo', referrer, {
+              patientId,
+              patientName: row.patientName,
+              items: referrerItems,
+              isFollowUp: priorCount > 0,
+            });
           }
         }
       } else {
@@ -305,22 +348,18 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
           continue;
         }
 
-        const sent = await sendReminderEmailWithCooldown(
-          pool,
+        queueDigestEntry(digests, 'kezeloorvos', recipient, {
           patientId,
-          row.patientName,
-          recipient,
-          missingItems,
-          summary,
-          priorCount,
-          false,
-        );
-        if (sent) result.emailsSent++;
-        else result.skipped++;
+          patientName: row.patientName,
+          items: missingItems,
+          isFollowUp: priorCount > 0,
+        });
       }
 
-      // Eszkaláció az adminokhoz, ha valamelyik orvos elérte a küszöböt.
+      // Eszkaláció az adminokhoz, ha valamelyik orvos elérte a küszöböt. Az
+      // adminok is EGY összesítőt kapnak az összes eszkalált beteggel.
       if (needsEscalation) {
+        result.escalations++;
         const admins = await resolveAdmins(pool);
         for (const admin of admins) {
           const taskCreated = await ensureMissingDataTask(
@@ -333,18 +372,12 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
           if (taskCreated) result.tasksCreated++;
 
           const priorCount = await reminderCount(pool, patientId, admin.userId);
-          const sent = await sendReminderEmailWithCooldown(
-            pool,
+          queueDigestEntry(digests, 'escalation', admin, {
             patientId,
-            row.patientName,
-            admin,
-            missingItems,
-            summary,
-            priorCount,
-            true,
-          );
-          if (sent) result.escalations++;
-          else result.skipped++;
+            patientName: row.patientName,
+            items: missingItems,
+            isFollowUp: priorCount > 0,
+          });
         }
       }
     } catch (err) {
@@ -353,25 +386,48 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
     }
   }
 
-  // 3) Beutalónkénti heti összesítő e-mail (betegenkénti cooldownnal: csak
-  //    azok a betegek kerülnek a levélbe, akikről 7 napja nem ment értesítő).
-  for (const digest of Array.from(referrerDigests.values())) {
+  // 3) Címzettenként EGY összesítő e-mail kiküldése (betegenkénti cooldownnal:
+  //    csak azok a betegek kerülnek a levélbe, akikről 7 napja nem ment
+  //    értesítő az adott címzettnek).
+  await flushDigests(pool, digests, result);
+
+  return result;
+}
+
+/**
+ * A felgyűlt összesítők kiküldése: címzettenként egy e-mail, benne minden
+ * esedékes beteg. A 7 napos cooldown betegenként külön érvényesül — a friss
+ * (nemrég jelzett) betegek kimaradnak a levélből, a többi mehet.
+ */
+async function flushDigests(
+  pool: ReturnType<typeof getDbPool>,
+  digests: DigestMap,
+  result: MissingDataReminderResult
+): Promise<void> {
+  for (const digest of Array.from(digests.values())) {
+    const { recipient, kind } = digest;
     try {
-      const due: typeof digest.entries = [];
+      const due: DigestEntry[] = [];
       for (const entry of digest.entries) {
-        const recent = await hasRecentReminder(pool, entry.patientId, digest.recipient.userId);
+        const recent = await hasRecentReminder(pool, entry.patientId, recipient.userId);
         if (recent) result.skipped++;
         else due.push(entry);
       }
       if (due.length === 0) continue;
 
-      await sendEmail({
-        to: digest.recipient.email,
-        subject: `Pótlandó beutalási adatok — ${due.length} beteg (heti összesítő)`,
-        html: buildReferrerDigestHtml(digest.recipient.name, due),
-        emailType: 'missing_data_referrer_digest',
-        metadata: { recipientUserId: digest.recipient.userId, patientCount: due.length },
+      await sendMissingDataDigestEmail({
+        to: recipient.email,
+        recipientName: recipient.name,
+        kind,
+        entries: due.map((e) => ({
+          patientId: e.patientId,
+          patientName: e.patientName,
+          missingItems: e.items,
+          isFollowUp: e.isFollowUp,
+        })),
       });
+      result.emailsSent++;
+
       for (const entry of due) {
         await pool.query(
           `INSERT INTO missing_data_reminder_log
@@ -379,31 +435,39 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
            VALUES ($1, $2, $3, $4, $5)`,
           [
             entry.patientId,
-            digest.recipient.userId,
-            REFERRER_ROLE,
-            digest.recipient.email,
+            recipient.userId,
+            recipient.role,
+            recipient.email,
             formatMissingSummary(entry.items),
           ]
         );
       }
-      result.emailsSent++;
 
+      // Az admin-digestbe is EGY sor kerül levelenként (nem betegenként).
       await queueAdminNotification(
-        'missing_data_reminder_sent',
-        `Beutalói összesítő — ${digest.recipient.name ?? digest.recipient.email} (${due.length} beteg)`,
-        { recipientUserId: digest.recipient.userId, role: REFERRER_ROLE, patientCount: due.length }
+        kind === 'escalation' ? 'missing_data_escalated' : 'missing_data_reminder_sent',
+        `${DIGEST_NOTIFICATION_LABEL[kind]} — ${recipient.name ?? recipient.email} (${due.length} beteg)`,
+        {
+          recipientUserId: recipient.userId,
+          role: recipient.role,
+          kind,
+          patientCount: due.length,
+          patientIds: due.map((e) => e.patientId),
+          escalation: kind === 'escalation',
+        }
       ).catch(() => {});
     } catch (err) {
-      logger.error(
-        `[missing-data-reminders] Beutalói összesítő hiba (${digest.recipient.email}):`,
-        err
-      );
+      logger.error(`[missing-data-reminders] Összesítő hiba (${recipient.email}):`, err);
       result.errors++;
     }
   }
-
-  return result;
 }
+
+const DIGEST_NOTIFICATION_LABEL: Record<MissingDataDigestKind, string> = {
+  kezeloorvos: 'Kezelőorvosi összesítő',
+  beutalo: 'Beutalói összesítő',
+  escalation: 'Eszkalációs összesítő',
+};
 
 /**
  * Egy adott szerep-címkéjű címzett nyitott 'missing_data' feladatainak lezárása
@@ -442,36 +506,6 @@ async function hasRecentReminder(
   return res.rows.length > 0;
 }
 
-/** A beutalói heti összesítő e-mail tartalma (beteg + hiányzó mezők + karton-link). */
-function buildReferrerDigestHtml(
-  recipientName: string | null,
-  entries: { patientId: string; patientName: string | null; items: MissingItem[] }[]
-): string {
-  const baseUrl = getBaseUrlForEmail();
-  const rows = entries
-    .map(
-      (e) => `
-        <li style="margin-bottom: 10px;">
-          <strong>${e.patientName ?? 'Név nélküli beteg'}</strong> —
-          ${e.items.map((i) => i.label).join(', ')}
-          &nbsp;<a href="${baseUrl}/patients/${e.patientId}/view">Karton megnyitása</a>
-        </li>`
-    )
-    .join('');
-  return `
-    <div style="font-family: Arial, sans-serif;">
-      <h2 style="color: #0f766e;">Kedves ${recipientName ?? 'Doktornő/Doktor Úr'}!</h2>
-      <p>Az Ön által beutalt betegeknél az alábbi, a beutaláshoz kapcsolódó adatok
-      hiányoznak (beutaló indoklás, műtéti adatok, szövettan, BNO/TNM kód):</p>
-      <ul>${rows}</ul>
-      <p style="color: #6b7280; font-size: 13px;">
-        Ezeket az adatokat Ön ismeri a legpontosabban. A pótlás a beteg kartonján
-        néhány percet vesz igénybe — köszönjük a segítségét!
-      </p>
-    </div>
-  `;
-}
-
 /** Eddig hány emlékeztetőt logoltunk ennek a (beteg, címzett) párnak. */
 async function reminderCount(
   pool: ReturnType<typeof getDbPool>,
@@ -484,55 +518,6 @@ async function reminderCount(
     [patientId, recipientUserId],
   );
   return (res.rows[0]?.c as number) ?? 0;
-}
-
-/**
- * E-mail küldése a 7 napos cooldown betartásával + naplózás. Visszatérés: true,
- * ha most ténylegesen küldtünk e-mailt (false = cooldown miatt kihagyva).
- */
-async function sendReminderEmailWithCooldown(
-  pool: ReturnType<typeof getDbPool>,
-  patientId: string,
-  patientName: string | null,
-  recipient: Recipient,
-  missingItems: MissingItem[],
-  summary: string,
-  priorCount: number,
-  escalation: boolean,
-): Promise<boolean> {
-  const recent = await pool.query(
-    `SELECT 1 FROM missing_data_reminder_log
-      WHERE patient_id = $1 AND recipient_user_id = $2
-        AND sent_at > NOW() - INTERVAL '${REMINDER_COOLDOWN_DAYS} days'
-      LIMIT 1`,
-    [patientId, recipient.userId],
-  );
-  if (recent.rows.length > 0) return false; // még tart a heti cooldown
-
-  await sendMissingDataReminderEmail({
-    to: recipient.email,
-    recipientName: recipient.name,
-    patientName,
-    patientId,
-    missingItems,
-    isFollowUp: priorCount > 0,
-    escalation,
-  });
-
-  await pool.query(
-    `INSERT INTO missing_data_reminder_log
-       (patient_id, recipient_user_id, recipient_role, email_to, missing_summary)
-     VALUES ($1, $2, $3, $4, $5)`,
-    [patientId, recipient.userId, recipient.role, recipient.email, summary],
-  );
-
-  await queueAdminNotification(
-    escalation ? 'missing_data_escalated' : 'missing_data_reminder_sent',
-    `${patientName ?? 'Beteg'} — ${recipient.name ?? recipient.email} (${recipient.role})`,
-    { patientId, recipientUserId: recipient.userId, role: recipient.role, missing: summary, escalation },
-  ).catch(() => {});
-
-  return true;
 }
 
 /** Aktív admin felhasználók (e-maillel) — az eszkaláció címzettjei. */

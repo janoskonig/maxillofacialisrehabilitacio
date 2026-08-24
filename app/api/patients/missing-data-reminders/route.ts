@@ -12,9 +12,12 @@ export const dynamic = 'force-dynamic';
  * GET/POST /api/patients/missing-data-reminders
  *
  * Külső ütemező (hetente) hívja `x-api-key`-jel (GOOGLE_CALENDAR_SYNC_API_KEY),
- * vagy admin felhasználó indíthatja manuálisan. Minden hiányzó adattal rendelkező
- * betegnél értesíti a beutaló orvost és a legutóbbi fogpótlástanászt (e-mailben +
- * feladatként); ha egy hét után is hiányzik az adat, ismételt e-mailt küld.
+ * vagy admin felhasználó indíthatja manuálisan. A hiányzó adattal rendelkező
+ * betegek felelőseit (kezelőorvos, ill. beutaló orvos) értesíti e-mailben +
+ * feladatként. Az e-mail ÖSSZESÍTETT: egy címzett egy futásból típusonként
+ * pontosan egy levelet kap, benne az összes érintett betegével — nem
+ * betegenként külön levelet. A `result.emailsSent` így a levelek, nem a
+ * betegek száma.
  */
 export const GET = apiHandler(async (req) => handle(req));
 export const POST = apiHandler(async (req) => handle(req));

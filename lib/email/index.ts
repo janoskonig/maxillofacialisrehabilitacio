@@ -25,6 +25,7 @@ export {
   sendOhipReminderEmail,
   sendConsentRequestEmail,
   sendTaskReminderEmail,
-  sendMissingDataReminderEmail,
+  sendMissingDataDigestEmail,
   sendFeedbackResponseEmail,
 } from './senders';
+export type { MissingDataDigestEntry, MissingDataDigestKind } from './senders';

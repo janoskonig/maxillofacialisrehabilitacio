@@ -1,6 +1,7 @@
 import { describe, it, expect } from 'vitest';
 import {
   dedupeRecipients,
+  digestKey,
   formatMissingSummary,
   doctorActionableMissing,
   resolvePrimaryRecipients,
@@ -208,5 +209,20 @@ describe('splitByResponsible — beutaló-routing', () => {
     for (const key of Array.from(PATIENT_FILLABLE_KEYS)) {
       expect(REFERRER_FILLABLE_KEYS.has(key)).toBe(false);
     }
+  });
+});
+
+describe('digestKey', () => {
+  it('ugyanaz a címzett + típus egyetlen összesítőbe kerül', () => {
+    expect(digestKey('kezeloorvos', 'u1')).toBe(digestKey('kezeloorvos', 'u1'));
+  });
+
+  it('a levéltípusok külön összesítők maradnak ugyanannál a címzettnél', () => {
+    expect(digestKey('kezeloorvos', 'u1')).not.toBe(digestKey('beutalo', 'u1'));
+    expect(digestKey('kezeloorvos', 'u1')).not.toBe(digestKey('escalation', 'u1'));
+  });
+
+  it('a címzettek nem keverednek', () => {
+    expect(digestKey('kezeloorvos', 'u1')).not.toBe(digestKey('kezeloorvos', 'u2'));
   });
 });
