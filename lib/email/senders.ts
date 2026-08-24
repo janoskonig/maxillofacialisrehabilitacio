@@ -1297,90 +1297,157 @@ export async function sendFeedbackResponseEmail(params: {
   });
 }
 
+/** Egy beteg tétele az összesített hiányzó-betegadat e-mailben. */
+export interface MissingDataDigestEntry {
+  patientId: string;
+  patientName: string | null;
+  missingItems: { label: string; group: 'clinical' | 'research' }[];
+  /** Igaz, ha erről a betegről már ment korábban emlékeztető ennek a címzettnek. */
+  isFollowUp: boolean;
+}
+
 /**
- * Hiányzó betegadat-emlékeztető az érintett orvosnak (beutaló orvos vagy a
- * legutóbbi fogpótlástanász). Felsorolja a beteg hiányzó klinikai és kutatási
- * adatait, és átirányít a beteg kartonjára. A `isFollowUp` jelzi, ha ez egy
- * héttel a korábbi értesítő után küldött ismételt emlékeztető.
+ * A címzett szerepe az összesítőben — ez határozza meg a levél hangvételét:
+ *  - `kezeloorvos`: a beteg kijelölt (vagy fallback) felelőse,
+ *  - `beutalo`: a beutaló orvos, csak a beutaláshoz kötődő mezőkről,
+ *  - `escalation`: admin, akihez a tartósan pótolatlan betegek felkerültek.
  */
-export async function sendMissingDataReminderEmail(params: {
+export type MissingDataDigestKind = 'kezeloorvos' | 'beutalo' | 'escalation';
+
+/**
+ * Összesített (digest) e-mail a hiányzó betegadatokról — címzettenként EGY levél,
+ * amely az összes érintett beteget felsorolja. Szándékosan nem betegenként
+ * küldünk külön levelet: az orvosok korábban e-mail-dömpinget kaptak, ami
+ * elnyomta a tényleges információt.
+ */
+export async function sendMissingDataDigestEmail(params: {
   to: string;
   recipientName: string | null;
-  patientName: string | null;
-  patientId: string;
-  missingItems: { label: string; group: 'clinical' | 'research' }[];
-  isFollowUp: boolean;
-  /** Admin-eszkaláció: az orvost többszöri emlékeztetőre sem pótolta. */
-  escalation?: boolean;
+  kind: MissingDataDigestKind;
+  entries: MissingDataDigestEntry[];
 }): Promise<void> {
-  const { to, recipientName, patientName, patientId, missingItems, isFollowUp, escalation } = params;
+  const { to, recipientName, kind, entries } = params;
+  if (entries.length === 0) return;
+
+  const escapeHtml = (s: string) =>
+    s
+      .replace(/&/g, '&amp;')
+      .replace(/</g, '&lt;')
+      .replace(/>/g, '&gt;')
+      .replace(/"/g, '&quot;')
+      .replace(/'/g, '&#39;');
+
   const baseUrl = getBaseUrlForEmail();
-  const patientUrl = `${baseUrl}/patients/${patientId}/view`;
-  const greeting = recipientName?.trim() ? `Kedves ${recipientName.trim()}` : 'Kedves Kolléga';
-  const betegLabel = patientName?.trim() ? patientName.trim() : 'beteg';
-  const heading = escalation
-    ? 'Eszkaláció – tartósan hiányzó betegadatok'
-    : isFollowUp
-      ? 'Ismételt emlékeztető – hiányzó betegadatok'
-      : 'Hiányzó betegadatok';
+  const greeting = recipientName?.trim()
+    ? `Kedves ${escapeHtml(recipientName.trim())}`
+    : 'Kedves Kolléga';
+  const patientLabel = (name: string | null) =>
+    name?.trim() ? escapeHtml(name.trim()) : 'Név nélküli beteg';
 
-  const clinical = missingItems.filter((i) => i.group === 'clinical');
-  const research = missingItems.filter((i) => i.group === 'research');
-  const renderList = (items: { label: string }[]) =>
-    items.map((i) => `<li>${i.label}</li>`).join('');
+  const patientCount = entries.length;
+  const itemCount = entries.reduce((sum, e) => sum + e.missingItems.length, 0);
+  const followUpCount = entries.filter((e) => e.isFollowUp).length;
 
-  const clinicalBlock = clinical.length
-    ? `<p style="margin-bottom: 4px;"><strong>Klinikai minimum:</strong></p><ul>${renderList(clinical)}</ul>`
-    : '';
-  const researchBlock = research.length
-    ? `<p style="margin-bottom: 4px;"><strong>Kutatási adatok:</strong></p><ul>${renderList(research)}</ul>`
-    : '';
+  const headingColor =
+    kind === 'escalation' ? '#b91c1c' : kind === 'beutalo' ? '#0f766e' : '#2563eb';
+  const heading =
+    kind === 'escalation'
+      ? 'Eszkaláció – tartósan hiányzó betegadatok'
+      : kind === 'beutalo'
+        ? 'Pótlandó beutalási adatok'
+        : 'Hiányzó betegadatok – heti összesítő';
 
-  const intro = escalation
-    ? `<strong>${betegLabel}</strong> betegnél az érintett orvos(ok) többszöri emlékeztető ellenére sem pótolták az alábbi adatokat. Kérjük, adminisztrátorként intézkedjen (pótlás, a felelős megkeresése, vagy a mező N/A-ként jelölése):`
-    : isFollowUp
-      ? `Egy hete jeleztük, hogy <strong>${betegLabel}</strong> betegnél hiányzó adatok vannak. Ezek továbbra is pótlásra várnak:`
-      : `<strong>${betegLabel}</strong> betegnél az alábbi adatok hiányoznak, amelyek pótlása az Ön közreműködését igényli:`;
+  const intro =
+    kind === 'escalation'
+      ? `Az alábbi betegeknél az érintett orvosok többszöri emlékeztető ellenére sem pótolták a hiányzó adatokat. Kérjük, adminisztrátorként intézkedjen (pótlás, a felelős megkeresése, vagy a mező N/A-ként jelölése):`
+      : kind === 'beutalo'
+        ? `Az Ön által beutalt betegeknél az alábbi, a beutaláshoz kapcsolódó adatok hiányoznak (beutaló indoklás, műtéti adatok, szövettan, BNO/TNM kód). Ezeket Ön ismeri a legpontosabban:`
+        : `Az alábbi betegeknél hiányoznak olyan adatok, amelyek pótlása az Ön közreműködését igényli:`;
 
-  const footer = escalation
-    ? `Amennyiben az adatok pótlásra kerülnek (vagy N/A-ként jelölik), az értesítő automatikusan megszűnik.`
-    : `Amennyiben az adatok pótlásra kerülnek, az értesítő automatikusan megszűnik. Ellenkező esetben egy hét múlva újabb emlékeztetőt küldünk.`;
+  const summaryLine = `
+    <p style="margin: 0 0 16px 0; padding: 10px 14px; background: #f3f4f6; border-radius: 6px; color: #374151; font-size: 14px;">
+      <strong>${patientCount}</strong> érintett beteg &middot;
+      <strong>${itemCount}</strong> hiányzó adat${
+        followUpCount > 0
+          ? ` &middot; ebből <strong>${followUpCount}</strong> beteg már korábban is szerepelt`
+          : ''
+      }
+    </p>`;
 
-  const headingColor = escalation ? '#b91c1c' : isFollowUp ? '#dc2626' : '#2563eb';
+  const renderGroup = (
+    title: string,
+    items: { label: string }[]
+  ) =>
+    items.length
+      ? `<p style="margin: 6px 0 2px 0; font-size: 13px; color: #4b5563;"><strong>${title}:</strong></p>
+         <ul style="margin: 0 0 4px 0; padding-left: 20px;">${items
+           .map((i) => `<li style="font-size: 14px;">${escapeHtml(i.label)}</li>`)
+           .join('')}</ul>`
+      : '';
+
+  const cards = entries
+    .map((e) => {
+      const patientUrl = `${baseUrl}/patients/${e.patientId}/view`;
+      const badge = e.isFollowUp
+        ? `<span style="margin-left: 8px; padding: 2px 8px; background: #fee2e2; color: #b91c1c; border-radius: 10px; font-size: 12px;">ismételt</span>`
+        : '';
+      return `
+        <div style="border: 1px solid #e5e7eb; border-left: 4px solid ${headingColor}; border-radius: 6px; padding: 12px 16px; margin-bottom: 12px;">
+          <p style="margin: 0 0 6px 0; font-size: 16px;"><strong>${patientLabel(e.patientName)}</strong>${badge}</p>
+          ${renderGroup('Klinikai minimum', e.missingItems.filter((i) => i.group === 'clinical'))}
+          ${renderGroup('Kutatási adatok', e.missingItems.filter((i) => i.group === 'research'))}
+          <p style="margin: 10px 0 0 0;">
+            <a href="${patientUrl}" style="color: #2563eb; font-weight: bold; text-decoration: none;">Karton megnyitása &rarr;</a>
+          </p>
+        </div>`;
+    })
+    .join('');
+
+  const footer =
+    kind === 'escalation'
+      ? 'Amennyiben az adatok pótlásra kerülnek (vagy N/A-ként jelölik), az értesítő automatikusan megszűnik.'
+      : 'Amennyiben az adatok pótlásra kerülnek, az értesítő automatikusan megszűnik. Ellenkező esetben egy hét múlva küldünk újabb összesítőt — betegenként legfeljebb hetente egyszer.';
 
   const html = `
-    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+    <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto;">
       <h2 style="color: ${headingColor};">${heading}</h2>
       <p>${greeting}!</p>
       <p>${intro}</p>
-      ${clinicalBlock}
-      ${researchBlock}
-      <p style="margin-top: 20px;">
-        <a href="${patientUrl}" style="display: inline-block; background-color: #2563eb; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; font-weight: bold;">
-          Beteg kartonjának megnyitása
-        </a>
-      </p>
-      <p style="color: #6b7280; font-size: 14px; margin-top: 20px;">
-        Ha a gomb nem működik, másolja be az alábbi linket a böngészőjébe:<br>
-        <a href="${patientUrl}" style="color: #3b82f6;">${patientUrl}</a>
-      </p>
+      ${summaryLine}
+      ${cards}
       <p style="color: #6b7280; font-size: 13px;">${footer}</p>
       <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
     </div>
   `;
 
-  const subjectPrefix = escalation
-    ? 'Eszkaláció: hiányzó betegadatok'
-    : isFollowUp
-      ? 'Ismételt emlékeztető'
-      : 'Hiányzó betegadatok';
+  const subjectPrefix =
+    kind === 'escalation'
+      ? 'Eszkaláció: hiányzó betegadatok'
+      : kind === 'beutalo'
+        ? 'Pótlandó beutalási adatok'
+        : 'Hiányzó betegadatok';
+  // Egy betegnél a név informatívabb, mint a darabszám.
+  const subjectScope =
+    patientCount === 1
+      ? (entries[0].patientName?.trim() || 'Név nélküli beteg')
+      : `${patientCount} beteg`;
 
   await sendEmail({
     to,
-    subject: `${subjectPrefix} – ${betegLabel} – Maxillofaciális Rehabilitáció`,
+    subject: `${subjectPrefix} – ${subjectScope} – Maxillofaciális Rehabilitáció`,
     html,
-    emailType: escalation ? 'missing_data_escalation' : 'missing_data_reminder',
+    emailType:
+      kind === 'escalation'
+        ? 'missing_data_escalation'
+        : kind === 'beutalo'
+          ? 'missing_data_referrer_digest'
+          : 'missing_data_reminder',
     sentBy: 'system',
-    metadata: { patientId, isFollowUp, escalation: !!escalation },
+    metadata: {
+      kind,
+      patientCount,
+      itemCount,
+      patientIds: entries.map((e) => e.patientId).join(','),
+    },
   });
 }
