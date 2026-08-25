@@ -11,6 +11,13 @@ export interface AppointmentStageTransitionResult {
   at: string | null;
   source: 'delivery' | 'manual' | null;
   message: string | null;
+  /**
+   * true, ha a származtatott (nem a felhasználó által kért) stádiumváltás
+   * elmaradt. Ilyenkor az időpont kimenetele (státusz + „mi történt?”) MENTHETŐ
+   * marad — a hívó a `message`-t figyelmeztetésként mutatja meg.
+   */
+  skipped: boolean;
+  skippedCode: string | null;
 }
 
 interface ApplyAppointmentStageTransitionArgs {
@@ -42,6 +49,38 @@ export function parseAppointmentClinicalEvent(value: unknown): AppointmentClinic
 }
 
 /**
+ * A származtatott stádiumváltás akadályainak felhasználói szövege. Ezek NEM
+ * hibák: az időpont kimenetele mentve lett, csak a stádium maradt változatlanul.
+ */
+const SKIPPED_STAGE_MESSAGES: Record<string, string> = {
+  STAGE_TRANSITION_REQUIRES_EPISODE:
+    'Az időponthoz nincs ellátási epizód kötve, ezért az automatikus stádiumváltás elmaradt. Az időpont kimenetele mentve.',
+  STAGE_EPISODE_NOT_FOUND:
+    'Az időponthoz kötött ellátási epizód nem található, ezért az automatikus stádiumváltás elmaradt. Az időpont kimenetele mentve.',
+  STAGE_EPISODE_NOT_OPEN:
+    'Az ellátási epizód nem aktív (lezárt vagy szüneteltetett), ezért az automatikus stádiumváltás elmaradt. Az időpont kimenetele mentve.',
+  INVALID_STAGE_FOR_EPISODE:
+    'A célstádium nem szerepel az epizód stádiumkatalógusában, ezért az automatikus stádiumváltás elmaradt. Az időpont kimenetele mentve.',
+};
+
+function skippedResult(
+  code: string,
+  source: AppointmentStageTransitionResult['source'],
+): AppointmentStageTransitionResult {
+  return {
+    requested: true,
+    changed: false,
+    stageCode: null,
+    stageLabel: null,
+    at: null,
+    source,
+    message: SKIPPED_STAGE_MESSAGES[code] ?? 'Az automatikus stádiumváltás elmaradt. Az időpont kimenetele mentve.',
+    skipped: true,
+    skippedCode: code,
+  };
+}
+
+/**
  * Az időpont kimeneteléhez kötött stádiumváltás tranzakciós része.
  *
  * - átadás esemény vagy átadás munkafázis → STAGE_6;
@@ -49,10 +88,20 @@ export function parseAppointmentClinicalEvent(value: unknown): AppointmentClinic
  * - az esemény klinikai időpontja az appointment tényleges kezdete;
  * - idempotens: azonos stádiumot nem szúr be újra;
  * - átadás nem léptet vissza STAGE_7-ből STAGE_6-ba.
+ *
+ * Hibakezelés — KÉT külön eset:
+ *  • KÉRT váltás (a felhasználó választott célstádiumot vagy klinikai eseményt):
+ *    az akadály hibát dob, a hívó tranzakció visszagördül. A felhasználó
+ *    tudatosan kért valamit, amit nem lehet végrehajtani.
+ *  • SZÁRMAZTATOTT váltás (csak a munkafázis `step_code`-jából jön, pl.
+ *    „delivery”): az akadály NEM dob. Az időpont-kimenetel rögzítése (státusz +
+ *    „mi történt?”) sosem hiúsulhat meg egy stádium-könyvelési akadály miatt —
+ *    a stádium marad, a válasz `skipped` + `message` mezője jelzi az esetet.
  */
 export async function applyAppointmentStageTransition(
   args: ApplyAppointmentStageTransitionArgs,
 ): Promise<AppointmentStageTransitionResult> {
+  const explicit = args.clinicalEvent === 'delivery' || !!args.requestedStageCode;
   const delivery = args.clinicalEvent === 'delivery' || isDeliveryStepCode(args.appointmentStepCode);
   const targetStageCode = delivery ? 'STAGE_6' : args.requestedStageCode;
   const source: AppointmentStageTransitionResult['source'] = delivery
@@ -60,6 +109,12 @@ export async function applyAppointmentStageTransition(
     : targetStageCode
       ? 'manual'
       : null;
+
+  // Akadály: kért váltásnál hiba, származtatottnál csendes kihagyás.
+  const fail = (code: string): AppointmentStageTransitionResult => {
+    if (explicit) throw new Error(code);
+    return skippedResult(code, source);
+  };
 
   if (!targetStageCode) {
     return {
@@ -70,12 +125,12 @@ export async function applyAppointmentStageTransition(
       at: null,
       source: null,
       message: null,
+      skipped: false,
+      skippedCode: null,
     };
   }
 
-  if (!args.episodeId) {
-    throw new Error('STAGE_TRANSITION_REQUIRES_EPISODE');
-  }
+  if (!args.episodeId) return fail('STAGE_TRANSITION_REQUIRES_EPISODE');
 
   const episodeResult = await args.client.query(
     `SELECT id, patient_id, reason, status
@@ -84,10 +139,10 @@ export async function applyAppointmentStageTransition(
       FOR UPDATE`,
     [args.episodeId],
   );
-  if (episodeResult.rows.length === 0) throw new Error('STAGE_EPISODE_NOT_FOUND');
+  if (episodeResult.rows.length === 0) return fail('STAGE_EPISODE_NOT_FOUND');
 
   const episode = episodeResult.rows[0];
-  if (episode.status !== 'open') throw new Error('STAGE_EPISODE_NOT_OPEN');
+  if (episode.status !== 'open') return fail('STAGE_EPISODE_NOT_OPEN');
 
   const targetCatalog = await args.client.query(
     `SELECT code, label_hu, order_index
@@ -95,7 +150,7 @@ export async function applyAppointmentStageTransition(
       WHERE code = $1 AND reason = $2`,
     [targetStageCode, episode.reason],
   );
-  if (targetCatalog.rows.length === 0) throw new Error('INVALID_STAGE_FOR_EPISODE');
+  if (targetCatalog.rows.length === 0) return fail('INVALID_STAGE_FOR_EPISODE');
 
   const target = targetCatalog.rows[0] as { code: string; label_hu: string; order_index: number };
   const currentResult = await args.client.query(
@@ -120,6 +175,8 @@ export async function applyAppointmentStageTransition(
       at: current.at?.toISOString?.() ?? args.appointmentAt.toISOString(),
       source,
       message: `A stádium már „${target.label_hu}”, ezért nem jött létre duplikált bejegyzés.`,
+      skipped: false,
+      skippedCode: null,
     };
   }
 
@@ -136,6 +193,8 @@ export async function applyAppointmentStageTransition(
       at: current.at?.toISOString?.() ?? null,
       source,
       message: `A beteg már az átadást követő „${current.label_hu ?? current.stage_code}” stádiumban van; visszaléptetés nem történt.`,
+      skipped: false,
+      skippedCode: null,
     };
   }
 
@@ -168,5 +227,7 @@ export async function applyAppointmentStageTransition(
     message: delivery
       ? `Az átadás rögzítve; a stádium automatikusan „${target.label_hu}” állapotra váltott.`
       : `A stádium „${target.label_hu}” állapotra váltott.`,
+    skipped: false,
+    skippedCode: null,
   };
 }

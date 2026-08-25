@@ -21,6 +21,7 @@
     "preview:admin-digest": "tsx scripts/preview-admin-digest.ts",
     "test:watch": "vitest",
     "diagnose:ohip-reminder": "tsx scripts/diagnose-ohip-reminder.ts",
+    "diagnose:appointment-outcome": "tsx scripts/diagnose-appointment-outcome.ts",
     "sim:scenarios": "tsx scripts/sim/treatment-plan-scenarios.ts",
     "sim:edge": "tsx scripts/sim/edge-cases.ts",
     "sim:shots": "node scripts/sim/screenshots.mjs",

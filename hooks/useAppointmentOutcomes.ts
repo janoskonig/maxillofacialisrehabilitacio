@@ -36,6 +36,13 @@ export interface OutcomeAppointment {
   stageOptions?: Array<{ code: string; labelHu: string; orderIndex: number }>;
 }
 
+/** Mentés utáni stádium-visszajelzés egy időpontsoron. */
+export interface StageNotice {
+  message: string;
+  /** true, ha a származtatott stádiumváltás elmaradt (figyelmeztetés, nem siker). */
+  skipped: boolean;
+}
+
 export interface StatusForm {
   appointmentStatus: 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show' | null;
   completionNotes: string;
@@ -64,7 +71,7 @@ export function useAppointmentOutcomes(initial: OutcomeAppointment[], onUpdate?:
   const [retryReason, setRetryReason] = useState('');
   const [retrySaving, setRetrySaving] = useState(false);
   const [statusForm, setStatusForm] = useState<StatusForm>(EMPTY_FORM);
-  const [stageNotices, setStageNotices] = useState<Record<string, string>>({});
+  const [stageNotices, setStageNotices] = useState<Record<string, StageNotice>>({});
 
   useEffect(() => {
     setAppointments(initial);
@@ -101,7 +108,12 @@ export function useAppointmentOutcomes(initial: OutcomeAppointment[], onUpdate?:
       isLate: appointment.isLate || false,
       appointmentType: appointment.appointmentType || '',
       typeLabel: appointment.typeLabel || '',
-      clinicalEvent: appointment.isDeliveryStep ? 'delivery' : '',
+      // Az átadás-munkafázisból következő stádiumváltást a szerver vezeti le a
+      // step_code-ból. Ha a kliens is „delivery”-t küldene, a szerver KÉRT
+      // váltásként kezelné, és egy stádium-akadály (nincs epizód / lezárt epizód)
+      // az egész kimenetel-mentést visszagördítené. Csak azt küldjük, amit a
+      // felhasználó tényleg kiválasztott.
+      clinicalEvent: '',
       stageCode: '',
     });
   }, []);
@@ -160,7 +172,13 @@ export function useAppointmentOutcomes(initial: OutcomeAppointment[], onUpdate?:
       if (response.ok) {
         const data = await response.json();
         const stageTransition = data.stageTransition as
-          | { changed?: boolean; stageCode?: string | null; stageLabel?: string | null; message?: string | null }
+          | {
+              changed?: boolean;
+              skipped?: boolean;
+              stageCode?: string | null;
+              stageLabel?: string | null;
+              message?: string | null;
+            }
           | null
           | undefined;
         setAppointments((prev) => prev.map((apt) =>
@@ -186,7 +204,10 @@ export function useAppointmentOutcomes(initial: OutcomeAppointment[], onUpdate?:
             : apt,
         ));
         if (stageTransition?.message) {
-          setStageNotices((prev) => ({ ...prev, [appointmentId]: stageTransition.message! }));
+          setStageNotices((prev) => ({
+            ...prev,
+            [appointmentId]: { message: stageTransition.message!, skipped: !!stageTransition.skipped },
+          }));
         } else {
           setStageNotices((prev) => {
             const next = { ...prev };
