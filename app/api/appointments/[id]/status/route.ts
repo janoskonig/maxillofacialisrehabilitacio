@@ -122,6 +122,7 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
               episode_id         AS "episodeId",
               step_code          AS "stepCode",
               work_phase_id      AS "workPhaseId",
+              appointment_type   AS "appointmentType",
               COALESCE(start_time, created_at) AS "appointmentAt"
        FROM appointments WHERE id = $1 FOR UPDATE`,
       [appointmentId]
@@ -187,7 +188,12 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
           );
         }
       }
-      if (appointmentType !== 'recall') {
+      // A recall-zár CSAK tényleges típusváltásnál szólal meg. Korábban minden
+      // mentésnél lefutott (a kimenetel-űrlap a változatlan típust is elküldi),
+      // így egy recall-időpont „mi történt?” rögzítése 409-cel elhasalt.
+      const currentType: string | null = apptBefore.appointmentType ?? null;
+      const nextType: string | null = appointmentType || null;
+      if (nextType !== currentType && nextType !== 'recall') {
         const linkedRecall = await client.query(
           `SELECT 1
              FROM episode_tasks
@@ -377,6 +383,16 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
       }
     }
 
+
+    // A származtatott (munkafázisból jövő) stádiumváltás akadálya nem hiba: a
+    // kimenetel mentve van, de a jelenséget látni akarjuk a logban.
+    if (stageTransition?.skipped) {
+      logger.warn('[appointment-status] Származtatott stádiumváltás kihagyva — az időpont kimenetele mentve', {
+        appointmentId,
+        episodeId: episodeIdForStage,
+        skippedCode: stageTransition.skippedCode,
+      });
+    }
 
     if (stageTransition?.changed && episodeIdForStage) {
       try {

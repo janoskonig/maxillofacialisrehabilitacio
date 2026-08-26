@@ -132,9 +132,19 @@ export function AppointmentOutcomeRow({ appointment, c }: Props) {
           )}
 
           {!isEditing && !isRetrying && stageNotice && (
-            <div className="mt-1.5 flex items-start gap-1.5 rounded-md border border-emerald-200 bg-emerald-50 px-2 py-1.5 text-xs font-medium text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200">
-              <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
-              <span>{stageNotice}</span>
+            <div
+              className={`mt-1.5 flex items-start gap-1.5 rounded-md border px-2 py-1.5 text-xs font-medium ${
+                stageNotice.skipped
+                  ? 'border-amber-200 bg-amber-50 text-amber-800 dark:border-amber-800 dark:bg-amber-950/40 dark:text-amber-200'
+                  : 'border-emerald-200 bg-emerald-50 text-emerald-800 dark:border-emerald-800 dark:bg-emerald-950/40 dark:text-emerald-200'
+              }`}
+            >
+              {stageNotice.skipped ? (
+                <AlertCircle className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              ) : (
+                <CheckCircle2 className="mt-0.5 h-3.5 w-3.5 shrink-0" />
+              )}
+              <span>{stageNotice.message}</span>
             </div>
           )}
 
@@ -220,8 +230,10 @@ export function AppointmentOutcomeRow({ appointment, c }: Props) {
                       ...c.statusForm,
                       appointmentStatus: value as any,
                       completionNotes: value === 'completed' ? c.statusForm.completionNotes : '',
-                      clinicalEvent:
-                        value === 'completed' && appointment.isDeliveryStep ? 'delivery' : '',
+                      // Az átadás-fázisból jövő stádiumváltás szerveroldali
+                      // származtatás (step_code) — a kliens csak azt küldi, amit
+                      // a felhasználó kifejezetten kiválasztott.
+                      clinicalEvent: '',
                       stageCode: '',
                     });
                   }}

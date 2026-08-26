@@ -115,3 +115,124 @@ describe('appointment stage transition', () => {
     expect(result).toMatchObject({ changed: true, stageCode: 'STAGE_4', source: 'manual' });
   });
 });
+
+describe('a kimenetel mentése sosem hiúsul meg származtatott stádiumváltás miatt', () => {
+  it('átadás-munkafázis epizód nélkül: kihagyás, nem hiba', async () => {
+    const { client, query } = fakeClient([]);
+
+    const result = await applyAppointmentStageTransition({
+      client,
+      appointmentId: 'appointment-3',
+      episodeId: null,
+      appointmentAt: new Date('2026-08-25T09:00:00+02:00'),
+      appointmentStepCode: 'delivery',
+      clinicalEvent: null,
+      requestedStageCode: null,
+      changedBy: 'doctor@example.com',
+    });
+
+    expect(result).toMatchObject({
+      changed: false,
+      skipped: true,
+      skippedCode: 'STAGE_TRANSITION_REQUIRES_EPISODE',
+      source: 'delivery',
+    });
+    expect(result.message).toContain('Az időpont kimenetele mentve');
+    expect(query).not.toHaveBeenCalled();
+  });
+
+  it('átadás-munkafázis lezárt epizódon: kihagyás, nem hiba', async () => {
+    const { client } = fakeClient([
+      [{ id: 'episode-1', patient_id: 'patient-1', reason: 'traumás sérülés', status: 'closed' }],
+    ]);
+
+    const result = await applyAppointmentStageTransition({
+      client,
+      appointmentId: 'appointment-4',
+      episodeId: 'episode-1',
+      appointmentAt: new Date('2026-08-25T09:00:00+02:00'),
+      appointmentStepCode: 'felso_atadas',
+      clinicalEvent: null,
+      requestedStageCode: null,
+      changedBy: 'doctor@example.com',
+    });
+
+    expect(result).toMatchObject({ changed: false, skipped: true, skippedCode: 'STAGE_EPISODE_NOT_OPEN' });
+  });
+
+  it('hiányzó katalógus-sor esetén is csak kihagy', async () => {
+    const { client } = fakeClient([
+      [{ id: 'episode-1', patient_id: 'patient-1', reason: 'traumás sérülés', status: 'open' }],
+      [],
+    ]);
+
+    const result = await applyAppointmentStageTransition({
+      client,
+      appointmentId: 'appointment-5',
+      episodeId: 'episode-1',
+      appointmentAt: new Date('2026-08-25T09:00:00+02:00'),
+      appointmentStepCode: 'atadas',
+      clinicalEvent: null,
+      requestedStageCode: null,
+      changedBy: 'doctor@example.com',
+    });
+
+    expect(result).toMatchObject({ changed: false, skipped: true, skippedCode: 'INVALID_STAGE_FOR_EPISODE' });
+  });
+
+  it('a felhasználó által KÉRT váltás továbbra is hibát dob (nem néma)', async () => {
+    const notOpen = fakeClient([
+      [{ id: 'episode-1', patient_id: 'patient-1', reason: 'traumás sérülés', status: 'paused' }],
+    ]);
+    await expect(
+      applyAppointmentStageTransition({
+        client: notOpen.client,
+        appointmentId: 'appointment-6',
+        episodeId: 'episode-1',
+        appointmentAt: new Date('2026-08-25T09:00:00+02:00'),
+        appointmentStepCode: 'tryin',
+        clinicalEvent: null,
+        requestedStageCode: 'STAGE_4',
+        changedBy: 'doctor@example.com',
+      }),
+    ).rejects.toThrow('STAGE_EPISODE_NOT_OPEN');
+
+    const noEpisode = fakeClient([]);
+    await expect(
+      applyAppointmentStageTransition({
+        client: noEpisode.client,
+        appointmentId: 'appointment-7',
+        episodeId: null,
+        appointmentAt: new Date('2026-08-25T09:00:00+02:00'),
+        appointmentStepCode: 'tryin',
+        clinicalEvent: 'delivery',
+        requestedStageCode: null,
+        changedBy: 'doctor@example.com',
+      }),
+    ).rejects.toThrow('STAGE_TRANSITION_REQUIRES_EPISODE');
+  });
+
+  it('sikeres váltásnál a skipped hamis marad', async () => {
+    const appointmentAt = new Date('2026-08-25T09:00:00+02:00');
+    const { client } = fakeClient([
+      [{ id: 'episode-1', patient_id: 'patient-1', reason: 'traumás sérülés', status: 'open' }],
+      [{ code: 'STAGE_6', label_hu: 'Átadás', order_index: 6 }],
+      [{ stage_code: 'STAGE_5', at: new Date('2026-05-01'), label_hu: 'Protetikai fázis', order_index: 5 }],
+      [],
+      [{ at: appointmentAt }],
+    ]);
+
+    const result = await applyAppointmentStageTransition({
+      client,
+      appointmentId: 'appointment-8',
+      episodeId: 'episode-1',
+      appointmentAt,
+      appointmentStepCode: 'delivery',
+      clinicalEvent: null,
+      requestedStageCode: null,
+      changedBy: 'doctor@example.com',
+    });
+
+    expect(result).toMatchObject({ changed: true, skipped: false, skippedCode: null });
+  });
+});
