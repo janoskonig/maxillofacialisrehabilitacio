@@ -52,7 +52,7 @@ export async function releaseWorkPhasesForDelete(
   //    jövőbeli) párosítás fogja meg — ugyanaz a szemantika, mint a
   //    "Mégsem kész" ág appointment-lemondásánál.
   const appts = await client.query(
-    `SELECT a.id, a.time_slot_id
+    `SELECT a.id, a.time_slot_id, a.slot_intent_id
        FROM appointments a
       WHERE a.episode_id = $1
         AND ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}
@@ -67,15 +67,33 @@ export async function releaseWorkPhasesForDelete(
     [episodeId, phaseIds, stepCodes]
   );
 
-  for (const ap of appts.rows as Array<{ id: string; time_slot_id: string | null }>) {
+  for (const ap of appts.rows as Array<{
+    id: string;
+    time_slot_id: string | null;
+    slot_intent_id: string | null;
+  }>) {
+    // WP-0.4 (kódaudit #03): a lemondott sor a slot_intent linket is elengedi,
+    // hogy a halott appointment ne birtokolja tovább az intentet
+    // (idx_appointments_unique_slot_intent).
     await client.query(
-      `UPDATE appointments SET appointment_status = 'cancelled_by_doctor' WHERE id = $1`,
+      `UPDATE appointments SET appointment_status = 'cancelled_by_doctor', slot_intent_id = NULL WHERE id = $1`,
       [ap.id]
     );
     if (ap.time_slot_id) {
       await client.query(
         `UPDATE available_time_slots SET state = 'free', status = 'available' WHERE id = $1`,
         [ap.time_slot_id]
+      );
+    }
+    // A lemondott foglaláshoz tartozó konvertált intent lejáratása — ugyanaz,
+    // mint a skip ágon (work-phases/[workPhaseId] route) és a lemondási
+    // ágakon; e nélkül a 'converted' intent egy lemondott appointmentre
+    // (mostantól: a semmire) mutatna tovább.
+    if (ap.slot_intent_id) {
+      await client.query(
+        `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP
+         WHERE id = $1 AND state = 'converted'`,
+        [ap.slot_intent_id]
       );
     }
   }

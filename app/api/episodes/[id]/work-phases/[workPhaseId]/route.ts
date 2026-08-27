@@ -419,8 +419,12 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
           time_slot_id: string | null;
           slot_intent_id: string | null;
         }>) {
+          // WP-0.4 (kódaudit #03): a lemondott sor a slot_intent linket is
+          // elengedi, hogy a halott appointment ne birtokolja tovább az
+          // intentet (idx_appointments_unique_slot_intent). Az intent
+          // lejáratása lentebb a már kiolvasott `ap.slot_intent_id`-vel megy.
           await client.query(
-            `UPDATE appointments SET appointment_status = 'cancelled_by_doctor' WHERE id = $1`,
+            `UPDATE appointments SET appointment_status = 'cancelled_by_doctor', slot_intent_id = NULL WHERE id = $1`,
             [ap.id]
           );
           if (ap.time_slot_id) {
