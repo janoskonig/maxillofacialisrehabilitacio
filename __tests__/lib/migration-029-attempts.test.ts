@@ -1,13 +1,18 @@
 /**
  * Source-level pinning test for migration 029
- * (`database/migrations/029_appointment_attempts.sql`).
+ * (`database/migrations/029_appointment_attempts.sql`) and for the EFFECTIVE
+ * state of `idx_appointments_unique_work_phase_active`, which migration 059
+ * (`database/migrations/059_no_show_releases_work_phase.sql`) later rebuilt.
  *
- * The migration:
+ * Migration 029:
  *   1. Adds the `attempt_*` columns (with sane defaults / nullables).
  *   2. Extends the canonical `appointment_status` CHECK constraint to include
  *      the new `'unsuccessful'` value (idempotent, drops legacy duplicates).
  *   3. Rebuilds `idx_appointments_unique_work_phase_active` so that
  *      `'unsuccessful'` releases the work-phase slot (alongside cancelled).
+ *      NOTE: 029's version still treated `no_show` as ACTIVE — that was a bug
+ *      (a no_show appointment blocked rebooking the same work phase), fixed by
+ *      migration 059, which rebuilt the index to also exclude `no_show`.
  *   4. Adds an index for fast attempt-history queries.
  *   5. Backfills `attempt_number = 1` for existing rows.
  *
@@ -19,11 +24,18 @@
  */
 
 import { describe, it, expect } from 'vitest';
-import { readFileSync } from 'fs';
+import { readFileSync, readdirSync } from 'fs';
 import { join } from 'path';
 
+const MIGRATIONS_DIR = join(__dirname, '..', '..', 'database', 'migrations');
+
 const SQL = readFileSync(
-  join(__dirname, '..', '..', 'database', 'migrations', '029_appointment_attempts.sql'),
+  join(MIGRATIONS_DIR, '029_appointment_attempts.sql'),
+  'utf8'
+);
+
+const SQL_059 = readFileSync(
+  join(MIGRATIONS_DIR, '059_no_show_releases_work_phase.sql'),
   'utf8'
 );
 
@@ -85,10 +97,55 @@ describe('migration 029 — appointment attempts', () => {
     expect(where).toContain("'cancelled_by_doctor'");
     expect(where).toContain("'cancelled_by_patient'");
     expect(where).toContain("'unsuccessful'");
-    // It must NOT exclude 'no_show' or 'completed' — those remain "active"
-    // for the work_phase uniqueness check.
-    expect(where).not.toContain("'no_show'");
+    // 029's version did not yet exclude 'no_show' — that was the bug fixed by
+    // migration 059 (see the "effective index state" tests below). 'completed'
+    // must stay "active" for the work_phase uniqueness check in every version.
     expect(where).not.toContain("'completed'");
+  });
+
+  describe('effective index state (029 + 059)', () => {
+    it('migration 059 rebuilds the index so no_show ALSO releases the work phase', () => {
+      expect(SQL_059).toMatch(/DROP INDEX IF EXISTS idx_appointments_unique_work_phase_active/);
+      const idxMatch = SQL_059.match(
+        /CREATE UNIQUE INDEX idx_appointments_unique_work_phase_active[\s\S]*?WHERE([\s\S]*?)(?:\$sql\$|;)/
+      );
+      expect(idxMatch, '059 partial unique index definition missing').toBeTruthy();
+      const where = idxMatch![1];
+
+      // All four releasing statuses free the work phase for a new attempt.
+      // Mirrors STEP_RELEASING_APPOINTMENT_STATUSES in lib/active-appointment.ts
+      // (the work-phase-index-parity tests enforce that agreement).
+      for (const releasing of [
+        'cancelled_by_doctor',
+        'cancelled_by_patient',
+        'no_show',
+        'unsuccessful',
+      ]) {
+        expect(
+          where.includes(`'${releasing}'`),
+          `effective index must release the work phase on: ${releasing}`
+        ).toBe(true);
+      }
+
+      // NULL-status and 'completed' rows keep the work phase booked.
+      expect(where).toMatch(/appointment_status\s+IS\s+NULL/i);
+      expect(where).not.toContain("'completed'");
+      expect(where).toMatch(/work_phase_id\s+IS\s+NOT\s+NULL/i);
+    });
+
+    it('059 is the LAST tracked migration defining the index, so its predicate is the effective one', () => {
+      const defining = readdirSync(MIGRATIONS_DIR)
+        .filter((f) => f.endsWith('.sql'))
+        .filter((f) =>
+          readFileSync(join(MIGRATIONS_DIR, f), 'utf8').includes(
+            'CREATE UNIQUE INDEX idx_appointments_unique_work_phase_active'
+          )
+        )
+        .sort();
+      // If a later migration rebuilds this index, move the "effective state"
+      // assertions above onto that file (and keep the parity tests in sync).
+      expect(defining[defining.length - 1]).toBe('059_no_show_releases_work_phase.sql');
+    });
   });
 
   it('adds an index on (episode_id, step_code, attempt_number) for fast attempt-history lookup', () => {
