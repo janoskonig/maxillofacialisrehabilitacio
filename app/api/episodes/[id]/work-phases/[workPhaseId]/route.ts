@@ -9,7 +9,7 @@ import {
 } from '@/lib/episode-work-phase-select';
 import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 import { SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT } from '@/lib/active-appointment';
-import { releaseWorkPhasesForDelete } from '@/lib/work-phase-delete';
+import { insertWorkPhaseTombstones, releaseWorkPhasesForDelete } from '@/lib/work-phase-delete';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 
 export const dynamic = 'force-dynamic';
@@ -76,6 +76,12 @@ export const DELETE = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász
           ? `Manuálisan törölve (${released.cancelledAppointments} foglalás lemondva)`
           : 'Manuálisan törölve',
     });
+
+    // Törlés-tombstone (WP-0.7, kódaudit #01): a kulcs feljegyzése + a
+    // fog-fázis tooth_treatments sorának visszaállítása 'pending'-re, hogy a
+    // generate (sablon-őr / fog-szinkron) ne támassza fel a törölt sort.
+    // A DELETE ELŐTT kell futnia — az élő sorból olvassa a kulcsokat.
+    await insertWorkPhaseTombstones(client, episodeId, [workPhaseId], auth.email ?? auth.userId ?? 'unknown');
 
     await client.query(`DELETE FROM episode_work_phases WHERE id = $1`, [workPhaseId]);
 

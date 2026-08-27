@@ -1,6 +1,6 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { authedHandler } from '@/lib/api/route-handler';
+import { roleHandler } from '@/lib/api/route-handler';
 import { getFullWorkPhaseQuery } from '@/lib/episode-work-phase-select';
 import { generateEpisodeWorkPhases } from '@/lib/generate-episode-work-phases';
 
@@ -9,8 +9,12 @@ export const dynamic = 'force-dynamic';
 /**
  * POST /api/episodes/:id/work-phases/generate — idempotent episode_work_phases generation.
  * Logic lives in lib/generate-episode-work-phases.ts (shared with activation + backfill).
+ *
+ * WP-0.7: explicit írásra szánt művelet — az olvasás a GET .../work-phases.
+ * A testvér-route-okkal egyezően terv-mutációt csak a klinikai szerepek
+ * végezhetnek (a korábbi authedHandler technikusnak is engedte).
  */
-export const POST = authedHandler(async (_req, { params }) => {
+export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (_req, { params }) => {
   const episodeId = params.id;
   const pool = getDbPool();
 

@@ -1,10 +1,31 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { roleHandler } from '@/lib/api/route-handler';
+import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { getFullWorkPhaseQuery } from '@/lib/episode-work-phase-select';
 
 export const dynamic = 'force-dynamic';
+
+/**
+ * GET /api/episodes/:id/work-phases — a kezelési terv olvasása (WP-0.7).
+ *
+ * A terv-kártya (EpisodeStepsManager) korábban a mutáló POST .../generate-tel
+ * "olvasott" — a kártya megnyitása írhatott a DB-be, és a törölt fázisokat
+ * visszatette. Az olvasás mostantól ez a mellékhatás-mentes GET; a generate
+ * explicit, írásra szánt művelet maradt.
+ */
+export const GET = authedHandler(async (_req, { params }) => {
+  const episodeId = params.id;
+  const pool = getDbPool();
+
+  const epRow = await pool.query(`SELECT id FROM patient_episodes WHERE id = $1`, [episodeId]);
+  if (epRow.rows.length === 0) {
+    return NextResponse.json({ error: 'Epizód nem található' }, { status: 404 });
+  }
+
+  const allPhases = await getFullWorkPhaseQuery(pool, episodeId);
+  return NextResponse.json({ workPhases: allPhases.rows });
+});
 
 /**
  * POST /api/episodes/:id/work-phases — add a work phase (from catalog or ad-hoc).
