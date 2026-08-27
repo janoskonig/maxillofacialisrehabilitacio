@@ -28,6 +28,7 @@
 
 import type { Pool } from 'pg';
 import { normalizePathwayWorkPhaseArray } from './pathway-work-phases-for-episode';
+import { insertWorkPhaseAudit } from './work-phase-audit';
 
 export type GenerateWorkPhasesResult =
   | { status: 'ok'; totalGenerated: number }
@@ -35,15 +36,30 @@ export type GenerateWorkPhasesResult =
   | { status: 'not_open' }
   | { status: 'no_pathway' };
 
+export interface GenerateWorkPhasesOptions {
+  /**
+   * WP-2.1: ki alkalmazta a sablont — az audit sorok changed_by mezőjébe.
+   * A route a bejelentkezett felhasználót adja át; az aktiválás / backfill /
+   * sim hívásoknál a default 'system'.
+   */
+  changedBy?: string;
+}
+
 /**
  * Generate episode_work_phases for an episode from its care pathway(s) + linked tooth
  * treatments. Returns a structured result instead of throwing HTTP errors so callers
  * (route, activation, backfill) can decide how to react.
+ *
+ * WP-2.1: minden ténylegesen beszúrt fázis audit sort kap
+ * (change_type 'template_apply' a sablon-fázisokra, 'create' a fog-szinkron
+ * soraira) — az idempotens korai return-ök (őrök) nem írnak naplót.
  */
 export async function generateEpisodeWorkPhases(
   pool: Pool,
-  episodeId: string
+  episodeId: string,
+  options: GenerateWorkPhasesOptions = {}
 ): Promise<GenerateWorkPhasesResult> {
+  const changedBy = options.changedBy ?? 'system';
   const epRow = await pool.query(
     `SELECT pe.id, pe.patient_id, pe.care_pathway_id, pe.status
      FROM patient_episodes pe WHERE pe.id = $1`,
@@ -127,9 +143,10 @@ export async function generateEpisodeWorkPhases(
     for (const epPw of epPathways) {
       // A sablont az őr ELŐTT olvassuk: a legacy őrnek a fázis-kódok kellenek.
       const pathwayRow = await client.query(
-        `SELECT work_phases_json, steps_json FROM care_pathways WHERE id = $1`,
+        `SELECT name, work_phases_json, steps_json FROM care_pathways WHERE id = $1`,
         [epPw.care_pathway_id]
       );
+      const pathwayName: string | null = pathwayRow.rows[0]?.name ?? null;
       const templates =
         normalizePathwayWorkPhaseArray(pathwayRow.rows[0]?.work_phases_json) ??
         normalizePathwayWorkPhaseArray(pathwayRow.rows[0]?.steps_json);
@@ -228,11 +245,25 @@ export async function generateEpisodeWorkPhases(
         pIdx += 8;
       }
 
-      await client.query(
+      const insertedPhases = await client.query(
         `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, source_episode_pathway_id, seq)
-         VALUES ${insertPlaceholders.join(', ')}`,
+         VALUES ${insertPlaceholders.join(', ')}
+         RETURNING id`,
         insertValues
       );
+
+      // WP-2.1: fázisonkénti audit sor a ténylegesen beszúrt sablon-fázisokra.
+      for (const inserted of insertedPhases.rows as Array<{ id: string }>) {
+        await insertWorkPhaseAudit(client, {
+          episodeWorkPhaseId: inserted.id,
+          episodeId,
+          oldStatus: null,
+          newStatus: 'pending',
+          changedBy,
+          changeType: 'template_apply',
+          reason: `Sablon alkalmazása: ${pathwayName ?? epPw.care_pathway_id}`,
+        });
+      }
 
       nextSeq += templates.length;
       totalGenerated += templates.length;
@@ -267,11 +298,23 @@ export async function generateEpisodeWorkPhases(
           [episodeId]
         );
         const nextIdx = (maxIdxRow.rows[0].max_idx ?? -1) + 1;
-        await client.query(
+        const insertedTooth = await client.query(
           `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, tooth_treatment_id, custom_label)
-           VALUES ($1, $2, $3, 'work', 30, 7, $4, $5, $6)`,
+           VALUES ($1, $2, $3, 'work', 30, 7, $4, $5, $6)
+           RETURNING id`,
           [episodeId, workPhaseCode, nextIdx, nextSeq, row.id, customLabel]
         );
+        // WP-2.1: a fog-szinkron által létrehozott fázis is naplózódik —
+        // change_type 'create' (nem sablonból jön), a reason jelzi a forrást.
+        await insertWorkPhaseAudit(client, {
+          episodeWorkPhaseId: insertedTooth.rows[0].id,
+          episodeId,
+          oldStatus: null,
+          newStatus: 'pending',
+          changedBy,
+          changeType: 'create',
+          reason: `Fogkezelés-szinkron (generate): ${customLabel}`,
+        });
         nextSeq += 1;
         totalGenerated += 1;
       }

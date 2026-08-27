@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { getFullWorkPhaseQuery } from '@/lib/episode-work-phase-select';
+import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,15 +29,48 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     return NextResponse.json({ error: 'Csak aktív epizód munkafázisai bonthatók szét' }, { status: 400 });
   }
 
-  const updated = await pool.query(
-    `UPDATE episode_work_phases SET merged_into_episode_work_phase_id = NULL
-     WHERE merged_into_episode_work_phase_id = $1 AND episode_id = $2
-     RETURNING id`,
-    [workPhaseId, episodeId]
-  );
+  // A szétbontás és a 'unmerge' audit sorok (WP-2.1) EGY tranzakcióban,
+  // hogy a napló ne maradhasson le a mutációról.
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
 
-  if (updated.rows.length === 0) {
-    return NextResponse.json({ error: 'Nincs összevont munkafázis ehhez a fő munkafázishoz' }, { status: 404 });
+    const primaryRow = await client.query(
+      `SELECT work_phase_code FROM episode_work_phases WHERE id = $1 AND episode_id = $2`,
+      [workPhaseId, episodeId]
+    );
+    const primaryCode: string = primaryRow.rows[0]?.work_phase_code ?? workPhaseId;
+
+    const updated = await client.query(
+      `UPDATE episode_work_phases SET merged_into_episode_work_phase_id = NULL
+       WHERE merged_into_episode_work_phase_id = $1 AND episode_id = $2
+       RETURNING id, status`,
+      [workPhaseId, episodeId]
+    );
+
+    if (updated.rows.length === 0) {
+      await client.query('ROLLBACK');
+      return NextResponse.json({ error: 'Nincs összevont munkafázis ehhez a fő munkafázishoz' }, { status: 404 });
+    }
+
+    for (const row of updated.rows as Array<{ id: string; status: string }>) {
+      await insertWorkPhaseAudit(client, {
+        episodeWorkPhaseId: row.id,
+        episodeId,
+        oldStatus: row.status,
+        newStatus: row.status,
+        changedBy: auth.email ?? auth.userId ?? 'unknown',
+        changeType: 'unmerge',
+        reason: `Szétbontva a(z) ${primaryCode} fázis alól`,
+      });
+    }
+
+    await client.query('COMMIT');
+  } catch (txError) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw txError;
+  } finally {
+    client.release();
   }
 
   try {

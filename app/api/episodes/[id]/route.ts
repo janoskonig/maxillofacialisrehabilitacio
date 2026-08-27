@@ -480,6 +480,8 @@ async function handleRemovePathway(
         oldStatus: ph.status,
         newStatus: 'deleted',
         changedBy,
+        // WP-2.1: a sablon-eltávolítás megkülönböztethető a kézi törléstől.
+        changeType: 'template_remove',
         reason: force
           ? 'Sablon force-eltávolítása az epizódról (foglalt/teljesített fázisokkal együtt, a foglalások lemondásra kerültek)'
           : 'Sablon eltávolítása az epizódról',

@@ -6,6 +6,7 @@ import { HttpError } from '@/lib/auth-server';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { logger } from '@/lib/logger';
 import { getFullWorkPhaseQuery } from '@/lib/episode-work-phase-select';
+import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -64,10 +65,16 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     // A tranzakción belül olvasunk, hogy a seq-átírás ugyanarra az állapotra
     // épüljön, amit itt validálunk.
     const verification = await client.query(
-      `SELECT id, merged_into_episode_work_phase_id FROM episode_work_phases WHERE episode_id = $1`,
+      `SELECT id, work_phase_code, merged_into_episode_work_phase_id
+       FROM episode_work_phases WHERE episode_id = $1
+       ORDER BY COALESCE(seq, pathway_order_index)`,
       [episodeId]
     );
-    const allRows: Array<{ id: string; merged_into_episode_work_phase_id: string | null }> = verification.rows;
+    const allRows: Array<{
+      id: string;
+      work_phase_code: string;
+      merged_into_episode_work_phase_id: string | null;
+    }> = verification.rows;
     const existingIds = new Set(allRows.map((r) => r.id));
     const mergedIds = new Set(allRows.filter((r) => r.merged_into_episode_work_phase_id).map((r) => r.id));
 
@@ -112,6 +119,37 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
            AND child.episode_id = $1`,
         [episodeId]
       );
+    }
+
+    // WP-2.1: az átrendezés EGY összefoglaló audit sort kap epizódonként
+    // (fázisonkénti sor túl zajos lenne) — episode_work_phase_id NULL,
+    // change_type 'reorder', a reason a ténylegesen elmozdult fázis(ok)
+    // kódjával. No-op átrendezés (változatlan sorrend) nem termel sort.
+    {
+      const oldPrimaryOrder = allRows
+        .filter((r) => !r.merged_into_episode_work_phase_id)
+        .map((r) => r.id);
+      const newPrimaryOrder = [...stepIds, ...missingPrimaryIds];
+      const oldPos = new Map(oldPrimaryOrder.map((id, i) => [id, i]));
+      const codeById = new Map(allRows.map((r) => [r.id, r.work_phase_code]));
+      const movedCodes = Array.from(
+        new Set(
+          newPrimaryOrder
+            .filter((id: string, i: number) => oldPos.get(id) !== i)
+            .map((id: string) => codeById.get(id) ?? id)
+        )
+      );
+      if (movedCodes.length > 0) {
+        await insertWorkPhaseAudit(client, {
+          episodeWorkPhaseId: null,
+          episodeId,
+          oldStatus: null,
+          newStatus: null,
+          changedBy: auth.email ?? auth.userId ?? 'unknown',
+          changeType: 'reorder',
+          reason: `Terv átrendezve — mozgatott fázis(ok): ${movedCodes.join(', ')}`,
+        });
+      }
     }
 
     // 2. Appointment-stays-step-shifts: reassign future appointments if the
