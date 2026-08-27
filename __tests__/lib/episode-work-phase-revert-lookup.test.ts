@@ -64,6 +64,7 @@ describe('episode-work-phase-revert-lookup — source invariants', () => {
     expect(SRC).toMatch(
       /UPDATE episode_work_phases\s+SET status = 'pending', appointment_id = NULL/
     );
-    expect(SRC).toMatch(/INSERT INTO episode_work_phase_audit/);
+    // WP-0.3 óta a közös helper írja az auditot (snapshot oszlopokkal).
+    expect(SRC).toMatch(/insertWorkPhaseAudit/);
   });
 });

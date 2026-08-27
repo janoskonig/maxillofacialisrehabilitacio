@@ -9,6 +9,7 @@ import {
   SQL_APPOINTMENT_VISIBLE_STATUS_FRAGMENT,
   isAppointmentActive,
 } from '@/lib/active-appointment';
+import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -360,19 +361,14 @@ export const POST = roleHandler(
         );
 
         if (current.status === 'scheduled') {
-          await client.query(
-            `INSERT INTO episode_work_phase_audit
-               (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [
-              row.workPhaseId,
-              episodeId,
-              'scheduled',
-              'pending',
-              changedBy,
-              `integrity repair: dangling appointment_id takarítása (mutatott: ${row.appointmentId}, status: ${row.appointmentMissing ? 'MISSING' : (row.appointmentStatus ?? 'NULL')})${reasonSuffix}`,
-            ]
-          );
+          await insertWorkPhaseAudit(client, {
+            episodeWorkPhaseId: row.workPhaseId,
+            episodeId,
+            oldStatus: 'scheduled',
+            newStatus: 'pending',
+            changedBy,
+            reason: `integrity repair: dangling appointment_id takarítása (mutatott: ${row.appointmentId}, status: ${row.appointmentMissing ? 'MISSING' : (row.appointmentStatus ?? 'NULL')})${reasonSuffix}`,
+          });
         }
       }
 

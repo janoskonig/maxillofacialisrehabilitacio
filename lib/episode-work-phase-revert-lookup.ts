@@ -22,6 +22,7 @@
 
 import type { PoolClient } from 'pg';
 import { getMergedFilterFragment } from './schema-probe';
+import { insertWorkPhaseAudit } from './work-phase-audit';
 
 export interface EwpForRevert {
   id: string;
@@ -146,10 +147,12 @@ export async function revertWorkPhaseLinkToPending(
      WHERE id = $1`,
     [ewpId]
   );
-  await client.query(
-    `INSERT INTO episode_work_phase_audit
-       (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
-     VALUES ($1, $2, $3, $4, $5, $6)`,
-    [ewpId, episodeId, oldEwpStatus, 'pending', changedBy, reasonText]
-  );
+  await insertWorkPhaseAudit(client, {
+    episodeWorkPhaseId: ewpId,
+    episodeId,
+    oldStatus: oldEwpStatus,
+    newStatus: 'pending',
+    changedBy,
+    reason: reasonText,
+  });
 }
