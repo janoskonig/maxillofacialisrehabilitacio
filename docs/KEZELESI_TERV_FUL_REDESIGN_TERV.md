@@ -25,7 +25,7 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 | WP-0.5 reorder SAVEPOINT | ✅ | [#62](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/62) | Review-javítás: epizód-státusz kapu a tranzakción belül (FOR SHARE) |
 | WP-0.6 köteg EWP-link | ✅ | [#64](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/64) | Konverzió tranzakción belül írja az EWP appointment_id/status-t |
 | WP-0.7 GET + tombstone (086) | ✅ | [#66](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/66) | GET route + roleHandler a generate-en; tombstone KÜLÖN táblával (nem deleted_at — indoklás a PR-ban); review 2 majorja javítva perzisztens őrökkel, piros-ellenőrzéssel |
-| WP-0.8 kis javítások (#08/#09/#11/#13) | ⬜ | — | |
+| WP-0.8 kis javítások (#08/#09/#11/#13) | ✅ | [#68](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/68) | + a 3 release-hézag (Mégsem kész ág, betegportál-lemondás, hold-lejárat); review-javítás: flag-olvasás tranzakción kívül, index-hű #08 szonda, #13 sorrend-őr. **Ezzel a FÁZIS 0 teljes.** |
 | WP-0.9 pinning-teszt | ✅ | [#59](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/59) | A 029+059 együttes (hatályos) állapotot pinneli; index-őr regexek toleránsak |
 | WP-1.1 validáció-zajcsökkentés | ⬜ | — | |
 | WP-1.2 integritás kivezetés | ⬜ | — | |
