@@ -35,7 +35,7 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 | WP-2.2 napló endpoint + UI | ⬜ | — | |
 | WP-3.1 recall séma (088) | ✅ | [#72](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/72) | CHECK feloldva, source/label/created_by, epizód-szintű recall_risk_level; deploy-kötés: a 088 a kód ELŐTT fusson (kétirányú törés) |
 | WP-3.2 recall szolgáltatásréteg | ✅ | [#72](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/72) | Pure kadencia-katalógus (SZÁMOK JÓVÁHAGYÁSRA VÁRNAK); horgony = utolsó teljesült kezelés; STAGE_6 mint generálási KAPU megmaradt — NYITOTT KÉRDÉS a lazítása; kézi sorokat az auto sosem írja felül |
-| WP-3.3 Gondozás kártya | ⬜ | — | |
+| WP-3.3 Gondozás kártya | ✅ | [#73](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/73) | Rizikó-választó + egy időrendi lista + kézi felvétel + törlés-AJÁNLAT (új, őrzött DELETE végpont); FONTOS: a kadencia-számok élesítése az orvos per-epizód választásán múlik, a számok jóváhagyása NYITOTT. **Ezzel a FÁZIS 3 teljes.** |
 | FÁZIS 4 (puzzle) | ⏸ | — | Külön jóváhagyás kell, nem indul enélkül |
 
 ---
