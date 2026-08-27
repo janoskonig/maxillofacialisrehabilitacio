@@ -117,7 +117,13 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
 
   if (body.action === 'addPathway') {
     const jaw = body.jaw && ['felso', 'also'].includes(body.jaw) ? body.jaw : null;
-    return await handleAddPathway(pool, episodeId, body.carePathwayId, jaw);
+    return await handleAddPathway(
+      pool,
+      episodeId,
+      body.carePathwayId,
+      jaw,
+      auth.email ?? auth.userId ?? 'unknown'
+    );
   }
   if (body.action === 'removePathway') {
     return await handleRemovePathway(
@@ -267,7 +273,8 @@ async function handleAddPathway(
   pool: Awaited<ReturnType<typeof getDbPool>>,
   episodeId: string,
   carePathwayId: unknown,
-  jaw: 'felso' | 'also' | null
+  jaw: 'felso' | 'also' | null,
+  changedBy = 'unknown'
 ) {
   if (!carePathwayId || typeof carePathwayId !== 'string') {
     return NextResponse.json({ error: 'carePathwayId kötelező (string UUID)' }, { status: 400 });
@@ -357,11 +364,28 @@ async function handleAddPathway(
         pIdx += 8;
       }
 
-      await client.query(
+      const insertedPhases = await client.query(
         `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, source_episode_pathway_id, seq)
-         VALUES ${insertPlaceholders.join(', ')}`,
+         VALUES ${insertPlaceholders.join(', ')}
+         RETURNING id`,
         insertValues
       );
+
+      // WP-2.1 (review MAJOR): a sablon-alkalmazás elsődleges UI-útja is
+      // fázisonkénti template_apply audit sort ír — a generate-tel azonos
+      // mintával, a mutációval EGY tranzakcióban.
+      const pathwayName: string | null = pw.rows[0]?.name ?? null;
+      for (const inserted of insertedPhases.rows as Array<{ id: string }>) {
+        await insertWorkPhaseAudit(client, {
+          episodeWorkPhaseId: inserted.id,
+          episodeId,
+          oldStatus: null,
+          newStatus: 'pending',
+          changedBy,
+          changeType: 'template_apply',
+          reason: `Sablon alkalmazása: ${pathwayName ?? carePathwayId}`,
+        });
+      }
     }
 
     await client.query('COMMIT');

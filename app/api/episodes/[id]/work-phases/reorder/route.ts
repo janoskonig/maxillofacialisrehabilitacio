@@ -64,10 +64,14 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     // Fetch all steps; separate primary (not merged) from merged-into.
     // A tranzakción belül olvasunk, hogy a seq-átírás ugyanarra az állapotra
     // épüljön, amit itt validálunk.
+    // Az `, id` tiebreaker determinisztikussá teszi a "régi sorrendet":
+    // unmerge után több sor osztozhat ugyanazon a seq-en, és tiebreaker nélkül
+    // az azonos seq-ű sorok cseréje no-opnak minősülhetne (kimaradó audit sor),
+    // vagy fantom "mozgatott" kód kerülhetne a reasonbe (review minor).
     const verification = await client.query(
       `SELECT id, work_phase_code, merged_into_episode_work_phase_id
        FROM episode_work_phases WHERE episode_id = $1
-       ORDER BY COALESCE(seq, pathway_order_index)`,
+       ORDER BY COALESCE(seq, pathway_order_index), id`,
       [episodeId]
     );
     const allRows: Array<{
@@ -239,7 +243,7 @@ async function shiftAppointmentsAfterReorder(
             merged_into_episode_work_phase_id as "mergedIntoId"
      FROM episode_work_phases
      WHERE episode_id = $1
-     ORDER BY COALESCE(seq, pathway_order_index) ASC`,
+     ORDER BY COALESCE(seq, pathway_order_index) ASC, id ASC`,
     [episodeId]
   );
   const steps: Array<{

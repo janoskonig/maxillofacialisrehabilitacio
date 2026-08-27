@@ -4,6 +4,7 @@ import { roleHandler } from '@/lib/api/route-handler';
 import { logActivity } from '@/lib/activity';
 import { logger } from '@/lib/logger';
 import { pathwayTemplatesFromCarePathwayRow } from '@/lib/pathway-work-phases-for-episode';
+import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -120,7 +121,7 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     let pathwayAssigned = false;
     if (tt.default_care_pathway_id) {
       const pathwayCheck = await client.query(
-        'SELECT id, work_phases_json, steps_json FROM care_pathways WHERE id = $1',
+        'SELECT id, name, work_phases_json, steps_json FROM care_pathways WHERE id = $1',
         [tt.default_care_pathway_id]
       );
       if (pathwayCheck.rows.length > 0) {
@@ -162,11 +163,13 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
                   [episodeId]
                 );
                 const nextSeq: number = (maxSeqRow.rows[0].max_seq ?? -1) + 1;
+                const pathwayName: string | null = pathwayCheck.rows[0]?.name ?? null;
                 for (let i = 0; i < phases.length; i++) {
                   const p = phases[i];
-                  await client.query(
+                  const insertedPhase = await client.query(
                     `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, seq, pool, duration_minutes, default_days_offset, status)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')`,
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+                     RETURNING id`,
                     [
                       episodeId,
                       p.work_phase_code,
@@ -177,6 +180,18 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
                       p.default_days_offset ?? 0,
                     ]
                   );
+                  // WP-2.1 (review minor): a default sablon fázisai itt is
+                  // fázisonkénti template_apply audit sort kapnak, a route
+                  // tranzakcióján belül.
+                  await insertWorkPhaseAudit(client, {
+                    episodeWorkPhaseId: insertedPhase.rows[0].id,
+                    episodeId,
+                    oldStatus: null,
+                    newStatus: 'pending',
+                    changedBy: auth.email ?? auth.userId ?? 'unknown',
+                    changeType: 'template_apply',
+                    reason: `Sablon alkalmazása: ${pathwayName ?? tt.default_care_pathway_id}`,
+                  });
                 }
               }
             }
@@ -208,12 +223,24 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
       const workPhaseCode = `tooth_${tt.treatment_code}`;
       const customLabel = `${tt.label_hu} – ${tt.tooth_number}`;
 
-      await client.query(
+      const insertedTooth = await client.query(
         `INSERT INTO episode_work_phases
            (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, tooth_treatment_id, custom_label, status)
-         VALUES ($1, $2, $3, 'work', 30, 7, $4, $5, $6, 'pending')`,
+         VALUES ($1, $2, $3, 'work', 30, 7, $4, $5, $6, 'pending')
+         RETURNING id`,
         [episodeId, workPhaseCode, nextIdx, nextSeq, treatmentId, customLabel]
       );
+      // WP-2.1 (review minor): a fog-fázis létrehozása is naplózódik —
+      // change_type 'create', a from-tooth-treatment route mintájára.
+      await insertWorkPhaseAudit(client, {
+        episodeWorkPhaseId: insertedTooth.rows[0].id,
+        episodeId,
+        oldStatus: null,
+        newStatus: 'pending',
+        changedBy: auth.email ?? auth.userId ?? 'unknown',
+        changeType: 'create',
+        reason: `Fogkezelésből hozzáadva: ${customLabel}`,
+      });
     }
 
     await client.query('COMMIT');

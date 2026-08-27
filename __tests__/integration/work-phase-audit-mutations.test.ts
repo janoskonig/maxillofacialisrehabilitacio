@@ -10,6 +10,8 @@ import {
 import {
   cleanupCreatedWp07,
   createWp07CarePathway,
+  createWp07ToothTreatment,
+  createWp07ToothTreatmentCatalogEntry,
   createWp07TreatmentType,
 } from './helpers/factories-wp07';
 import { authedRequest, type TestAuthUser } from './helpers/auth';
@@ -20,6 +22,7 @@ import { POST as mergeWorkPhases } from '@/app/api/episodes/[id]/work-phases/mer
 import { POST as unmergeWorkPhases } from '@/app/api/episodes/[id]/work-phases/[workPhaseId]/unmerge/route';
 import { POST as generateWorkPhases } from '@/app/api/episodes/[id]/work-phases/generate/route';
 import { PATCH as patchEpisode } from '@/app/api/episodes/[id]/route';
+import { POST as createEpisodeFromToothTreatment } from '@/app/api/patients/[id]/tooth-treatments/[treatmentId]/create-episode/route';
 
 /**
  * WP-2.1: minden terv-mutáció írjon auditot (change_type, 087-es migráció).
@@ -297,5 +300,98 @@ describe('terv-mutációk auditja (WP-2.1)', () => {
       expect(row.new_status).toBe('deleted');
       expect(row.changed_by).toBe(doctor.email);
     }
+  });
+
+  it('sablon alkalmazása addPathway-jel (EpisodePathwayEditor útja): fázisonkénti template_apply sor', async () => {
+    const doctor = await makeDoctor();
+    const patient = await createTestPatient();
+    const episode = await createTestEpisode(undefined, patient.id);
+    const tt = await createWp07TreatmentType();
+    const cp = await createWp07CarePathway(undefined, tt.id, {
+      name: 'WP-2.1 addPathway sablon',
+    });
+
+    const addReq = await authedRequest(`http://test.local/api/episodes/${episode.id}`, {
+      user: doctor,
+      method: 'PATCH',
+      body: { action: 'addPathway', carePathwayId: cp.id },
+    });
+    const addRes = await patchEpisode(addReq, { params: { id: episode.id } });
+    expect(addRes.status).toBe(201);
+
+    const rows = await auditRows(episode.id);
+    // Csak a sablon-alkalmazás sorai — a 3 fázis mindegyike template_apply-t kap.
+    expect(rows).toHaveLength(3);
+    const applyRows = rows.filter((r) => r.change_type === 'template_apply');
+    expect(applyRows).toHaveLength(3);
+    expect(applyRows.map((r) => r.work_phase_code).sort()).toEqual(
+      ['atadas', 'konzultacio', 'lenyomat'].sort()
+    );
+    for (const row of applyRows) {
+      expect(row.episode_work_phase_id).not.toBeNull();
+      expect(row.old_status).toBeNull();
+      expect(row.new_status).toBe('pending');
+      expect(row.changed_by).toBe(doctor.email);
+      expect(row.reason).toContain('WP-2.1 addPathway sablon');
+    }
+  });
+
+  it('epizód fogkezelésből (create-episode): sablon-fázisokra template_apply, fog-fázisra create sor', async () => {
+    const doctor = await makeDoctor();
+    const patient = await createTestPatient();
+    // Meglévő nyitott epizód — a route ehhez kapcsolja a fogkezelést.
+    const episode = await createTestEpisode(undefined, patient.id);
+    const tt = await createWp07TreatmentType();
+    const cp = await createWp07CarePathway(undefined, tt.id, {
+      name: 'WP-2.1 fog-sablon',
+    });
+    const catalog = await createWp07ToothTreatmentCatalogEntry(undefined, {
+      defaultCarePathwayId: cp.id,
+    });
+    const tooth = await createWp07ToothTreatment(undefined, patient.id, null, catalog.code, {
+      status: 'pending',
+      toothNumber: 21,
+    });
+
+    const req = await authedRequest(
+      `http://test.local/api/patients/${patient.id}/tooth-treatments/${tooth.id}/create-episode`,
+      { user: doctor, method: 'POST', body: {} }
+    );
+    const res = await createEpisodeFromToothTreatment(req, {
+      params: { id: patient.id, treatmentId: tooth.id },
+    });
+    expect(res.status).toBe(200);
+    const resBody = await res.json();
+    expect(resBody.episodeId).toBe(episode.id);
+    expect(resBody.pathwayAssigned).toBe(true);
+
+    // 3 sablon-fázis + 1 fog-fázis = 4 audit sor, egy tranzakcióból (a
+    // created_at azonos, ezért change_type szerint válogatunk, nem sorrendre).
+    const rows = await auditRows(episode.id);
+    expect(rows).toHaveLength(4);
+
+    const applyRows = rows.filter((r) => r.change_type === 'template_apply');
+    expect(applyRows).toHaveLength(3);
+    expect(applyRows.map((r) => r.work_phase_code).sort()).toEqual(
+      ['atadas', 'konzultacio', 'lenyomat'].sort()
+    );
+    for (const row of applyRows) {
+      expect(row.episode_work_phase_id).not.toBeNull();
+      expect(row.old_status).toBeNull();
+      expect(row.new_status).toBe('pending');
+      expect(row.changed_by).toBe(doctor.email);
+      expect(row.reason).toContain('WP-2.1 fog-sablon');
+    }
+
+    const createRows = rows.filter((r) => r.change_type === 'create');
+    expect(createRows).toHaveLength(1);
+    const toothRow = createRows[0];
+    expect(toothRow.episode_work_phase_id).not.toBeNull();
+    expect(toothRow.work_phase_code).toBe(`tooth_${catalog.code}`);
+    expect(toothRow.custom_label).toBe(`${catalog.labelHu} – 21`);
+    expect(toothRow.old_status).toBeNull();
+    expect(toothRow.new_status).toBe('pending');
+    expect(toothRow.changed_by).toBe(doctor.email);
+    expect(toothRow.reason).toContain('Fogkezelésből hozzáadva');
   });
 });
