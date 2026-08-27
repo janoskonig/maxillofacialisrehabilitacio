@@ -1519,7 +1519,7 @@ export function EpisodeStepsManager({
                 </div>
               )}
 
-              {/* ─── Foglalási állapot: integritás, lánc-kötelezettség, blokk ── */}
+              {/* ─── Foglalási állapot: integritás, lánc-ajánlat, blokk ── */}
               {booking.enabled && (
                 <div className="mb-3 empty:mb-0 empty:hidden space-y-2">
                   <EpisodeIntegrityBanner
@@ -1545,17 +1545,18 @@ export function EpisodeStepsManager({
                     </p>
                   )}
                   {booking.chainBookingRequired && (
-                    <div className="rounded-lg border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-950 dark:text-amber-200">
-                      <p className="font-semibold">Teljes sorozat lefoglalása kötelező lépés</p>
-                      <p className="mt-1 text-amber-900/90 dark:text-amber-300/90">
-                        Az epizódhoz több munkafázis tartozik — foglald le egyszerre a szükséges
-                        időpontokat, ne csak az első lépést egyenként.
+                    <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-3 py-2 text-sm text-blue-900 dark:text-blue-200">
+                      <p className="font-semibold">Több lépés is foglalható egyszerre</p>
+                      <p className="mt-1 text-blue-800/90 dark:text-blue-300/90">
+                        {pendingCount >= 2
+                          ? `Az epizód következő ${pendingCount} lépése egy menetben lefoglalható, a láncolást a rendszer számolja.`
+                          : 'Az epizód következő lépései egy menetben lefoglalhatók, a láncolást a rendszer számolja.'}
                       </p>
                       <button
                         type="button"
                         onClick={() => void booking.convertAll()}
                         disabled={booking.convertAllBusy}
-                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-amber-500 text-white rounded-md text-xs font-semibold hover:bg-amber-600 disabled:opacity-50"
+                        className="mt-2 inline-flex items-center gap-1.5 px-3 py-1.5 bg-medical-primary text-white rounded-md text-xs font-semibold hover:bg-medical-primary-dark disabled:opacity-50"
                       >
                         {booking.convertAllBusy && <Loader2 className="w-3 h-3 animate-spin" />}
                         {booking.convertAllBusy ? 'Lefoglalás…' : 'Összes szükséges időpont lefoglalása'}
