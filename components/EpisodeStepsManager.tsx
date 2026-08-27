@@ -905,12 +905,14 @@ export function EpisodeStepsManager({
 
   const loadSteps = useCallback(async () => {
     try {
-      const res = await fetch(`/api/episodes/${episodeId}/work-phases/generate`, {
-        method: 'POST',
+      // WP-0.7: mellékhatás-mentes olvasás. Korábban a mutáló POST .../generate
+      // töltötte a listát — a kártya megnyitása írt a DB-be, és a törölt
+      // fázisokat visszatette. A generálás az aktiválás / sablon-alkalmazás
+      // dolga; ez itt csak GET.
+      const res = await fetch(`/api/episodes/${episodeId}/work-phases`, {
         credentials: 'include',
       });
       if (!res.ok) {
-        if (res.status === 409) { setSteps([]); return; }
         throw new Error('Nem sikerült betölteni');
       }
       const data = await res.json();

@@ -4,6 +4,26 @@
  *
  * Idempotent: skips pathways that already have generated phases and tooth treatments
  * already turned into steps. Runs in a single transaction.
+ *
+ * WP-0.7 (kódaudit #01 + #07):
+ *   • Az idempotencia-őr a törlés-tombstone-okat (episode_work_phase_tombstones,
+ *     086-os migráció) is nézi — a törölt fázis nem "hiányzó", nem generálandó
+ *     újra, és a fog-szinkron sem teszi vissza a törölt fog-fázist.
+ *   • Az episode_pathways bootstrap INSERT-je nem használ ON CONFLICT-ot: a
+ *     006-os migráció óta az egyediséget a 3-elemű kifejezés-index adja
+ *     (episode_id, care_pathway_id, COALESCE(jaw,'_none_')), amire a 2 oszlopos
+ *     arbiter-inferencia 42P10-zel hasalt, és a csupasz catch mindig a
+ *     '__legacy__' fallbackra vitt. Most: 23505 → a meglévő sor visszaolvasása;
+ *     42P01 (nincs episode_pathways tábla) → '__legacy__'; minden más hiba dob.
+ *   • A '__legacy__' őr nem a túl széles `source_episode_pathway_id IS NULL`
+ *     predikátum, hanem a sablon fázis-kódjaira szűkített kérdés — így egy
+ *     ad-hoc (NULL-source) sor nem hiúsítja meg a sablon generálását.
+ *   • Review-javítás: a régi (__legacy__ úton generált, NULL-source) terv
+ *     elleni őr PERZISZTENS adatra épül, nem hívásonkénti memóriára — a valós
+ *     ágon minden generate nézi a NULL-source élő sorokat ÉS a NULL-source
+ *     tombstone-okat a sablon fázis-kódjai szerint. Így akárhányadik generate
+ *     idempotens (a bootstrap INSERT azonnali commitja után is), és a legacy
+ *     tervből törölt fázisok sem élednek fel.
  */
 
 import type { Pool } from 'pg';
@@ -47,24 +67,33 @@ export async function generateEpisodeWorkPhases(
 
   if (epPathways.length === 0 && ep.care_pathway_id) {
     try {
+      // Nincs ON CONFLICT: a 006-os migráció a 2-oszlopos unique constraintet
+      // kifejezés-indexre cserélte, amit az arbiter-inferencia nem talál meg
+      // (42P10). Az ütközést a 23505-ös ág kezeli.
       const ins = await pool.query(
         `INSERT INTO episode_pathways (episode_id, care_pathway_id, ordinal)
          VALUES ($1, $2, 0)
-         ON CONFLICT (episode_id, care_pathway_id) DO NOTHING
          RETURNING id, care_pathway_id`,
         [episodeId, ep.care_pathway_id]
       );
-      if (ins.rows.length > 0) {
-        epPathways = ins.rows;
-      } else {
+      epPathways = ins.rows;
+    } catch (err) {
+      const code = (err as { code?: string } | null)?.code;
+      if (code === '23505') {
+        // Párhuzamos hívás már beszúrta — a meglévő sort olvassuk vissza.
         const existing = await pool.query(
-          `SELECT id, care_pathway_id FROM episode_pathways WHERE episode_id = $1 AND care_pathway_id = $2`,
+          `SELECT id, care_pathway_id FROM episode_pathways
+           WHERE episode_id = $1 AND care_pathway_id = $2
+           ORDER BY ordinal`,
           [episodeId, ep.care_pathway_id]
         );
         epPathways = existing.rows;
+      } else if (code === '42P01') {
+        // Csak a hiányzó episode_pathways tábla visz a legacy ágra.
+        epPathways = [{ id: '__legacy__', care_pathway_id: ep.care_pathway_id }];
+      } else {
+        throw err;
       }
-    } catch {
-      epPathways = [{ id: '__legacy__', care_pathway_id: ep.care_pathway_id }];
     }
   }
 
@@ -74,6 +103,20 @@ export async function generateEpisodeWorkPhases(
   try {
     await client.query('BEGIN');
 
+    // Törlés-tombstone tábla (086-os migráció) — régebbi környezetben még
+    // hiányozhat (a lib backfill/sim scriptekből is fut), ezért probe-oljuk,
+    // a hasToothCol mintájára.
+    const tombstoneProbe = await client.query(
+      `SELECT 1 FROM information_schema.tables
+       WHERE table_schema = 'public' AND table_name = 'episode_work_phase_tombstones' LIMIT 1`
+    );
+    const hasTombstones = tombstoneProbe.rows.length > 0;
+
+    const toothColProbe = await client.query(
+      `SELECT 1 FROM information_schema.columns WHERE table_name = 'episode_work_phases' AND column_name = 'tooth_treatment_id' LIMIT 1`
+    );
+    const hasToothCol = toothColProbe.rows.length > 0;
+
     const maxSeqRow = await client.query(
       `SELECT COALESCE(MAX(seq), -1) as max_seq FROM episode_work_phases WHERE episode_id = $1`,
       [episodeId]
@@ -82,14 +125,7 @@ export async function generateEpisodeWorkPhases(
     let totalGenerated = 0;
 
     for (const epPw of epPathways) {
-      const alreadyExists = await client.query(
-        epPw.id === '__legacy__'
-          ? `SELECT 1 FROM episode_work_phases WHERE episode_id = $1 AND source_episode_pathway_id IS NULL LIMIT 1`
-          : `SELECT 1 FROM episode_work_phases WHERE source_episode_pathway_id = $1 LIMIT 1`,
-        epPw.id === '__legacy__' ? [episodeId] : [epPw.id]
-      );
-      if (alreadyExists.rows.length > 0) continue;
-
+      // A sablont az őr ELŐTT olvassuk: a legacy őrnek a fázis-kódok kellenek.
       const pathwayRow = await client.query(
         `SELECT work_phases_json, steps_json FROM care_pathways WHERE id = $1`,
         [epPw.care_pathway_id]
@@ -99,6 +135,75 @@ export async function generateEpisodeWorkPhases(
         normalizePathwayWorkPhaseArray(pathwayRow.rows[0]?.steps_json);
 
       if (!templates || templates.length === 0) continue;
+
+      const templateCodes = templates.map((t) => t.work_phase_code);
+
+      if (epPw.id === '__legacy__') {
+        // Legacy ág (nincs episode_pathways tábla): az őr a sablon fázis-kódjaira
+        // szűkít — a korábbi `source_episode_pathway_id IS NULL` predikátum egy
+        // ad-hoc vagy fog-fázis sortól is "kész"-nek látta a sablont.
+        const alreadyExists = await client.query(
+          `SELECT 1 FROM episode_work_phases
+           WHERE episode_id = $1 AND source_episode_pathway_id IS NULL
+             AND work_phase_code = ANY($2::text[])
+           LIMIT 1`,
+          [episodeId, templateCodes]
+        );
+        if (alreadyExists.rows.length > 0) continue;
+        if (hasTombstones) {
+          const tombstoned = await client.query(
+            `SELECT 1 FROM episode_work_phase_tombstones
+             WHERE episode_id = $1 AND source_episode_pathway_id IS NULL
+               AND work_phase_code = ANY($2::text[])
+             LIMIT 1`,
+            [episodeId, templateCodes]
+          );
+          if (tombstoned.rows.length > 0) continue;
+        }
+      } else {
+        const alreadyExists = await client.query(
+          `SELECT 1 FROM episode_work_phases WHERE source_episode_pathway_id = $1 LIMIT 1`,
+          [epPw.id]
+        );
+        if (alreadyExists.rows.length > 0) continue;
+
+        // A régi (hibás '__legacy__' úton generált) terv lenyomata: NULL-source
+        // élő sorok a sablon kódjaival. PERZISZTENS őr, nem hívásonkénti
+        // memória: a bootstrap episode_pathways INSERT azonnal commitol, így a
+        // 2. generate-nél az epizódnak már van pathway-sora — az őrnek AKKOR IS
+        // meg kell fognia a legacy tervet, különben a teljes sablon duplán
+        // szúródna be (review MAJOR 1; ugyanez fedi a 23505-ös konkurens ágat).
+        // Az árva NULL-source sorokat nem bántjuk, csak nem duplikálunk.
+        const legacyGenerated = await client.query(
+          `SELECT 1 FROM episode_work_phases
+           WHERE episode_id = $1 AND source_episode_pathway_id IS NULL
+             ${hasToothCol ? 'AND tooth_treatment_id IS NULL' : ''}
+             AND work_phase_code = ANY($2::text[])
+           LIMIT 1`,
+          [episodeId, templateCodes]
+        );
+        if (legacyGenerated.rows.length > 0) continue;
+
+        // Törlés-tombstone (kódaudit #01): ha ebből a sablonból már töröltek
+        // fázist, a sablon nem generálandó újra — a törölt sor nem "hiányzó".
+        // A legacy (NULL-source) terv sorainak törlésekor a tombstone
+        // source_episode_pathway_id-ja is NULL, ezért a sablon-forrás melletti
+        // (episode_id, work_phase_code) szerinti NULL-source találat is véd
+        // (review MAJOR 2) — nélküle a teljesen kitörölt legacy terv egyetlen
+        // generate-től feléledne.
+        if (hasTombstones) {
+          const tombstoned = await client.query(
+            `SELECT 1 FROM episode_work_phase_tombstones
+             WHERE source_episode_pathway_id = $1
+                OR (episode_id = $2 AND source_episode_pathway_id IS NULL
+                    AND tooth_treatment_id IS NULL
+                    AND work_phase_code = ANY($3::text[]))
+             LIMIT 1`,
+            [epPw.id, episodeId, templateCodes]
+          );
+          if (tombstoned.rows.length > 0) continue;
+        }
+      }
 
       const insertValues: unknown[] = [];
       const insertPlaceholders: string[] = [];
@@ -134,16 +239,23 @@ export async function generateEpisodeWorkPhases(
     }
 
     // Sync linked tooth treatments into steps (automatic: all episode_linked treatments become steps)
-    const hasToothCol = await client.query(
-      `SELECT 1 FROM information_schema.columns WHERE table_name = 'episode_work_phases' AND column_name = 'tooth_treatment_id' LIMIT 1`
-    );
-    if (hasToothCol.rows.length > 0) {
+    if (hasToothCol) {
+      // A törölt fog-fázis nem "hiányzó" (kódaudit #01): a tombstone-nal bíró
+      // fogkezelést a szinkron kihagyja — kézzel (from-tooth-treatment) továbbra
+      // is hozzáadható. A törlés emellett a tooth_treatments.status-t is
+      // visszaállítja 'pending'-re, így az episode_linked szűrő sem venné fel.
       const missing = await client.query(
         `SELECT tt.id, tt.treatment_code, tt.tooth_number, ttc.label_hu as "label_hu"
          FROM tooth_treatments tt
          JOIN tooth_treatment_catalog ttc ON tt.treatment_code = ttc.code
          WHERE tt.episode_id = $1 AND tt.status = 'episode_linked'
            AND NOT EXISTS (SELECT 1 FROM episode_work_phases es WHERE es.episode_id = tt.episode_id AND es.tooth_treatment_id = tt.id)
+           ${
+             hasTombstones
+               ? `AND NOT EXISTS (SELECT 1 FROM episode_work_phase_tombstones t
+                    WHERE t.episode_id = tt.episode_id AND t.tooth_treatment_id = tt.id)`
+               : ''
+           }
          ORDER BY tt.tooth_number, ttc.sort_order`,
         [episodeId]
       );

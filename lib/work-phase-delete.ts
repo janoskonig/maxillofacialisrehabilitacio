@@ -142,3 +142,52 @@ export async function releaseWorkPhasesForDelete(
     expiredIntents: intents.rows.length,
   };
 }
+
+/**
+ * Törlés-tombstone (WP-0.7, kódaudit #01): a törölt fázis kulcsának feljegyzése,
+ * hogy a generate (sablon-őr + fog-szinkron) ne támassza fel a sort.
+ *
+ * A törlés maga valódi DELETE marad (konzisztensen a 078-as FK-feloldással és a
+ * 084-es audit-tombstone-nal); ez a helper a `DELETE FROM episode_work_phases`
+ * ELŐTT, ugyanabban a tranzakcióban hívandó, mert az élő sorból olvassa a
+ * kulcsokat (work_phase_code, tooth_treatment_id, source_episode_pathway_id).
+ *
+ * Mellékhatás: a fog-fázishoz tartozó tooth_treatments sor státuszát
+ * 'episode_linked' → 'pending'-re állítja, hogy a fog-szinkron (ami csak az
+ * 'episode_linked' sorokat szedi fel) akkor se tegye vissza automatikusan, ha a
+ * tombstone-tábla valamiért nem szűrne. A kezelési igény ettől még látszik a
+ * Fogkezelés fülön, és kézzel újra hozzáadható a tervhez.
+ *
+ * A sablon-eltávolítás (handleRemovePathway) NEM hívja: ott az episode_pathways
+ * sor is törlődik, és a tombstone FK ON DELETE CASCADE-je pont azért van, hogy
+ * az újra alkalmazott sablon tiszta lappal generálódhasson.
+ */
+export async function insertWorkPhaseTombstones(
+  client: PoolClient,
+  episodeId: string,
+  phaseIds: string[],
+  deletedBy: string
+): Promise<void> {
+  if (phaseIds.length === 0) return;
+
+  await client.query(
+    `INSERT INTO episode_work_phase_tombstones
+       (episode_id, work_phase_code, tooth_treatment_id, source_episode_pathway_id, deleted_by)
+     SELECT ewp.episode_id, ewp.work_phase_code, ewp.tooth_treatment_id,
+            ewp.source_episode_pathway_id, $3
+       FROM episode_work_phases ewp
+      WHERE ewp.episode_id = $1 AND ewp.id = ANY($2::uuid[])`,
+    [episodeId, phaseIds, deletedBy]
+  );
+
+  await client.query(
+    `UPDATE tooth_treatments tt
+        SET status = 'pending'
+       FROM episode_work_phases ewp
+      WHERE ewp.episode_id = $1
+        AND ewp.id = ANY($2::uuid[])
+        AND ewp.tooth_treatment_id = tt.id
+        AND tt.status = 'episode_linked'`,
+    [episodeId, phaseIds]
+  );
+}
