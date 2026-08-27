@@ -19,6 +19,7 @@ import {
 import { authedRequest, type TestAuthUser } from './helpers/auth';
 import { ensureRecallTasksForEpisode, syncRecallTasksForRiskChange } from '@/lib/recall-tasks';
 import { GET as getRecallTasks, POST as postRecallTask } from '@/app/api/episodes/[id]/recall-tasks/route';
+import { DELETE as deleteRecallTask } from '@/app/api/episodes/[id]/recall-tasks/[taskId]/route';
 import { PATCH as patchEpisode } from '@/app/api/episodes/[id]/route';
 
 /**
@@ -717,5 +718,120 @@ describe('PATCH /api/episodes/:id — recallRiskLevel', () => {
       body: { recallRiskLevel: 'extrém' },
     });
     expect((await patchEpisode(req, { params: { id: episode.id } })).status).toBe(400);
+  });
+});
+
+describe('DELETE /api/episodes/:id/recall-tasks/:taskId — felajánlott törlés (WP-3.3)', () => {
+  it('foglalatlan, nem teljesített sor törölhető — a sor tényleg eltűnik', async () => {
+    const doctor = await makeDoctor();
+    const patient = await createTestPatient();
+    const episode = await createTestEpisode(undefined, patient.id);
+    // A kadenciából kikerült auto sor tipikus esete (low mellett 30 napos).
+    const task = await createTestRecallTask(undefined, {
+      episodeId: episode.id,
+      intervalDays: 30,
+      source: 'auto',
+      label: '1 hónapos kontroll',
+    });
+
+    const req = await authedRequest(
+      `http://test.local/api/episodes/${episode.id}/recall-tasks/${task.id}`,
+      { user: doctor, method: 'DELETE' }
+    );
+    const res = await deleteRecallTask(req, { params: { id: episode.id, taskId: task.id } });
+    expect(res.status).toBe(200);
+
+    const pool = getDbPool();
+    const { rows } = await pool.query(`SELECT id FROM episode_tasks WHERE id = $1`, [task.id]);
+    expect(rows).toHaveLength(0);
+  });
+
+  it('foglalt sor 409 (előbb az időpontot kell lemondani), teljesített sor 409', async () => {
+    const doctor = await makeDoctor();
+    const patient = await createTestPatient();
+    const episode = await createTestEpisode(undefined, patient.id);
+    const pool = getDbPool();
+
+    const slot = await createTestSlot(undefined, doctor.id);
+    const appointment = await createTestAppointment(undefined, {
+      patientId: patient.id,
+      timeSlotId: slot.id,
+      episodeId: episode.id,
+      appointmentStatus: null,
+    });
+    const booked = await createTestRecallTask(undefined, {
+      episodeId: episode.id,
+      intervalDays: 90,
+      source: 'auto',
+      appointmentId: appointment.id,
+    });
+    const completed = await createTestRecallTask(undefined, {
+      episodeId: episode.id,
+      intervalDays: 60,
+      source: 'auto',
+      completedAt: new Date(),
+    });
+
+    for (const task of [booked, completed]) {
+      const req = await authedRequest(
+        `http://test.local/api/episodes/${episode.id}/recall-tasks/${task.id}`,
+        { user: doctor, method: 'DELETE' }
+      );
+      const res = await deleteRecallTask(req, { params: { id: episode.id, taskId: task.id } });
+      expect(res.status).toBe(409);
+    }
+    const { rows } = await pool.query(
+      `SELECT COUNT(*)::int AS cnt FROM episode_tasks WHERE id = ANY($1::uuid[])`,
+      [[booked.id, completed.id]]
+    );
+    expect(rows[0].cnt).toBe(2);
+  });
+
+  it('másik epizód taskjára 404, lezárt epizódra 409', async () => {
+    const doctor = await makeDoctor();
+    const patient = await createTestPatient();
+    const episode = await createTestEpisode(undefined, patient.id);
+    const otherEpisode = await createTestEpisode(undefined, patient.id);
+    const task = await createTestRecallTask(undefined, {
+      episodeId: episode.id,
+      intervalDays: 30,
+      source: 'auto',
+    });
+
+    // Nem a task epizódjának URL-jén: 404, és a sor megmarad.
+    const wrongReq = await authedRequest(
+      `http://test.local/api/episodes/${otherEpisode.id}/recall-tasks/${task.id}`,
+      { user: doctor, method: 'DELETE' }
+    );
+    expect(
+      (await deleteRecallTask(wrongReq, { params: { id: otherEpisode.id, taskId: task.id } })).status
+    ).toBe(404);
+
+    // Lezárt epizód sora nem törölhető. (A sort még nyitott epizódra vesszük
+    // fel — trigger tiltja a lezártra szúrást —, majd az epizódot lezárjuk.)
+    const closed = await createTestEpisode(undefined, patient.id);
+    const closedTask = await createTestRecallTask(undefined, {
+      episodeId: closed.id,
+      intervalDays: 30,
+      source: 'manual',
+    });
+    await getDbPool().query(
+      `UPDATE patient_episodes SET status = 'closed', closed_at = CURRENT_TIMESTAMP WHERE id = $1`,
+      [closed.id]
+    );
+    const closedReq = await authedRequest(
+      `http://test.local/api/episodes/${closed.id}/recall-tasks/${closedTask.id}`,
+      { user: doctor, method: 'DELETE' }
+    );
+    expect(
+      (await deleteRecallTask(closedReq, { params: { id: closed.id, taskId: closedTask.id } })).status
+    ).toBe(409);
+
+    const pool = getDbPool();
+    const { rows } = await pool.query(
+      `SELECT COUNT(*)::int AS cnt FROM episode_tasks WHERE id = ANY($1::uuid[])`,
+      [[task.id, closedTask.id]]
+    );
+    expect(rows[0].cnt).toBe(2);
   });
 });
