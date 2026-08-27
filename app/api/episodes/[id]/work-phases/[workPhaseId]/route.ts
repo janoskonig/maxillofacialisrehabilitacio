@@ -148,6 +148,8 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     (defaultDaysOffset !== undefined || durationMinutes !== undefined || customLabel !== undefined);
 
   const client = await pool.connect();
+  // Skip ágon: hány jövőbeli foglalást mondtunk le (a válaszban visszaadjuk).
+  let skipCancelledAppointments: number | null = null;
   try {
     await client.query('BEGIN');
     const phaseRow = await client.query(
@@ -359,6 +361,14 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
            WHERE id = $4`,
           [newStatus, completedAt, appointmentIdForLink, workPhaseId]
         );
+      } else if (newStatus === 'skipped' || phase.status === 'skipped') {
+        // Skip és skipped → pending visszaút: a foglalás-link mindig tisztul.
+        // A jövőbeli foglalást a lenti felszabadítás mondja le; a múltbeli
+        // (már megtörtént) vizitet nem bántjuk, csak a link kerül le a sorról.
+        await client.query(
+          `UPDATE episode_work_phases SET status = $1, completed_at = $2, appointment_id = NULL WHERE id = $3`,
+          [newStatus, completedAt, workPhaseId]
+        );
       } else {
         await client.query(
           `UPDATE episode_work_phases SET status = $1, completed_at = $2 WHERE id = $3`,
@@ -372,7 +382,64 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
         [workPhaseId, episodeId, phase.status, newStatus, auth.email ?? auth.userId ?? 'unknown', reason ?? null]
       );
 
+      // Skip ág: a fázisra mutató JÖVŐBELI aktív foglalások lemondása és a
+      // slot/intent felszabadítása — ugyanaz a szemantika, mint a
+      // completed → pending ágon. Csak a jövőbeli sorokat bántjuk: a skip
+      // legitim retro-használata (már megtörtént vizit) érintetlen marad.
+      if (newStatus === 'skipped') {
+        const stepCode = phase.work_phase_code as string;
+        const futureAppts = await client.query(
+          `SELECT a.id, a.time_slot_id, a.slot_intent_id FROM appointments a
+           WHERE a.episode_id = $1 AND a.step_code = $2
+             AND a.start_time > CURRENT_TIMESTAMP
+             AND ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}`,
+          [episodeId, stepCode]
+        );
+        for (const ap of futureAppts.rows as Array<{
+          id: string;
+          time_slot_id: string | null;
+          slot_intent_id: string | null;
+        }>) {
+          await client.query(
+            `UPDATE appointments SET appointment_status = 'cancelled_by_doctor' WHERE id = $1`,
+            [ap.id]
+          );
+          if (ap.time_slot_id) {
+            await client.query(
+              `UPDATE available_time_slots SET state = 'free', status = 'available' WHERE id = $1`,
+              [ap.time_slot_id]
+            );
+          }
+          // A lemondott foglaláshoz tartozó konvertált intent lejáratása —
+          // ugyanaz, mint az appointments/[id]/status lemondási ágán; e nélkül
+          // a 'converted' intent egy lemondott appointmentre mutatna tovább.
+          if (ap.slot_intent_id) {
+            await client.query(
+              `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP
+               WHERE id = $1 AND state = 'converted'`,
+              [ap.slot_intent_id]
+            );
+          }
+        }
+
+        await client.query(
+          `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP
+           WHERE episode_id = $1 AND step_code = $2 AND state = 'open'`,
+          [episodeId, stepCode]
+        );
+
+        skipCancelledAppointments = futureAppts.rows.length;
+      }
+
       await client.query('COMMIT');
+
+      if (newStatus === 'skipped' || phase.status === 'skipped') {
+        try {
+          await projectRemainingSteps(episodeId);
+        } catch {
+          /* non-blocking */
+        }
+      }
 
       try {
         await emitSchedulingEvent(
@@ -392,7 +459,10 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
       [workPhaseId]
     );
 
-    return NextResponse.json({ workPhase: updated.rows[0] });
+    return NextResponse.json({
+      workPhase: updated.rows[0],
+      ...(skipCancelledAppointments !== null ? { cancelledAppointments: skipCancelledAppointments } : {}),
+    });
   } catch (txError) {
     await client.query('ROLLBACK').catch(() => {});
     throw txError;

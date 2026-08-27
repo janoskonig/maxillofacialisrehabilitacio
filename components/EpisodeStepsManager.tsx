@@ -657,6 +657,15 @@ function StepRowWithConfirm({
               <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
                 Biztosan átugorja a(z) <strong>{stepLabel}</strong> munkafázist?
               </p>
+              {rowBooking?.state === 'BOOKED' ? (
+                <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">
+                  Ehhez a munkafázishoz 1 jövőbeli foglalt időpont tartozik — az átugrással az időpont is lemondásra kerül.
+                </p>
+              ) : step.status === 'scheduled' ? (
+                <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">
+                  Ehhez a munkafázishoz foglalt időpont tartozik — az átugrással a jövőbeli időpont lemondásra kerül, a már megtörtént vizitet nem érinti.
+                </p>
+              ) : null}
               <input
                 type="text" value={skipReason} onChange={(e) => onSkipReasonChange(e.target.value)}
                 placeholder="Ok (opcionális, pl. már megtörtént)"
@@ -1057,7 +1066,13 @@ export function EpisodeStepsManager({
       setConfirmStepId(null);
       setConfirmAction(null);
       setSkipReason('');
-      showToast('Munkafázis átugorva', 'success');
+      const cancelled = typeof data.cancelledAppointments === 'number' ? data.cancelledAppointments : 0;
+      showToast(
+        cancelled > 0
+          ? `Munkafázis átugorva, ${cancelled} jövőbeli foglalt időpont lemondva`
+          : 'Munkafázis átugorva',
+        'success'
+      );
       notifyPlanChanged();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba történt', 'error');
