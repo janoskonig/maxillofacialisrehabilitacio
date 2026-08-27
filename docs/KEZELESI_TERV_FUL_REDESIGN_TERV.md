@@ -36,6 +36,7 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 | WP-3.1 recall séma (088) | ✅ | [#72](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/72) | CHECK feloldva, source/label/created_by, epizód-szintű recall_risk_level; deploy-kötés: a 088 a kód ELŐTT fusson (kétirányú törés) |
 | WP-3.2 recall szolgáltatásréteg | ✅ | [#72](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/72) | Pure kadencia-katalógus (SZÁMOK JÓVÁHAGYÁSRA VÁRNAK); horgony = utolsó teljesült kezelés; STAGE_6 mint generálási KAPU megmaradt — NYITOTT KÉRDÉS a lazítása; kézi sorokat az auto sosem írja felül |
 | WP-3.3 Gondozás kártya | ✅ | [#73](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/73) | Rizikó-választó + egy időrendi lista + kézi felvétel + törlés-AJÁNLAT (új, őrzött DELETE végpont); FONTOS: a kadencia-számok élesítése az orvos per-epizód választásán múlik, a számok jóváhagyása NYITOTT. **Ezzel a FÁZIS 3 teljes.** |
+| D1+D2 recall-döntések | ✅ | [#76](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/76) | Kadencia-számok jóváhagyva; STAGE_6 kapu lazítva (horgony: utolsó teljesült kezelés, átadás előtt is) |
 | FÁZIS 4 (puzzle) | ⏸ | — | Külön jóváhagyás kell, nem indul enélkül |
 
 ---
@@ -669,16 +670,15 @@ A WP-0.0 harnesse mellé, a fázisokkal párhuzamosan, a riport által javasolt 
 
 ---
 
-## 2. Ami még nyitva van (a felhasználó döntését várja — 2026-08-27 állapot)
+## 2. Ami még nyitva van (a felhasználó döntését várja — 2026-08-27 esti állapot)
 
-1. **Recall-kadencia konkrét számai** rizikószintenként (WP-3.2): a kódban élő javaslat
-   `lib/recall-cadence.ts` — low: 180/365 (a mai viselkedés), medium: 90/180/365,
-   high: 30/90/180/365. Számváltozás csak akkor történik, ha az orvos az epizódon
-   Közepes/Magas szintet választ; a számok módosítása egy-konstansos változás.
-2. **STAGE_6 mint auto-generálási kapu** (WP-3.2 review): a recall-sorok automatikus
-   létrehozása továbbra is átadás (STAGE_6) után indul — csak a határidő-horgony lett
-   az utolsó teljesült kezelés. Átadás ELŐTTI auto-recallhoz a kapu lazítása kell —
-   döntést igényel (a rövid távú visszarendelés addig kézi sorral vehető fel).
+1. ~~**Recall-kadencia konkrét számai**~~ **ELDÖNTVE 2026-08-27:** a felhasználó a
+   javasolt számokat jóváhagyta (low 180/365, medium 90/180/365, high 30/90/180/365) —
+   [#76](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/76).
+2. ~~**STAGE_6 mint auto-generálási kapu**~~ **ELDÖNTVE 2026-08-27:** a felhasználó a
+   lazítást kérte — auto-recall átadás előtt is születik, ha van már teljesült
+   kezelés/kontroll (az a horgony); horgony nélkül továbbra sem —
+   [#76](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/76).
 3. **`episode_visits` külön tábla vs. merge-csoport** megtartása (WP-4.1) — a terv
    ajánlása a külön tábla, de ez séma-elköteleződés.
 4. **FÁZIS 4 (vizit-alapú „puzzle" terv)** — 8–12 nap, külön jóváhagyás kell hozzá;
