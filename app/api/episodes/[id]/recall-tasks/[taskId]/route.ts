@@ -27,7 +27,7 @@ export const PATCH = roleHandler([...ROLES], async (req, { auth, params }) => {
          JOIN patient_episodes pe ON pe.id = et.episode_id
         WHERE et.id = $1 AND et.episode_id = $2
           AND et.task_type = 'recall_due'
-          AND et.recall_interval_days IN (180, 365)
+          AND et.recall_interval_days IS NOT NULL
         FOR UPDATE OF et`,
       [taskId, episodeId],
     );
