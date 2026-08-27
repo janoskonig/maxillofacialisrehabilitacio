@@ -123,8 +123,8 @@ export function RevertUnsuccessfulModal({
 
           <div className="text-xs text-amber-800 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 p-2 rounded">
             A visszavonás után a próba újra <strong>pending</strong> állapotba
-            kerül; ha közben már lefoglaltad a következő próbát, a sorszámok
-            ahhoz képest értelmeződnek (újrahúzza a worklist a frissítés után).
+            kerül. Ha közben már lefoglaltad a következő próbát, a visszavonás
+            nem végezhető el — előbb mondd le vagy rendezd át az új foglalást.
           </div>
 
           <div>

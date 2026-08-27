@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
-import { convertIntentToAppointment } from '@/lib/convert-slot-intent';
+import { convertIntentToAppointment, type ConvertIntentOutcome } from '@/lib/convert-slot-intent';
 import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 import { getPathwayWorkPhasesForEpisode } from '@/lib/pathway-work-phases-for-episode';
 
@@ -153,10 +153,25 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
       chainMinStartTime = new Date(prevActualStart.getTime() + gapDays * MS_PER_DAY);
     }
 
-    const result = await convertIntentToAppointment(pool, row.id, auth, {
-      skipOneHardNext: true,
-      ...(chainMinStartTime ? { chainMinStartTime } : {}),
-    });
+    // Audit #09 (WP-0.8): a konverzió dobott hibája NEM buktathatja el a
+    // teljes köteget — a korábbi iterációk foglalásai már COMMIT-oltak, egy
+    // 500-as válasz eltitkolná őket a kliens elől (aki !res.ok-nál nem
+    // frissített). A dobott hibát skipped[] bejegyzéssé fogjuk le, a horgony
+    // pedig a skip-ág szabálya szerint halad tovább.
+    let result: ConvertIntentOutcome;
+    try {
+      result = await convertIntentToAppointment(pool, row.id, auth, {
+        skipOneHardNext: true,
+        ...(chainMinStartTime ? { chainMinStartTime } : {}),
+      });
+    } catch (e) {
+      result = {
+        ok: false,
+        status: 500,
+        error: e instanceof Error ? e.message : String(e),
+        code: 'CONVERT_FAILED',
+      };
+    }
 
     if (result.ok) {
       appointmentIds.push(result.appointmentId);

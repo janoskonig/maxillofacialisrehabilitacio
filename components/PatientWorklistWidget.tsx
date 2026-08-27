@@ -316,6 +316,10 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
       const data = await res.json();
       if (!res.ok) {
         setConvertAllMessage({ type: 'error', text: data.error ?? 'Hiba történt' });
+        // Audit #09 (WP-0.8): hibás válasznál is frissítünk — a köteg egy
+        // része addigra már COMMIT-olhatott, és e nélkül a felület elrejtené
+        // a ténylegesen létrejött foglalásokat.
+        fetchWorklist();
         return;
       }
       const { converted, skipped } = data as {

@@ -6,7 +6,12 @@
  */
 
 import { Pool, type PoolClient } from 'pg';
-import { checkOneHardNext, getAppointmentRiskSettings } from '@/lib/scheduling-service';
+import {
+  checkOneHardNext,
+  computeAppointmentRiskSettings,
+  prefetchAppointmentRiskInputs,
+  type AppointmentRiskPrefetch,
+} from '@/lib/scheduling-service';
 import { getSchedulingFeatureFlag } from '@/lib/scheduling-feature-flags';
 import type { AuthPayload } from '@/lib/auth-server';
 import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
@@ -142,8 +147,36 @@ export async function convertIntentToAppointment(
 
   const intent = intentResult.rows[0];
 
+  // WP-0.8 (audit #11): a no-show-risk DB-olvasásai (beteg no-show számláló +
+  // config együtthatók) a tranzakción KÍVÜL, a pool.connect() előtt futnak.
+  // Nyitott tranzakcióból pool.query-t hívni DB_POOL_MAX=5 mellett kiéhezteti
+  // a poolt (a tranzakciós kapcsolat fogva marad, míg egy másikra várunk).
+  // A slot-függő rész (lead time, kezdő óra) pure, a tranzakcióban számoljuk.
+  let riskPrefetch: AppointmentRiskPrefetch | null = null;
+  try {
+    riskPrefetch = await prefetchAppointmentRiskInputs(intent.patientId);
+  } catch {
+    riskPrefetch = null; // tranzakción belüli fallback: 48 órás hold
+  }
+
+  // Szintén #11: a feature-flag olvasása is a tranzakción KÍVÜL történik
+  // (cache-miss esetén pool.query lenne nyitott tranzakcióból), a
+  // one-hard-next ellenőrzés pedig lent a tranzakciós clientet kapja.
+  let enforceOneHardNext = false;
+  if (!skipOneHardNext) {
+    try {
+      enforceOneHardNext = await getSchedulingFeatureFlag('enforce_one_hard_next');
+    } catch {
+      enforceOneHardNext = false;
+    }
+  }
+
   for (let attempt = 0; attempt < 3; attempt++) {
     const client = await pool.connect();
+    // WP-0.8 (audit #11): a drift-self-heal pool.query a client.release() UTÁN
+    // fut (lásd finally) — a tranzakciós kapcsolat fogva tartása közben egy
+    // második pool-kapcsolatra várni szintén pool-éheztetés.
+    let selfHealDriftedSlotId: string | null = null;
     try {
       await client.query('BEGIN');
 
@@ -236,11 +269,11 @@ export async function convertIntentToAppointment(
       // single-intent and bulk paths behave the same. The bulk path's
       // `skipOneHardNext` flag still wins when set, for backward compat.
       if (!skipOneHardNext) {
-        const enforceOneHardNext = await getSchedulingFeatureFlag('enforce_one_hard_next');
         if (enforceOneHardNext) {
           const oneHardNext = await checkOneHardNext(intent.episode_id, intent.pool as 'work' | 'consult' | 'control', {
             requiresPrecommit,
             stepCode: intent.step_code,
+            dbClient: client,
           });
           if (!oneHardNext.allowed) {
             await client.query('ROLLBACK');
@@ -382,12 +415,17 @@ export async function convertIntentToAppointment(
       let noShowRisk = 0;
       let requiresConfirmation = false;
       let holdExpiresAt: Date | null = null;
-      try {
-        const riskSettings = await getAppointmentRiskSettings(intent.patientId, startTime, auth.email);
+      if (riskPrefetch) {
+        // Pure számítás a tranzakción kívül előre lekért bemenetekből (#11).
+        const riskSettings = computeAppointmentRiskSettings(
+          riskPrefetch,
+          intent.patientId,
+          startTime
+        );
         noShowRisk = riskSettings.noShowRisk;
         requiresConfirmation = riskSettings.requiresConfirmation;
         holdExpiresAt = riskSettings.holdExpiresAt;
-      } catch {
+      } else {
         holdExpiresAt = new Date();
         holdExpiresAt.setHours(holdExpiresAt.getHours() + 48);
       }
@@ -428,7 +466,9 @@ export async function convertIntentToAppointment(
       // Both are bugs the operator must resolve via the
       // /api/admin/booking-consistency report — silently writing NULL would
       // disable the canonical unique-index protection on the new appointment.
-      const hasWorkPhaseIdColumn = await probeAppointmentsWorkPhaseIdColumn(pool);
+      // WP-0.8 (audit #11): a szonda a tranzakció saját `client`-jén fut —
+      // pool-t adva neki nyitott tranzakcióból kérne új kapcsolatot.
+      const hasWorkPhaseIdColumn = await probeAppointmentsWorkPhaseIdColumn(client);
       let resolvedWorkPhaseId: string | null = null;
       if (hasWorkPhaseIdColumn) {
         const intentWorkPhaseId = (intent as { work_phase_id?: string | null }).work_phase_id ?? null;
@@ -570,22 +610,10 @@ export async function convertIntentToAppointment(
         // separate, best-effort statement so subsequent picker calls skip it
         // (the new FREE_SLOT_PREDICATE_SQL also filters drifted slots, but the
         // self-heal pins the state column to match reality).
-        try {
-          await pool.query(
-            `UPDATE available_time_slots
-                SET state = 'booked', status = 'booked'
-              WHERE id = $1
-                AND state = 'free'
-                AND EXISTS (
-                  SELECT 1 FROM appointments a
-                   WHERE a.time_slot_id = $1
-                     AND ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}
-                )`,
-            [slotId]
-          );
-        } catch {
-          /* non-blocking: drift is logged via SLOT_ALREADY_BOOKED return */
-        }
+        //
+        // WP-0.8 (audit #11): a tényleges pool.query a `finally`-ban, a
+        // client.release() UTÁN fut — itt csak megjelöljük a driftelt slotot.
+        selfHealDriftedSlotId = slotId ?? null;
         return {
           ok: false,
           status: 409,
@@ -650,9 +678,17 @@ export async function convertIntentToAppointment(
       } catch {
         /* connection may already be aborted */
       }
-      if (isRetriableLockError(e) && attempt < 2) {
-        await new Promise((r) => setTimeout(r, 120 * 2 ** attempt));
-        continue;
+      if (isRetriableLockError(e)) {
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, 120 * 2 ** attempt));
+          continue;
+        }
+        // Audit #09 (WP-0.8): kimerült retry — korábban ide érve a hiba
+        // tovább-dobódott, így a ciklus utáni 503-as visszatérés halott kód
+        // volt, a batch hívó pedig 500-zal az egész köteget elrejtette
+        // (a már COMMIT-olt foglalásokkal együtt). A zárolási ütközés nem
+        // hiba-állapot, hanem „próbáld újra" — essen a 503-as ágra.
+        break;
       }
       const translation = translateUniqueViolation(e);
       if (translation) {
@@ -667,6 +703,26 @@ export async function convertIntentToAppointment(
       throw e;
     } finally {
       client.release();
+      if (selfHealDriftedSlotId) {
+        // A release UTÁN, best-effort — így nem tartunk fogva kapcsolatot,
+        // amíg egy másikra várunk (#11).
+        try {
+          await pool.query(
+            `UPDATE available_time_slots
+                SET state = 'booked', status = 'booked'
+              WHERE id = $1
+                AND state = 'free'
+                AND EXISTS (
+                  SELECT 1 FROM appointments a
+                   WHERE a.time_slot_id = $1
+                     AND ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}
+                )`,
+            [selfHealDriftedSlotId]
+          );
+        } catch {
+          /* non-blocking: drift is logged via SLOT_ALREADY_BOOKED return */
+        }
+      }
     }
   }
 

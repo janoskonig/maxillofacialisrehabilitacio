@@ -29,6 +29,17 @@ const DEFAULT_COEFFS = {
   shortHoldThreshold: 0.35,
 };
 
+export type NoShowRiskCoeffs = typeof DEFAULT_COEFFS;
+
+/**
+ * A no_show_risk_config együtthatók beolvasása (hibánál default). Exportált,
+ * hogy a hívó a DB-olvasást tranzakción KÍVÜL végezhesse el, és a tranzakcióban
+ * már csak a pure `computeNoShowRiskSync` fusson (WP-0.8, audit #11).
+ */
+export async function getNoShowRiskCoeffs(): Promise<NoShowRiskCoeffs> {
+  return getCoeffs();
+}
+
 async function getCoeffs(): Promise<typeof DEFAULT_COEFFS> {
   try {
     const pool = getDbPool();

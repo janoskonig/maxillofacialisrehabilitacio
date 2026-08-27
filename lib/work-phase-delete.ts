@@ -47,7 +47,26 @@ export async function releaseWorkPhasesForDelete(
     new Set(phases.map((p) => p.workPhaseCode).filter((c): c is string => !!c))
   );
 
-  // 1) Aktív foglalások lemondása. Elsődlegesen a közvetlen work_phase_id
+  // 1) Nyitott slot intent-ek lezárása — SZÁNDÉKOSAN a foglalás-scan ELŐTT
+  //    (WP-0.8, audit #13). Ha egy párhuzamos konverzió épp most alakítja az
+  //    open intentet appointmentté, ez az UPDATE a konverzió intent-sorának
+  //    zárján blokkolódik; mire lefut, a konvertált appointment már látszik a
+  //    lenti scan-nek, így azt is lemondjuk. Fordított sorrendnél (scan előbb)
+  //    a friss appointment kicsúszna a scan pillanatképéből, az intent pedig
+  //    időközben 'converted' lévén az expiry-t is elkerülné — élő foglalás
+  //    maradna egy törölt fázison. FOR UPDATE a scanben önmagában nem elég:
+  //    a még nem commitolt sor a SELECT találati halmazában sincs benne.
+  const intents = await client.query(
+    `UPDATE slot_intents
+        SET state = 'expired', updated_at = CURRENT_TIMESTAMP
+      WHERE episode_id = $1
+        AND state = 'open'
+        AND (work_phase_id = ANY($2::uuid[]) OR (work_phase_id IS NULL AND step_code = ANY($3::text[])))
+      RETURNING id`,
+    [episodeId, phaseIds, stepCodes]
+  );
+
+  // 2) Aktív foglalások lemondása. Elsődlegesen a közvetlen work_phase_id
   //    kapcsolat alapján; a régebbi, link nélküli sorokat a (step_code +
   //    jövőbeli) párosítás fogja meg — ugyanaz a szemantika, mint a
   //    "Mégsem kész" ág appointment-lemondásánál.
@@ -97,17 +116,6 @@ export async function releaseWorkPhasesForDelete(
       );
     }
   }
-
-  // 2) Nyitott slot intent-ek lezárása (nehogy a törölt fázisra fusson foglalás).
-  const intents = await client.query(
-    `UPDATE slot_intents
-        SET state = 'expired', updated_at = CURRENT_TIMESTAMP
-      WHERE episode_id = $1
-        AND state = 'open'
-        AND (work_phase_id = ANY($2::uuid[]) OR (work_phase_id IS NULL AND step_code = ANY($3::text[])))
-      RETURNING id`,
-    [episodeId, phaseIds, stepCodes]
-  );
 
   // 3) Párhuzamos (episode_plan_items) modell: archiválás + a legacy FK bontása.
   //    A táblák a 021-es migrációval jöttek létre; ha egy környezetben mégsem

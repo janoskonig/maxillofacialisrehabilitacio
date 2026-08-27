@@ -1,7 +1,8 @@
 /**
  * Hold expiry: expire appointments whose hold_expires_at has passed.
  * On expiry: appointment_status → cancelled_by_doctor, completion_notes = 'hold_expired',
- * slot returned to free. Emits appointment_status_events for audit.
+ * slot returned to free, a kapcsolt 'converted' slot_intent expired + a
+ * slot_intent_id link elengedve (WP-0.8). Emits appointment_status_events for audit.
  */
 
 import { getDbPool } from './db';
@@ -67,6 +68,26 @@ export async function runHoldExpiry(): Promise<{
         `UPDATE appointments SET appointment_status = $1, completion_notes = $2, hold_expires_at = NULL
           WHERE id = $3 AND appointment_status IS NULL`,
         ['cancelled_by_doctor', HOLD_EXPIRED_NOTE, apptId]
+      );
+
+      // WP-0.8 kiegészítés (a WP-0.4 review-jából): a hold-lejárattal
+      // lemondott appointmenthez kötött 'converted' slot_intent lejáratása +
+      // a link elengedése, a skip-ág pontos mintájára. E nélkül a halott sor
+      // örökre birtokolná az intentet (idx_appointments_unique_slot_intent),
+      // és a projektor által visszanyitott lépés MÁSIK slotra nem lenne
+      // újrafoglalható.
+      await client.query(
+        `UPDATE slot_intents si
+            SET state = 'expired', updated_at = CURRENT_TIMESTAMP
+           FROM appointments a
+          WHERE a.id = $1
+            AND a.slot_intent_id = si.id
+            AND si.state = 'converted'`,
+        [apptId]
+      );
+      await client.query(
+        `UPDATE appointments SET slot_intent_id = NULL WHERE id = $1 AND slot_intent_id IS NOT NULL`,
+        [apptId]
       );
 
       if (timeSlotId) {

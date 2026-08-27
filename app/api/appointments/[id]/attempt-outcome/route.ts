@@ -35,6 +35,7 @@ import { sendPushNotification } from '@/lib/push-notifications';
 import { logger } from '@/lib/logger';
 import { syncRecallTaskForAppointmentStatus } from '@/lib/recall-task-lifecycle';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
+import { translateUniqueViolation } from '@/lib/appointment-constraint-errors';
 
 export const dynamic = 'force-dynamic';
 
@@ -84,6 +85,7 @@ export const PATCH = roleHandler(
     let episodeId: string | null = null;
     let stepCode: string | null = null;
     let workPhaseId: string | null = null;
+    let stepSeq: number | null = null;
     let ewpId: string | null = null;
     let oldEwpStatus: string | null = null;
     let newEwpStatus: string | null = null;
@@ -102,6 +104,7 @@ export const PATCH = roleHandler(
         `SELECT a.id,
                 a.episode_id,
                 a.step_code,
+                a.step_seq,
                 a.patient_id,
                 a.start_time,
                 a.appointment_status as "appointmentStatus",
@@ -127,6 +130,7 @@ export const PATCH = roleHandler(
         episodeId = (appointment.episode_id as string | null) ?? null;
         stepCode = (appointment.step_code as string | null) ?? null;
         workPhaseId = (appointment.workPhaseId as string | null) ?? null;
+        stepSeq = (appointment.step_seq as number | null) ?? null;
 
         if (action === 'mark_unsuccessful') {
           // Engedélyezett forrás-állapotok: pending (NULL), completed, no_show.
@@ -201,16 +205,67 @@ export const PATCH = roleHandler(
               { status: 400 }
             );
           } else {
-            newStatus = null;
-            await client.query(
-              `UPDATE appointments
-                  SET appointment_status   = NULL,
-                      attempt_failed_reason = NULL,
-                      attempt_failed_at     = NULL,
-                      attempt_failed_by     = NULL
-                WHERE id = $1`,
-              [appointmentId]
-            );
+            // Audit #08 (WP-0.8): a visszavonás az appointmentet újra AKTÍVVÁ
+            // teszi (NULL státusz). Ha a lépésre időközben már lefoglalták a
+            // következő próbát, az UPDATE determinisztikusan beleszaladna az
+            // `idx_appointments_unique_work_phase_active` / `_pending_step`
+            // partial unique indexbe (23505 → generikus „Már létezik ilyen
+            // rekord" 409). Ehelyett előre lefuttatjuk ugyanazt az
+            // aktív-foglalás szondát, amit lentebb a `hasOtherActive` is
+            // használ — elsődlegesen `work_phase_id` szerint, `step_code`-dal
+            // csak a legacy (link nélküli) sorokra —, és TÍPUSOS 409-et adunk
+            // a blokkoló appointment id-jével (a reassign-step route mintájára).
+            const blockerConds: string[] = [];
+            const blockerParams: unknown[] = [appointmentId];
+            if (workPhaseId) {
+              blockerParams.push(workPhaseId);
+              blockerConds.push(`a.work_phase_id = $${blockerParams.length}`);
+            }
+            if (episodeId && stepCode && stepSeq !== null) {
+              // A legacy ág az `idx_appointments_unique_pending_step`
+              // (episode_id, step_code, step_seq; WHERE appointment_status IS
+              // NULL) tényleges szemantikáját tükrözi: csak azonos step_seq-ű,
+              // NULL státuszú sor blokkol; NULL step_seq-ű sorok a btree-ben
+              // sosem ütköznek, ilyenkor a feltétel el is marad.
+              blockerParams.push(episodeId, stepCode, stepSeq);
+              blockerConds.push(
+                `(a.work_phase_id IS NULL AND a.episode_id = $${blockerParams.length - 2} AND a.step_code = $${blockerParams.length - 1} AND a.step_seq = $${blockerParams.length} AND a.appointment_status IS NULL)`
+              );
+            }
+            const blockerRow =
+              blockerConds.length > 0
+                ? await client.query(
+                    `SELECT a.id FROM appointments a
+                      WHERE a.id <> $1
+                        AND ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}
+                        AND (${blockerConds.join(' OR ')})
+                      LIMIT 1`,
+                    blockerParams
+                  )
+                : null;
+
+            if (blockerRow && blockerRow.rows.length > 0) {
+              earlyResponse = NextResponse.json(
+                {
+                  error:
+                    'A visszavonás nem lehetséges: erre a lépésre már le van foglalva a következő próba. Előbb mondd le vagy rendezd át a meglévő foglalást.',
+                  code: 'RETRY_ALREADY_BOOKED',
+                  blockingAppointmentId: blockerRow.rows[0].id as string,
+                },
+                { status: 409 }
+              );
+            } else {
+              newStatus = null;
+              await client.query(
+                `UPDATE appointments
+                    SET appointment_status   = NULL,
+                        attempt_failed_reason = NULL,
+                        attempt_failed_at     = NULL,
+                        attempt_failed_by     = NULL
+                  WHERE id = $1`,
+                [appointmentId]
+              );
+            }
           }
         }
       }
@@ -391,6 +446,20 @@ export const PATCH = roleHandler(
         await client.query('ROLLBACK');
       } catch {
         /* már bezárt connection — felejtsük el */
+      }
+      // Audit #08 (WP-0.8): versenyhelyzet-hátvéd — ha a fenti szonda és az
+      // UPDATE között foglalták le a következő próbát, a 23505-öt típusos
+      // 409-re fordítjuk a generikus „Már létezik ilyen rekord" helyett.
+      const translation = translateUniqueViolation(txError);
+      if (translation) {
+        return NextResponse.json(
+          {
+            error: translation.error,
+            code: translation.code,
+            ...(translation.hint ? { hint: translation.hint } : {}),
+          },
+          { status: translation.status }
+        );
       }
       throw txError;
     } finally {
