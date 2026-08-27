@@ -14,7 +14,11 @@ const RELEASE_STATUSES = new Set([
   'unsuccessful',
 ]);
 
-/** Zárolás + scope/lifecycle ellenőrzés az időpont-foglalás tranzakciójában. */
+/**
+ * Zárolás + scope/lifecycle ellenőrzés az időpont-foglalás tranzakciójában.
+ * A 088-as migráció óta bármely pozitív intervallumú (auto vagy kézi) recall
+ * foglalható; a NULL-intervallumos legacy sorok maradnak kizárva.
+ */
 export async function validateRecallTaskForBooking(
   client: Pick<PoolClient, 'query'>,
   input: { taskId: string; patientId: string; episodeId: string | null },
@@ -32,7 +36,7 @@ export async function validateRecallTaskForBooking(
        LEFT JOIN appointments a ON a.id = et.appointment_id
       WHERE et.id = $1
         AND et.task_type = 'recall_due'
-        AND et.recall_interval_days IN (180, 365)
+        AND et.recall_interval_days IS NOT NULL
       FOR UPDATE OF et`,
     [input.taskId],
   );

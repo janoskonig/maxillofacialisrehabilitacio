@@ -9,26 +9,78 @@ import {
 } from '@/lib/recall-task-lifecycle';
 
 describe('recall ütemezés', () => {
-  it('a klinikai átadás dátumától számolja a 6/12 hónapot', async () => {
+  it('teljesült kezelés híján a klinikai átadás (STAGE_6) dátumától számol, low kadenciával', async () => {
     const deliveryAt = new Date('2026-03-28T10:00:00.000Z');
     const query = vi.fn()
-      .mockResolvedValueOnce({ rows: [{ id: 'ep-1', delivery_at: deliveryAt }] })
+      .mockResolvedValueOnce({
+        rows: [{ id: 'ep-1', recall_risk_level: null, stage6_at: deliveryAt, last_completed_at: null }],
+      })
       .mockResolvedValueOnce({ rowCount: 2, rows: [{ id: 'r-1' }, { id: 'r-2' }] });
 
     await expect(ensureRecallTasksForEpisode('ep-1', { query } as any)).resolves.toBe(2);
 
     expect(query).toHaveBeenCalledTimes(2);
     expect(query.mock.calls[0][0]).toMatch(/MIN\(se\.at\)[\s\S]*STAGE_6/i);
-    expect(query.mock.calls[1][0]).toMatch(/ON CONFLICT \(episode_id, recall_interval_days\)/i);
+    // Az arbiter a 088-as partiális (source='auto') unique indexet célozza,
+    // és a beszúrt sor is auto-forrású.
+    expect(query.mock.calls[1][0]).toMatch(
+      /ON CONFLICT \(episode_id, recall_interval_days\)[\s\S]*source = 'auto'/i,
+    );
     expect(query.mock.calls[1][1][1]).toEqual([180, 365]);
     expect(query.mock.calls[1][1][2].map((d: Date) => d.toISOString())).toEqual([
       '2026-09-24T10:00:00.000Z',
       '2027-03-28T10:00:00.000Z',
     ]);
+    expect(query.mock.calls[1][1][3]).toEqual(['6 hónapos kontroll', '12 hónapos kontroll']);
+  });
+
+  it('a horgony az utolsó teljesült kezelés, ha az későbbi a STAGE_6-nál', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'ep-1',
+          recall_risk_level: null,
+          stage6_at: new Date('2026-03-28T10:00:00.000Z'),
+          last_completed_at: new Date('2026-05-01T08:00:00.000Z'),
+        }],
+      })
+      .mockResolvedValueOnce({ rowCount: 2, rows: [{ id: 'r-1' }, { id: 'r-2' }] });
+
+    await ensureRecallTasksForEpisode('ep-1', { query } as any);
+
+    expect(query.mock.calls[1][1][2].map((d: Date) => d.toISOString())).toEqual([
+      '2026-10-28T08:00:00.000Z',
+      '2027-05-01T08:00:00.000Z',
+    ]);
+  });
+
+  it('high rizikószintnél a sűrűbb kadenciát generálja', async () => {
+    const query = vi.fn()
+      .mockResolvedValueOnce({
+        rows: [{
+          id: 'ep-1',
+          recall_risk_level: 'high',
+          stage6_at: new Date('2026-03-28T10:00:00.000Z'),
+          last_completed_at: null,
+        }],
+      })
+      .mockResolvedValueOnce({ rowCount: 4, rows: [{ id: 'r-1' }] });
+
+    await ensureRecallTasksForEpisode('ep-1', { query } as any);
+
+    expect(query.mock.calls[1][1][1]).toEqual([30, 90, 180, 365]);
   });
 
   it('STAGE_6 nélkül nem hoz létre fallback-now feladatot', async () => {
     const query = vi.fn().mockResolvedValueOnce({ rows: [] });
+    await expect(ensureRecallTasksForEpisode('ep-1', { query } as any)).resolves.toBe(0);
+    expect(query).toHaveBeenCalledOnce();
+  });
+
+  it('nyitott epizódon is 0, ha még nincs STAGE_6 esemény', async () => {
+    const query = vi.fn().mockResolvedValueOnce({
+      rows: [{ id: 'ep-1', recall_risk_level: 'high', stage6_at: null, last_completed_at: new Date() }],
+    });
     await expect(ensureRecallTasksForEpisode('ep-1', { query } as any)).resolves.toBe(0);
     expect(query).toHaveBeenCalledOnce();
   });
