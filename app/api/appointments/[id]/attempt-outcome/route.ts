@@ -175,6 +175,19 @@ export const PATCH = roleHandler(
                   AND si.state = 'converted'`,
               [appointmentId]
             );
+
+            // WP-0.4 (kódaudit #03): a sikertelen (halott) sor ne birtokolja
+            // tovább az intentet — az `idx_appointments_unique_slot_intent`
+            // miatt a visszanyitott intent MÁSIK slotra konverziója különben
+            // 23505 → INTENT_ALREADY_CONVERTED 409 lenne. A fenti lejáratás
+            // UTÁN fut (az a `a.slot_intent_id` joinra épül).
+            await client.query(
+              `UPDATE appointments
+                  SET slot_intent_id = NULL
+                WHERE id = $1
+                  AND slot_intent_id IS NOT NULL`,
+              [appointmentId]
+            );
           }
         } else {
           // 'revert' — csak akkor van értelme, ha jelenleg unsuccessful.

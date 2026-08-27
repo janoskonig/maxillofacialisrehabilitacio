@@ -340,6 +340,21 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
         [appointmentId]
       );
 
+      // WP-0.4 (kódaudit #03): a halott (lemondott / no-show) appointment sor
+      // ne birtokolja tovább az intentet. E nélkül az
+      // `idx_appointments_unique_slot_intent` miatt a lejáratott→visszanyitott
+      // intent következő, MÁSIK slotra történő konverziója 23505-tel hasalna
+      // (INTENT_ALREADY_CONVERTED 409). A 085-ös migráció partiális indexe a
+      // régi adatot is védi; ez az írás az új sorokat tartja tisztán. A fenti
+      // intent-lejáratás UTÁN kell futnia (az a `a.slot_intent_id` joinra épül).
+      await client.query(
+        `UPDATE appointments
+            SET slot_intent_id = NULL
+          WHERE id = $1
+            AND slot_intent_id IS NOT NULL`,
+        [appointmentId]
+      );
+
       // Slot-state ↔ appointment_status szinkron (W: bulk-convert robustness).
       // A cancelled_by_* megsz\u00fcntet\u00e9s mostm\u00e1r felszabad\u00edtja a slotot is, hogy a
       // bulk-convert / individual booking flow \u00fajra haszn\u00e1lhassa. A `no_show`-ra
