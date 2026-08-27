@@ -10,7 +10,9 @@ export default defineConfig({
     include: ['**/*.test.{ts,tsx}'],
     // Az integrációs tesztek külön configgal és valódi DB-vel futnak:
     // vitest.integration.config.ts (npm run test:integration).
-    exclude: [...configDefaults.exclude, '__tests__/integration/**'],
+    // A .claude/** kizárás a párhuzamos agent-worktree-k tesztmásolatai ellen
+    // kell (.claude/worktrees/<agent>/__tests__/... különben ide is beszámítana).
+    exclude: [...configDefaults.exclude, '__tests__/integration/**', '.claude/**'],
     setupFiles: [],
   },
   resolve: {
