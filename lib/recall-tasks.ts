@@ -12,7 +12,8 @@
  * A kézi (source='manual') sorokhoz az auto-generálás SOHA nem nyúl: nem
  * írja felül és nem duplikálja őket (az ON CONFLICT csak az auto sorok
  * partiális unique indexét célozza, és azonos intervallumú kézi sor mellé
- * auto sor nem is szúródik be).
+ * ÚJ auto sor nem is szúródik be). A már létező auto sor horgony-frissítését
+ * a kézi ikersor nem nyomja el.
  */
 
 import type { Pool, PoolClient } from 'pg';
@@ -81,8 +82,10 @@ export async function ensureRecallTasksForEpisode(
   // Egyetlen UPSERT: párhuzamos hívásnál sincs duplikáció, félbemaradt régi
   // létrehozásnál a hiányzó sor önjavítóan létrejön, horgony-eltolódásnál
   // (pl. újabb teljesült kontroll) csak a még nem foglalt/teljesített sor
-  // határideje korrigálódik. A NOT EXISTS őr miatt azonos intervallumú KÉZI
-  // sor mellé nem születik auto ikersor.
+  // határideje korrigálódik. A kézi-őr csak az ÚJ auto sor beszúrását fogja
+  // meg (azonos intervallumú KÉZI sor mellé nem születik auto ikersor); ha az
+  // auto sor MÁR LÉTEZIK, az EXISTS-ág átengedi, így a horgony-frissítése
+  // (ON CONFLICT DO UPDATE) kézi ikersor mellett is lefut.
   const result = await db.query(
     `INSERT INTO episode_tasks (episode_id, task_type, due_at, recall_interval_days, source, label)
      SELECT $1, 'recall_due', s.due_at, s.interval_days, 'auto', s.label
@@ -94,6 +97,14 @@ export async function ensureRecallTasksForEpisode(
            AND m.task_type = 'recall_due'
            AND m.source = 'manual'
            AND m.recall_interval_days = s.interval_days
+      )
+      OR EXISTS (
+        SELECT 1
+          FROM episode_tasks e
+         WHERE e.episode_id = $1
+           AND e.task_type = 'recall_due'
+           AND e.source = 'auto'
+           AND e.recall_interval_days = s.interval_days
       )
      ON CONFLICT (episode_id, recall_interval_days)
        WHERE task_type = 'recall_due' AND recall_interval_days IS NOT NULL AND source = 'auto'

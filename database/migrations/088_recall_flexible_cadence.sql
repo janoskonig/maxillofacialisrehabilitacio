@@ -13,6 +13,13 @@
 --     generált címkét kapnak.
 --
 -- IDEMPOTENS: IF EXISTS / IF NOT EXISTS őrökkel, ismételt futtatásra biztonságos.
+--
+-- DEPLOY-KÖTÉS — KÉTIRÁNYÚ, a kóddal szigorúan együtt jár:
+--   * régi kód + ÚJ séma: az ensure ON CONFLICT-ja a régi (törölt) unique
+--     indexet célozná → 42P10, a recall GET 500-zal hasal;
+--   * új kód + RÉGI séma: a source/label/created_by oszlopok hiányoznak → 42703.
+-- Ezért a 088-at ugyanabban a deployban, az új kód kiszolgálása ELŐTT kell
+-- futtatni; rolling deploynál rövid hibaablak várható a recall GET-en.
 
 BEGIN;
 

@@ -7,7 +7,8 @@ import { AppointmentBookingSection } from './AppointmentBookingSection';
 interface RecallTask {
   id: string;
   episodeId: string;
-  intervalDays: 180 | 365;
+  intervalDays: number;
+  label: string | null;
   dueAt: string;
   completedAt: string | null;
   appointmentId: string | null;
@@ -87,7 +88,9 @@ export function EpisodeRecallPanel({ episodeId, patientId }: { episodeId: string
       <div className="mt-3 space-y-2">
         {tasks.map((task) => {
           const overdue = !task.completedAt && !task.appointmentId && new Date(task.dueAt).getTime() < now;
-          const label = task.intervalDays === 180 ? '6 hónapos recall' : '12 hónapos recall';
+          // Minimál-fix a WP-3.3-as panel-átalakításig: a GET label-jét mutatjuk,
+          // a régi 180/365-ös címke csak fallback (nem-180 ≠ automatikusan 12 hónapos).
+          const label = task.label ?? (task.intervalDays === 180 ? '6 hónapos recall' : '12 hónapos recall');
           return (
             <div key={task.id} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3">
               <div className="flex flex-wrap items-center justify-between gap-3">

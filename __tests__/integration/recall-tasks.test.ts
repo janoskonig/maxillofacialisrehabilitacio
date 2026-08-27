@@ -277,6 +277,64 @@ describe('auto-generálás — rizikó-kadencia és horgony', () => {
     });
   });
 
+  it('foglalt (nem teljesült) auto sorhoz a horgony-eltolódás nem nyúl', async () => {
+    await withRollback(async (client) => {
+      const doctor = await createTestUser(client);
+      const patient = await createTestPatient(client);
+      const episode = await createTestEpisode(client, patient.id);
+      const stage6At = new Date('2026-05-01T10:00:00.000Z');
+      await createTestStageEvent(client, {
+        patientId: patient.id,
+        episodeId: episode.id,
+        at: stage6At,
+      });
+      await ensureRecallTasksForEpisode(episode.id, client);
+
+      // A 6 hónapos sorra időpontot foglalunk (aktív, NEM teljesült)…
+      const bookedAt = new Date('2026-10-28T09:00:00.000Z');
+      const bookedSlot = await createTestSlot(client, doctor.id, { startTime: bookedAt });
+      const bookedAppointment = await createTestAppointment(client, {
+        patientId: patient.id,
+        timeSlotId: bookedSlot.id,
+        episodeId: episode.id,
+        startTime: bookedAt,
+        appointmentStatus: null,
+      });
+      const originalDue = (
+        await client.query(
+          `UPDATE episode_tasks SET appointment_id = $2
+            WHERE episode_id = $1 AND task_type = 'recall_due' AND recall_interval_days = 180
+            RETURNING due_at`,
+          [episode.id, bookedAppointment.id]
+        )
+      ).rows[0].due_at;
+
+      // …majd egy újabb teljesült időpont eltolja a horgonyt.
+      const controlAt = new Date('2026-07-15T09:00:00.000Z');
+      const controlSlot = await createTestSlot(client, doctor.id, { startTime: controlAt });
+      await createTestAppointment(client, {
+        patientId: patient.id,
+        timeSlotId: controlSlot.id,
+        episodeId: episode.id,
+        startTime: controlAt,
+        appointmentStatus: 'completed',
+      });
+      await ensureRecallTasksForEpisode(episode.id, client);
+
+      const { rows } = await client.query(
+        `SELECT recall_interval_days, due_at, appointment_id, completed_at FROM episode_tasks
+          WHERE episode_id = $1 AND task_type = 'recall_due' ORDER BY recall_interval_days`,
+        [episode.id]
+      );
+      // A foglalt 180-as sor határideje NEM íródik át…
+      expect(rows[0].appointment_id).toBe(bookedAppointment.id);
+      expect(rows[0].completed_at).toBeNull();
+      expect(new Date(rows[0].due_at).getTime()).toBe(new Date(originalDue).getTime());
+      // …a foglalatlan 365-ös az új horgonyhoz igazodik.
+      expect(new Date(rows[1].due_at).getTime()).toBe(controlAt.getTime() + 365 * DAY_MS);
+    });
+  });
+
   it('azonos intervallumú kézi sor mellé nem születik auto ikersor, és a kézi sor érintetlen marad', async () => {
     await withRollback(async (client) => {
       const patient = await createTestPatient(client);
@@ -307,6 +365,65 @@ describe('auto-generálás — rizikó-kadencia és horgony', () => {
       ]);
       const manualRow = rows.find((r: any) => r.id === manual.id);
       expect(manualRow.label).toBe('Kézi féléves kontroll');
+      expect(new Date(manualRow.due_at).getTime()).toBe(manualDue.getTime());
+    });
+  });
+
+  it('kézi ikersor a MÁR LÉTEZŐ auto sor horgony-frissítését nem nyomja el', async () => {
+    await withRollback(async (client) => {
+      const doctor = await createTestUser(client);
+      const patient = await createTestPatient(client);
+      const episode = await createTestEpisode(client, patient.id);
+      const stage6At = new Date('2026-05-01T10:00:00.000Z');
+      await createTestStageEvent(client, {
+        patientId: patient.id,
+        episodeId: episode.id,
+        at: stage6At,
+      });
+      // Előbb létrejön az auto 180/365 pár…
+      await ensureRecallTasksForEpisode(episode.id, client);
+
+      // …majd az auto 180 MELLÉ kézi 180-as sor kerül.
+      const manualDue = new Date('2027-01-15T08:00:00.000Z');
+      const manual = await createTestRecallTask(client, {
+        episodeId: episode.id,
+        intervalDays: 180,
+        dueAt: manualDue,
+        source: 'manual',
+        label: 'Kézi féléves kontroll',
+      });
+
+      // Új teljesült kontroll tolja a horgonyt.
+      const controlAt = new Date('2026-06-10T09:00:00.000Z');
+      const slot = await createTestSlot(client, doctor.id, { startTime: controlAt });
+      await createTestAppointment(client, {
+        patientId: patient.id,
+        timeSlotId: slot.id,
+        episodeId: episode.id,
+        startTime: controlAt,
+        appointmentStatus: 'completed',
+      });
+      await ensureRecallTasksForEpisode(episode.id, client);
+
+      const { rows } = await client.query(
+        `SELECT id, recall_interval_days, due_at, source FROM episode_tasks
+          WHERE episode_id = $1 AND task_type = 'recall_due'
+          ORDER BY recall_interval_days, source`,
+        [episode.id]
+      );
+      // Nincs ikersor: auto 180 + kézi 180 + auto 365.
+      expect(rows.map((r: any) => [r.recall_interval_days, r.source])).toEqual([
+        [180, 'auto'],
+        [180, 'manual'],
+        [365, 'auto'],
+      ]);
+      // Az auto 180 az ÚJ horgonyhoz igazodik (nem ragad a STAGE_6-on)…
+      const auto180 = rows.find((r: any) => r.recall_interval_days === 180 && r.source === 'auto');
+      expect(new Date(auto180.due_at).getTime()).toBe(controlAt.getTime() + 180 * DAY_MS);
+      // …ahogy az auto 365 is; a kézi sor érintetlen.
+      const auto365 = rows.find((r: any) => r.recall_interval_days === 365 && r.source === 'auto');
+      expect(new Date(auto365.due_at).getTime()).toBe(controlAt.getTime() + 365 * DAY_MS);
+      const manualRow = rows.find((r: any) => r.id === manual.id);
       expect(new Date(manualRow.due_at).getTime()).toBe(manualDue.getTime());
     });
   });
@@ -361,6 +478,50 @@ describe('rizikószint-váltás — syncRecallTasksForRiskChange', () => {
         [180, 'auto'],
         [365, 'auto'],
       ]);
+    });
+  });
+
+  it('foglalt (nem teljesült) auto sort nem ajánl fel törlésre', async () => {
+    await withRollback(async (client) => {
+      const doctor = await createTestUser(client);
+      const patient = await createTestPatient(client);
+      const episode = await createTestEpisode(client, patient.id);
+      await createTestStageEvent(client, { patientId: patient.id, episodeId: episode.id });
+
+      await client.query(`UPDATE patient_episodes SET recall_risk_level = 'high' WHERE id = $1`, [
+        episode.id,
+      ]);
+      await ensureRecallTasksForEpisode(episode.id, client);
+
+      // A 90 napos auto sorra aktív (NEM teljesült) foglalás kerül.
+      const slot = await createTestSlot(client, doctor.id);
+      const appointment = await createTestAppointment(client, {
+        patientId: patient.id,
+        timeSlotId: slot.id,
+        episodeId: episode.id,
+        appointmentStatus: null,
+      });
+      await client.query(
+        `UPDATE episode_tasks SET appointment_id = $2
+          WHERE episode_id = $1 AND task_type = 'recall_due' AND recall_interval_days = 90`,
+        [episode.id, appointment.id]
+      );
+
+      await client.query(`UPDATE patient_episodes SET recall_risk_level = 'low' WHERE id = $1`, [
+        episode.id,
+      ]);
+      const result = await syncRecallTasksForRiskChange(episode.id, client);
+
+      // A kadencián kívüli 30 felajánlott, de a foglalt 90 NEM.
+      expect(result.obsoleteAutoTasks.map((t) => t.intervalDays)).toEqual([30]);
+
+      // A foglalt sor és a foglalása érintetlen.
+      const { rows } = await client.query(
+        `SELECT appointment_id FROM episode_tasks
+          WHERE episode_id = $1 AND task_type = 'recall_due' AND recall_interval_days = 90`,
+        [episode.id]
+      );
+      expect(rows[0].appointment_id).toBe(appointment.id);
     });
   });
 });
