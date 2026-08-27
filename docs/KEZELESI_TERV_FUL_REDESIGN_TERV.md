@@ -19,14 +19,14 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 |---|---|---|---|
 | WP-0.0 harness | ✅ | [#58](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/58) | Pillanatkép-alapú teszt-DB (a legacy lánc friss DB-n törik); route-teszteknél cleanup-minta a rollback helyett — dokumentálva |
 | WP-0.1 skip felszabadítás | ⬜ | — | |
-| WP-0.2 intent-lejáratás + horgony | ⬜ | — | |
-| WP-0.3 audit-tombstone (084) | ⬜ | — | |
+| WP-0.2 intent-lejáratás + horgony | ✅ | [#60](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/60) | #10-nél a skip-ági horgony-változat került be (az első intent padlója marad `now`) |
+| WP-0.3 audit-tombstone (084) | ✅ | [#63](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/63) | Közös `insertWorkPhaseAudit` helper; review-javítás: nemlétező fázisnál NULL id-s tombstone |
 | WP-0.4 slot_intent_id (085) | ⬜ | — | |
 | WP-0.5 reorder SAVEPOINT | ⬜ | — | |
 | WP-0.6 köteg EWP-link | ⬜ | — | |
 | WP-0.7 GET + tombstone (086) | ⬜ | — | |
 | WP-0.8 kis javítások (#08/#09/#11/#13) | ⬜ | — | |
-| WP-0.9 pinning-teszt | ⬜ | — | |
+| WP-0.9 pinning-teszt | ✅ | [#59](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/59) | A 029+059 együttes (hatályos) állapotot pinneli; index-őr regexek toleránsak |
 | WP-1.1 validáció-zajcsökkentés | ⬜ | — | |
 | WP-1.2 integritás kivezetés | ⬜ | — | |
 | WP-1.3 lánc-banner szöveg | ⬜ | — | |
