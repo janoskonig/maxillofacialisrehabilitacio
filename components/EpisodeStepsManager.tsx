@@ -1180,6 +1180,16 @@ export function EpisodeStepsManager({
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
       const data = await res.json();
       setSteps(mapWorkPhasesResponse(data.workPhases ?? data.steps));
+      if (data.partial) {
+        // A sorrend mentve, de az időpont-átkötés nem sikerült — ne maradjon néma.
+        showToast(
+          typeof data.message === 'string' && data.message
+            ? data.message
+            : 'A sorrend mentve, de az időpontok átkötése nem sikerült maradéktalanul.',
+          'info',
+          8000
+        );
+      }
       notifyPlanChanged();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba az átrendezésnél', 'error');
