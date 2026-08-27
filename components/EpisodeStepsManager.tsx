@@ -14,6 +14,7 @@ import { LONG_DURATION_MINUTES } from '@/lib/treatment-plan-validation';
 import { useWorkPhaseBooking } from '@/hooks/useWorkPhaseBooking';
 import { WorkPhaseBookingModals } from './WorkPhaseBookingModals';
 import { PlanStartDateControl } from './PlanStartDateControl';
+import { PlanHistoryLog } from './PlanHistoryLog';
 import type { WorklistRowState } from '@/lib/worklist-types';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -1979,6 +1980,9 @@ export function EpisodeStepsManager({
                   )}
                 </div>
               )}
+
+              {/* ─── WP-2.2: „A terv változásai" — olvasható napló ────── */}
+              <PlanHistoryLog episodeId={episodeId} />
             </>
           )}
         </div>
