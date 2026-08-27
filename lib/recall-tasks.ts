@@ -1,13 +1,16 @@
 /**
  * Kezelési tervtől független gondozási (recall) feladatok.
  *
- * Auto-generálás: az epizód első STAGE_6 (átadás) eseménye után indul, a
- * rizikószint (patient_episodes.recall_risk_level, NULL → 'low') szerinti
- * kadenciával. A HORGONY nem (csak) a STAGE_6 esemény: a recall az epizód
- * utolsó teljesült kezeléséhez/kontrolljához (legutóbbi completed
- * appointment / munkafázis) képest indul, így a rövid távú (1-3 hetes)
- * visszarendelés is fogalmilag belefér; ha ilyen nincs, az első STAGE_6
- * esemény időpontja a horgony. A tényleges időpont a control poolba foglalható.
+ * Auto-generálás: bármely nyitott epizódra indul, amelynek már van HORGONYA —
+ * azaz legalább egy teljesült kezelése/kontrollja (legutóbbi completed
+ * appointment / munkafázis), vagy STAGE_6 (átadás) eseménye. A felhasználó
+ * 2026-08-27-i döntése lazította a korábbi kaput (auto-sor csak átadás után):
+ * átadás ELŐTT is születik auto-recall, az utolsó teljesült kezeléshez
+ * horgonyozva, a rizikószint (patient_episodes.recall_risk_level,
+ * NULL → 'low') szerinti kadenciával — így a rövid távú (1-3 hetes)
+ * visszarendelés is belefér. Horgony nélküli (még semmit nem teljesített)
+ * epizódra továbbra sem születik auto-sor. A tényleges időpont a control
+ * poolba foglalható.
  *
  * A kézi (source='manual') sorokhoz az auto-generálás SOHA nem nyúl: nem
  * írja felül és nem duplikálja őket (az ON CONFLICT csak az auto sorok
@@ -70,11 +73,16 @@ export async function ensureRecallTasksForEpisode(
         AND p.halal_datum IS NULL`,
     [episodeId],
   );
-  if (episodeResult.rows.length === 0 || !episodeResult.rows[0].stage6_at) return 0;
+  if (episodeResult.rows.length === 0) return 0;
 
   const row = episodeResult.rows[0];
   // Horgony: az utolsó teljesült kezelés/kontroll; ha (még) nincs, a STAGE_6.
-  const anchorAt = new Date(row.last_completed_at ?? row.stage6_at);
+  // Ha egyik sincs (friss epizód, semmi teljesült), nincs mihez horgonyozni —
+  // auto-sor nem születik. (A STAGE_6 mint KAPU 2026-08-27-én, felhasználói
+  // döntésre lazult: átadás előtt is generálunk, ha van teljesült kezelés.)
+  const anchorRaw = row.last_completed_at ?? row.stage6_at;
+  if (!anchorRaw) return 0;
+  const anchorAt = new Date(anchorRaw);
   const intervals = [...recallCadenceForRisk(row.recall_risk_level)];
   const dueDates = intervals.map((days) => recallDueAt(anchorAt, days));
   const labels = intervals.map((days) => recallLabelForInterval(days));
