@@ -6,7 +6,6 @@ import {
   Clock,
   Download,
   User,
-  Mail,
   Trash2,
   Edit2,
   X,
@@ -16,13 +15,9 @@ import {
   XCircle,
   AlertCircle,
   Clock as ClockIcon,
-  Plus,
 } from 'lucide-react';
 import { Patient } from '@/lib/types';
-import { formatDateTime, toLocalISOString, digitsOnly } from '@/lib/dateUtils';
-import { DateTimePicker } from './DateTimePicker';
-import { MobileTable } from './mobile/MobileTable';
-import { MobileKeyValueGrid } from './mobile/MobileKeyValueGrid';
+import { formatDateTime } from '@/lib/dateUtils';
 
 // ---------------------------------------------------------------------------
 // Types
@@ -52,18 +47,6 @@ interface Appointment {
   appointmentType?: 'elso_konzultacio' | 'munkafazis' | 'kontroll' | null;
 }
 
-interface PendingAppointment {
-  id: string;
-  patientId: string;
-  timeSlotId: string;
-  startTime: string;
-  patientName: string | null;
-  patientTaj: string | null;
-  patientEmail: string | null;
-  approvalStatus: 'pending' | 'approved' | 'rejected';
-  createdAt: string;
-}
-
 interface PaginationInfo {
   page: number;
   limit: number;
@@ -71,23 +54,21 @@ interface PaginationInfo {
   totalPages: number;
 }
 
-export type BookingMode = 'standard' | 'conditional';
-
 export interface AppointmentBookingProps {
-  mode?: BookingMode;
   patientId?: string | null;
-  patientEmail?: string | null;
   onBookingComplete?: () => void;
 }
 
 // ---------------------------------------------------------------------------
 // Component
+//
+// Normál (azonnali) időpontfoglalás és a lefoglalt időpontok kezelése.
+// A feltételes időpont-ajánlatok (korábban `mode === 'conditional'`) a
+// ConditionalAppointmentOffers komponensbe kerültek (WP-1.4).
 // ---------------------------------------------------------------------------
 
 export function AppointmentBooking({
-  mode = 'standard',
   patientId: propPatientId,
-  patientEmail,
   onBookingComplete,
 }: AppointmentBookingProps = {}) {
   // ---- Shared state ----
@@ -98,7 +79,7 @@ export function AppointmentBooking({
   const [selectedSlot, setSelectedSlot] = useState<string>('');
   const isLoadingRef = useRef(false);
 
-  // ---- Standard-mode state ----
+  // ---- Appointments state ----
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [appointmentsPagination, setAppointmentsPagination] = useState<PaginationInfo | null>(null);
   const [appointmentsPage, setAppointmentsPage] = useState<number>(1);
@@ -115,17 +96,6 @@ export function AppointmentBooking({
     isLate: false,
   });
 
-  // ---- Conditional-mode state ----
-  const [pendingAppointments, setPendingAppointments] = useState<PendingAppointment[]>([]);
-  const [rejectedAppointments, setRejectedAppointments] = useState<PendingAppointment[]>([]);
-  const [alternativeSlots, setAlternativeSlots] = useState<string[]>([]);
-  const [creating, setCreating] = useState(false);
-  const [showNewSlotForm, setShowNewSlotForm] = useState(false);
-  const [newSlotDateTime, setNewSlotDateTime] = useState<Date | null>(null);
-  const [newSlotTeremszam, setNewSlotTeremszam] = useState<string>('');
-  const [selectedAppointmentType, setSelectedAppointmentType] = useState<'elso_konzultacio' | 'munkafazis' | 'kontroll' | null>(null);
-  const [creatingNewSlot, setCreatingNewSlot] = useState(false);
-
   // =========================================================================
   // Data loading
   // =========================================================================
@@ -138,11 +108,9 @@ export function AppointmentBooking({
       const limit = 100;
       const maxPages = 100;
 
-      const onlyAvailableParam = mode === 'conditional' ? '&onlyAvailable=true' : '';
-
       while (hasMore && page <= maxPages) {
         const response = await fetch(
-          `/api/time-slots?page=${page}&limit=${limit}${onlyAvailableParam}`,
+          `/api/time-slots?page=${page}&limit=${limit}`,
           { credentials: 'include' },
         );
         if (response.ok) {
@@ -172,7 +140,7 @@ export function AppointmentBooking({
     } catch (error) {
       console.error('Error loading time slots:', error);
     }
-  }, [mode]);
+  }, []);
 
   const loadPatients = useCallback(async () => {
     if (propPatientId) return;
@@ -181,22 +149,16 @@ export function AppointmentBooking({
       const response = await fetch('/api/patients', { credentials: 'include' });
       if (response.ok) {
         const data = await response.json();
-        const allPatients: Patient[] = data.patients || [];
-        if (mode === 'conditional') {
-          setPatients(allPatients.filter((p) => p.email && p.email.trim() !== ''));
-        } else {
-          setPatients(allPatients);
-        }
+        setPatients(data.patients || []);
       }
     } catch (error) {
       console.error('Error loading patients:', error);
     }
-  }, [propPatientId, mode]);
+  }, [propPatientId]);
 
-  // Standard mode: load all appointments with pagination
+  // Load all appointments with pagination
   const loadAppointments = useCallback(
     async (page: number = 1) => {
-      if (mode !== 'standard') return;
       try {
         const response = await fetch(`/api/appointments?page=${page}&limit=50`, {
           credentials: 'include',
@@ -210,27 +172,8 @@ export function AppointmentBooking({
         console.error('Error loading appointments:', error);
       }
     },
-    [mode],
+    [],
   );
-
-  // Conditional mode: load pending / rejected appointments
-  const loadPendingAppointments = useCallback(async () => {
-    if (mode !== 'conditional') return;
-    try {
-      const url = propPatientId
-        ? `/api/appointments?patientId=${propPatientId}`
-        : '/api/appointments';
-      const response = await fetch(url, { credentials: 'include' });
-      if (response.ok) {
-        const data = await response.json();
-        const all = data.appointments || [];
-        setPendingAppointments(all.filter((apt: any) => apt.approvalStatus === 'pending'));
-        setRejectedAppointments(all.filter((apt: any) => apt.approvalStatus === 'rejected'));
-      }
-    } catch (error) {
-      console.error('Error loading appointments:', error);
-    }
-  }, [mode, propPatientId]);
 
   const loadData = useCallback(async () => {
     if (isLoadingRef.current) return;
@@ -238,16 +181,12 @@ export function AppointmentBooking({
     try {
       isLoadingRef.current = true;
       setLoading(true);
-      if (mode === 'standard') {
-        await Promise.all([loadAvailableSlots(), loadAppointments(appointmentsPage), loadPatients()]);
-      } else {
-        await Promise.all([loadAvailableSlots(), loadPendingAppointments(), loadPatients()]);
-      }
+      await Promise.all([loadAvailableSlots(), loadAppointments(appointmentsPage), loadPatients()]);
     } finally {
       setLoading(false);
       isLoadingRef.current = false;
     }
-  }, [mode, loadAvailableSlots, loadAppointments, loadPendingAppointments, loadPatients, appointmentsPage]);
+  }, [loadAvailableSlots, loadAppointments, loadPatients, appointmentsPage]);
 
   // =========================================================================
   // Effects
@@ -262,11 +201,11 @@ export function AppointmentBooking({
   }, [loadData]);
 
   useEffect(() => {
-    if (mode === 'standard') loadAppointments(appointmentsPage);
-  }, [appointmentsPage, loadAppointments, mode]);
+    loadAppointments(appointmentsPage);
+  }, [appointmentsPage, loadAppointments]);
 
   // =========================================================================
-  // Standard-mode handlers
+  // Handlers
   // =========================================================================
 
   const handleBookAppointment = useCallback(async () => {
@@ -450,137 +389,6 @@ export function AppointmentBooking({
   );
 
   // =========================================================================
-  // Conditional-mode handlers
-  // =========================================================================
-
-  const handleCreatePendingAppointment = useCallback(async () => {
-    const effectivePatientId = propPatientId || selectedPatient;
-
-    if (!effectivePatientId || !selectedSlot) {
-      alert('Kérjük, válasszon beteget és időpontot!');
-      return;
-    }
-
-    if (propPatientId) {
-      if (!patientEmail || patientEmail.trim() === '') {
-        alert('A betegnek nincs email címe. A feltételes időpontválasztáshoz email cím szükséges.');
-        return;
-      }
-    } else {
-      const selectedPatientData = patients.find((p) => p.id === selectedPatient);
-      if (!selectedPatientData || !selectedPatientData.email) {
-        alert('A kiválasztott betegnek nincs email címe. A feltételes időpontválasztáshoz email cím szükséges.');
-        return;
-      }
-    }
-
-    if (
-      !confirm(
-        'Biztosan létre szeretné hozni ezt a feltételes időpontot? A páciens emailben értesítést kap és jóváhagyhatja vagy elvetheti az időpontot.',
-      )
-    )
-      return;
-
-    try {
-      setCreating(true);
-      const response = await fetch('/api/appointments/pending', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          patientId: effectivePatientId,
-          timeSlotId: selectedSlot,
-          alternativeTimeSlotIds: alternativeSlots.filter((id) => id && id !== selectedSlot),
-          appointmentType: selectedAppointmentType || null,
-        }),
-      });
-      if (response.ok) {
-        await loadData();
-        if (!propPatientId) setSelectedPatient('');
-        setSelectedSlot('');
-        setAlternativeSlots([]);
-        setSelectedAppointmentType(null);
-        onBookingComplete?.();
-        alert('Feltételes időpont sikeresen létrehozva! A páciens emailben értesítést kapott.');
-      } else {
-        const data = await response.json();
-        alert(data.error || 'Hiba történt a feltételes időpont létrehozásakor');
-      }
-    } catch (error) {
-      console.error('Error creating pending appointment:', error);
-      alert('Hiba történt a feltételes időpont létrehozásakor');
-    } finally {
-      setCreating(false);
-    }
-  }, [propPatientId, patientEmail, selectedPatient, selectedSlot, alternativeSlots, selectedAppointmentType, patients, loadData, onBookingComplete]);
-
-  const addAlternativeSlot = useCallback(() => {
-    setAlternativeSlots([...alternativeSlots, '']);
-  }, [alternativeSlots]);
-
-  const removeAlternativeSlot = useCallback(
-    (index: number) => {
-      setAlternativeSlots(alternativeSlots.filter((_, i) => i !== index));
-    },
-    [alternativeSlots],
-  );
-
-  const updateAlternativeSlot = useCallback(
-    (index: number, slotId: string) => {
-      const newAlternatives = [...alternativeSlots];
-      newAlternatives[index] = slotId;
-      setAlternativeSlots(newAlternatives);
-    },
-    [alternativeSlots],
-  );
-
-  const handleCreateNewTimeSlot = useCallback(async () => {
-    if (!newSlotDateTime) {
-      alert('Kérjük, válasszon dátumot és időt!');
-      return;
-    }
-    if (newSlotDateTime <= new Date()) {
-      alert('Az időpont csak jövőbeli dátum lehet!');
-      return;
-    }
-
-    const isoDateTime = toLocalISOString(newSlotDateTime);
-    const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
-
-    try {
-      setCreatingNewSlot(true);
-      const response = await fetch('/api/time-slots', {
-        method: 'POST',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({
-          startTime: isoDateTime,
-          cim: DEFAULT_CIM,
-          teremszam: newSlotTeremszam.trim() || null,
-        }),
-      });
-      if (response.ok) {
-        const data = await response.json();
-        const createdSlotId = data.timeSlot.id;
-        await loadAvailableSlots();
-        setSelectedSlot(createdSlotId);
-        setNewSlotDateTime(null);
-        setNewSlotTeremszam('');
-        setShowNewSlotForm(false);
-        alert('Új időpont sikeresen létrehozva és kiválasztva!');
-      } else {
-        const errorData = await response.json();
-        alert(errorData.error || 'Hiba történt az időpont létrehozásakor');
-      }
-    } catch (error) {
-      console.error('Error creating new time slot:', error);
-      alert('Hiba történt az időpont létrehozásakor');
-    } finally {
-      setCreatingNewSlot(false);
-    }
-  }, [newSlotDateTime, newSlotTeremszam, loadAvailableSlots]);
-
-  // =========================================================================
   // Derived / memoised values
   // =========================================================================
 
@@ -613,10 +421,10 @@ export function AppointmentBooking({
   return (
     <div className="space-y-6">
       {/* ================================================================= */}
-      {/* Standard-mode modals                                              */}
+      {/* Modals                                              */}
       {/* ================================================================= */}
 
-      {mode === 'standard' && editingStatus && (
+      {editingStatus && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-900 rounded-lg p-6 max-w-md w-full mx-4 max-h-[90vh] overflow-y-auto">
             <div className="flex justify-between items-center mb-4">
@@ -705,7 +513,7 @@ export function AppointmentBooking({
         </div>
       )}
 
-      {mode === 'standard' && editingAppointment && (
+      {editingAppointment && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
           <div className="bg-white dark:bg-gray-900 rounded-lg p-6 max-w-md w-full mx-4">
             <div className="flex justify-between items-center mb-4">
@@ -769,10 +577,10 @@ export function AppointmentBooking({
       )}
 
       {/* ================================================================= */}
-      {/* Standard-mode booking form                                        */}
+      {/* Booking form                                        */}
       {/* ================================================================= */}
 
-      {mode === 'standard' && (
+      {(
         <div className="card p-6">
           <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">Új időpont foglalása</h3>
           <div className="space-y-4">
@@ -824,10 +632,10 @@ export function AppointmentBooking({
       )}
 
       {/* ================================================================= */}
-      {/* Standard-mode appointments table                                  */}
+      {/* Appointments table                                  */}
       {/* ================================================================= */}
 
-      {mode === 'standard' && (
+      {(
         <div className="card">
           <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100 mb-4">Lefoglalt időpontjaim</h3>
           {appointments.length === 0 ? (
@@ -997,411 +805,6 @@ export function AppointmentBooking({
               </div>
             </div>
           )}
-        </div>
-      )}
-
-      {/* ================================================================= */}
-      {/* Conditional-mode booking form                                     */}
-      {/* ================================================================= */}
-
-      {mode === 'conditional' && (
-        <div className="card p-6 border-l-4 border-blue-500">
-          <div className="flex items-center gap-2 mb-4">
-            <Mail className="w-5 h-5 text-blue-500 dark:text-blue-400" />
-            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">Feltételes időpontválasztás</h3>
-          </div>
-          <p className="text-sm text-gray-600 dark:text-gray-400 mb-4">
-            Hozzon létre egy időpontot, amelyet a páciens emailben jóváhagyhat vagy elvethet. A páciens új időpontot is
-            kérhet, ha az ajánlott időpont nem megfelelő.
-          </p>
-          <div className="space-y-4">
-            {!propPatientId && (
-              <div>
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">
-                  Beteg (csak email címmel rendelkező betegek)
-                </label>
-                <select
-                  value={selectedPatient}
-                  onChange={(e) => setSelectedPatient(e.target.value)}
-                  className="form-input w-full"
-                  disabled={creating}
-                >
-                  <option value="">Válasszon beteget...</option>
-                  {patients.map((patient) => (
-                    <option key={patient.id} value={patient.id}>
-                      {patient.nev || 'Név nélküli'} {patient.taj ? `(${patient.taj})` : ''} - {patient.email}
-                    </option>
-                  ))}
-                </select>
-                {patients.length === 0 && (
-                  <p className="text-sm text-amber-600 dark:text-amber-300 mt-2 flex items-center gap-1">
-                    <AlertCircle className="w-4 h-4" />
-                    Nincs olyan beteg, akinek email címe lenne. A feltételes időpontválasztáshoz email cím szükséges.
-                  </p>
-                )}
-              </div>
-            )}
-            {propPatientId && (!patientEmail || patientEmail.trim() === '') && (
-              <div className="p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded">
-                <p className="text-sm text-amber-800 dark:text-amber-300 flex items-center gap-1">
-                  <AlertCircle className="w-4 h-4" />A betegnek nincs email címe. A feltételes időpontválasztáshoz
-                  email cím szükséges.
-                </p>
-              </div>
-            )}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Szabad időpont</label>
-                <button
-                  type="button"
-                  onClick={() => setShowNewSlotForm(!showNewSlotForm)}
-                  className="flex items-center gap-1 px-3 py-1 text-sm bg-blue-100 dark:bg-blue-950/50 text-blue-700 dark:text-blue-300 rounded hover:bg-blue-200 dark:hover:bg-blue-900/40 transition-colors"
-                  disabled={creating || creatingNewSlot}
-                >
-                  <Plus className="w-4 h-4" />
-                  {showNewSlotForm ? 'Mégse' : 'Új időpont létrehozása'}
-                </button>
-              </div>
-              {showNewSlotForm && (
-                <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-lg space-y-3">
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Dátum és idő</label>
-                    <DateTimePicker
-                      selected={newSlotDateTime}
-                      onChange={(date: Date | null) => setNewSlotDateTime(date)}
-                      minDate={new Date()}
-                      placeholder="Válasszon dátumot és időt"
-                      className="form-input w-full"
-                      disabled={creatingNewSlot}
-                    />
-                  </div>
-                  <div>
-                    <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Teremszám (opcionális)</label>
-                    <input
-                      type="text"
-                      value={newSlotTeremszam}
-                      onChange={(e) => setNewSlotTeremszam(digitsOnly(e.target.value))}
-                      placeholder="Pl. 101"
-                      className="form-input w-full"
-                      disabled={creatingNewSlot}
-                    />
-                  </div>
-                  <button
-                    type="button"
-                    onClick={handleCreateNewTimeSlot}
-                    disabled={!newSlotDateTime || creatingNewSlot}
-                    className="btn-primary w-full"
-                  >
-                    {creatingNewSlot ? 'Létrehozás...' : 'Időpont létrehozása'}
-                  </button>
-                </div>
-              )}
-              <select
-                value={selectedSlot}
-                onChange={(e) => setSelectedSlot(e.target.value)}
-                className="form-input w-full"
-                disabled={creating || creatingNewSlot}
-              >
-                <option value="">Válasszon időpontot...</option>
-                {availableSlotsOnly.map((slot) => {
-                  const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
-                  const displayCim = slot.cim || DEFAULT_CIM;
-                  return (
-                    <option key={slot.id} value={slot.id}>
-                      {formatDateTime(slot.startTime)}
-                      {slot.dentistName ? ` - ${slot.dentistName}` : ''}
-                      {` - ${displayCim}`}
-                      {slot.teremszam ? ` (Terem: ${slot.teremszam})` : ''}
-                      {slot.userEmail ? ` - ${slot.userEmail}` : ''}
-                    </option>
-                  );
-                })}
-              </select>
-              {availableSlotsOnly.length === 0 && !showNewSlotForm && (
-                <p className="text-sm text-gray-500 dark:text-gray-400 mt-2">Jelenleg nincs elérhető szabad időpont.</p>
-              )}
-            </div>
-
-            {/* Időpont típusa */}
-            <div>
-              <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Időpont típusa</label>
-              <select
-                value={selectedAppointmentType || ''}
-                onChange={(e) => setSelectedAppointmentType((e.target.value as any) || null)}
-                className="form-input w-full"
-                disabled={creating}
-              >
-                <option value="">Nincs megadva</option>
-                <option value="elso_konzultacio">Első konzultáció</option>
-                <option value="munkafazis">Munkafázis</option>
-                <option value="kontroll">Kontroll</option>
-              </select>
-            </div>
-
-            {/* Alternatív időpontok */}
-            <div>
-              <div className="flex items-center justify-between mb-2">
-                <label className="block text-sm font-medium text-gray-700 dark:text-gray-300">Alternatív időpontok (opcionális)</label>
-                <button
-                  type="button"
-                  onClick={addAlternativeSlot}
-                  className="flex items-center gap-1 px-3 py-1 text-sm bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                  disabled={creating}
-                >
-                  <Plus className="w-4 h-4" />
-                  Hozzáadás
-                </button>
-              </div>
-              <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                Ha a beteg elutasítja az első időpontot, automatikusan az első alternatívát fogjuk felajánlani, majd a
-                másodikat stb.
-              </p>
-              {alternativeSlots.length > 0 && (
-                <div className="space-y-2">
-                  {alternativeSlots.map((altSlotId, index) => (
-                    <div key={index} className="flex items-center gap-2">
-                      <select
-                        value={altSlotId}
-                        onChange={(e) => updateAlternativeSlot(index, e.target.value)}
-                        className="form-input flex-1"
-                        disabled={creating}
-                      >
-                        <option value="">Válasszon alternatív időpontot...</option>
-                        {availableSlotsOnly
-                          .filter(
-                            (slot) =>
-                              (slot.id !== selectedSlot && !alternativeSlots.includes(slot.id)) ||
-                              slot.id === altSlotId,
-                          )
-                          .map((slot) => {
-                            const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
-                            const displayCim = slot.cim || DEFAULT_CIM;
-                            return (
-                              <option key={slot.id} value={slot.id}>
-                                {formatDateTime(slot.startTime)}
-                                {slot.dentistName ? ` - ${slot.dentistName}` : ''}
-                                {` - ${displayCim}`}
-                                {slot.teremszam ? ` (Terem: ${slot.teremszam})` : ''}
-                                {slot.userEmail ? ` - ${slot.userEmail}` : ''}
-                              </option>
-                            );
-                          })}
-                      </select>
-                      <button
-                        type="button"
-                        onClick={() => removeAlternativeSlot(index)}
-                        className="p-2 text-red-600 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-900/40 rounded transition-colors"
-                        disabled={creating}
-                      >
-                        <X className="w-4 h-4" />
-                      </button>
-                    </div>
-                  ))}
-                </div>
-              )}
-            </div>
-
-            <button
-              onClick={handleCreatePendingAppointment}
-              disabled={
-                (!propPatientId && !selectedPatient) ||
-                !selectedSlot ||
-                creating ||
-                creatingNewSlot ||
-                (!propPatientId && patients.length === 0) ||
-                (propPatientId ? !patientEmail || patientEmail.trim() === '' : false)
-              }
-              className="btn-primary w-full"
-            >
-              {creating ? 'Létrehozás...' : 'Feltételes időpont létrehozása'}
-            </button>
-          </div>
-        </div>
-      )}
-
-      {/* ================================================================= */}
-      {/* Conditional-mode pending appointments                             */}
-      {/* ================================================================= */}
-
-      {mode === 'conditional' && (
-        <div className="card">
-          <div className="flex items-center gap-2 mb-4">
-            <Calendar className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-              {propPatientId ? 'Jóváhagyásra váró időpontok (ehhez a beteghez)' : 'Jóváhagyásra váró időpontok'}
-            </h3>
-          </div>
-          <MobileTable
-            items={pendingAppointments}
-            renderRow={(appointment) => (
-              <>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <User className="w-4 h-4 text-gray-400 dark:text-gray-500 mr-2" />
-                    <div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {appointment.patientName || 'Név nélküli'}
-                      </div>
-                      {appointment.patientTaj && (
-                        <div className="text-sm text-gray-500 dark:text-gray-400">TAJ: {appointment.patientTaj}</div>
-                      )}
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <Mail className="w-4 h-4 text-gray-400 dark:text-gray-500 mr-2" />
-                    <span className="text-sm text-gray-900 dark:text-gray-100">{appointment.patientEmail || 'Nincs email'}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <Clock className="w-4 h-4 text-gray-400 dark:text-gray-500 mr-2" />
-                    <span className="text-sm text-gray-900 dark:text-gray-100">{formatDateTime(appointment.startTime)}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    {new Date(appointment.createdAt).toLocaleString('hu-HU')}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300">
-                    Várakozik
-                  </span>
-                </td>
-              </>
-            )}
-            renderCard={(appointment) => (
-              <div className="mobile-card">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <User className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                    <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">
-                      {appointment.patientName || 'Név nélküli'}
-                    </h3>
-                  </div>
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-yellow-100 dark:bg-yellow-950/50 text-yellow-800 dark:text-yellow-300 flex-shrink-0">
-                    Várakozik
-                  </span>
-                </div>
-                <MobileKeyValueGrid
-                  items={[
-                    { key: 'Email', value: appointment.patientEmail || 'Nincs email' },
-                    { key: 'Időpont', value: formatDateTime(appointment.startTime) },
-                    { key: 'Létrehozva', value: new Date(appointment.createdAt).toLocaleString('hu-HU') },
-                    ...(appointment.patientTaj ? [{ key: 'TAJ', value: appointment.patientTaj }] : []),
-                  ]}
-                />
-              </div>
-            )}
-            keyExtractor={(appointment) => appointment.id}
-            emptyState={
-              <div className="text-center py-8">
-                <Calendar className="w-12 h-12 text-gray-400 dark:text-gray-500 mx-auto mb-4" />
-                <p className="text-gray-500 dark:text-gray-400">Jelenleg nincs jóváhagyásra váró időpont.</p>
-              </div>
-            }
-            renderHeader={() => (
-              <>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Beteg</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Időpont</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Létrehozva</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Státusz</th>
-              </>
-            )}
-          />
-        </div>
-      )}
-
-      {/* ================================================================= */}
-      {/* Conditional-mode rejected appointments                            */}
-      {/* ================================================================= */}
-
-      {mode === 'conditional' && rejectedAppointments.length > 0 && (
-        <div className="card mt-6">
-          <div className="flex items-center gap-2 mb-4">
-            <Calendar className="w-5 h-5 text-gray-500 dark:text-gray-400" />
-            <h3 className="text-xl font-bold text-gray-900 dark:text-gray-100">
-              {propPatientId ? 'Elutasított időpontok (ehhez a beteghez)' : 'Elutasított időpontok'}
-            </h3>
-          </div>
-          <MobileTable
-            items={rejectedAppointments}
-            renderRow={(appointment) => (
-              <>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <User className="w-4 h-4 text-gray-400 dark:text-gray-500 mr-2" />
-                    <div>
-                      <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                        {appointment.patientName || 'Név nélküli'}
-                      </div>
-                      {appointment.patientTaj && (
-                        <div className="text-sm text-gray-500 dark:text-gray-400">TAJ: {appointment.patientTaj}</div>
-                      )}
-                    </div>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <Mail className="w-4 h-4 text-gray-400 dark:text-gray-500 mr-2" />
-                    <span className="text-sm text-gray-900 dark:text-gray-100">{appointment.patientEmail || 'Nincs email'}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <div className="flex items-center">
-                    <Clock className="w-4 h-4 text-gray-400 dark:text-gray-500 mr-2" />
-                    <span className="text-sm text-gray-900 dark:text-gray-100">{formatDateTime(appointment.startTime)}</span>
-                  </div>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="text-sm text-gray-500 dark:text-gray-400">
-                    {new Date(appointment.createdAt).toLocaleString('hu-HU')}
-                  </span>
-                </td>
-                <td className="px-6 py-4 whitespace-nowrap">
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-950/50 text-red-800 dark:text-red-300">
-                    Elutasítva
-                  </span>
-                </td>
-              </>
-            )}
-            renderCard={(appointment) => (
-              <div className="mobile-card">
-                <div className="flex items-center justify-between mb-3">
-                  <div className="flex items-center gap-2 flex-1 min-w-0">
-                    <User className="w-4 h-4 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                    <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">
-                      {appointment.patientName || 'Név nélküli'}
-                    </h3>
-                  </div>
-                  <span className="inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium bg-red-100 dark:bg-red-950/50 text-red-800 dark:text-red-300 flex-shrink-0">
-                    Elutasítva
-                  </span>
-                </div>
-                <MobileKeyValueGrid
-                  items={[
-                    { key: 'Email', value: appointment.patientEmail || 'Nincs email' },
-                    { key: 'Időpont', value: formatDateTime(appointment.startTime) },
-                    { key: 'Létrehozva', value: new Date(appointment.createdAt).toLocaleString('hu-HU') },
-                    ...(appointment.patientTaj ? [{ key: 'TAJ', value: appointment.patientTaj }] : []),
-                  ]}
-                />
-              </div>
-            )}
-            keyExtractor={(appointment) => appointment.id}
-            renderHeader={() => (
-              <>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Beteg</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Email</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Időpont</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Létrehozva</th>
-                <th className="px-6 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Státusz</th>
-              </>
-            )}
-          />
         </div>
       )}
     </div>
