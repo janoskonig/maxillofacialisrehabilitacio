@@ -13,7 +13,7 @@ import { PatientTabsNav } from '@/components/PatientTabsNav';
 import { EpisodePathwayEditor } from '@/components/EpisodePathwayEditor';
 import { EpisodeStepsManager } from '@/components/EpisodeStepsManager';
 import { AppointmentBookingSection } from '@/components/AppointmentBookingSection';
-import { ConditionalAppointmentBooking } from '@/components/ConditionalAppointmentBooking';
+import { ConditionalAppointmentOffers } from '@/components/ConditionalAppointmentOffers';
 import { PatientStageSelector } from '@/components/PatientStageSelector';
 import { PatientStageStepper } from '@/components/PatientStageStepper';
 import { PatientCareTimeline } from '@/components/PatientCareTimeline';
@@ -445,10 +445,12 @@ export default function PatientStagesPage() {
             />
           </div>
 
-          {/* Feltételes időpont (admin) — saját kártya-chrome-mal, ezért a
-              Gyors foglalás kártyán KÍVÜL áll (kártya-a-kártyában elkerülése) */}
+          {/* Betegnek küldött időpont-ajánlatok (admin) — egy kártya: fejlécben az
+              „Új ajánlat küldése" gomb, alatta állapot-chipes lista. Saját
+              kártya-chrome-mal, ezért a Gyors foglalás kártyán KÍVÜL áll
+              (kártya-a-kártyában elkerülése). */}
           {userRole === 'admin' && (
-            <ConditionalAppointmentBooking patientId={patientId} patientEmail={patient.email || null} />
+            <ConditionalAppointmentOffers patientId={patientId} patientEmail={patient.email || null} />
           )}
 
           {/* 4) Feladatok */}
