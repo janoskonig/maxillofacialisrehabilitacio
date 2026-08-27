@@ -131,16 +131,22 @@ describe('convertIntentToAppointment — drift-tolerant slot picker (W: bulk-con
   });
 
   it('self-heals slot.state to booked when SLOT_ALREADY_BOOKED is raised', () => {
-    // When a drifted slot slips through, the post-rollback self-heal updates
-    // slot.state to match reality so the next picker iteration skips it.
-    // Otherwise the next intent picks the same slot and bounces too,
-    // turning one drift row into N skipped intents.
+    // When a drifted slot slips through, the self-heal updates slot.state to
+    // match reality so the next picker iteration skips it. Otherwise the next
+    // intent picks the same slot and bounces too, turning one drift row into
+    // N skipped intents.
     expect(SRC).toMatch(/UPDATE\s+available_time_slots[\s\S]*?SET\s+state\s*=\s*'booked'[\s\S]*?WHERE\s+id\s*=\s*\$1[\s\S]*?AND\s+state\s*=\s*'free'/);
     // And the heal must be guarded by an EXISTS check so we only flip
     // slot.state when an active appt row is actually present (i.e. real drift,
     // not a transient race).
-    const healBlock = SRC.match(/Self-heal[\s\S]*?try\s*\{[\s\S]*?\}\s*catch/);
-    expect(healBlock, 'Self-heal block missing').toBeTruthy();
+    //
+    // WP-0.8 (audit #11): the heal runs in the `finally`, AFTER
+    // client.release() — holding the tx connection while waiting on a second
+    // pool connection starves the small pool (DB_POOL_MAX=5).
+    const healBlock = SRC.match(
+      /client\.release\(\);[\s\S]*?if\s*\(selfHealDriftedSlotId\)[\s\S]*?try\s*\{[\s\S]*?\}\s*catch/
+    );
+    expect(healBlock, 'Self-heal block missing (after client.release())').toBeTruthy();
     expect(healBlock![0]).toMatch(/EXISTS\s*\([\s\S]*?appointments\s+a[\s\S]*?SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT/);
   });
 });

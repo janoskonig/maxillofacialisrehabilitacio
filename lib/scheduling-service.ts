@@ -50,7 +50,12 @@ export async function hasFreeSlotInWindow(
   );
   return (r.rowCount ?? 0) > 0;
 }
-import { computeNoShowRiskWithConfig, getPatientNoShowsLast12m } from './no-show-risk';
+import {
+  computeNoShowRiskSync,
+  getNoShowRiskCoeffs,
+  getPatientNoShowsLast12m,
+  type NoShowRiskCoeffs,
+} from './no-show-risk';
 
 export type CreatedVia = 'worklist' | 'patient_self' | 'admin_override' | 'surgeon_override' | 'migration' | 'google_import';
 
@@ -179,25 +184,50 @@ export async function checkStepPrerequisites(
 }
 
 /**
- * Compute no-show risk and hold/confirmation settings for a new appointment.
+ * A no-show-risk számítás DB-t érintő bemenetei, előre lekérve.
+ *
+ * WP-0.8 (audit #11): a `convert-slot-intent` korábban nyitott tranzakcióból
+ * hívta a `getAppointmentRiskSettings`-et, ami a globális poolból kért újabb
+ * kapcsolatokat — DB_POOL_MAX=5 mellett a párhuzamos konverziók kiéheztették a
+ * poolt. A DB-olvasások (beteg no-show számláló + config együtthatók) csak a
+ * `patientId`-től függenek, ezért kiemelhetők a tranzakció elé; a slot-függő
+ * rész (lead time, kezdő óra) pure számítás.
  */
-export async function getAppointmentRiskSettings(
+export interface AppointmentRiskPrefetch {
+  patientNoShowsLast12m: number;
+  coeffs: NoShowRiskCoeffs;
+}
+
+export async function prefetchAppointmentRiskInputs(
+  patientId: string
+): Promise<AppointmentRiskPrefetch> {
+  const [patientNoShowsLast12m, coeffs] = await Promise.all([
+    getPatientNoShowsLast12m(patientId),
+    getNoShowRiskCoeffs(),
+  ]);
+  return { patientNoShowsLast12m, coeffs };
+}
+
+/** Pure rész: a slot-kezdéstől függő kockázat/hold számítás, DB nélkül. */
+export function computeAppointmentRiskSettings(
+  prefetch: AppointmentRiskPrefetch,
   patientId: string,
-  timeSlotStart: Date,
-  createdBy: string
-): Promise<{ noShowRisk: number; requiresConfirmation: boolean; holdExpiresAt: Date }> {
+  timeSlotStart: Date
+): { noShowRisk: number; requiresConfirmation: boolean; holdExpiresAt: Date } {
   const leadTimeDays = Math.ceil((timeSlotStart.getTime() - Date.now()) / (24 * 60 * 60 * 1000));
   // Budapest-local hour (DST-correct), not server-local — the early-morning
   // no-show risk bump (07–09h) is defined in clinic time.
   const appointmentStartHour = budapestHour(timeSlotStart);
-  const patientNoShowsLast12m = await getPatientNoShowsLast12m(patientId);
 
-  const result = await computeNoShowRiskWithConfig({
-    patientId,
-    leadTimeDays,
-    appointmentStartHour,
-    patientNoShowsLast12m,
-  });
+  const result = computeNoShowRiskSync(
+    {
+      patientId,
+      leadTimeDays,
+      appointmentStartHour,
+      patientNoShowsLast12m: prefetch.patientNoShowsLast12m,
+    },
+    prefetch.coeffs
+  );
 
   const holdExpiresAt = new Date();
   holdExpiresAt.setHours(holdExpiresAt.getHours() + result.holdHours);
@@ -207,4 +237,16 @@ export async function getAppointmentRiskSettings(
     requiresConfirmation: result.requiresConfirmation,
     holdExpiresAt,
   };
+}
+
+/**
+ * Compute no-show risk and hold/confirmation settings for a new appointment.
+ */
+export async function getAppointmentRiskSettings(
+  patientId: string,
+  timeSlotStart: Date,
+  createdBy: string
+): Promise<{ noShowRisk: number; requiresConfirmation: boolean; holdExpiresAt: Date }> {
+  const prefetch = await prefetchAppointmentRiskInputs(patientId);
+  return computeAppointmentRiskSettings(prefetch, patientId, timeSlotStart);
 }
