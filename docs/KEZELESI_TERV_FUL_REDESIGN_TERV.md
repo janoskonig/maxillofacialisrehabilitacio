@@ -29,8 +29,8 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 | WP-0.9 pinning-teszt | ✅ | [#59](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/59) | A 029+059 együttes (hatályos) állapotot pinneli; index-őr regexek toleránsak |
 | WP-1.1 validáció-zajcsökkentés | ⬜ | — | |
 | WP-1.2 integritás kivezetés | ⬜ | — | |
-| WP-1.3 lánc-banner szöveg | ⬜ | — | |
-| WP-1.4 feltételes időpont egy kártya | ⬜ | — | |
+| WP-1.3 lánc-banner szöveg | ✅ | [#67](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/67) | Mindhárom előfordulás (terv-kártya, worklist-widget, ChainBookingCallout) ajánlattá fogalmazva, amber→kék |
+| WP-1.4 feltételes időpont egy kártya | ✅ | [#69](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/69) | Új ConditionalAppointmentOffers komponens; jegyzet: az e-mail-hiányos küldés-gomb disabled marad (technikai előfeltétel, nem klinikai kapu); 2 örökölt hiba külön feladat-chipben (LIMIT 50 csonkolás, halott AppointmentBooking.tsx) |
 | WP-2.1 terv-mutáció audit (087) | ⬜ | — | |
 | WP-2.2 napló endpoint + UI | ⬜ | — | |
 | WP-3.1 recall séma (088) | ⬜ | — | |
