@@ -183,6 +183,98 @@ describe('WP-0.1: scheduled → skipped felszabadítja a foglalást', () => {
     expect(ewpRow.rows[0].appointment_id).toBeNull();
   });
 
+  it('testvér-fázis (azonos work_phase_code) foglalását a skip NEM bántja', async () => {
+    // Egy epizódban két azonos work_phase_code-ú EWP sor támogatott adatalak
+    // (két állcsont / több fog). A foglalás NÉLKÜLI sor skip-elése nem
+    // mondhatja le a TESTVÉR jövőbeli foglalását, nem szabadíthatja fel a
+    // slotját és nem járathatja le a converted intentjét.
+    const pool = getDbPool();
+    const future = new Date(Date.now() + 7 * 24 * 60 * 60 * 1000);
+    const user = await createTestUser();
+    const patient = await createTestPatient();
+    const episode = await createTestEpisode(undefined, patient.id);
+    createdEpisodeIds.push(episode.id);
+
+    // A skip-elendő sor: nincs foglalása.
+    const wpToSkip = await createTestWorkPhase(undefined, episode.id, {
+      workPhaseCode: 'lenyomat',
+      status: 'pending',
+      seq: 0,
+    });
+    // A testvér: azonos work_phase_code, másik step_seq, jövőbeli foglalással.
+    const sibling = await createTestWorkPhase(undefined, episode.id, {
+      workPhaseCode: 'lenyomat',
+      status: 'scheduled',
+      seq: 1,
+    });
+    const siblingSlot = await createTestSlot(undefined, user.id, {
+      startTime: future,
+      state: 'booked',
+      status: 'booked',
+    });
+    const siblingIntent = await createTestSlotIntent(undefined, episode.id, {
+      stepCode: 'lenyomat',
+      stepSeq: 1,
+      state: 'converted',
+      workPhaseId: sibling.id,
+    });
+    const siblingAppt = await createTestAppointment(undefined, {
+      patientId: patient.id,
+      timeSlotId: siblingSlot.id,
+      episodeId: episode.id,
+      workPhaseId: sibling.id,
+      slotIntentId: siblingIntent.id,
+      stepCode: 'lenyomat',
+      stepSeq: 1,
+      startTime: future,
+      endTime: new Date(future.getTime() + 30 * 60 * 1000),
+    });
+    await pool.query(`UPDATE episode_work_phases SET appointment_id = $1 WHERE id = $2`, [
+      siblingAppt.id,
+      sibling.id,
+    ]);
+
+    const res = await skipPhase(user, episode.id, wpToSkip.id);
+    expect(res.status).toBe(200);
+    const body = await res.json();
+    expect(body.workPhase.status).toBe('skipped');
+    // A testvér foglalása nem számít lemondottnak.
+    expect(body.cancelledAppointments).toBe(0);
+
+    // A testvér appointmentje aktív marad.
+    const apptRow = await pool.query(`SELECT appointment_status FROM appointments WHERE id = $1`, [
+      siblingAppt.id,
+    ]);
+    expect(apptRow.rows[0].appointment_status).toBeNull();
+
+    // A testvér slotja foglalt marad.
+    const slotRow = await pool.query(`SELECT state, status FROM available_time_slots WHERE id = $1`, [
+      siblingSlot.id,
+    ]);
+    expect(slotRow.rows[0].state).toBe('booked');
+    expect(slotRow.rows[0].status).toBe('booked');
+
+    // A testvér converted intentje nem jár le.
+    const intentRow = await pool.query(`SELECT state FROM slot_intents WHERE id = $1`, [siblingIntent.id]);
+    expect(intentRow.rows[0].state).toBe('converted');
+
+    // A testvér EWP scheduled marad, a foglalás-linkje érintetlen.
+    const siblingRow = await pool.query(
+      `SELECT status, appointment_id FROM episode_work_phases WHERE id = $1`,
+      [sibling.id]
+    );
+    expect(siblingRow.rows[0].status).toBe('scheduled');
+    expect(siblingRow.rows[0].appointment_id).toBe(siblingAppt.id);
+
+    // A skip-elt sor rendben átment.
+    const skippedRow = await pool.query(
+      `SELECT status, appointment_id FROM episode_work_phases WHERE id = $1`,
+      [wpToSkip.id]
+    );
+    expect(skippedRow.rows[0].status).toBe('skipped');
+    expect(skippedRow.rows[0].appointment_id).toBeNull();
+  });
+
   it('skipped → pending visszaút is tisztítja az appointment_id-t', async () => {
     const pool = getDbPool();
     const past = new Date(Date.now() - 7 * 24 * 60 * 60 * 1000);

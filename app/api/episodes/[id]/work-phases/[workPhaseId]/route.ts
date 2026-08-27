@@ -383,17 +383,29 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
       );
 
       // Skip ág: a fázisra mutató JÖVŐBELI aktív foglalások lemondása és a
-      // slot/intent felszabadítása — ugyanaz a szemantika, mint a
-      // completed → pending ágon. Csak a jövőbeli sorokat bántjuk: a skip
+      // slot/intent felszabadítása. Csak a jövőbeli sorokat bántjuk: a skip
       // legitim retro-használata (már megtörtént vizit) érintetlen marad.
+      //
+      // Párosítás ELSŐDLEGESEN work_phase_id szerint (a skip-elt EWP sorra),
+      // és step_code szerint CSAK a work_phase_id NÉLKÜLI legacy sorokra —
+      // a lib/work-phase-delete.ts mintája. Puszta step_code-ra szűrni nem
+      // szabad: egy epizódban több azonos work_phase_code-ú testvér-fázis is
+      // élhet (két állcsont / több fog), és a testvér foglalását nem szabad
+      // lemondani. A FOR UPDATE a párhuzamos intent→appointment konverzióval
+      // szembeni ablakot szűkíti.
       if (newStatus === 'skipped') {
-        const stepCode = phase.work_phase_code as string;
+        const stepCode = (phase.work_phase_code as string | null) ?? null;
         const futureAppts = await client.query(
           `SELECT a.id, a.time_slot_id, a.slot_intent_id FROM appointments a
-           WHERE a.episode_id = $1 AND a.step_code = $2
+           WHERE a.episode_id = $1
              AND a.start_time > CURRENT_TIMESTAMP
-             AND ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}`,
-          [episodeId, stepCode]
+             AND ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}
+             AND (
+               a.work_phase_id = $2
+               OR (a.work_phase_id IS NULL AND a.step_code = $3)
+             )
+           FOR UPDATE OF a`,
+          [episodeId, workPhaseId, stepCode]
         );
         for (const ap of futureAppts.rows as Array<{
           id: string;
@@ -422,10 +434,14 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
           }
         }
 
+        // Nyitott intentek lejáratása — szintén a skip-elt fázisra szűkítve:
+        // work_phase_id szerint, step_code-dal csak a legacy (link nélküli)
+        // sorokra. A testvér-fázis nyitott intentje érintetlen marad.
         await client.query(
           `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP
-           WHERE episode_id = $1 AND step_code = $2 AND state = 'open'`,
-          [episodeId, stepCode]
+           WHERE episode_id = $1 AND state = 'open'
+             AND (work_phase_id = $2 OR (work_phase_id IS NULL AND step_code = $3))`,
+          [episodeId, workPhaseId, stepCode]
         );
 
         skipCancelledAppointments = futureAppts.rows.length;
