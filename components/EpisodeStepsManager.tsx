@@ -10,6 +10,7 @@ import {
 } from 'lucide-react';
 import { WorkPhaseTaskDelegateBlock } from './WorkPhaseTaskDelegateBlock';
 import { PlanValidationPanel } from './PlanValidationPanel';
+import { LONG_DURATION_MINUTES } from '@/lib/treatment-plan-validation';
 import { useWorkPhaseBooking } from '@/hooks/useWorkPhaseBooking';
 import { WorkPhaseBookingModals } from './WorkPhaseBookingModals';
 import { PlanStartDateControl } from './PlanStartDateControl';
@@ -809,6 +810,13 @@ function TimingEditor({ step, mergedChildCount, saving, onCancel }: {
           <span className="text-xs text-gray-400 dark:text-gray-500">perc</span>
         </div>
       </div>
+      {/* WP-1.1: hosszú időtartam — halk inline hint, csak itt, a szerkesztő
+          sorban (nem badge, nem összesítő). Nem blokkol semmit. */}
+      {duration > LONG_DURATION_MINUTES && (
+        <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">
+          Szokatlanul hosszú időtartam ({duration} perc) — ellenőrizze, hogy valóban egy alkalomra szánja.
+        </p>
+      )}
       <div className="flex items-center gap-2">
         <button onClick={handleSave} disabled={saving || localSaving}
           className="inline-flex items-center gap-1 px-3 py-1.5 bg-medical-primary text-white rounded text-xs font-medium hover:bg-medical-primary-dark disabled:opacity-50">
@@ -1641,8 +1649,17 @@ export function EpisodeStepsManager({
                 </div>
               )}
 
-              {/* ─── Terv-validáció (WP3) ─────────────────────────────── */}
-              <PlanValidationPanel episodeId={episodeId} patientId={patientId} signature={planSignature} />
+              {/* ─── Terv-validáció (WP3, WP-1.1) ─────────────────────── */}
+              {/* Üres terv (nincs aktív lépés) → a validációs panel helyett a
+                  kártya üres-állapota jelez; badge sehol nem jelenik meg. */}
+              {steps.some((s) => s.status !== 'skipped') ? (
+                <PlanValidationPanel episodeId={episodeId} patientId={patientId} signature={planSignature} />
+              ) : steps.length > 0 ? (
+                <div className="mb-4 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 p-3 text-sm text-gray-600 dark:text-gray-400">
+                  A kezelési terv üres — minden munkafázis kihagyva. Új lépést a „Munkafázis
+                  hozzáadása" gombbal vehet fel.
+                </div>
+              ) : null}
 
               {/* ─── Step adder panel ─────────────────────────────────── */}
               <div className="mb-4">

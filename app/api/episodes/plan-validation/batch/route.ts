@@ -5,6 +5,7 @@ import { getMergedFilterFragment } from '@/lib/schema-probe';
 import {
   validateTreatmentPlan,
   summarizePlanReadiness,
+  hasActivePlanSteps,
   type PlanStepInput,
   type PlanReadinessStatus,
 } from '@/lib/treatment-plan-validation';
@@ -16,9 +17,9 @@ export const dynamic = 'force-dynamic';
 const MAX_EPISODES = 200;
 
 interface BatchEntry {
-  status: PlanReadinessStatus;
+  /** null = nincs aktív lépés a tervben → a listák nem mutatnak badge-et. */
+  status: PlanReadinessStatus | null;
   errorCount: number;
-  warningCount: number;
   approved: boolean;
   /** Gap A: hány lefoglalt időpont csúszott a terv sorrendje elé (újrafoglalandó). */
   sequenceViolations: number;
@@ -27,10 +28,11 @@ interface BatchEntry {
 /**
  * POST /api/episodes/plan-validation/batch
  * Body: { episodeIds: string[] }
- * → { [episodeId]: { status, errorCount, warningCount, approved } }
+ * → { [episodeId]: { status, errorCount, approved, sequenceViolations } }
  *
  * Powers the plan-readiness badges on the Gantt and worklist (WP6a) — one round-trip
  * for many episodes instead of per-row calls to /api/episodes/:id/plan-validation.
+ * WP-1.1: warning-szint nincs — status: errors | approved | ready | null (üres terv).
  */
 export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req) => {
   const body = await req.json().catch(() => ({}));
@@ -42,7 +44,10 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   if (episodeIds.length === 0) return NextResponse.json({});
 
   const pool = getDbPool();
-  const mergedFilter = await getMergedFilterFragment(pool, 'episode_work_phases');
+  // A lenti query `ewp` aliast használ — a fragmentnek is ezt kell hivatkoznia,
+  // különben `42P01 invalid reference to FROM-clause entry` (a teljes táblanév
+  // aliasolás után nem hivatkozható; ugyanaz a hiba, mint az [id]-s route-ban volt).
+  const mergedFilter = await getMergedFilterFragment(pool, 'ewp');
 
   const [stepRows, approvalRows, bookedRows] = await Promise.all([
     pool.query(
@@ -108,9 +113,10 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     const sequenceViolations = detectSequenceViolations(sequenceSteps).length;
 
     result[id] = {
-      status: summarizePlanReadiness(issues, approved),
-      errorCount: issues.filter((i) => i.level === 'error').length,
-      warningCount: issues.filter((i) => i.level === 'warning').length,
+      // Üres terv (nincs aktív lépés) → nincs badge; a jelzés a terv-kártya
+      // üres-állapota (WP-1.1).
+      status: hasActivePlanSteps(steps) ? summarizePlanReadiness(issues, approved) : null,
+      errorCount: issues.length,
       approved,
       sequenceViolations,
     };
