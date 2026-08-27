@@ -1,10 +1,11 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, CalendarClock, CheckCircle2, Loader2, ShieldCheck, ShieldOff, XCircle } from 'lucide-react';
+import { CalendarClock, CheckCircle2, Loader2, ShieldCheck, ShieldOff, XCircle } from 'lucide-react';
 
 interface PlanIssue {
-  level: 'error' | 'warning';
+  /** WP-1.1 óta a validátor csak error-szintű issue-t ad. */
+  level: 'error';
   code: string;
   message: string;
   workPhaseCode?: string;
@@ -41,6 +42,11 @@ export interface PlanValidationPanelProps {
  * WP3: surfaces treatment-plan validation issues and the "approved / ready to book"
  * state for an episode. Re-validates whenever `signature` changes (i.e. after any
  * step edit in EpisodeStepsManager).
+ *
+ * WP-1.1: warning-szint nincs többé — a panel csak a strukturális hibákat
+ * (INVALID_POOL, INVALID_DURATION), a jóváhagyást és a sorrend-eltérést mutatja.
+ * Az üres terv jelzése a terv-kártya üres-állapota (EpisodeStepsManager), a
+ * hosszú időtartam a szerkesztő sor inline hintje.
  */
 export function PlanValidationPanel({ episodeId, patientId, signature, canEdit = true }: PlanValidationPanelProps) {
   const [data, setData] = useState<PlanValidationResponse | null>(null);
@@ -86,9 +92,8 @@ export function PlanValidationPanel({ episodeId, patientId, signature, canEdit =
 
   if (loading || !data) return null;
 
-  const errors = data.issues.filter((i) => i.level === 'error');
-  const warnings = data.issues.filter((i) => i.level === 'warning');
-  const clean = data.issues.length === 0;
+  const errors = data.issues;
+  const clean = errors.length === 0;
   const approved = Boolean(data.approvedAt);
 
   return (
@@ -108,17 +113,10 @@ export function PlanValidationPanel({ episodeId, patientId, signature, canEdit =
               <CheckCircle2 className="w-4 h-4 text-emerald-600 dark:text-emerald-300 shrink-0" />
               <span className="font-medium text-emerald-700 dark:text-emerald-300">A terv rendben — foglalásra kész</span>
             </>
-          ) : errors.length > 0 ? (
-            <>
-              <XCircle className="w-4 h-4 text-red-600 dark:text-red-300 shrink-0" />
-              <span className="font-medium text-red-700 dark:text-red-300">
-                {errors.length} hiba{warnings.length > 0 ? `, ${warnings.length} figyelmeztetés` : ''}
-              </span>
-            </>
           ) : (
             <>
-              <AlertTriangle className="w-4 h-4 text-amber-500 dark:text-amber-400 shrink-0" />
-              <span className="font-medium text-amber-700 dark:text-amber-300">{warnings.length} figyelmeztetés</span>
+              <XCircle className="w-4 h-4 text-red-600 dark:text-red-300 shrink-0" />
+              <span className="font-medium text-red-700 dark:text-red-300">{errors.length} hiba</span>
             </>
           )}
         </div>
@@ -149,15 +147,11 @@ export function PlanValidationPanel({ episodeId, patientId, signature, canEdit =
         )}
       </div>
 
-      {data.issues.length > 0 && (
+      {errors.length > 0 && (
         <ul className="divide-y divide-gray-100 dark:divide-gray-800">
-          {[...errors, ...warnings].map((issue, idx) => (
+          {errors.map((issue, idx) => (
             <li key={`${issue.code}-${issue.workPhaseCode ?? idx}`} className="flex items-start gap-2 px-3 py-1.5">
-              {issue.level === 'error' ? (
-                <XCircle className="w-3.5 h-3.5 text-red-500 dark:text-red-400 mt-0.5 shrink-0" />
-              ) : (
-                <AlertTriangle className="w-3.5 h-3.5 text-amber-500 dark:text-amber-400 mt-0.5 shrink-0" />
-              )}
+              <XCircle className="w-3.5 h-3.5 text-red-500 dark:text-red-400 mt-0.5 shrink-0" />
               <span className="text-gray-700 dark:text-gray-300">{issue.message}</span>
             </li>
           ))}

@@ -4,9 +4,9 @@ import { useEffect, useState } from 'react';
 import type { PlanReadinessStatus } from '@/lib/treatment-plan-validation';
 
 export interface PlanReadinessEntry {
-  status: PlanReadinessStatus;
+  /** null = üres terv (nincs aktív lépés) → nincs badge (WP-1.1). */
+  status: PlanReadinessStatus | null;
   errorCount: number;
-  warningCount: number;
   approved: boolean;
   /** Gap A: hány lefoglalt időpont csúszott a terv sorrendje elé. */
   sequenceViolations?: number;
