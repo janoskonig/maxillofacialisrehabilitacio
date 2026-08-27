@@ -90,7 +90,7 @@ describe('migration 029 — appointment attempts', () => {
     // cancelled set) — that is what frees the work_phase slot for a fresh
     // attempt_number row.
     const idxMatch = SQL.match(
-      /CREATE UNIQUE INDEX idx_appointments_unique_work_phase_active[\s\S]*?WHERE([\s\S]*?)(?:\$sql\$|;)/
+      /CREATE UNIQUE INDEX\s+(?:CONCURRENTLY\s+)?(?:IF NOT EXISTS\s+)?idx_appointments_unique_work_phase_active[\s\S]*?WHERE([\s\S]*?)(?:\$sql\$|;)/
     );
     expect(idxMatch, 'new partial unique index definition missing').toBeTruthy();
     const where = idxMatch![1];
@@ -107,7 +107,7 @@ describe('migration 029 — appointment attempts', () => {
     it('migration 059 rebuilds the index so no_show ALSO releases the work phase', () => {
       expect(SQL_059).toMatch(/DROP INDEX IF EXISTS idx_appointments_unique_work_phase_active/);
       const idxMatch = SQL_059.match(
-        /CREATE UNIQUE INDEX idx_appointments_unique_work_phase_active[\s\S]*?WHERE([\s\S]*?)(?:\$sql\$|;)/
+        /CREATE UNIQUE INDEX\s+(?:CONCURRENTLY\s+)?(?:IF NOT EXISTS\s+)?idx_appointments_unique_work_phase_active[\s\S]*?WHERE([\s\S]*?)(?:\$sql\$|;)/
       );
       expect(idxMatch, '059 partial unique index definition missing').toBeTruthy();
       const where = idxMatch![1];
@@ -137,8 +137,10 @@ describe('migration 029 — appointment attempts', () => {
       const defining = readdirSync(MIGRATIONS_DIR)
         .filter((f) => f.endsWith('.sql'))
         .filter((f) =>
-          readFileSync(join(MIGRATIONS_DIR, f), 'utf8').includes(
-            'CREATE UNIQUE INDEX idx_appointments_unique_work_phase_active'
+          // Toleráns az IF NOT EXISTS / CONCURRENTLY változatokra is, hogy egy
+          // későbbi ilyen alakú rebuild ne évítse el csendben ezt az őrt.
+          /CREATE UNIQUE INDEX\s+(?:CONCURRENTLY\s+)?(?:IF NOT EXISTS\s+)?idx_appointments_unique_work_phase_active/.test(
+            readFileSync(join(MIGRATIONS_DIR, f), 'utf8')
           )
         )
         .sort();
