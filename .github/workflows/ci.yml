@@ -24,7 +24,46 @@ jobs:
       - name: Typecheck
         run: npm run typecheck
 
+      - name: Unit tests
+        run: npm run test
+
       - name: Build
         run: npm run build
         env:
           NODE_OPTIONS: --max-old-space-size=4096
+
+  integration:
+    runs-on: ubuntu-latest
+    services:
+      postgres:
+        image: postgres:16
+        env:
+          POSTGRES_USER: maxfac
+          POSTGRES_PASSWORD: maxfac_ci_throwaway
+          POSTGRES_DB: postgres
+        ports:
+          - 5432:5432
+        options: >-
+          --health-cmd "pg_isready -U maxfac"
+          --health-interval 5s
+          --health-timeout 5s
+          --health-retries 20
+    steps:
+      - uses: actions/checkout@v4
+
+      - uses: actions/setup-node@v4
+        with:
+          node-version: 20
+          cache: npm
+
+      - run: npm ci
+
+      - name: Build throwaway test DB
+        run: npm run test:integration:setup
+        env:
+          PGPASSWORD: maxfac_ci_throwaway
+
+      - name: Integration tests
+        run: npm run test:integration
+        env:
+          TEST_DATABASE_URL: postgresql://maxfac:maxfac_ci_throwaway@127.0.0.1:5432/maxfac_test?sslmode=disable
