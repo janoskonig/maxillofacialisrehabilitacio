@@ -615,6 +615,32 @@ export async function convertIntentToAppointment(
         [intentId]
       );
 
+      // WP-0.6 (audit #06): a foglalást ugyanebben a tranzakcióban kössük az
+      // intent munkafázis-sorához (episode_work_phases.appointment_id +
+      // status='scheduled') — a lib/appointment-service.ts soronkénti útjának
+      // tükre. Enélkül a worklist BOOKED-ot mutatott (appointments), miközben a
+      // terv-kártya ugyanazt a sort „Várakozik" chippel hozta, és az
+      // „Elhagyom" figyelmeztetés (status === 'scheduled' kapu) elmaradt,
+      // holott a törlés work_phase_id alapján mégis lemondta az időpontot.
+      if (resolvedWorkPhaseId && intent.episode_id) {
+        // Előbb nullázzuk bármely MÁSIK munkafázis-sor hivatkozását erre az
+        // appointmentre (elavult link, pl. kézi átrendezés után).
+        await client.query(
+          `UPDATE episode_work_phases
+           SET appointment_id = NULL,
+               status = CASE WHEN status = 'scheduled' THEN 'pending' ELSE status END
+           WHERE episode_id = $1 AND appointment_id = $2 AND id <> $3`,
+          [intent.episode_id, appointmentId, resolvedWorkPhaseId]
+        );
+        await client.query(
+          `UPDATE episode_work_phases
+           SET appointment_id = $1,
+               status = CASE WHEN status IN ('pending', 'scheduled') THEN 'scheduled' ELSE status END
+           WHERE id = $2`,
+          [appointmentId, resolvedWorkPhaseId]
+        );
+      }
+
       await client.query('COMMIT');
 
       return { ok: true, appointmentId, intentId, startTime };
