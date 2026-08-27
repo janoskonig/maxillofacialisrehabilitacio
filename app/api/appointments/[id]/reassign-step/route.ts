@@ -6,6 +6,7 @@ import { logActivity } from '@/lib/activity';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 import { isAppointmentActive } from '@/lib/active-appointment';
+import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -312,19 +313,14 @@ export const PATCH = roleHandler(
           [targetInTx.id]
         );
         if (targetInTx.status === 'scheduled') {
-          await client.query(
-            `INSERT INTO episode_work_phase_audit
-               (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [
-              targetInTx.id,
-              apptInTx.episodeId,
-              'scheduled',
-              'pending',
-              changedBy,
-              `stale appointment_id takarítása (mutatott: ${targetInTx.appointmentId}, status: ${staleStatusLabel}) reassign előtt${reasonSuffix}`,
-            ]
-          );
+          await insertWorkPhaseAudit(client, {
+            episodeWorkPhaseId: targetInTx.id,
+            episodeId: apptInTx.episodeId!,
+            oldStatus: 'scheduled',
+            newStatus: 'pending',
+            changedBy,
+            reason: `stale appointment_id takarítása (mutatott: ${targetInTx.appointmentId}, status: ${staleStatusLabel}) reassign előtt${reasonSuffix}`,
+          });
           targetCurrentStatus = 'pending';
         }
       }
@@ -347,19 +343,14 @@ export const PATCH = roleHandler(
         );
 
         if (prevStatus === 'scheduled') {
-          await client.query(
-            `INSERT INTO episode_work_phase_audit
-               (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
-             VALUES ($1, $2, $3, $4, $5, $6)`,
-            [
-              oldEwp.id,
-              apptInTx.episodeId,
-              'scheduled',
-              'pending',
-              changedBy,
-              `appointment ${appointmentId} átrendezve másik fázisra (${oldEwp.workPhaseCode} → ${targetInTx.workPhaseCode})${reasonSuffix}`,
-            ]
-          );
+          await insertWorkPhaseAudit(client, {
+            episodeWorkPhaseId: oldEwp.id,
+            episodeId: apptInTx.episodeId!,
+            oldStatus: 'scheduled',
+            newStatus: 'pending',
+            changedBy,
+            reason: `appointment ${appointmentId} átrendezve másik fázisra (${oldEwp.workPhaseCode} → ${targetInTx.workPhaseCode})${reasonSuffix}`,
+          });
         }
       }
 
@@ -379,19 +370,14 @@ export const PATCH = roleHandler(
       );
 
       if (targetCurrentStatus !== newTargetStatus) {
-        await client.query(
-          `INSERT INTO episode_work_phase_audit
-             (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
-           VALUES ($1, $2, $3, $4, $5, $6)`,
-          [
-            targetInTx.id,
-            apptInTx.episodeId,
-            targetCurrentStatus,
-            newTargetStatus,
-            changedBy,
-            `appointment ${appointmentId} ide rendelve (${apptInTx.stepCode ?? 'n/a'} → ${targetInTx.workPhaseCode})${reasonSuffix}`,
-          ]
-        );
+        await insertWorkPhaseAudit(client, {
+          episodeWorkPhaseId: targetInTx.id,
+          episodeId: apptInTx.episodeId!,
+          oldStatus: targetCurrentStatus,
+          newStatus: newTargetStatus,
+          changedBy,
+          reason: `appointment ${appointmentId} ide rendelve (${apptInTx.stepCode ?? 'n/a'} → ${targetInTx.workPhaseCode})${reasonSuffix}`,
+        });
       }
 
       await client.query(

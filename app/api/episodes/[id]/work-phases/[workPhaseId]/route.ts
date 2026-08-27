@@ -10,6 +10,7 @@ import {
 import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 import { SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT } from '@/lib/active-appointment';
 import { releaseWorkPhasesForDelete } from '@/lib/work-phase-delete';
+import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,20 +62,20 @@ export const DELETE = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász
       { id: workPhaseId, workPhaseCode: phase.work_phase_code ?? null },
     ]);
 
-    await client.query(
-      `INSERT INTO episode_work_phase_audit (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        workPhaseId,
-        episodeId,
-        phase.status,
-        'deleted',
-        auth.email ?? auth.userId ?? 'unknown',
+    // Tombstone audit sor — a snapshot oszlopok miatt a DELETE ELŐTT kell
+    // beszúrni; a 084-es migráció óta a sor a törlést túléli
+    // (episode_work_phase_id → NULL).
+    await insertWorkPhaseAudit(client, {
+      episodeWorkPhaseId: workPhaseId,
+      episodeId,
+      oldStatus: phase.status,
+      newStatus: 'deleted',
+      changedBy: auth.email ?? auth.userId ?? 'unknown',
+      reason:
         released.cancelledAppointments > 0
           ? `Manuálisan törölve (${released.cancelledAppointments} foglalás lemondva)`
           : 'Manuálisan törölve',
-      ]
-    );
+    });
 
     await client.query(`DELETE FROM episode_work_phases WHERE id = $1`, [workPhaseId]);
 
@@ -218,11 +219,14 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
         [workPhaseId]
       );
 
-      await client.query(
-        `INSERT INTO episode_work_phase_audit (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [workPhaseId, episodeId, 'completed', 'pending', auth.email ?? auth.userId ?? 'unknown', reason.trim()]
-      );
+      await insertWorkPhaseAudit(client, {
+        episodeWorkPhaseId: workPhaseId,
+        episodeId,
+        oldStatus: 'completed',
+        newStatus: 'pending',
+        changedBy: auth.email ?? auth.userId ?? 'unknown',
+        reason: reason.trim(),
+      });
 
       const futureAppts = await client.query(
         `SELECT a.id, a.time_slot_id FROM appointments a
@@ -366,11 +370,14 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
         );
       }
 
-      await client.query(
-        `INSERT INTO episode_work_phase_audit (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [workPhaseId, episodeId, phase.status, newStatus, auth.email ?? auth.userId ?? 'unknown', reason ?? null]
-      );
+      await insertWorkPhaseAudit(client, {
+        episodeWorkPhaseId: workPhaseId,
+        episodeId,
+        oldStatus: phase.status,
+        newStatus,
+        changedBy: auth.email ?? auth.userId ?? 'unknown',
+        reason: reason ?? null,
+      });
 
       await client.query('COMMIT');
 

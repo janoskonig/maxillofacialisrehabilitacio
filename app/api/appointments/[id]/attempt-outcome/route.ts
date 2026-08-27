@@ -34,6 +34,7 @@ import { APPOINTMENT_STATUS_EVENT_PENDING_AUDIT } from '@/lib/appointment-status
 import { sendPushNotification } from '@/lib/push-notifications';
 import { logger } from '@/lib/logger';
 import { syncRecallTaskForAppointmentStatus } from '@/lib/recall-task-lifecycle';
+import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -310,19 +311,16 @@ export const PATCH = roleHandler(
             );
             newEwpStatus = desired;
             if (oldEwpStatus !== desired || ewpAppointmentId !== appointmentId) {
-              await client.query(
-                `INSERT INTO episode_work_phase_audit
-                   (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
-                 VALUES ($1, $2, $3, $4, $5, $6)`,
-                [
-                  ewpId,
-                  episodeId,
-                  oldEwpStatus,
-                  desired,
-                  changedBy,
-                  `attempt #${attemptNum} sikertelen-jelölés visszavonva (link helyreállítva): ${reasonRaw}`,
-                ]
-              );
+              // oldEwpStatus itt biztosan nem null: az ewpId-guard csak akkor
+              // enged ide, ha az EWP-t megtaláltuk (status kitöltve).
+              await insertWorkPhaseAudit(client, {
+                episodeWorkPhaseId: ewpId,
+                episodeId,
+                oldStatus: oldEwpStatus!,
+                newStatus: desired,
+                changedBy,
+                reason: `attempt #${attemptNum} sikertelen-jelölés visszavonva (link helyreállítva): ${reasonRaw}`,
+              });
             }
           } else if (oldEwpStatus === 'pending' || oldEwpStatus === 'scheduled') {
             const desired = hasOtherActive || thisStillActive ? 'scheduled' : 'pending';
@@ -352,21 +350,17 @@ export const PATCH = roleHandler(
               newEwpStatus = desired;
 
               if (desired !== oldEwpStatus) {
-                await client.query(
-                  `INSERT INTO episode_work_phase_audit
-                     (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
-                   VALUES ($1, $2, $3, $4, $5, $6)`,
-                  [
-                    ewpId,
-                    episodeId,
-                    oldEwpStatus,
-                    desired,
-                    changedBy,
+                await insertWorkPhaseAudit(client, {
+                  episodeWorkPhaseId: ewpId,
+                  episodeId,
+                  oldStatus: oldEwpStatus,
+                  newStatus: desired,
+                  changedBy,
+                  reason:
                     action === 'mark_unsuccessful'
                       ? `attempt #${attemptNum} sikertelen: ${reasonRaw}`
                       : `attempt #${attemptNum} sikertelen-jelölés visszavonva: ${reasonRaw}`,
-                  ]
-                );
+                });
               }
             }
           }

@@ -12,6 +12,7 @@ import { probeColumnExists } from '@/lib/schema-probe';
 import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { releaseWorkPhasesForDelete } from '@/lib/work-phase-delete';
+import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -119,7 +120,14 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     return await handleAddPathway(pool, episodeId, body.carePathwayId, jaw);
   }
   if (body.action === 'removePathway') {
-    return await handleRemovePathway(pool, episodeId, body.carePathwayId, body.episodePathwayId, body.force === true);
+    return await handleRemovePathway(
+      pool,
+      episodeId,
+      body.carePathwayId,
+      body.episodePathwayId,
+      body.force === true,
+      auth.email ?? auth.userId ?? 'unknown'
+    );
   }
 
   const { carePathwayId, carePathwayVersion, assignedProviderId, treatmentTypeId, planStartDate } = body;
@@ -389,7 +397,8 @@ async function handleRemovePathway(
   episodeId: string,
   carePathwayId: unknown,
   episodePathwayIdParam?: unknown,
-  force = false
+  force = false,
+  changedBy = 'unknown'
 ) {
   let epPathwayId: string;
 
@@ -444,17 +453,38 @@ async function handleRemovePathway(
     await client.query('BEGIN');
 
     const phasesToDelete = await client.query(
-      `SELECT id, work_phase_code FROM episode_work_phases WHERE source_episode_pathway_id = $1 FOR UPDATE`,
+      `SELECT id, work_phase_code, status FROM episode_work_phases WHERE source_episode_pathway_id = $1 FOR UPDATE`,
       [epPathwayId]
     );
+    const phaseRows = phasesToDelete.rows as Array<{
+      id: string;
+      work_phase_code: string | null;
+      status: string;
+    }>;
     await releaseWorkPhasesForDelete(
       client,
       episodeId,
-      (phasesToDelete.rows as Array<{ id: string; work_phase_code: string | null }>).map((r) => ({
+      phaseRows.map((r) => ({
         id: r.id,
         workPhaseCode: r.work_phase_code,
       }))
     );
+
+    // Fázisonkénti tombstone audit sor a DELETE ELŐTT (WP-0.3) — a 084-es
+    // migráció óta ezek a sorok a törlést túlélik (episode_work_phase_id →
+    // NULL, a snapshot oszlopok őrzik, mi volt a fázis).
+    for (const ph of phaseRows) {
+      await insertWorkPhaseAudit(client, {
+        episodeWorkPhaseId: ph.id,
+        episodeId,
+        oldStatus: ph.status,
+        newStatus: 'deleted',
+        changedBy,
+        reason: force
+          ? 'Sablon force-eltávolítása az epizódról (foglalt/teljesített fázisokkal együtt, a foglalások lemondásra kerültek)'
+          : 'Sablon eltávolítása az epizódról',
+      });
+    }
 
     await client.query(`DELETE FROM episode_work_phases WHERE source_episode_pathway_id = $1`, [epPathwayId]);
 

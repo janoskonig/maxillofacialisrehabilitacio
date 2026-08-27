@@ -110,7 +110,8 @@ describe('PATCH /api/appointments/[id]/reassign-step — source-level invariants
     expect(SRC).toMatch(/stale appointment_id takarítása/);
     expect(SRC).toMatch(/SET appointment_id = NULL/);
     // Audit bejegyzés
-    expect(SRC).toMatch(/INSERT INTO episode_work_phase_audit/);
+    // WP-0.3 óta a közös helper írja az auditot (snapshot oszlopokkal).
+    expect(SRC).toMatch(/insertWorkPhaseAudit/);
   });
 
   it('a régi linkelt EWP sorokról is lekapcsolja az appointment_id-t', () => {

@@ -5,6 +5,7 @@
 
 import type { PoolClient } from 'pg';
 import { isAppointmentActive } from './active-appointment';
+import { insertWorkPhaseAudit } from './work-phase-audit';
 
 export interface LinkAppointmentWorkPhaseParams {
   appointmentId: string;
@@ -187,19 +188,14 @@ export async function linkAppointmentToWorkPhase(
       [target.id]
     );
     if (target.status === 'scheduled') {
-      await client.query(
-        `INSERT INTO episode_work_phase_audit
-           (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          target.id,
-          effectiveEpisodeId,
-          'scheduled',
-          'pending',
-          changedBy,
-          `stale appointment_id takarítása link előtt${reasonSuffix}`,
-        ]
-      );
+      await insertWorkPhaseAudit(client, {
+        episodeWorkPhaseId: target.id,
+        episodeId: effectiveEpisodeId,
+        oldStatus: 'scheduled',
+        newStatus: 'pending',
+        changedBy,
+        reason: `stale appointment_id takarítása link előtt${reasonSuffix}`,
+      });
       targetCurrentStatus = 'pending';
     }
   }
@@ -221,19 +217,14 @@ export async function linkAppointmentToWorkPhase(
       [oldEwp.id]
     );
     if (prevStatus === 'scheduled') {
-      await client.query(
-        `INSERT INTO episode_work_phase_audit
-           (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
-         VALUES ($1, $2, $3, $4, $5, $6)`,
-        [
-          oldEwp.id,
-          effectiveEpisodeId,
-          'scheduled',
-          'pending',
-          changedBy,
-          `appointment ${appointmentId} átkötve (${oldEwp.workPhaseCode} → ${target.workPhaseCode})${reasonSuffix}`,
-        ]
-      );
+      await insertWorkPhaseAudit(client, {
+        episodeWorkPhaseId: oldEwp.id,
+        episodeId: effectiveEpisodeId,
+        oldStatus: 'scheduled',
+        newStatus: 'pending',
+        changedBy,
+        reason: `appointment ${appointmentId} átkötve (${oldEwp.workPhaseCode} → ${target.workPhaseCode})${reasonSuffix}`,
+      });
     }
   }
 
@@ -248,19 +239,14 @@ export async function linkAppointmentToWorkPhase(
   );
 
   if (targetCurrentStatus !== newTargetStatus) {
-    await client.query(
-      `INSERT INTO episode_work_phase_audit
-         (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason)
-       VALUES ($1, $2, $3, $4, $5, $6)`,
-      [
-        target.id,
-        effectiveEpisodeId,
-        targetCurrentStatus,
-        newTargetStatus,
-        changedBy,
-        `appointment ${appointmentId} munkafázishoz rendelve (${appt.stepCode ?? 'n/a'} → ${target.workPhaseCode})${reasonSuffix}`,
-      ]
-    );
+    await insertWorkPhaseAudit(client, {
+      episodeWorkPhaseId: target.id,
+      episodeId: effectiveEpisodeId,
+      oldStatus: targetCurrentStatus,
+      newStatus: newTargetStatus,
+      changedBy,
+      reason: `appointment ${appointmentId} munkafázishoz rendelve (${appt.stepCode ?? 'n/a'} → ${target.workPhaseCode})${reasonSuffix}`,
+    });
   }
 
   await client.query(
