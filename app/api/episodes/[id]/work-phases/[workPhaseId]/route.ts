@@ -230,27 +230,62 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
         reason: reason.trim(),
       });
 
+      // WP-0.8 kiegészítés (a WP-0.4 review-jából): a párosítás ELSŐDLEGESEN
+      // work_phase_id szerint megy (erre az EWP sorra), step_code szerint csak
+      // a work_phase_id NÉLKÜLI legacy sorokra — a skip-ág pontos mintájára.
+      // Csupasz step_code duplikált fáziskódnál (két állcsont / több fog) a
+      // TESTVÉR fázis foglalását is lemondaná.
       const futureAppts = await client.query(
-        `SELECT a.id, a.time_slot_id FROM appointments a
-         WHERE a.episode_id = $1 AND a.step_code = $2
+        `SELECT a.id, a.time_slot_id, a.slot_intent_id FROM appointments a
+         WHERE a.episode_id = $1
            AND a.start_time > CURRENT_TIMESTAMP
-           AND ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}`,
-        [episodeId, stepCode]
+           AND ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}
+           AND (
+             a.work_phase_id = $2
+             OR (a.work_phase_id IS NULL AND a.step_code = $3)
+           )
+         FOR UPDATE OF a`,
+        [episodeId, workPhaseId, stepCode]
       );
-      for (const ap of futureAppts.rows as Array<{ id: string; time_slot_id: string | null }>) {
-        await client.query(`UPDATE appointments SET appointment_status = 'cancelled_by_doctor' WHERE id = $1`, [ap.id]);
+      for (const ap of futureAppts.rows as Array<{
+        id: string;
+        time_slot_id: string | null;
+        slot_intent_id: string | null;
+      }>) {
+        // A lemondott sor a slot_intent linket is elengedi (WP-0.4 mintája),
+        // hogy a halott appointment ne birtokolja tovább az intentet
+        // (idx_appointments_unique_slot_intent).
+        await client.query(
+          `UPDATE appointments SET appointment_status = 'cancelled_by_doctor', slot_intent_id = NULL WHERE id = $1`,
+          [ap.id]
+        );
         if (ap.time_slot_id) {
           await client.query(
             `UPDATE available_time_slots SET state = 'free', status = 'available' WHERE id = $1`,
             [ap.time_slot_id]
           );
         }
+        // A lemondott foglaláshoz tartozó konvertált intent lejáratása — a
+        // skip-ág pontos mintájára; e nélkül a 'converted' intent egy
+        // lemondott appointmentre mutatna tovább, és a projektor nem tudná
+        // újranyitni a lépést.
+        if (ap.slot_intent_id) {
+          await client.query(
+            `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP
+             WHERE id = $1 AND state = 'converted'`,
+            [ap.slot_intent_id]
+          );
+        }
       }
 
+      // Nyitott intentek lejáratása — szintén erre a fázisra szűkítve:
+      // work_phase_id szerint, step_code-dal csak a legacy (link nélküli)
+      // sorokra. A testvér-fázis nyitott intentje érintetlen marad.
       await client.query(
         `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP
-         WHERE episode_id = $1 AND step_code = $2 AND state = 'open'`,
-        [episodeId, stepCode]
+         WHERE episode_id = $1 AND state = 'open'
+           AND (work_phase_id = $2 OR (work_phase_id IS NULL AND step_code = $3))`,
+        [episodeId, workPhaseId, stepCode]
       );
 
       await client.query('COMMIT');

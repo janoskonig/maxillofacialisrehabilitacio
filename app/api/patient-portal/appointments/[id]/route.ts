@@ -106,6 +106,26 @@ export const DELETE = apiHandler(async (req, { correlationId, params }) => {
       ['cancelled_by_patient', cancellationReason.trim(), params.id]
     );
 
+    // WP-0.8 kiegészítés (a WP-0.4 review-jából): a lemondott appointmenthez
+    // kötött 'converted' slot_intent lejáratása + a link elengedése, a
+    // skip-ág (work-phases/[workPhaseId] route) pontos mintájára. E nélkül a
+    // halott sor örökre birtokolná az intentet
+    // (idx_appointments_unique_slot_intent), és a projektor által
+    // visszanyitott lépés MÁSIK slotra nem lenne újrafoglalható.
+    await client.query(
+      `UPDATE slot_intents si
+          SET state = 'expired', updated_at = CURRENT_TIMESTAMP
+         FROM appointments a
+        WHERE a.id = $1
+          AND a.slot_intent_id = si.id
+          AND si.state = 'converted'`,
+      [params.id]
+    );
+    await client.query(
+      `UPDATE appointments SET slot_intent_id = NULL WHERE id = $1 AND slot_intent_id IS NOT NULL`,
+      [params.id]
+    );
+
     await client.query(
       `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = $1`,
       [appointment.time_slot_id]
