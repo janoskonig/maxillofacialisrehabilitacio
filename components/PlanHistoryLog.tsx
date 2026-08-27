@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
 import { ChevronRight, History, Loader2 } from 'lucide-react';
 import type { PlanHistoryEntry } from '@/lib/plan-history';
 
@@ -46,7 +46,14 @@ export function PlanHistoryLog({ episodeId }: { episodeId: string }) {
         if (!res.ok) throw new Error('Nem sikerült betölteni a változásnaplót');
         const data = await res.json();
         const pageEntries: PlanHistoryEntry[] = data.entries ?? [];
-        setEntries((prev) => (offset === 0 ? pageEntries : [...prev, ...pageEntries]));
+        // Review-javítás: két lap között születhet új audit-sor, az offset
+        // ilyenkor elcsúszik és a lap eleje a már megjelenített sort adná
+        // újra — id-alapú dedupe véd a duplikált sor/React-key ellen.
+        setEntries((prev) => {
+          if (offset === 0) return pageEntries;
+          const seen = new Set(prev.map((e) => e.id));
+          return [...prev, ...pageEntries.filter((e) => !seen.has(e.id))];
+        });
         setCount(typeof data.count === 'number' ? data.count : null);
         setHasMore(Boolean(data.hasMore));
       } catch {
@@ -65,6 +72,30 @@ export function PlanHistoryLog({ episodeId }: { episodeId: string }) {
     setOpen(next);
     if (next) void loadPage(0);
   };
+
+  // Review-javítás (SSOT: "A terv változásai (N)" lecsukva is): egy könnyű,
+  // count-célú lekérés mountkor (limit=1) — a teljes lista továbbra is csak
+  // kinyitáskor töltődik.
+  useEffect(() => {
+    let cancelled = false;
+    (async () => {
+      try {
+        const res = await fetch(`/api/episodes/${episodeId}/plan-history?limit=1&offset=0`, {
+          credentials: 'include',
+        });
+        if (!res.ok) return;
+        const data = await res.json();
+        if (!cancelled && typeof data.count === 'number') {
+          setCount((prev) => (prev == null ? data.count : prev));
+        }
+      } catch {
+        /* a lecsukott N hiánya nem hiba-állapot */
+      }
+    })();
+    return () => {
+      cancelled = true;
+    };
+  }, [episodeId]);
 
   return (
     <details

@@ -41,12 +41,14 @@ function installFetchMock(opts: { entries: PlanHistoryEntry[]; failFirst?: boole
     if (!match) {
       return Promise.resolve({ ok: false, status: 404, json: () => Promise.resolve({}) } as Response);
     }
-    if (failNext) {
+    const limit = Number(match[1]);
+    const offset = Number(match[2]);
+    // failFirst az első LISTA-fetchet buktatja (limit>1) — a mount-kori könnyű
+    // count-lekérést (limit=1) nem, az a lecsukott fejléc N-jét szolgálja.
+    if (failNext && limit > 1) {
       failNext = false;
       return Promise.resolve({ ok: false, status: 500, json: () => Promise.resolve({}) } as Response);
     }
-    const limit = Number(match[1]);
-    const offset = Number(match[2]);
     const page = opts.entries.slice(offset, offset + limit);
     return Promise.resolve({
       ok: true,
@@ -71,23 +73,29 @@ afterEach(() => {
 });
 
 describe('PlanHistoryLog — lusta betöltés', () => {
-  it('lecsukva NEM fetchel; kinyitáskor tölt, és a fejléc megkapja az N-t', async () => {
+  it('lecsukva csak könnyű count-fetch fut (limit=1); a lista kinyitáskor tölt', async () => {
     const fetchMock = installFetchMock({
       entries: [makeEntry({ id: 'e1' }), makeEntry({ id: 'e2', summary: 'hozzáadta: Lenyomat' })],
     });
     render(<PlanHistoryLog episodeId={EPISODE_ID} />);
 
-    // Lecsukott állapot: cím látszik, fetch még nem történt.
-    expect(screen.getByText('A terv változásai')).toBeDefined();
-    expect(fetchMock).not.toHaveBeenCalled();
-
-    fireEvent.click(screen.getByText('A terv változásai'));
-
+    // Lecsukott állapot: a fejléc az N-t a mount-kori könnyű (limit=1)
+    // count-lekérésből kapja (SSOT: "A terv változásai (N)" lecsukva is);
+    // a TELJES lista fetch-e ilyenkor még nem történt meg.
     await waitFor(() => {
       expect(screen.getByText('A terv változásai (2)')).toBeDefined();
     });
     expect(fetchMock).toHaveBeenCalledTimes(1);
     expect(String(fetchMock.mock.calls[0][0])).toContain(
+      `/api/episodes/${EPISODE_ID}/plan-history?limit=1&offset=0`
+    );
+
+    fireEvent.click(screen.getByText('A terv változásai (2)'));
+
+    await waitFor(() => {
+      expect(fetchMock).toHaveBeenCalledTimes(2);
+    });
+    expect(String(fetchMock.mock.calls[1][0])).toContain(
       `/api/episodes/${EPISODE_ID}/plan-history?limit=20&offset=0`
     );
   });
@@ -137,7 +145,7 @@ describe('PlanHistoryLog — lapozás', () => {
     );
     const fetchMock = installFetchMock({ entries });
     render(<PlanHistoryLog episodeId={EPISODE_ID} />);
-    fireEvent.click(screen.getByText('A terv változásai'));
+    fireEvent.click(screen.getByText(/A terv változásai/));
 
     await waitFor(() => {
       expect(screen.getByText('bejegyzés-0')).toBeDefined();
@@ -152,8 +160,12 @@ describe('PlanHistoryLog — lapozás', () => {
     });
     // Az első oldal sorai megmaradtak (append, nem csere).
     expect(screen.getByText('bejegyzés-0')).toBeDefined();
-    expect(fetchMock).toHaveBeenCalledTimes(2);
-    expect(String(fetchMock.mock.calls[1][0])).toContain('offset=20');
+    // A mount-kori limit=1 count-fetch mellett két LISTA-fetch történt.
+    const listCalls = fetchMock.mock.calls
+      .map((c) => String(c[0]))
+      .filter((u) => u.includes('limit=20'));
+    expect(listCalls).toHaveLength(2);
+    expect(listCalls[1]).toContain('offset=20');
     // Nincs több oldal → a gomb eltűnik.
     expect(screen.queryByText('Továbbiak betöltése')).toBeNull();
   });
@@ -163,7 +175,7 @@ describe('PlanHistoryLog — hibaág', () => {
   it('sikertelen betöltésnél hibaszöveg + Újra gomb, ami újra próbál', async () => {
     installFetchMock({ entries: [makeEntry({ id: 'e1' })], failFirst: true });
     render(<PlanHistoryLog episodeId={EPISODE_ID} />);
-    fireEvent.click(screen.getByText('A terv változásai'));
+    fireEvent.click(screen.getByText(/A terv változásai/));
 
     await waitFor(() => {
       expect(screen.getByText('A változásnapló betöltése sikertelen.')).toBeDefined();
