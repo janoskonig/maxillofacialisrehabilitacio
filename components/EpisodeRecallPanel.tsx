@@ -1,13 +1,37 @@
 'use client';
 
 import { useCallback, useEffect, useState } from 'react';
-import { AlertTriangle, CalendarCheck2, CheckCircle2, ChevronDown, Clock, Loader2, RotateCcw } from 'lucide-react';
+import {
+  AlertTriangle,
+  CalendarCheck2,
+  CheckCircle2,
+  ChevronDown,
+  Clock,
+  Loader2,
+  Plus,
+  RotateCcw,
+} from 'lucide-react';
 import { AppointmentBookingSection } from './AppointmentBookingSection';
+import {
+  RECALL_RISK_LEVELS,
+  normalizeRecallRiskLevel,
+  recallCadenceForRisk,
+  recallLabelForInterval,
+  type RecallRiskLevel,
+} from '@/lib/recall-cadence';
+
+/**
+ * „Gondozás" kártya (WP-3.3): rövid és hosszú távú visszarendelések EGY
+ * listában, esedékesség szerint. Fejlécben a rizikócsoport-választó, amely
+ * csak a JAVASOLT kadenciát állítja — semmit nem tesz kötelezővé, és magától
+ * nem töröl semmit (a feleslegessé vált auto sorokat csak felajánlja).
+ */
 
 interface RecallTask {
   id: string;
   episodeId: string;
   intervalDays: number;
+  source: 'auto' | 'manual' | string | null;
   label: string | null;
   dueAt: string;
   completedAt: string | null;
@@ -17,24 +41,54 @@ interface RecallTask {
   dentistEmail: string | null;
 }
 
+const RISK_LABELS: Record<RecallRiskLevel, string> = {
+  low: 'Alacsony',
+  medium: 'Közepes',
+  high: 'Magas',
+};
+
 function formatDate(value: string): string {
   return new Date(value).toLocaleDateString('hu-HU', { year: 'numeric', month: 'long', day: 'numeric' });
 }
 
 export function EpisodeRecallPanel({ episodeId, patientId }: { episodeId: string; patientId: string }) {
   const [tasks, setTasks] = useState<RecallTask[]>([]);
+  const [riskLevel, setRiskLevel] = useState<RecallRiskLevel | null>(null);
+  const [riskLevelKnown, setRiskLevelKnown] = useState(true);
   const [loading, setLoading] = useState(true);
   const [bookingTaskId, setBookingTaskId] = useState<string | null>(null);
   const [actingTaskId, setActingTaskId] = useState<string | null>(null);
+  const [savingRisk, setSavingRisk] = useState(false);
+  const [deletingObsolete, setDeletingObsolete] = useState(false);
   const [error, setError] = useState<string | null>(null);
+  // „+ Visszarendelés hozzáadása" űrlap
+  const [addOpen, setAddOpen] = useState(false);
+  const [addDays, setAddDays] = useState('');
+  const [addLabel, setAddLabel] = useState('');
+  const [addSaving, setAddSaving] = useState(false);
 
   const load = useCallback(async () => {
     try {
-      const response = await fetch(`/api/episodes/${episodeId}/recall-tasks`, { credentials: 'include' });
-      if (!response.ok) throw new Error('A recall-feladatok betöltése sikertelen');
-      const data = await response.json();
+      const [tasksResponse, episodeResponse] = await Promise.all([
+        fetch(`/api/episodes/${episodeId}/recall-tasks`, { credentials: 'include' }),
+        fetch(`/api/episodes/${episodeId}`, { credentials: 'include' }),
+      ]);
+      if (!tasksResponse.ok) throw new Error('A visszarendelések betöltése sikertelen');
+      const data = await tasksResponse.json();
       setTasks(data.recallTasks ?? []);
-      setError(null);
+      if (episodeResponse.ok) {
+        const episodeData = await episodeResponse.json();
+        const level = episodeData.episode?.recallRiskLevel ?? null;
+        setRiskLevel(level && RECALL_RISK_LEVELS.includes(level) ? level : null);
+        setRiskLevelKnown(true);
+        setError(null);
+      } else {
+        setRiskLevelKnown(false);
+        // Review-javítás: ha az epizód-GET elhasal, ne mutassunk hamis
+        // "Alacsony" szintet néma fallbackként — jelezzük, és a rizikó-függő
+        // ajánlatokat a render a riskLevel=null + hiba együttesből visszafogja.
+        setError('A rizikószint betöltése sikertelen — a lista friss, de a szint ismeretlen');
+      }
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Hiba történt');
     } finally {
@@ -69,30 +123,198 @@ export function EpisodeRecallPanel({ episodeId, patientId }: { episodeId: string
     }
   };
 
+  const changeRisk = async (level: RecallRiskLevel) => {
+    if (savingRisk || level === riskLevel) return;
+    setSavingRisk(true);
+    try {
+      const response = await fetch(`/api/episodes/${episodeId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ recallRiskLevel: level }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? 'A rizikócsoport mentése sikertelen');
+      setRiskLevel(data.episode?.recallRiskLevel ?? level);
+      setError(null);
+      // A váltás új auto sorokat hozhatott; a feleslegessé váltakat a lenti
+      // ajánlat-sáv mutatja (törlés csak kifejezett kérésre).
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Hiba történt');
+    } finally {
+      setSavingRisk(false);
+    }
+  };
+
+  const submitAdd = async (event: React.FormEvent) => {
+    event.preventDefault();
+    const intervalDays = Number(addDays);
+    if (!Number.isInteger(intervalDays) || intervalDays <= 0) {
+      setError('A visszarendeléshez pozitív egész napszám szükséges');
+      return;
+    }
+    setAddSaving(true);
+    try {
+      const response = await fetch(`/api/episodes/${episodeId}/recall-tasks`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          intervalDays,
+          ...(addLabel.trim() ? { label: addLabel.trim() } : {}),
+        }),
+      });
+      const data = await response.json();
+      if (!response.ok) throw new Error(data.error ?? 'A visszarendelés felvétele sikertelen');
+      setAddOpen(false);
+      setAddDays('');
+      setAddLabel('');
+      setError(null);
+      await load();
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Hiba történt');
+    } finally {
+      setAddSaving(false);
+    }
+  };
+
+  // A jelenlegi kadenciából kikerült, még szabad auto sorok — törlésre
+  // FELAJÁNLVA (a szolgáltatás nem törölte őket, a döntés a felhasználóé).
+  const cadence = recallCadenceForRisk(riskLevel);
+  // Ismeretlen rizikószintnél (epizód-GET hiba) nem ajánlunk törlést — a
+  // null→low fallback különben a kadenciában lévő sorokat is felajánlaná.
+  const obsoleteAutoTasks = riskLevelKnown
+    ? tasks.filter(
+        (task) =>
+          task.source === 'auto' &&
+          !task.completedAt &&
+          !task.appointmentId &&
+          !cadence.includes(task.intervalDays),
+      )
+    : [];
+
+  const deleteObsolete = async () => {
+    setDeletingObsolete(true);
+    try {
+      for (const task of obsoleteAutoTasks) {
+        const response = await fetch(`/api/episodes/${episodeId}/recall-tasks/${task.id}`, {
+          method: 'DELETE',
+          credentials: 'include',
+        });
+        if (!response.ok) {
+          const data = await response.json().catch(() => ({}));
+          throw new Error(data.error ?? 'A törlés sikertelen');
+        }
+      }
+      setError(null);
+    } catch (err) {
+      setError(err instanceof Error ? err.message : 'Hiba történt');
+    } finally {
+      // Részleges siker esetén is frissítünk (review-javítás): a már törölt
+      // sorok ne maradjanak a listában/ajánlat-sávban a hibaüzenet mellett.
+      await load();
+      setDeletingObsolete(false);
+    }
+  };
+
   if (loading) return null;
-  if (tasks.length === 0 && !error) return null;
 
   const now = Date.now();
+  const sortedTasks = [...tasks].sort(
+    (a, b) => new Date(a.dueAt).getTime() - new Date(b.dueAt).getTime(),
+  );
+  const effectiveRisk = normalizeRecallRiskLevel(riskLevel);
+
   return (
     <section className="bg-white dark:bg-gray-900 rounded-lg border border-pink-200 dark:border-pink-900 p-4">
-      <div className="flex items-start gap-2">
-        <CalendarCheck2 className="w-5 h-5 text-pink-600 dark:text-pink-300 mt-0.5" />
-        <div>
-          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Recall gondozás</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400">Az átadástól számított 6 és 12 hónapos kontrollok. A foglalás kontrollkapacitásból történik.</p>
+      <div className="flex items-start justify-between gap-3 flex-wrap">
+        <div className="flex items-start gap-2 min-w-0">
+          <CalendarCheck2 className="w-5 h-5 text-pink-600 dark:text-pink-300 mt-0.5 shrink-0" />
+          <div>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Gondozás</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400">
+              Rövid és hosszú távú visszarendelések egy listában. A foglalás kontrollkapacitásból történik.
+            </p>
+          </div>
+        </div>
+
+        <div className="shrink-0">
+          <div className="flex items-center gap-2">
+            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Rizikócsoport:</span>
+            <div
+              role="group"
+              aria-label="Rizikócsoport"
+              className="inline-flex rounded-md border border-gray-200 dark:border-gray-700 overflow-hidden"
+            >
+              {RECALL_RISK_LEVELS.map((level) => {
+                const selected = effectiveRisk === level;
+                return (
+                  <button
+                    key={level}
+                    type="button"
+                    onClick={() => void changeRisk(level)}
+                    disabled={savingRisk}
+                    aria-pressed={selected}
+                    className={`px-2.5 py-1 text-xs font-medium transition-colors disabled:opacity-60 ${
+                      selected
+                        ? 'bg-pink-600 text-white'
+                        : 'bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:bg-gray-50 dark:hover:bg-gray-800'
+                    }`}
+                  >
+                    {RISK_LABELS[level]}
+                  </button>
+                );
+              })}
+            </div>
+            {savingRisk && <Loader2 className="w-3.5 h-3.5 animate-spin text-gray-400 dark:text-gray-500" />}
+          </div>
+          <p className="mt-1 text-xs text-gray-500 dark:text-gray-400 max-w-xs">
+            A rizikócsoport csak a javasolt kontroll-kadenciát állítja — semmit nem tesz kötelezővé, és magától nem töröl semmit.
+          </p>
         </div>
       </div>
 
       {error && <p className="mt-3 text-sm text-red-600 dark:text-red-300">{error}</p>}
 
+      {obsoleteAutoTasks.length > 0 && (
+        <div className="mt-3 flex flex-wrap items-center justify-between gap-2 rounded-md border border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 px-3 py-2">
+          <p className="text-xs text-amber-800 dark:text-amber-200">
+            {obsoleteAutoTasks.length} automatikus visszarendelés feleslegessé vált a jelenlegi kadenciában
+            {' '}({obsoleteAutoTasks.map((t) => t.label ?? recallLabelForInterval(t.intervalDays)).join(', ')})
+            {' '}— megtartható, vagy egy kattintással törölhető.
+          </p>
+          <button
+            type="button"
+            onClick={() => void deleteObsolete()}
+            disabled={deletingObsolete}
+            className="text-xs font-medium text-amber-800 dark:text-amber-200 underline hover:no-underline disabled:opacity-50"
+          >
+            {deletingObsolete ? 'Törlés…' : 'Törlés'}
+          </button>
+        </div>
+      )}
+
+      {sortedTasks.length === 0 && !error && (
+        <p className="mt-3 text-sm text-gray-500 dark:text-gray-400">
+          Ehhez az epizódhoz még nincs visszarendelés. Az automatikus kontrollok az átadás után jönnek
+          létre; kézi visszarendelés bármikor felvehető.
+        </p>
+      )}
+
       <div className="mt-3 space-y-2">
-        {tasks.map((task) => {
+        {sortedTasks.map((task) => {
           const overdue = !task.completedAt && !task.appointmentId && new Date(task.dueAt).getTime() < now;
-          // Minimál-fix a WP-3.3-as panel-átalakításig: a GET label-jét mutatjuk,
-          // a régi 180/365-ös címke csak fallback (nem-180 ≠ automatikusan 12 hónapos).
-          const label = task.label ?? (task.intervalDays === 180 ? '6 hónapos recall' : '12 hónapos recall');
+          const label = task.label ?? recallLabelForInterval(task.intervalDays);
           return (
-            <div key={task.id} className="rounded-lg border border-gray-200 dark:border-gray-800 p-3">
+            <div
+              key={task.id}
+              className={`rounded-lg border p-3 ${
+                overdue
+                  ? 'border-red-300 dark:border-red-900 bg-red-50/50 dark:bg-red-950/20'
+                  : 'border-gray-200 dark:border-gray-800'
+              }`}
+            >
               <div className="flex flex-wrap items-center justify-between gap-3">
                 <div className="flex items-start gap-2 min-w-0">
                   {task.completedAt ? (
@@ -105,16 +327,21 @@ export function EpisodeRecallPanel({ episodeId, patientId }: { episodeId: string
                   <div>
                     <div className="text-sm font-medium text-gray-900 dark:text-gray-100">{label}</div>
                     <div className="text-xs text-gray-500 dark:text-gray-400">Esedékes: {formatDate(task.dueAt)}</div>
-                    {task.appointmentStart && !task.completedAt && (
+                    {task.completedAt ? (
+                      <div className="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">
+                        Teljesült: {new Date(task.completedAt).toLocaleString('hu-HU')}
+                      </div>
+                    ) : task.appointmentStart ? (
                       <div className="text-xs text-blue-700 dark:text-blue-300 mt-0.5">
-                        Lefoglalva: {new Date(task.appointmentStart).toLocaleString('hu-HU')}
+                        Foglalva: {new Date(task.appointmentStart).toLocaleString('hu-HU')}
                         {task.dentistEmail ? ` · ${task.dentistEmail}` : ''}
                       </div>
+                    ) : (
+                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">Nincs foglalva</div>
                     )}
-                    {task.completedAt && (
-                      <div className="text-xs text-emerald-700 dark:text-emerald-300 mt-0.5">Teljesítve: {new Date(task.completedAt).toLocaleString('hu-HU')}</div>
+                    {overdue && (
+                      <div className="text-xs font-medium text-red-700 dark:text-red-300 mt-0.5">Lejárt</div>
                     )}
-                    {overdue && <div className="text-xs font-medium text-red-700 dark:text-red-300 mt-0.5">Lejárt — időpont szükséges</div>}
                   </div>
                 </div>
 
@@ -126,7 +353,7 @@ export function EpisodeRecallPanel({ episodeId, patientId }: { episodeId: string
                         onClick={() => setBookingTaskId((current) => current === task.id ? null : task.id)}
                         className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-pink-600 text-white text-xs font-medium hover:bg-pink-700"
                       >
-                        Recall foglalása <ChevronDown className="w-3 h-3" />
+                        Foglalás <ChevronDown className="w-3 h-3" />
                       </button>
                       <button
                         type="button"
@@ -171,6 +398,62 @@ export function EpisodeRecallPanel({ episodeId, patientId }: { episodeId: string
             </div>
           );
         })}
+      </div>
+
+      <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
+        {addOpen ? (
+          <form onSubmit={submitAdd} className="flex flex-wrap items-end gap-3">
+            <label className="flex flex-col gap-1 text-xs font-medium text-gray-600 dark:text-gray-400">
+              Hány nap múlva?
+              <input
+                type="number"
+                min={1}
+                step={1}
+                required
+                value={addDays}
+                onChange={(e) => setAddDays(e.target.value)}
+                placeholder="pl. 14"
+                className="w-24 rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-pink-500"
+              />
+            </label>
+            <label className="flex flex-col gap-1 text-xs font-medium text-gray-600 dark:text-gray-400 grow max-w-sm">
+              Címke (opcionális)
+              <input
+                type="text"
+                maxLength={200}
+                value={addLabel}
+                onChange={(e) => setAddLabel(e.target.value)}
+                placeholder="pl. 2 hetes sebgyógyulási kontroll"
+                className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 px-2 py-1.5 text-sm text-gray-900 dark:text-gray-100 focus:outline-none focus:ring-2 focus:ring-pink-500"
+              />
+            </label>
+            <div className="flex items-center gap-2">
+              <button
+                type="submit"
+                disabled={addSaving}
+                className="inline-flex items-center gap-1.5 px-2.5 py-1.5 rounded-md bg-pink-600 text-white text-xs font-medium hover:bg-pink-700 disabled:opacity-50"
+              >
+                {addSaving ? 'Mentés…' : 'Hozzáadás'}
+              </button>
+              <button
+                type="button"
+                onClick={() => { setAddOpen(false); setAddDays(''); setAddLabel(''); }}
+                className="text-xs text-gray-600 dark:text-gray-400 hover:underline"
+              >
+                Mégse
+              </button>
+            </div>
+          </form>
+        ) : (
+          <button
+            type="button"
+            onClick={() => setAddOpen(true)}
+            className="inline-flex items-center gap-1.5 text-sm font-medium text-pink-700 dark:text-pink-300 hover:underline"
+          >
+            <Plus className="w-4 h-4" />
+            Visszarendelés hozzáadása
+          </button>
+        )}
       </div>
     </section>
   );

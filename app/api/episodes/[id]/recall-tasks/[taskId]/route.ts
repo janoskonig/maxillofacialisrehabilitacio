@@ -74,3 +74,80 @@ export const PATCH = roleHandler([...ROLES], async (req, { auth, params }) => {
     client.release();
   }
 });
+
+/**
+ * Recall-sor törlése (WP-3.3) — tipikusan a rizikószint-váltás után
+ * feleslegessé vált auto sorokra, a UI „Törlés" ajánlatából. A törlés mindig
+ * kifejezett felhasználói döntés: a szolgáltatásréteg magától soha nem töröl.
+ * Foglalt vagy teljesített sort nem töröl (409) — a foglalást előbb le kell
+ * mondani, a teljesítés pedig előzmény.
+ */
+export const DELETE = roleHandler([...ROLES], async (req, { auth, params }) => {
+  const episodeId = params.id;
+  const taskId = params.taskId;
+  const pool = getDbPool();
+
+  const taskResult = await pool.query(
+    `SELECT et.id, et.completed_at, et.appointment_id, et.source, et.label,
+            et.recall_interval_days, pe.status AS episode_status
+       FROM episode_tasks et
+       JOIN patient_episodes pe ON pe.id = et.episode_id
+      WHERE et.id = $1 AND et.episode_id = $2
+        AND et.task_type = 'recall_due'
+        AND et.recall_interval_days IS NOT NULL`,
+    [taskId, episodeId],
+  );
+  if (taskResult.rows.length === 0) {
+    return NextResponse.json({ error: 'Recall-feladat nem található' }, { status: 404 });
+  }
+  const task = taskResult.rows[0];
+  if (task.episode_status !== 'open') {
+    return NextResponse.json({ error: 'Lezárt epizód recall-feladata nem módosítható' }, { status: 409 });
+  }
+  if (task.appointment_id) {
+    return NextResponse.json(
+      { error: 'Foglalt visszarendelés nem törölhető — előbb az időpontot kell lemondani' },
+      { status: 409 },
+    );
+  }
+  if (task.completed_at) {
+    return NextResponse.json(
+      { error: 'Teljesített visszarendelés előzmény, nem törölhető' },
+      { status: 409 },
+    );
+  }
+
+  // Atomi, feltételes törlés (review-javítás, TOCTOU): a fenti őr-SELECT és a
+  // törlés között egy párhuzamos foglalás/teljesítés beírhatta volna a sort —
+  // a WHERE ezt egyetlen lépésben zárja ki.
+  const deleted = await pool.query(
+    `DELETE FROM episode_tasks
+      WHERE id = $1 AND episode_id = $2
+        AND appointment_id IS NULL AND completed_at IS NULL
+      RETURNING id`,
+    [taskId, episodeId],
+  );
+  if (deleted.rowCount === 0) {
+    return NextResponse.json(
+      {
+        error: 'A visszarendelést időközben lefoglalták vagy teljesítették — frissítse a listát',
+        code: 'RECALL_TASK_CHANGED',
+      },
+      { status: 409 },
+    );
+  }
+
+  await logActivity(
+    req,
+    auth.email ?? auth.userId ?? 'unknown',
+    'recall_task_deleted',
+    JSON.stringify({
+      episodeId,
+      taskId,
+      source: task.source,
+      intervalDays: task.recall_interval_days,
+      label: task.label,
+    }),
+  );
+  return NextResponse.json({ ok: true });
+});
