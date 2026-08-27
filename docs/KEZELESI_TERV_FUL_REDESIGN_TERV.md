@@ -1,7 +1,7 @@
 # Kezelési terv & időpont fül — újratervezési és javítási terv
 
-**Státusz:** VÉGREHAJTÁS ALATT (jóváhagyva: 2026-08-27) · **Készült:** 2026-08-27 ·
-**Alap-commit:** `09d6446` (main)
+**Státusz:** FÁZIS 0–3 VÉGREHAJTVA (2026-08-27, PR #58–#75) · FÁZIS 4 külön
+jóváhagyásra vár · **Készült:** 2026-08-27 · **Alap-commit:** `09d6446` (main)
 **Címzett:** végrehajtó agent-szett. Ez a fájl a kanonikus forrás; ha valami ellentmond a
 beszélgetésnek, ez a fájl nyer.
 
@@ -32,7 +32,7 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 | WP-1.3 lánc-banner szöveg | ✅ | [#67](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/67) | Mindhárom előfordulás (terv-kártya, worklist-widget, ChainBookingCallout) ajánlattá fogalmazva, amber→kék |
 | WP-1.4 feltételes időpont egy kártya | ✅ | [#69](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/69) | Új ConditionalAppointmentOffers komponens; jegyzet: az e-mail-hiányos küldés-gomb disabled marad (technikai előfeltétel, nem klinikai kapu); 2 örökölt hiba külön feladat-chipben (LIMIT 50 csonkolás, halott AppointmentBooking.tsx) |
 | WP-2.1 terv-mutáció audit (087) | ✅ | [#71](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/71) | change_type oszlop; minden mutáció naplóz (create/delete/reorder/merge/unmerge/timing/template_apply/template_remove); review-javítás: addPathway + create-episode auditja, reorder tiebreaker |
-| WP-2.2 napló endpoint + UI | ⬜ | — | |
+| WP-2.2 napló endpoint + UI | ✅ | [#75](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/75) | GET plan-history (lapozható, changed_by-feloldás, tombstone-olvasható) + lecsukott „A terv változásai (N)" idővonal; review-javítás: lapozás-dedupe, egy-pillanatképes count. **Ezzel a FÁZIS 2 teljes — minden jóváhagyott WP kész.** |
 | WP-3.1 recall séma (088) | ✅ | [#72](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/72) | CHECK feloldva, source/label/created_by, epizód-szintű recall_risk_level; deploy-kötés: a 088 a kód ELŐTT fusson (kétirányú törés) |
 | WP-3.2 recall szolgáltatásréteg | ✅ | [#72](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/72) | Pure kadencia-katalógus (SZÁMOK JÓVÁHAGYÁSRA VÁRNAK); horgony = utolsó teljesült kezelés; STAGE_6 mint generálási KAPU megmaradt — NYITOTT KÉRDÉS a lazítása; kézi sorokat az auto sosem írja felül |
 | WP-3.3 Gondozás kártya | ✅ | [#73](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/73) | Rizikó-választó + egy időrendi lista + kézi felvétel + törlés-AJÁNLAT (új, őrzött DELETE végpont); FONTOS: a kadencia-számok élesítése az orvos per-epizód választásán múlik, a számok jóváhagyása NYITOTT. **Ezzel a FÁZIS 3 teljes.** |
@@ -669,17 +669,26 @@ A WP-0.0 harnesse mellé, a fázisokkal párhuzamosan, a riport által javasolt 
 
 ---
 
-## 2. Ami még nyitva van (ne találd ki magadtól)
+## 2. Ami még nyitva van (a felhasználó döntését várja — 2026-08-27 állapot)
 
-Ezeket a WP végén kérdezd meg a felhasználótól, ne döntsd el:
-
-1. **Recall-kadencia konkrét számai** rizikószintenként (WP-3.2).
-2. **`episode_visits` külön tábla vs. merge-csoport** megtartása (WP-4.1) — a terv ajánlása a
-   külön tábla, de ez séma-elköteleződés.
-3. **Meddig megyünk.** A 4. fázis 8–12 nap, és külön jóváhagyás kell hozzá.
-4. A 19 nem verifikált audit-megállapítás (a riport 02. szakaszának végén) — plauzibilisek, de
-   nem igazoltak. Több ugyanabba a fájlba esik, mint a javított hibák; ha ott jársz, nézd meg,
-   de ne vedd készpénznek.
+1. **Recall-kadencia konkrét számai** rizikószintenként (WP-3.2): a kódban élő javaslat
+   `lib/recall-cadence.ts` — low: 180/365 (a mai viselkedés), medium: 90/180/365,
+   high: 30/90/180/365. Számváltozás csak akkor történik, ha az orvos az epizódon
+   Közepes/Magas szintet választ; a számok módosítása egy-konstansos változás.
+2. **STAGE_6 mint auto-generálási kapu** (WP-3.2 review): a recall-sorok automatikus
+   létrehozása továbbra is átadás (STAGE_6) után indul — csak a határidő-horgony lett
+   az utolsó teljesült kezelés. Átadás ELŐTTI auto-recallhoz a kapu lazítása kell —
+   döntést igényel (a rövid távú visszarendelés addig kézi sorral vehető fel).
+3. **`episode_visits` külön tábla vs. merge-csoport** megtartása (WP-4.1) — a terv
+   ajánlása a külön tábla, de ez séma-elköteleződés.
+4. **FÁZIS 4 (vizit-alapú „puzzle" terv)** — 8–12 nap, külön jóváhagyás kell hozzá;
+   enélkül nem indul.
+5. A 19 nem verifikált audit-megállapítás (a riport 02. szakaszának végén) —
+   plauzibilisek, de nem igazoltak; a javítások során 5 új, elő-létező hézag elő is
+   került és javítva lett (#65 review → WP-0.8 kiegészítés; multi-link a #74-ben).
+   A maradékot érdemes szemmel tartani.
+6. Két örökölt hiba külön feladat-chipként vár indításra: az ajánlat-lista LIMIT 50
+   csonkolása és a halott `AppointmentBooking.tsx` kivezetése (WP-1.4 review).
 
 ## 3. Munkamódszer a végrehajtó agenteknek
 
