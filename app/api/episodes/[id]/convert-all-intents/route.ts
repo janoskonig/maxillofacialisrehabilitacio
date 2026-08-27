@@ -46,7 +46,9 @@ const DEFAULT_PATHWAY_GAP_DAYS = 14;
  *
  * The first intent in the batch has no previous scheduled slot, so its only
  * floor is `now` (handled inside convertIntentToAppointment when
- * chainMinStartTime is undefined).
+ * chainMinStartTime is undefined). If the FIRST intent is skipped, the anchor
+ * still starts from `now` (audit #10 / WP-0.2), so the second intent's floor
+ * is `now + its own gap` — not bare `now`.
  *
  * Response: { converted, appointmentIds, skipped: Array<{ intentId, reason }> }
  */
@@ -177,9 +179,12 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
       // distance we'd have required from the previous successful anchor
       // to this step had it succeeded. The next iteration will add ITS
       // own gap on top.
-      if (prevActualStart && chainMinStartTime) {
-        prevActualStart = chainMinStartTime;
-      }
+      //
+      // Audit #10 (WP-0.2): ha a köteg ELSŐ intentje marad ki (ilyenkor
+      // `prevActualStart` még null, így `chainMinStartTime` sincs), a horgony
+      // a `now`-tól indul — különben a 2. intent egyetlen padlója a `now`
+      // maradna, és a kihagyott vezető lépés elé csúszhatna a naptárban.
+      prevActualStart = chainMinStartTime ?? new Date();
     }
   }
 
