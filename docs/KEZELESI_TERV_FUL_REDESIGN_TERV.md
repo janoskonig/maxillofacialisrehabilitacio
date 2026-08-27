@@ -31,10 +31,10 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 | WP-1.2 integritás kivezetés | ⬜ | — | |
 | WP-1.3 lánc-banner szöveg | ✅ | [#67](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/67) | Mindhárom előfordulás (terv-kártya, worklist-widget, ChainBookingCallout) ajánlattá fogalmazva, amber→kék |
 | WP-1.4 feltételes időpont egy kártya | ✅ | [#69](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/69) | Új ConditionalAppointmentOffers komponens; jegyzet: az e-mail-hiányos küldés-gomb disabled marad (technikai előfeltétel, nem klinikai kapu); 2 örökölt hiba külön feladat-chipben (LIMIT 50 csonkolás, halott AppointmentBooking.tsx) |
-| WP-2.1 terv-mutáció audit (087) | ⬜ | — | |
+| WP-2.1 terv-mutáció audit (087) | ✅ | [#71](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/71) | change_type oszlop; minden mutáció naplóz (create/delete/reorder/merge/unmerge/timing/template_apply/template_remove); review-javítás: addPathway + create-episode auditja, reorder tiebreaker |
 | WP-2.2 napló endpoint + UI | ⬜ | — | |
-| WP-3.1 recall séma (088) | ⬜ | — | |
-| WP-3.2 recall szolgáltatásréteg | ⬜ | — | |
+| WP-3.1 recall séma (088) | ✅ | [#72](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/72) | CHECK feloldva, source/label/created_by, epizód-szintű recall_risk_level; deploy-kötés: a 088 a kód ELŐTT fusson (kétirányú törés) |
+| WP-3.2 recall szolgáltatásréteg | ✅ | [#72](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/72) | Pure kadencia-katalógus (SZÁMOK JÓVÁHAGYÁSRA VÁRNAK); horgony = utolsó teljesült kezelés; STAGE_6 mint generálási KAPU megmaradt — NYITOTT KÉRDÉS a lazítása; kézi sorokat az auto sosem írja felül |
 | WP-3.3 Gondozás kártya | ⬜ | — | |
 | FÁZIS 4 (puzzle) | ⏸ | — | Külön jóváhagyás kell, nem indul enélkül |
 
