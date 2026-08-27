@@ -155,6 +155,25 @@ export const PATCH = roleHandler(
                 WHERE id = $1`,
               [appointmentId, reasonRaw, auth.email ?? auth.userId ?? 'unknown']
             );
+
+            // Audit #04 (WP-0.2): a foglaláshoz kötött `converted` slot_intent
+            // lejáratása még EBBEN a tranzakcióban. A post-commit
+            // `projectRemainingSteps` nem tud `converted` sort visszanyitni
+            // (az UPSERT-je csak `state IN ('open','expired')` sorokat frissít),
+            // és második sort sem szúrhat be ugyanarra a lépésre
+            // (`uq_slot_intents_episode_step_seq`). Minden testvér-út (lemondás,
+            // törlés, fázis-elhagyás) lejáratja az intentet — e nélkül a
+            // sikertelen-jelölés után a lépés kimaradna az „Összes szükséges
+            // időpont lefoglalása" kötegből.
+            await client.query(
+              `UPDATE slot_intents si
+                  SET state = 'expired', updated_at = CURRENT_TIMESTAMP
+                 FROM appointments a
+                WHERE a.id = $1
+                  AND a.slot_intent_id = si.id
+                  AND si.state = 'converted'`,
+              [appointmentId]
+            );
           }
         } else {
           // 'revert' — csak akkor van értelme, ha jelenleg unsuccessful.
