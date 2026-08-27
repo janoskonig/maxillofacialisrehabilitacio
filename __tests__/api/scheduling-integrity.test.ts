@@ -14,13 +14,20 @@
  *
  * A repair logika csak ezt a két típust tisztítja, NEM nyúl a slot-hoz és
  * nem lép túl az audit-on.
+ *
+ * WP-1.2: a detektálás/javítás implementáció a `lib/scheduling-integrity.ts`
+ * fájlba költözött (az automatikus szerveroldali javítás is onnan fut), a
+ * route vékony wrapper maradt. A guardok változatlanok — a SRC a route és a
+ * lib összefűzése, így minden korábbi assertion ugyanazt a védelmet adja.
+ * Az auto-repair VISELKEDÉSÉT a
+ * `__tests__/integration/scheduling-integrity-auto-repair.test.ts` fedi.
  */
 
 import { describe, it, expect } from 'vitest';
 import { readFileSync } from 'fs';
 import { join } from 'path';
 
-const SRC = readFileSync(
+const ROUTE_SRC = readFileSync(
   join(
     __dirname,
     '..',
@@ -34,6 +41,13 @@ const SRC = readFileSync(
   ),
   'utf8'
 );
+
+const LIB_SRC = readFileSync(
+  join(__dirname, '..', '..', 'lib', 'scheduling-integrity.ts'),
+  'utf8'
+);
+
+const SRC = `${ROUTE_SRC}\n${LIB_SRC}`;
 
 describe('scheduling-integrity route — új violation-típusok (GET)', () => {
   it('EWP_DANGLING_APPOINTMENT_LINK detektálás', () => {

@@ -6,7 +6,7 @@ import {
   Loader2, SkipForward, RotateCcw, CheckCircle2, Circle, Clock,
   ChevronDown, ChevronUp, ChevronRight, GripVertical, Trash2,
   Plus, Search, FileText, Layers, PenLine, Merge, Unlink, Calendar, SendHorizontal,
-  AlertTriangle, CalendarDays, UserRound, CalendarPlus, CalendarClock, Link2, Undo2,
+  AlertTriangle, CalendarDays, UserRound, CalendarPlus, CalendarClock, CalendarX2, Link2, Undo2,
 } from 'lucide-react';
 import { WorkPhaseTaskDelegateBlock } from './WorkPhaseTaskDelegateBlock';
 import { PlanValidationPanel } from './PlanValidationPanel';
@@ -14,7 +14,6 @@ import { LONG_DURATION_MINUTES } from '@/lib/treatment-plan-validation';
 import { useWorkPhaseBooking } from '@/hooks/useWorkPhaseBooking';
 import { WorkPhaseBookingModals } from './WorkPhaseBookingModals';
 import { PlanStartDateControl } from './PlanStartDateControl';
-import { EpisodeIntegrityBanner } from './EpisodeIntegrityBanner';
 import type { WorklistRowState } from '@/lib/worklist-types';
 import {
   DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
@@ -50,6 +49,12 @@ interface EpisodeStep {
   mergedIntoStepId?: string | null;
   toothNumber?: number | null;
   treatmentLabel?: string | null;
+  /**
+   * WP-1.2: az integritás-javítás során elveszett a sor foglalása (a
+   * hivatkozott időpontot lemondták/törölték), és azóta sincs új. A sorban
+   * halk jelzést mutatunk: „nincs élő időpont — foglaljon újat".
+   */
+  lostAppointment?: boolean;
 }
 
 interface LinkedToothTreatment {
@@ -147,9 +152,19 @@ function mapWorkPhaseApiToEpisodeStep(row: Record<string, unknown>): EpisodeStep
   };
 }
 
-function mapWorkPhasesResponse(rows: unknown[] | undefined): EpisodeStep[] {
+function mapWorkPhasesResponse(
+  rows: unknown[] | undefined,
+  lostAppointmentWorkPhaseIds?: unknown[]
+): EpisodeStep[] {
   if (!rows?.length) return [];
-  return rows.map((r) => mapWorkPhaseApiToEpisodeStep(r as Record<string, unknown>));
+  const lostIds = new Set(
+    (lostAppointmentWorkPhaseIds ?? []).map((id) => String(id))
+  );
+  return rows.map((r) => {
+    const step = mapWorkPhaseApiToEpisodeStep(r as Record<string, unknown>);
+    if (lostIds.has(step.id)) step.lostAppointment = true;
+    return step;
+  });
 }
 
 export interface EpisodeStepsManagerProps {
@@ -417,6 +432,15 @@ function SortableStepRow({
               </>
             )}
           </div>
+          {/* WP-1.2: klinikai jelentésű, halk sor-jelzés — a lépés foglalása
+              az integritás-takarítás során veszett el (a hivatkozott időpont
+              már nem élő), és azóta nincs új. Nem banner, nem blokkol. */}
+          {step.status === 'pending' && step.lostAppointment && (
+            <div className="flex items-center gap-1.5 mt-1 text-xs text-blue-700 dark:text-blue-300">
+              <CalendarX2 className="w-3.5 h-3.5 shrink-0" />
+              <span>Ehhez a lépéshez már nincs élő időpont — foglaljon újat.</span>
+            </div>
+          )}
           {/* Merged children list */}
           {hasMerged && (
             <div className="mt-1 ml-1 space-y-0.5">
@@ -924,7 +948,12 @@ export function EpisodeStepsManager({
         throw new Error('Nem sikerült betölteni');
       }
       const data = await res.json();
-      setSteps(mapWorkPhasesResponse(data.workPhases ?? data.steps));
+      setSteps(
+        mapWorkPhasesResponse(
+          data.workPhases ?? data.steps,
+          data.lostAppointmentWorkPhaseIds
+        )
+      );
     } catch (e) {
       console.error('Error loading episode steps:', e);
     }
@@ -1035,11 +1064,6 @@ export function EpisodeStepsManager({
     void bookingRefresh();
   }, [refreshTrigger, bookingRefresh]);
 
-  const integrityEpisodeIds = useMemo(() => [episodeId], [episodeId]);
-  const handleIntegrityRepaired = useCallback(() => {
-    void bookingRefresh();
-    void loadSteps();
-  }, [bookingRefresh, loadSteps]);
   const handlePlanStartSaved = useCallback(() => {
     void bookingRefresh();
     void loadProjections();
@@ -1527,13 +1551,12 @@ export function EpisodeStepsManager({
                 </div>
               )}
 
-              {/* ─── Foglalási állapot: integritás, lánc-ajánlat, blokk ── */}
+              {/* ─── Foglalási állapot: lánc-ajánlat, blokk ─────────────── */}
+              {/* WP-1.2: az EpisodeIntegrityBanner kikerült a kartonról — a
+                  javítható integritás-ügyeket a szerver olvasáskor magától
+                  rendezi, a maradék az /admin „Ütemezési integritás" fülön él. */}
               {booking.enabled && (
                 <div className="mb-3 empty:mb-0 empty:hidden space-y-2">
-                  <EpisodeIntegrityBanner
-                    episodeIds={integrityEpisodeIds}
-                    onRepaired={handleIntegrityRepaired}
-                  />
                   {booking.error && (
                     <div className="flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-3 py-2 text-sm text-red-700 dark:text-red-300">
                       <AlertTriangle className="w-4 h-4 shrink-0" />

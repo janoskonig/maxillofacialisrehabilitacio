@@ -4,7 +4,7 @@ import { useEffect, useState, useRef } from 'react';
 import Link from 'next/link';
 import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
-import { Settings, ListOrdered, Users } from 'lucide-react';
+import { Settings, ListOrdered, Users, ShieldAlert } from 'lucide-react';
 import { CarePathwaysEditor } from '@/components/admin/CarePathwaysEditor';
 import { StageCatalogEditor } from '@/components/admin/StageCatalogEditor';
 import { StepCatalogEditor } from '@/components/admin/StepCatalogEditor';
@@ -15,13 +15,14 @@ import { AppShell } from '@/components/layout/AppShell';
 import { UserManagementTab } from './_components/UserManagementTab';
 import { PatientMerge } from '@/components/admin/PatientMerge';
 import { DuplicateDetector } from '@/components/admin/DuplicateDetector';
+import { SchedulingIntegrityPanel } from '@/components/admin/SchedulingIntegrityPanel';
 
 export default function AdminPage() {
   const router = useRouter();
   const [currentUser, setCurrentUser] = useState<AuthUser | null>(null);
   const [authorized, setAuthorized] = useState(false);
   const [loading, setLoading] = useState(true);
-  const [adminTab, setAdminTab] = useState<'felhasznalok' | 'folyamatok' | 'merge'>('felhasznalok');
+  const [adminTab, setAdminTab] = useState<'felhasznalok' | 'folyamatok' | 'merge' | 'integritas'>('felhasznalok');
   const [editPathwayId, setEditPathwayId] = useState<string | null>(null);
   const carePathwaysRef = useRef<HTMLDivElement>(null);
 
@@ -81,10 +82,23 @@ export default function AdminPage() {
               Összevonás
             </button>
           )}
+          {currentUser?.role === 'admin' && (
+            <button onClick={() => setAdminTab('integritas')} className={`px-4 py-2 text-sm font-medium transition-colors flex items-center gap-1 ${effectiveTab === 'integritas' ? 'bg-medical-primary text-white' : 'bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50'}`}>
+              <ShieldAlert className="w-4 h-4" />
+              Ütemezési integritás
+            </button>
+          )}
         </div>
       }
     >
-      {effectiveTab === 'merge' ? (
+      {effectiveTab === 'integritas' ? (
+          <section className="card" aria-labelledby="section-scheduling-integrity">
+            <div className="mb-4">
+              <h2 id="section-scheduling-integrity" className="text-lg font-semibold text-gray-900 dark:text-gray-100">Ütemezési integritás</h2>
+            </div>
+            <SchedulingIntegrityPanel />
+          </section>
+        ) : effectiveTab === 'merge' ? (
           <div className="space-y-8">
             <section className="card" aria-labelledby="section-duplicates">
               <div className="mb-4">
