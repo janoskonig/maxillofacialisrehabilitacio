@@ -3,6 +3,10 @@ import { getDbPool } from '@/lib/db';
 import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { getFullWorkPhaseQuery } from '@/lib/episode-work-phase-select';
+import {
+  autoRepairSchedulingIntegrity,
+  getLostAppointmentWorkPhaseIds,
+} from '@/lib/scheduling-integrity';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 
 export const dynamic = 'force-dynamic';
@@ -14,8 +18,17 @@ export const dynamic = 'force-dynamic';
  * "olvasott" — a kártya megnyitása írhatott a DB-be, és a törölt fázisokat
  * visszatette. Az olvasás mostantól ez a mellékhatás-mentes GET; a generate
  * explicit, írásra szánt művelet maradt.
+ *
+ * WP-1.2 kivétel a mellékhatás-mentesség alól: a JAVÍTHATÓ integritás-
+ * sérüléseket (stale foglalás-link, step_code eltérés) a rendszer itt,
+ * olvasáskor magától rendbe teszi — idempotensen, auditáltan, kérdezés
+ * nélkül (lib/scheduling-integrity.ts). Ez szándékosan NEM a generate-féle
+ * destruktív írás: nem hoz létre és nem támaszt fel sorokat, csak a hibás
+ * hivatkozásokat takarítja, és ha nincs mit javítani, nem ír semmit.
+ * A `lostAppointmentWorkPhaseIds` a karton sor-szintű, klinikai jelzéséhez
+ * kell: „ehhez a lépéshez már nincs élő időpont — foglaljon újat".
  */
-export const GET = authedHandler(async (_req, { params }) => {
+export const GET = authedHandler(async (_req, { auth, params }) => {
   const episodeId = params.id;
   const pool = getDbPool();
 
@@ -24,8 +37,27 @@ export const GET = authedHandler(async (_req, { params }) => {
     return NextResponse.json({ error: 'Epizód nem található' }, { status: 404 });
   }
 
+  const autoRepair = await autoRepairSchedulingIntegrity(pool, episodeId, {
+    changedBy: `auto-repair (${auth.email ?? auth.userId ?? 'ismeretlen'})`,
+    trigger: 'work-phases GET',
+  });
+
   const allPhases = await getFullWorkPhaseQuery(pool, episodeId);
-  return NextResponse.json({ workPhases: allPhases.rows });
+  const lostAppointmentWorkPhaseIds = await getLostAppointmentWorkPhaseIds(
+    pool,
+    episodeId
+  );
+
+  return NextResponse.json({
+    workPhases: allPhases.rows,
+    lostAppointmentWorkPhaseIds,
+    autoRepair: autoRepair
+      ? {
+          danglingCleared: autoRepair.danglingCleared,
+          mismatchRepaired: autoRepair.mismatchRepaired,
+        }
+      : null,
+  });
 });
 
 /**
