@@ -21,6 +21,7 @@
  * javítani, nem nyit tranzakciót és nem ír auditot.
  */
 
+import * as Sentry from '@sentry/nextjs';
 import { getDbPool } from './db';
 import { logger } from './logger';
 import { emitSchedulingEvent } from './scheduling-events';
@@ -486,11 +487,9 @@ export async function repairSchedulingIntegrity(
   return { danglingCleared, mismatchRepaired, clearedWorkPhaseIds };
 }
 
-/** Sentry breadcrumb, ha a Sentry elérhető — nélküle is működik. */
+/** Sentry breadcrumb — konfigurálatlan Sentry mellett no-op, hibája lenyelve. */
 function addSentryBreadcrumb(data: Record<string, unknown>): void {
   try {
-    // eslint-disable-next-line @typescript-eslint/no-var-requires
-    const Sentry = require('@sentry/nextjs') as typeof import('@sentry/nextjs');
     Sentry.addBreadcrumb({
       category: 'scheduling-integrity',
       message: 'auto-repair',
