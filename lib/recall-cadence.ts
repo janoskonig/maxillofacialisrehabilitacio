@@ -2,10 +2,9 @@
  * Gondozási (recall) kadencia-katalógus rizikószintenként — PURE modul,
  * DB és framework nélkül tesztelhető (WP-3.2).
  *
- * FIGYELEM — a konkrét napszámok JAVASLATOK: élesítés (a rizikószint-választó
- * UI bekapcsolása) előtt a felhasználó (gyakorló orvos) jóváhagyása szükséges.
- * Rizikószint nélkül (NULL) a rendszer a mai viselkedést adja: a 'low'
- * kadenciát, azaz 180 + 365 nap.
+ * A napszámokat a felhasználó (gyakorló orvos) 2026-08-27-én JÓVÁHAGYTA:
+ * low 180/365 · medium 90/180/365 · high 30/90/180/365. Rizikószint nélkül
+ * (NULL) a rendszer a korábbi viselkedést adja: a 'low' kadenciát.
  */
 
 export type RecallRiskLevel = 'low' | 'medium' | 'high';
@@ -13,9 +12,8 @@ export type RecallRiskLevel = 'low' | 'medium' | 'high';
 export const RECALL_RISK_LEVELS: readonly RecallRiskLevel[] = ['low', 'medium', 'high'];
 
 /**
- * Javasolt kadencia rizikószintenként, az utolsó teljesült kezeléstől/
- * kontrolltól számított napokban. A számok a felhasználó jóváhagyásáig
- * javaslatnak tekintendők (lásd a modul-fejlécet).
+ * Kadencia rizikószintenként, az utolsó teljesült kezeléstől/kontrolltól
+ * számított napokban (2026-08-27-én jóváhagyva — lásd a modul-fejlécet).
  */
 export const RECALL_CADENCE_DAYS: Record<RecallRiskLevel, readonly number[]> = {
   low: [180, 365],

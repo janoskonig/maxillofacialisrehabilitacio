@@ -1,13 +1,16 @@
 /**
  * Kezelési tervtől független gondozási (recall) feladatok.
  *
- * Auto-generálás: az epizód első STAGE_6 (átadás) eseménye után indul, a
- * rizikószint (patient_episodes.recall_risk_level, NULL → 'low') szerinti
- * kadenciával. A HORGONY nem (csak) a STAGE_6 esemény: a recall az epizód
- * utolsó teljesült kezeléséhez/kontrolljához (legutóbbi completed
- * appointment / munkafázis) képest indul, így a rövid távú (1-3 hetes)
- * visszarendelés is fogalmilag belefér; ha ilyen nincs, az első STAGE_6
- * esemény időpontja a horgony. A tényleges időpont a control poolba foglalható.
+ * Auto-generálás: bármely nyitott epizódra indul, amelynek már van HORGONYA —
+ * azaz legalább egy teljesült kezelése/kontrollja (legutóbbi completed
+ * appointment / munkafázis), vagy STAGE_6 (átadás) eseménye. A felhasználó
+ * 2026-08-27-i döntése lazította a korábbi kaput (auto-sor csak átadás után):
+ * átadás ELŐTT is születik auto-recall, az utolsó teljesült kezeléshez
+ * horgonyozva, a rizikószint (patient_episodes.recall_risk_level,
+ * NULL → 'low') szerinti kadenciával — így a rövid távú (1-3 hetes)
+ * visszarendelés is belefér. Horgony nélküli (még semmit nem teljesített)
+ * epizódra továbbra sem születik auto-sor. A tényleges időpont a control
+ * poolba foglalható.
  *
  * A kézi (source='manual') sorokhoz az auto-generálás SOHA nem nyúl: nem
  * írja felül és nem duplikálja őket (az ON CONFLICT csak az auto sorok
@@ -53,15 +56,23 @@ export async function ensureRecallTasksForEpisode(
                FROM stage_events se
               WHERE se.episode_id = pe.id AND se.stage_code = 'STAGE_6') AS stage6_at,
             GREATEST(
+              -- Horgony: teljesült KEZELÉS/KONTROLL (a 2026-08-27-i döntés
+              -- szövege szerint) — a puszta konzultáció/egyéb nem horgony,
+              -- különben egy csak-konzultáción járt beteg kartonnyitása
+              -- azonnal lejárt recall-sort szülne. NULL típus (legacy sor)
+              -- kezelésnek számít.
               (SELECT MAX(a.start_time)
                  FROM appointments a
                 WHERE a.episode_id = pe.id
-                  AND a.appointment_status = 'completed'),
+                  AND a.appointment_status = 'completed'
+                  AND (a.appointment_type IS NULL
+                       OR a.appointment_type NOT IN ('elso_konzultacio', 'egyeb'))),
               (SELECT MAX(COALESCE(pa.start_time, ewp.completed_at))
                  FROM episode_work_phases ewp
                  LEFT JOIN appointments pa ON pa.id = ewp.appointment_id
                 WHERE ewp.episode_id = pe.id
-                  AND ewp.status = 'completed')
+                  AND ewp.status = 'completed'
+                  AND ewp.pool <> 'consult')
             ) AS last_completed_at
        FROM patient_episodes pe
        JOIN patients p ON p.id = pe.patient_id
@@ -70,11 +81,16 @@ export async function ensureRecallTasksForEpisode(
         AND p.halal_datum IS NULL`,
     [episodeId],
   );
-  if (episodeResult.rows.length === 0 || !episodeResult.rows[0].stage6_at) return 0;
+  if (episodeResult.rows.length === 0) return 0;
 
   const row = episodeResult.rows[0];
   // Horgony: az utolsó teljesült kezelés/kontroll; ha (még) nincs, a STAGE_6.
-  const anchorAt = new Date(row.last_completed_at ?? row.stage6_at);
+  // Ha egyik sincs (friss epizód, semmi teljesült), nincs mihez horgonyozni —
+  // auto-sor nem születik. (A STAGE_6 mint KAPU 2026-08-27-én, felhasználói
+  // döntésre lazult: átadás előtt is generálunk, ha van teljesült kezelés.)
+  const anchorRaw = row.last_completed_at ?? row.stage6_at;
+  if (!anchorRaw) return 0;
+  const anchorAt = new Date(anchorRaw);
   const intervals = [...recallCadenceForRisk(row.recall_risk_level)];
   const dueDates = intervals.map((days) => recallDueAt(anchorAt, days));
   const labels = intervals.map((days) => recallLabelForInterval(days));

@@ -77,9 +77,21 @@ describe('recall ütemezés', () => {
     expect(query).toHaveBeenCalledOnce();
   });
 
-  it('nyitott epizódon is 0, ha még nincs STAGE_6 esemény', async () => {
+  it('STAGE_6 nélkül IS generál, ha van teljesült kezelés (kapu-lazítás, 2026-08-27 felh. döntés)', async () => {
+    const anchor = new Date('2026-07-15T09:00:00.000Z');
+    const query = vi
+      .fn()
+      .mockResolvedValueOnce({
+        rows: [{ id: 'ep-1', recall_risk_level: 'high', stage6_at: null, last_completed_at: anchor }],
+      })
+      .mockResolvedValueOnce({ rowCount: 4, rows: [{ id: 'r-1' }] });
+    await expect(ensureRecallTasksForEpisode('ep-1', { query } as any)).resolves.toBe(4);
+    expect(query.mock.calls[1][1][1]).toEqual([30, 90, 180, 365]);
+  });
+
+  it('horgony nélkül (se teljesült kezelés, se STAGE_6) továbbra is 0', async () => {
     const query = vi.fn().mockResolvedValueOnce({
-      rows: [{ id: 'ep-1', recall_risk_level: 'high', stage6_at: null, last_completed_at: new Date() }],
+      rows: [{ id: 'ep-1', recall_risk_level: 'high', stage6_at: null, last_completed_at: null }],
     });
     await expect(ensureRecallTasksForEpisode('ep-1', { query } as any)).resolves.toBe(0);
     expect(query).toHaveBeenCalledOnce();
