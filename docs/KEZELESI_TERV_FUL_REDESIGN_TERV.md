@@ -21,10 +21,10 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 | WP-0.1 skip felszabadítás | ✅ | [#61](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/61) | Review-javítás: work_phase_id-elsődleges párosítás (testvér-fázis foglalását nem bántja) + FOR UPDATE |
 | WP-0.2 intent-lejáratás + horgony | ✅ | [#60](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/60) | #10-nél a skip-ági horgony-változat került be (az első intent padlója marad `now`) |
 | WP-0.3 audit-tombstone (084) | ✅ | [#63](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/63) | Közös `insertWorkPhaseAudit` helper; review-javítás: nemlétező fázisnál NULL id-s tombstone |
-| WP-0.4 slot_intent_id (085) | ⬜ | — | |
+| WP-0.4 slot_intent_id (085) | ✅ | [#65](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/65) | Link-nullázás minden lejáratási ágon + 085 partiális index; review 2 elő-létező hézagot talált → WP-0.8 kiegészítés |
 | WP-0.5 reorder SAVEPOINT | ✅ | [#62](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/62) | Review-javítás: epizód-státusz kapu a tranzakción belül (FOR SHARE) |
-| WP-0.6 köteg EWP-link | ⬜ | — | |
-| WP-0.7 GET + tombstone (086) | ⬜ | — | |
+| WP-0.6 köteg EWP-link | ✅ | [#64](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/64) | Konverzió tranzakción belül írja az EWP appointment_id/status-t |
+| WP-0.7 GET + tombstone (086) | 🔄 | [#66](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/66) | Review: 2 major (legacy NULL-source duplikáció + tombstone-lyuk) — javítás folyamatban; tombstone külön táblával (nem deleted_at), indoklás a PR-ban |
 | WP-0.8 kis javítások (#08/#09/#11/#13) | ⬜ | — | |
 | WP-0.9 pinning-teszt | ✅ | [#59](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/59) | A 029+059 együttes (hatályos) állapotot pinneli; index-őr regexek toleránsak |
 | WP-1.1 validáció-zajcsökkentés | ⬜ | — | |
@@ -382,6 +382,15 @@ duplikálja a tervet; (d) ha az epizódon van ad-hoc (NULL-source) sor, a sablon
   elég (a sor a SELECT pillanatában nincs a találati halmazban).
 
 **Teszt:** #08-ra és #09-re viselkedési teszt; #11 és #13 kódszintű + a meglévő suite zöld.
+
+**Kiegészítés (a WP-0.4 review-jából, 2026-08-27):** három elő-létező, azonos alakú
+hézag került elő, amelyeket ez a WP zár be (mind: a lemondott appointmenthez kötött
+`converted` intent lejáratása + `appointments.slot_intent_id = NULL`, a skip-ág mintájára):
+- a `completed → pending` („Mégsem kész") ág a work-phases/[workPhaseId] route-ban —
+  itt az appointment-párosítást is `work_phase_id`-elsődlegesre kell állítani
+  (csupasz `step_code` duplikált fáziskódnál a testvér foglalását is lemondaná);
+- a betegportál-lemondás (`app/api/patient-portal/appointments/[id]/route.ts`);
+- a hold-lejárat (`lib/hold-expiry.ts`, `hold_expired` ág).
 
 ---
 
