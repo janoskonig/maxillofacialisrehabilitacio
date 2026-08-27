@@ -650,9 +650,17 @@ export async function convertIntentToAppointment(
       } catch {
         /* connection may already be aborted */
       }
-      if (isRetriableLockError(e) && attempt < 2) {
-        await new Promise((r) => setTimeout(r, 120 * 2 ** attempt));
-        continue;
+      if (isRetriableLockError(e)) {
+        if (attempt < 2) {
+          await new Promise((r) => setTimeout(r, 120 * 2 ** attempt));
+          continue;
+        }
+        // Audit #09 (WP-0.8): kimerült retry — korábban ide érve a hiba
+        // tovább-dobódott, így a ciklus utáni 503-as visszatérés halott kód
+        // volt, a batch hívó pedig 500-zal az egész köteget elrejtette
+        // (a már COMMIT-olt foglalásokkal együtt). A zárolási ütközés nem
+        // hiba-állapot, hanem „próbáld újra" — essen a 503-as ágra.
+        break;
       }
       const translation = translateUniqueViolation(e);
       if (translation) {
