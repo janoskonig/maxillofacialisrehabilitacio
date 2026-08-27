@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { getFullWorkPhaseQuery } from '@/lib/episode-work-phase-select';
+import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -62,9 +63,11 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
 
   let workPhaseCode: string;
   let customLabel: string | null = null;
+  let createdVia: string;
 
   if (rawWorkPhaseCode.trim().length > 0) {
     workPhaseCode = rawWorkPhaseCode.trim();
+    createdVia = 'katalógusból';
     const catalogRow = await pool.query(
       `SELECT work_phase_code FROM work_phase_catalog WHERE work_phase_code = $1 AND is_active = true`,
       [workPhaseCode]
@@ -75,6 +78,7 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   } else {
     const prefix = `adhoc_${Date.now().toString(36)}`;
     workPhaseCode = prefix;
+    createdVia = 'szabadszövegesen';
     if (typeof label === 'string' && label.trim().length > 0) {
       customLabel = label.trim();
     } else {
@@ -94,11 +98,33 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   );
   const nextIdx = (maxIdxRow.rows[0].max_idx ?? -1) + 1;
 
-  await pool.query(
-    `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, custom_label, source_episode_pathway_id)
-     VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL)`,
-    [episodeId, workPhaseCode, nextIdx, phasePool, durationMinutes, defaultDaysOffset, nextSeq, customLabel]
-  );
+  // A fázis-INSERT és a 'create' audit sor (WP-2.1) EGY tranzakcióban fut,
+  // hogy a napló ne maradhasson le a létrehozásról.
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const inserted = await client.query(
+      `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, custom_label, source_episode_pathway_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL)
+       RETURNING id`,
+      [episodeId, workPhaseCode, nextIdx, phasePool, durationMinutes, defaultDaysOffset, nextSeq, customLabel]
+    );
+    await insertWorkPhaseAudit(client, {
+      episodeWorkPhaseId: inserted.rows[0].id,
+      episodeId,
+      oldStatus: null,
+      newStatus: 'pending',
+      changedBy: auth.email ?? auth.userId ?? 'unknown',
+      changeType: 'create',
+      reason: `Munkafázis hozzáadva (${createdVia})`,
+    });
+    await client.query('COMMIT');
+  } catch (txError) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw txError;
+  } finally {
+    client.release();
+  }
 
   try {
     await emitSchedulingEvent('episode', episodeId, 'step_added');

@@ -87,23 +87,24 @@ export async function createWp07CarePathway(
 /** Fogkezelés-katalógus bejegyzés (a pillanatkép séma-only, seed nélkül). */
 export async function createWp07ToothTreatmentCatalogEntry(
   db?: Queryable,
-  overrides: { code?: string; labelHu?: string } = {}
+  overrides: { code?: string; labelHu?: string; defaultCarePathwayId?: string | null } = {}
 ): Promise<{ code: string; labelHu: string }> {
   const code = overrides.code ?? `wp07_${randomUUID().slice(0, 8).replace(/-/g, '')}`;
   const labelHu = overrides.labelHu ?? 'WP-0.7 teszt fogkezelés';
   await q(db).query(
-    `INSERT INTO tooth_treatment_catalog (code, label_hu, sort_order) VALUES ($1, $2, 999)`,
-    [code, labelHu]
+    `INSERT INTO tooth_treatment_catalog (code, label_hu, sort_order, default_care_pathway_id)
+     VALUES ($1, $2, 999, $3)`,
+    [code, labelHu, overrides.defaultCarePathwayId ?? null]
   );
   track('tooth_treatment_catalog', code, db, 'code');
   return { code, labelHu };
 }
 
-/** Epizódhoz kötött fogkezelési igény. */
+/** Fogkezelési igény — episodeId null-lal még epizódhoz nem kötött (pending) igény. */
 export async function createWp07ToothTreatment(
   db: Queryable | undefined,
   patientId: string,
-  episodeId: string,
+  episodeId: string | null,
   treatmentCode: string,
   overrides: {
     toothNumber?: number;

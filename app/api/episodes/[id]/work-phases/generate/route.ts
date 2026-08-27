@@ -14,11 +14,15 @@ export const dynamic = 'force-dynamic';
  * A testvér-route-okkal egyezően terv-mutációt csak a klinikai szerepek
  * végezhetnek (a korábbi authedHandler technikusnak is engedte).
  */
-export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (_req, { params }) => {
+export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (_req, { auth, params }) => {
   const episodeId = params.id;
   const pool = getDbPool();
 
-  const result = await generateEpisodeWorkPhases(pool, episodeId);
+  // WP-2.1: a sablon-alkalmazás audit sorai a bejelentkezett felhasználót
+  // kapják changed_by-ként (a lib default 'system' csak a háttér-hívásoké).
+  const result = await generateEpisodeWorkPhases(pool, episodeId, {
+    changedBy: auth.email ?? auth.userId ?? 'unknown',
+  });
 
   if (result.status === 'not_found') {
     return NextResponse.json({ error: 'Epizód nem található' }, { status: 404 });
