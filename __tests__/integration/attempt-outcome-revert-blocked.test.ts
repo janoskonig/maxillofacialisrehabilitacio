@@ -125,7 +125,9 @@ describe('WP-0.8 / #08 — revert blokkolása lefoglalt következő próbánál'
       attemptNumber: 1,
     });
 
-    // Legacy blokkoló: nincs work_phase_id, csak step_code.
+    // Legacy blokkoló: nincs work_phase_id, csak step_code — és a
+    // `idx_appointments_unique_pending_step` szemantikája szerint csak az
+    // AZONOS step_seq-ű, NULL státuszú sor blokkol.
     const slot2 = await createTestSlot(undefined, user.id);
     const legacyRetry = await createTestAppointment(undefined, {
       patientId: patient.id,
@@ -133,7 +135,7 @@ describe('WP-0.8 / #08 — revert blokkolása lefoglalt következő próbánál'
       episodeId: episode.id,
       workPhaseId: null,
       stepCode: 'lenyomat',
-      stepSeq: 1,
+      stepSeq: 0,
       startTime: new Date(Date.now() + 7 * MS_PER_DAY),
       attemptNumber: 2,
     });
@@ -157,6 +159,64 @@ describe('WP-0.8 / #08 — revert blokkolása lefoglalt következő próbánál'
       [unsuccessful.id]
     );
     expect(after.rows[0].appointment_status).toBe('unsuccessful');
+  });
+
+  it('MÁS step_seq-ű legacy testvér nem blokkol (a revert 200)', async () => {
+    // Review-javítás (WP-0.8 #08 minor): duplikált fáziskódnál a testvér-fázis
+    // eltérő seq-ű legacy foglalása nem sérthet unique indexet, ezért nem ad
+    // hamis 409-et.
+    const pool = getDbPool();
+    const user = await authUser();
+    const patient = await createTestPatient();
+    const episode = await createTestEpisode(undefined, patient.id);
+
+    const ewp = await createTestWorkPhase(undefined, episode.id, {
+      workPhaseCode: 'lenyomat',
+      seq: 0,
+      status: 'scheduled',
+    });
+
+    const slot1 = await createTestSlot(undefined, user.id);
+    const unsuccessful = await createTestAppointment(undefined, {
+      patientId: patient.id,
+      timeSlotId: slot1.id,
+      episodeId: episode.id,
+      workPhaseId: ewp.id,
+      stepCode: 'lenyomat',
+      stepSeq: 0,
+      startTime: new Date(Date.now() - 1 * MS_PER_DAY),
+      appointmentStatus: 'unsuccessful',
+      attemptNumber: 1,
+    });
+
+    const slot2 = await createTestSlot(undefined, user.id);
+    await createTestAppointment(undefined, {
+      patientId: patient.id,
+      timeSlotId: slot2.id,
+      episodeId: episode.id,
+      workPhaseId: null,
+      stepCode: 'lenyomat',
+      stepSeq: 1,
+      startTime: new Date(Date.now() + 7 * MS_PER_DAY),
+      attemptNumber: 2,
+    });
+
+    const req = await authedRequest(
+      `http://test.local/api/appointments/${unsuccessful.id}/attempt-outcome`,
+      {
+        user,
+        method: 'PATCH',
+        body: { action: 'revert', reason: 'testvér-fázis nem blokkolhat' },
+      }
+    );
+    const res = await attemptOutcomePatch(req, { params: { id: unsuccessful.id } });
+    expect(res.status).toBe(200);
+
+    const after = await pool.query(
+      `SELECT appointment_status FROM appointments WHERE id = $1`,
+      [unsuccessful.id]
+    );
+    expect(after.rows[0].appointment_status).toBeNull();
   });
 
   it('blokkoló nélkül a revert továbbra is működik (200, státusz NULL)', async () => {

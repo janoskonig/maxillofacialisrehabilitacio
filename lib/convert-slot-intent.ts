@@ -159,6 +159,18 @@ export async function convertIntentToAppointment(
     riskPrefetch = null; // tranzakción belüli fallback: 48 órás hold
   }
 
+  // Szintén #11: a feature-flag olvasása is a tranzakción KÍVÜL történik
+  // (cache-miss esetén pool.query lenne nyitott tranzakcióból), a
+  // one-hard-next ellenőrzés pedig lent a tranzakciós clientet kapja.
+  let enforceOneHardNext = false;
+  if (!skipOneHardNext) {
+    try {
+      enforceOneHardNext = await getSchedulingFeatureFlag('enforce_one_hard_next');
+    } catch {
+      enforceOneHardNext = false;
+    }
+  }
+
   for (let attempt = 0; attempt < 3; attempt++) {
     const client = await pool.connect();
     // WP-0.8 (audit #11): a drift-self-heal pool.query a client.release() UTÁN
@@ -257,11 +269,11 @@ export async function convertIntentToAppointment(
       // single-intent and bulk paths behave the same. The bulk path's
       // `skipOneHardNext` flag still wins when set, for backward compat.
       if (!skipOneHardNext) {
-        const enforceOneHardNext = await getSchedulingFeatureFlag('enforce_one_hard_next');
         if (enforceOneHardNext) {
           const oneHardNext = await checkOneHardNext(intent.episode_id, intent.pool as 'work' | 'consult' | 'control', {
             requiresPrecommit,
             stepCode: intent.step_code,
+            dbClient: client,
           });
           if (!oneHardNext.allowed) {
             await client.query('ROLLBACK');

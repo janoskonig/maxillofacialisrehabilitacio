@@ -85,6 +85,7 @@ export const PATCH = roleHandler(
     let episodeId: string | null = null;
     let stepCode: string | null = null;
     let workPhaseId: string | null = null;
+    let stepSeq: number | null = null;
     let ewpId: string | null = null;
     let oldEwpStatus: string | null = null;
     let newEwpStatus: string | null = null;
@@ -103,6 +104,7 @@ export const PATCH = roleHandler(
         `SELECT a.id,
                 a.episode_id,
                 a.step_code,
+                a.step_seq,
                 a.patient_id,
                 a.start_time,
                 a.appointment_status as "appointmentStatus",
@@ -128,6 +130,7 @@ export const PATCH = roleHandler(
         episodeId = (appointment.episode_id as string | null) ?? null;
         stepCode = (appointment.step_code as string | null) ?? null;
         workPhaseId = (appointment.workPhaseId as string | null) ?? null;
+        stepSeq = (appointment.step_seq as number | null) ?? null;
 
         if (action === 'mark_unsuccessful') {
           // Engedélyezett forrás-állapotok: pending (NULL), completed, no_show.
@@ -218,10 +221,15 @@ export const PATCH = roleHandler(
               blockerParams.push(workPhaseId);
               blockerConds.push(`a.work_phase_id = $${blockerParams.length}`);
             }
-            if (episodeId && stepCode) {
-              blockerParams.push(episodeId, stepCode);
+            if (episodeId && stepCode && stepSeq !== null) {
+              // A legacy ág az `idx_appointments_unique_pending_step`
+              // (episode_id, step_code, step_seq; WHERE appointment_status IS
+              // NULL) tényleges szemantikáját tükrözi: csak azonos step_seq-ű,
+              // NULL státuszú sor blokkol; NULL step_seq-ű sorok a btree-ben
+              // sosem ütköznek, ilyenkor a feltétel el is marad.
+              blockerParams.push(episodeId, stepCode, stepSeq);
               blockerConds.push(
-                `(a.work_phase_id IS NULL AND a.episode_id = $${blockerParams.length - 1} AND a.step_code = $${blockerParams.length})`
+                `(a.work_phase_id IS NULL AND a.episode_id = $${blockerParams.length - 2} AND a.step_code = $${blockerParams.length - 1} AND a.step_seq = $${blockerParams.length} AND a.appointment_status IS NULL)`
               );
             }
             const blockerRow =
