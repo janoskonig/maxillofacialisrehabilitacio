@@ -17,7 +17,7 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 
 | WP | Státusz | PR | Megjegyzés |
 |---|---|---|---|
-| WP-0.0 harness | 🔄 | — | |
+| WP-0.0 harness | ✅ | [#58](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/58) | Pillanatkép-alapú teszt-DB (a legacy lánc friss DB-n törik); route-teszteknél cleanup-minta a rollback helyett — dokumentálva |
 | WP-0.1 skip felszabadítás | ⬜ | — | |
 | WP-0.2 intent-lejáratás + horgony | ⬜ | — | |
 | WP-0.3 audit-tombstone (084) | ⬜ | — | |
