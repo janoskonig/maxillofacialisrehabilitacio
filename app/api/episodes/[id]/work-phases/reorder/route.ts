@@ -29,54 +29,59 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
 
   const pool = getDbPool();
 
-  // Epizód-státusz kapu: nem nyitott epizódon a sorrend-módosítást nem mentjük el.
-  const episodeRes = await pool.query(
-    `SELECT status FROM patient_episodes WHERE id = $1`,
-    [episodeId]
-  );
-  if (episodeRes.rows.length === 0) {
-    throw new HttpError(404, 'Az epizód nem található', 'EPISODE_NOT_FOUND');
-  }
-  const episodeStatus: string = episodeRes.rows[0].status;
-  if (episodeStatus !== 'open') {
-    throw new HttpError(
-      409,
-      episodeStatus === 'closed'
-        ? 'Ez az epizód le van zárva, ezért az átrendezést nem mentettük el. Az epizód újranyitása után a terv ismét szerkeszthető.'
-        : 'Ez az epizód jelenleg szünetel, ezért az átrendezést nem mentettük el. Az epizód folytatása után a terv ismét szerkeszthető.',
-      'EPISODE_NOT_OPEN'
-    );
-  }
-
-  // Fetch all steps; separate primary (not merged) from merged-into
-  const verification = await pool.query(
-    `SELECT id, merged_into_episode_work_phase_id FROM episode_work_phases WHERE episode_id = $1`,
-    [episodeId]
-  );
-  const allRows: Array<{ id: string; merged_into_episode_work_phase_id: string | null }> = verification.rows;
-  const existingIds = new Set(allRows.map((r) => r.id));
-  const mergedIds = new Set(allRows.filter((r) => r.merged_into_episode_work_phase_id).map((r) => r.id));
-
-  // stepIds should contain only primary (non-merged) steps
-  const invalidIds = stepIds.filter((id: string) => !existingIds.has(id));
-  if (invalidIds.length > 0) {
-    return NextResponse.json(
-      { error: `Ismeretlen step ID-k: ${invalidIds.join(', ')}` },
-      { status: 400 }
-    );
-  }
-
-  const primaryIds = new Set(allRows.filter((r) => !r.merged_into_episode_work_phase_id).map((r) => r.id));
-  const missingPrimaryIds = Array.from(primaryIds).filter((id) => !stepIds.includes(id));
-  if (missingPrimaryIds.length > 0) {
-    console.warn(`[reorder] ${missingPrimaryIds.length} primary step(s) not in stepIds — appending`);
-  }
-
   let shiftFailed = false;
 
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+
+    // Epizód-státusz kapu a tranzakción BELÜL, sor-zárral (TOCTOU-védelem):
+    // korábban a kapu a tranzakción kívül, zárolás nélkül olvasott, így ha a
+    // kapu-ellenőrzés és a COMMIT között egy párhuzamos kérés lezárta az
+    // epizódot, az átrendezés mégis commitolódott a már lezárt epizódon.
+    // A FOR SHARE ütközik a lezáró UPDATE-tel (az megvárja a COMMIT-unkat),
+    // olvasókkal viszont nem; FOR UPDATE szándékosan nincs, hogy a
+    // deadlock-felület kicsi maradjon.
+    const episodeRes = await client.query(
+      `SELECT status FROM patient_episodes WHERE id = $1 FOR SHARE`,
+      [episodeId]
+    );
+    if (episodeRes.rows.length === 0) {
+      throw new HttpError(404, 'Az epizód nem található', 'EPISODE_NOT_FOUND');
+    }
+    const episodeStatus: string = episodeRes.rows[0].status;
+    if (episodeStatus !== 'open') {
+      throw new HttpError(
+        409,
+        episodeStatus === 'closed'
+          ? 'Ez az epizód le van zárva, ezért az átrendezést nem mentettük el. Az epizód újranyitása után a terv ismét szerkeszthető.'
+          : 'Ez az epizód jelenleg szünetel, ezért az átrendezést nem mentettük el. Az epizód folytatása után a terv ismét szerkeszthető.',
+        'EPISODE_NOT_OPEN'
+      );
+    }
+
+    // Fetch all steps; separate primary (not merged) from merged-into.
+    // A tranzakción belül olvasunk, hogy a seq-átírás ugyanarra az állapotra
+    // épüljön, amit itt validálunk.
+    const verification = await client.query(
+      `SELECT id, merged_into_episode_work_phase_id FROM episode_work_phases WHERE episode_id = $1`,
+      [episodeId]
+    );
+    const allRows: Array<{ id: string; merged_into_episode_work_phase_id: string | null }> = verification.rows;
+    const existingIds = new Set(allRows.map((r) => r.id));
+    const mergedIds = new Set(allRows.filter((r) => r.merged_into_episode_work_phase_id).map((r) => r.id));
+
+    // stepIds should contain only primary (non-merged) steps
+    const invalidIds = stepIds.filter((id: string) => !existingIds.has(id));
+    if (invalidIds.length > 0) {
+      throw new HttpError(400, `Ismeretlen step ID-k: ${invalidIds.join(', ')}`, 'UNKNOWN_STEP_IDS');
+    }
+
+    const primaryIds = new Set(allRows.filter((r) => !r.merged_into_episode_work_phase_id).map((r) => r.id));
+    const missingPrimaryIds = Array.from(primaryIds).filter((id) => !stepIds.includes(id));
+    if (missingPrimaryIds.length > 0) {
+      console.warn(`[reorder] ${missingPrimaryIds.length} primary step(s) not in stepIds — appending`);
+    }
 
     // 1. Update seq for primary steps
     for (let i = 0; i < stepIds.length; i++) {
