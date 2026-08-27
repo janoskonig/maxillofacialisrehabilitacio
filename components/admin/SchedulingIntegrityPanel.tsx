@@ -27,7 +27,8 @@ type ViolationKind =
   | 'APPOINTMENT_NO_SLOT'
   | 'SLOT_DOUBLE_BOOKED'
   | 'EWP_DANGLING_APPOINTMENT_LINK'
-  | 'APPOINTMENT_STEP_MISMATCH';
+  | 'APPOINTMENT_STEP_MISMATCH'
+  | 'MULTI_EWP_APPOINTMENT_LINK';
 
 interface Violation {
   kind: ViolationKind;
@@ -69,6 +70,8 @@ const VIOLATION_LABELS: Record<ViolationKind, string> = {
   SLOT_DOUBLE_BOOKED: 'Slot kétszeresen foglalt',
   EWP_DANGLING_APPOINTMENT_LINK: 'Stale foglalás-hivatkozás munkafázison',
   APPOINTMENT_STEP_MISMATCH: 'step_code eltér a hozzá kötött munkafázistól',
+  MULTI_EWP_APPOINTMENT_LINK:
+    'Több munkafázis ugyanarra az aktív foglalásra mutat (kézi rendezés)',
 };
 
 export function SchedulingIntegrityPanel() {

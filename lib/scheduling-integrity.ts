@@ -39,7 +39,8 @@ export type SchedulingIntegrityViolationKind =
   | 'APPOINTMENT_NO_SLOT'
   | 'SLOT_DOUBLE_BOOKED'
   | 'EWP_DANGLING_APPOINTMENT_LINK'
-  | 'APPOINTMENT_STEP_MISMATCH';
+  | 'APPOINTMENT_STEP_MISMATCH'
+  | 'MULTI_EWP_APPOINTMENT_LINK';
 
 export interface SchedulingIntegrityViolation {
   kind: SchedulingIntegrityViolationKind;
@@ -91,6 +92,21 @@ const DANGLING_SELECT = `SELECT ewp.id                      AS "workPhaseId",
      OR NOT ${SQL_APPOINTMENT_VISIBLE_STATUS_FRAGMENT}
    )`;
 
+/**
+ * Egy AKTÍV appointmentre több EWP sor is mutathat (nincs unique index az
+ * `episode_work_phases.appointment_id`-n — séma-döntés, ezen a WP-n túl).
+ * Az ilyen "multi-link" esetet a mismatch-repair NEM javíthatja: két eltérő
+ * kódú fázis közül bármelyikhez igazítaná a step_code-ot, a következő futás
+ * a másikhoz — a step_code oda-vissza billegne (flip-flop), és minden futás
+ * írna. Ezért a MISMATCH_SELECT kizárja, a detect pedig külön, NEM javítható
+ * violationként (MULTI_EWP_APPOINTMENT_LINK) jelenti az admin felületre.
+ */
+const MISMATCH_MULTI_LINK_EXCLUSION = `AND NOT EXISTS (
+     SELECT 1 FROM episode_work_phases other
+     WHERE other.appointment_id = ewp.appointment_id
+       AND other.id <> ewp.id
+   )`;
+
 const MISMATCH_SELECT = `SELECT ewp.id                        AS "workPhaseId",
         ewp.work_phase_code            AS "ewpWorkPhaseCode",
         ewp.pathway_order_index        AS "ewpPathwayOrderIndex",
@@ -105,7 +121,37 @@ const MISMATCH_SELECT = `SELECT ewp.id                        AS "workPhaseId",
    AND (
      a.step_code IS DISTINCT FROM ewp.work_phase_code
      OR a.step_seq IS DISTINCT FROM ewp.pathway_order_index
-   )`;
+   )
+   ${MISMATCH_MULTI_LINK_EXCLUSION}`;
+
+/**
+ * MULTI_EWP_APPOINTMENT_LINK: aktív appointment, amelyre egynél több EWP sor
+ * mutat, és amelyre az adott epizód legalább egy sora hivatkozik. A számlálás
+ * szándékosan epizód-független (a másik link jöhet másik epizódból is), mert
+ * a flip-flop veszély attól függetlenül fennáll.
+ */
+const MULTI_LINK_SELECT = `SELECT a.id                 AS "appointmentId",
+        a.appointment_status                            AS "appointmentStatus",
+        array_agg(ewp.id ORDER BY ewp.pathway_order_index)              AS "workPhaseIds",
+        array_agg(ewp.work_phase_code ORDER BY ewp.pathway_order_index) AS "workPhaseCodes",
+        COUNT(*)::int                                   AS "linkCount"
+ FROM appointments a
+ JOIN episode_work_phases ewp ON ewp.appointment_id = a.id
+ WHERE ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}
+   AND EXISTS (
+     SELECT 1 FROM episode_work_phases own
+     WHERE own.appointment_id = a.id AND own.episode_id = $1
+   )
+ GROUP BY a.id, a.appointment_status
+ HAVING COUNT(*) > 1`;
+
+interface MultiLinkRow {
+  appointmentId: string;
+  appointmentStatus: string | null;
+  workPhaseIds: string[];
+  workPhaseCodes: string[];
+  linkCount: number;
+}
 
 /**
  * Egy epizód összes ismert integritás-violationje (diagnosztika).
@@ -118,6 +164,8 @@ const MISMATCH_SELECT = `SELECT ewp.id                        AS "workPhaseId",
  *    unsuccessful appointmentre mutat — emiatt a worklist state drift-el
  *  - APPOINTMENT_STEP_MISMATCH: `a.step_code / step_seq` eltér az
  *    `episode_work_phases` sortól, amelynek `appointment_id = a.id`.
+ *  - MULTI_EWP_APPOINTMENT_LINK: több EWP sor mutat ugyanarra az aktív
+ *    appointmentre — NEM auto-javítható, kézi rendezést igényel.
  */
 export async function detectSchedulingIntegrityViolations(
   pool: DbPool,
@@ -233,6 +281,29 @@ export async function detectSchedulingIntegrityViolations(
     });
   }
 
+  // 6) MULTI_EWP_APPOINTMENT_LINK — több EWP sor mutat ugyanarra az AKTÍV
+  //    appointmentre. NEM auto-javítható (melyik link a jó, azt csak ember
+  //    döntheti el; az auto-repair itt szándékosan nem ír semmit, különben a
+  //    step_code futásonként oda-vissza billegne). Admin felületen jelenik meg.
+  const multiLinkResult = await pool.query(MULTI_LINK_SELECT, [episodeId]);
+  if (multiLinkResult.rows.length > 0) {
+    const rows = multiLinkResult.rows as MultiLinkRow[];
+    violations.push({
+      kind: 'MULTI_EWP_APPOINTMENT_LINK',
+      message: `Több munkafázis sor mutat ugyanarra az aktív foglalásra (${rows.length} foglalás érintett) — kézi rendezést igényel`,
+      appointmentIds: rows.map((r) => r.appointmentId),
+      workPhaseIds: rows.flatMap((r) => r.workPhaseIds),
+      details: rows.map((r) => ({
+        appointmentId: r.appointmentId,
+        appointmentStatus: r.appointmentStatus ?? 'NULL',
+        workPhaseIds: r.workPhaseIds,
+        workPhaseCodes: r.workPhaseCodes,
+        linkCount: r.linkCount,
+      })),
+      repairable: false,
+    });
+  }
+
   return violations;
 }
 
@@ -248,9 +319,21 @@ export interface SchedulingIntegrityRepairResult {
 /**
  * Szűk hatókörű, IDEMPOTENT javítás:
  *  - `EWP_DANGLING_APPOINTMENT_LINK` → `ewp.appointment_id = NULL`,
- *    `scheduled → pending` (ha az volt), audit-bejegyzéssel.
+ *    `scheduled → pending` (ha az volt), MINDEN tényleges link-nullázás
+ *    audit-bejegyzéssel jár (státusztól függetlenül, change_type
+ *    'integrity_repair' — WP-2.1 elv: minden terv-mutáció auditált).
  *  - `APPOINTMENT_STEP_MISMATCH` → `appointments.step_code` és `step_seq`
  *    átírása az ewp szerint (az ewp az SSOT, mert a worklist is így matchel).
+ *  - MULTI_EWP_APPOINTMENT_LINK (több EWP → egy aktív appointment) esetén
+ *    NEM ír semmit — az eset nem auto-javítható, az admin maradék-listán
+ *    jelenik meg (lásd MISMATCH_MULTI_LINK_EXCLUSION).
+ *
+ * Versenyhelyzet-védelem (READ COMMITTED alatt): a tranzakción belüli
+ * recheck SELECT `FOR UPDATE`-tel zárolja az érintett sort, ÉS az UPDATE
+ * WHERE-je is tartalmazza a guard-feltételeket (appointment_id egyezés,
+ * stale/aktív státusz) — így egy párhuzamos foglalási tranzakció commitja
+ * után az EPQ-újraértékelt WHERE hamis lesz, a friss link érintetlen marad.
+ * A számlálók és az audit-írás a tényleges UPDATE rowCount-ján alapulnak.
  *
  * NEM módosít slot-ot, nem törli a foglalást, nem nyúl a kezelési úthoz.
  * Ha nincs mit javítani, tranzakciót sem nyit. Hiba esetén dob — a hívó dönt
@@ -279,15 +362,18 @@ export async function repairSchedulingIntegrity(
     await client.query('BEGIN');
 
     for (const row of dangling.rows as DanglingRow[]) {
-      // Biztonsági utó-check a tranzakción belül — két egyidejű hívás
-      // ne lépje meg egymást. Megerősítjük, hogy továbbra is stale.
+      // Biztonsági utó-check a tranzakción belül — két egyidejű hívás ne
+      // lépje meg egymást. A FOR UPDATE OF ewp zárolja a munkafázis-sort:
+      // egy in-flight foglalási tranzakció commitjáig itt várunk, és a
+      // zárolt olvasás már a FRISS appointment_id-t adja vissza (EPQ).
       const recheck = await client.query(
         `SELECT ewp.appointment_id AS "appointmentId", ewp.status,
                 a.appointment_status AS "appointmentStatus",
                 (a.id IS NULL) AS "appointmentMissing"
          FROM episode_work_phases ewp
          LEFT JOIN appointments a ON a.id = ewp.appointment_id
-         WHERE ewp.id = $1`,
+         WHERE ewp.id = $1
+         FOR UPDATE OF ewp`,
         [row.workPhaseId]
       );
       const current = recheck.rows[0];
@@ -297,55 +383,95 @@ export async function repairSchedulingIntegrity(
         !isAppointmentActive(current.appointmentStatus);
       if (!stillStale) continue;
 
-      await client.query(
+      // A guard-feltételek az UPDATE WHERE-jében is: csak akkor nullázunk,
+      // ha a sor MÉG MINDIG a stale foglalásra mutat, és az a foglalás
+      // továbbra sem látható/aktív. Párhuzamos új foglalás linkjét így az
+      // EPQ-újraértékelés sem engedi kitörölni.
+      const updated = await client.query(
         `UPDATE episode_work_phases
          SET appointment_id = NULL,
              status = CASE WHEN status = 'scheduled' THEN 'pending' ELSE status END
-         WHERE id = $1`,
-        [row.workPhaseId]
+         WHERE id = $1
+           AND appointment_id = $2
+           AND NOT EXISTS (
+             SELECT 1 FROM appointments a
+             WHERE a.id = $2 AND ${SQL_APPOINTMENT_VISIBLE_STATUS_FRAGMENT}
+           )`,
+        [row.workPhaseId, row.appointmentId]
       );
+      if ((updated.rowCount ?? 0) === 0) continue;
+
       danglingCleared += 1;
       clearedWorkPhaseIds.push(row.workPhaseId);
 
-      if (current.status === 'scheduled') {
-        await insertWorkPhaseAudit(client, {
-          episodeWorkPhaseId: row.workPhaseId,
-          episodeId,
-          oldStatus: 'scheduled',
-          newStatus: 'pending',
-          changedBy: opts.changedBy,
-          reason: `integrity repair: dangling appointment_id takarítása (mutatott: ${row.appointmentId}, status: ${row.appointmentMissing ? 'MISSING' : (row.appointmentStatus ?? 'NULL')})${reasonSuffix}`,
-        });
-      }
+      // MINDEN tényleges link-nullázás auditot ír, státusztól függetlenül
+      // (WP-2.1 elv). A dedikált change_type ('integrity_repair') alapján
+      // ismeri fel a sor-szintű karton-jelzés (getLostAppointmentWorkPhaseIds)
+      // a takarítást — nem szöveg-prefixre támaszkodunk.
+      const newStatus = current.status === 'scheduled' ? 'pending' : current.status;
+      await insertWorkPhaseAudit(client, {
+        episodeWorkPhaseId: row.workPhaseId,
+        episodeId,
+        oldStatus: current.status,
+        newStatus,
+        changedBy: opts.changedBy,
+        changeType: 'integrity_repair',
+        reason: `integrity repair: dangling appointment_id takarítása (mutatott: ${row.appointmentId}, status: ${row.appointmentMissing ? 'MISSING' : (row.appointmentStatus ?? 'NULL')})${reasonSuffix}`,
+      });
     }
 
     for (const row of mismatch.rows as MismatchRow[]) {
+      // Recheck FRISS ewp-értékekkel, mindkét sor zárolásával. A linkCount
+      // a multi-link (több EWP → egy appointment) közbeni megjelenését fogja
+      // meg — ilyenkor nem írunk (nem auto-javítható, flip-flop veszély).
       const recheck = await client.query(
-        `SELECT a.step_code AS "stepCode", a.step_seq AS "stepSeq",
-                a.appointment_status AS "appointmentStatus"
-         FROM appointments a
-         WHERE a.id = $1`,
-        [row.appointmentId]
+        `SELECT a.id AS "appointmentId",
+                a.step_code AS "stepCode", a.step_seq AS "stepSeq",
+                a.appointment_status AS "appointmentStatus",
+                ewp.work_phase_code AS "ewpWorkPhaseCode",
+                ewp.pathway_order_index AS "ewpPathwayOrderIndex",
+                (SELECT COUNT(*)::int FROM episode_work_phases e2
+                  WHERE e2.appointment_id = a.id) AS "linkCount"
+         FROM episode_work_phases ewp
+         JOIN appointments a ON a.id = ewp.appointment_id
+         WHERE ewp.id = $1
+         FOR UPDATE OF ewp, a`,
+        [row.workPhaseId]
       );
       const current = recheck.rows[0];
       if (!current) continue;
+      if (current.appointmentId !== row.appointmentId) continue;
       if (!isAppointmentActive(current.appointmentStatus)) continue;
+      if (current.linkCount > 1) continue;
       const stillMismatch =
-        current.stepCode !== row.ewpWorkPhaseCode ||
-        current.stepSeq !== row.ewpPathwayOrderIndex;
+        current.stepCode !== current.ewpWorkPhaseCode ||
+        current.stepSeq !== current.ewpPathwayOrderIndex;
       if (!stillMismatch) continue;
 
-      await client.query(
-        `UPDATE appointments
+      // Guard-feltételek az UPDATE WHERE-jében is: aktív státusz, tényleges
+      // eltérés, és a cél-EWP link vissza-ellenőrzése.
+      const updated = await client.query(
+        `UPDATE appointments a
          SET step_code = $1, step_seq = $2, work_phase_id = $3
-         WHERE id = $4`,
+         WHERE a.id = $4
+           AND ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}
+           AND (
+             a.step_code IS DISTINCT FROM $1
+             OR a.step_seq IS DISTINCT FROM $2
+             OR a.work_phase_id IS DISTINCT FROM $3
+           )
+           AND EXISTS (
+             SELECT 1 FROM episode_work_phases g
+             WHERE g.id = $3 AND g.appointment_id = a.id
+           )`,
         [
-          row.ewpWorkPhaseCode,
-          row.ewpPathwayOrderIndex,
+          current.ewpWorkPhaseCode,
+          current.ewpPathwayOrderIndex,
           row.workPhaseId,
           row.appointmentId,
         ]
       );
+      if ((updated.rowCount ?? 0) === 0) continue;
       mismatchRepaired += 1;
     }
 
@@ -431,11 +557,23 @@ export async function autoRepairSchedulingIntegrity(
 }
 
 /**
+ * Az audit-bejegyzések közül ezek a change_type-ok NEM érintik a foglalás-linket
+ * / státuszt (pl. időzítés- vagy címke-módosítás) — a sor-szintű „elveszett
+ * időpont" jelzést nem szabad kioltaniuk. A `reorder` epizód-szintű sor
+ * (episode_work_phase_id NULL), a fázis alatt eleve nem jelenik meg.
+ */
+const LINK_IRRELEVANT_AUDIT_CHANGE_TYPES = ['timing_change'] as const;
+
+/**
  * A karton sor-szintű, klinikai jelentésű jelzéséhez: azok a munkafázis-sorok,
  * amelyek az integritás-javítás során veszítették el a foglalásukat, és azóta
  * sem kaptak újat. „Elveszett" = a sor `pending`, nincs appointment-linkje, és
- * a LEGUTOLSÓ audit-bejegyzése a dangling-takarítás. Amint a sorra új időpontot
- * foglalnak (vagy bármi más státusz-mozgás történik), a jelzés magától eltűnik.
+ * a LEGUTOLSÓ link-releváns audit-bejegyzése a dedikált 'integrity_repair'
+ * change_type-ú takarítás (nem szöveg-prefix egyezés — a reason csak embernek
+ * szól). Közbeeső, linket nem érintő audit (timing_change stb.) nem oltja ki a
+ * jelzést; új foglalás viszont igen: a link (appointment_id) beírásával a sor
+ * kiesik a szűrésből, és a foglalás-könyvelés audit-sora is felülírja a
+ * legutolsó link-releváns bejegyzést.
  */
 export async function getLostAppointmentWorkPhaseIds(
   pool: DbPool,
@@ -445,18 +583,18 @@ export async function getLostAppointmentWorkPhaseIds(
     `SELECT ewp.id
      FROM episode_work_phases ewp
      JOIN LATERAL (
-       SELECT au.new_status, au.reason
+       SELECT au.change_type
        FROM episode_work_phase_audit au
        WHERE au.episode_work_phase_id = ewp.id
+         AND au.change_type <> ALL($2::text[])
        ORDER BY au.created_at DESC, au.id DESC
        LIMIT 1
-     ) last_audit ON TRUE
+     ) last_relevant ON TRUE
      WHERE ewp.episode_id = $1
        AND ewp.status = 'pending'
        AND ewp.appointment_id IS NULL
-       AND last_audit.new_status = 'pending'
-       AND last_audit.reason LIKE 'integrity repair: dangling appointment_id takarítása%'`,
-    [episodeId]
+       AND last_relevant.change_type = 'integrity_repair'`,
+    [episodeId, [...LINK_IRRELEVANT_AUDIT_CHANGE_TYPES]]
   );
   return result.rows.map((r: { id: string }) => r.id);
 }

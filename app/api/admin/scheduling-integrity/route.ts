@@ -40,7 +40,10 @@ interface EpisodeIntegrityReport {
   violations: SchedulingIntegrityViolation[];
 }
 
-export const GET = roleHandler(['admin', 'fogpótlástanász'], async (_req, { auth }) => {
+// Csak admin: a scan tömeges auto-repairt (írást) triggerel, és a UI is csak
+// adminnak mutatja a fület — a szélesebb role-lista közvetlen API-hívással
+// tömeges írást engedett volna (review MEDIUM).
+export const GET = roleHandler(['admin'], async (_req, { auth }) => {
   const pool = getDbPool();
 
   // ── 1) Auto-repair: epizódok javítható violationnel ───────────────────────

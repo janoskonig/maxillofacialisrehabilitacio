@@ -88,12 +88,15 @@ describe('scheduling-integrity route — POST repair', () => {
   it('dangling sorok takarítása audit-tal', () => {
     expect(SRC).toMatch(/integrity repair: dangling appointment_id takarítása/);
     expect(SRC).toMatch(/UPDATE episode_work_phases\s+SET appointment_id = NULL/);
+    // MINDEN tényleges link-nullázás auditot ír (státusztól függetlenül),
+    // dedikált change_type-pal — a sor-jelzés erre szűr, nem reason-prefixre.
+    expect(SRC).toMatch(/changeType:\s*'integrity_repair'/);
   });
 
   it('step-mismatch javítás: az EWP az SSOT a step_code-hoz', () => {
     // A snapshot (appointments.step_code) átírása az EWP work_phase_code-ra
     expect(SRC).toMatch(
-      /UPDATE appointments\s+SET step_code = \$1, step_seq = \$2, work_phase_id = \$3/
+      /UPDATE appointments a\s+SET step_code = \$1, step_seq = \$2, work_phase_id = \$3/
     );
   });
 
@@ -103,6 +106,34 @@ describe('scheduling-integrity route — POST repair', () => {
     expect(SRC).toMatch(/isAppointmentActive\(current\.appointmentStatus\)/);
     // Minden mismatch sorra re-checkel, hogy még mindig mismatch-e
     expect(SRC).toMatch(/stillMismatch/);
+  });
+
+  it('versenyhelyzet-őr: a recheck zárol (FOR UPDATE), az UPDATE WHERE-je guardolt', () => {
+    // Dangling recheck: a munkafázis-sor zárolása (READ COMMITTED alatt az
+    // in-flight foglalási tranzakció commitjáig vár, majd friss értéket lát)
+    expect(SRC).toMatch(/FOR UPDATE OF ewp(?!,)/);
+    // Mismatch recheck: EWP + appointment sor együtt zárolva
+    expect(SRC).toMatch(/FOR UPDATE OF ewp, a/);
+    // A dangling UPDATE WHERE-je a link-egyezést ÉS a stale állapotot is
+    // újra megköveteli — EPQ alatt sem nullázhat friss, aktív linket
+    expect(SRC).toMatch(
+      /WHERE id = \$1\s+AND appointment_id = \$2\s+AND NOT EXISTS/
+    );
+    // A számlálók a tényleges UPDATE rowCount-ján alapulnak
+    expect(SRC).toMatch(/\(updated\.rowCount \?\? 0\) === 0/);
+  });
+
+  it('multi-link (több EWP → egy aktív appointment): nem auto-javítható', () => {
+    // A mismatch-select kizárja a több-linkes appointmenteket (flip-flop tilos)
+    expect(SRC).toMatch(/MISMATCH_MULTI_LINK_EXCLUSION/);
+    expect(SRC).toMatch(/other\.appointment_id = ewp\.appointment_id/);
+    // Külön violation-kind, repairable: false — admin maradék-listára kerül
+    const multiBlock = SRC.match(
+      /kind:\s*'MULTI_EWP_APPOINTMENT_LINK'[\s\S]*?repairable:\s*false/
+    );
+    expect(multiBlock, 'MULTI_EWP_APPOINTMENT_LINK nincs nem-javíthatónak jelölve').toBeTruthy();
+    // A repair mismatch-ága recheck-kor is kihagyja, ha időközben multi lett
+    expect(SRC).toMatch(/current\.linkCount > 1/);
   });
 
   it('activity log + scheduling event a commit után', () => {

@@ -25,6 +25,13 @@ BEGIN;
 --                       beszúráskor, fázisonként)
 --   'template_remove' — sablon eltávolítása az epizódról (fázisonként,
 --                       force-szal vagy anélkül; new_status = 'deleted')
+--   'integrity_repair' — automatikus integritás-javítás (WP-1.2): stale
+--                       foglalás-link nullázása a lib/scheduling-integrity.ts
+--                       repair-jéből. A karton sor-szintű „nincs élő időpont"
+--                       jelzése (getLostAppointmentWorkPhaseIds) erre a
+--                       change_type-ra szűr, nem a reason szövegére.
+--                       (Utólag, kódból bővített értékkészlet — az oszlopon
+--                       nincs CHECK, DB-változást nem igényelt.)
 --
 -- Idempotens: IF NOT EXISTS / feltételes UPDATE — párhuzamos teszt-agent is
 -- futtathatja ugyanazon a DB-n.
@@ -50,7 +57,7 @@ ALTER TABLE episode_work_phase_audit ALTER COLUMN old_status DROP NOT NULL;
 ALTER TABLE episode_work_phase_audit ALTER COLUMN new_status DROP NOT NULL;
 
 COMMENT ON COLUMN episode_work_phase_audit.change_type IS
-  'A terv-mutáció fajtája: status_change | create | delete | reorder | merge | unmerge | timing_change | template_apply | template_remove. A reorder epizód-szintű összefoglaló sor (episode_work_phase_id NULL).';
+  'A terv-mutáció fajtája: status_change | create | delete | reorder | merge | unmerge | timing_change | template_apply | template_remove | integrity_repair. A reorder epizód-szintű összefoglaló sor (episode_work_phase_id NULL).';
 COMMENT ON COLUMN episode_work_phase_audit.old_status IS
   'A fázis státusza a mutáció előtt; NULL a nem státusz-jellegű sorokon (create, reorder).';
 COMMENT ON COLUMN episode_work_phase_audit.new_status IS

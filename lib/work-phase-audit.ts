@@ -37,7 +37,8 @@ export type WorkPhaseAuditChangeType =
   | 'unmerge'
   | 'timing_change'
   | 'template_apply'
-  | 'template_remove';
+  | 'template_remove'
+  | 'integrity_repair';
 
 export interface WorkPhaseAuditEntry {
   /** Az érintett fázis; NULL az epizód-szintű (reorder) összefoglaló sornál. */
