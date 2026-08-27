@@ -117,7 +117,25 @@ export const DELETE = roleHandler([...ROLES], async (req, { auth, params }) => {
     );
   }
 
-  await pool.query(`DELETE FROM episode_tasks WHERE id = $1`, [taskId]);
+  // Atomi, feltételes törlés (review-javítás, TOCTOU): a fenti őr-SELECT és a
+  // törlés között egy párhuzamos foglalás/teljesítés beírhatta volna a sort —
+  // a WHERE ezt egyetlen lépésben zárja ki.
+  const deleted = await pool.query(
+    `DELETE FROM episode_tasks
+      WHERE id = $1 AND episode_id = $2
+        AND appointment_id IS NULL AND completed_at IS NULL
+      RETURNING id`,
+    [taskId, episodeId],
+  );
+  if (deleted.rowCount === 0) {
+    return NextResponse.json(
+      {
+        error: 'A visszarendelést időközben lefoglalták vagy teljesítették — frissítse a listát',
+        code: 'RECALL_TASK_CHANGED',
+      },
+      { status: 409 },
+    );
+  }
 
   await logActivity(
     req,

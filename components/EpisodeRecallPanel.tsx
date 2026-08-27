@@ -54,6 +54,7 @@ function formatDate(value: string): string {
 export function EpisodeRecallPanel({ episodeId, patientId }: { episodeId: string; patientId: string }) {
   const [tasks, setTasks] = useState<RecallTask[]>([]);
   const [riskLevel, setRiskLevel] = useState<RecallRiskLevel | null>(null);
+  const [riskLevelKnown, setRiskLevelKnown] = useState(true);
   const [loading, setLoading] = useState(true);
   const [bookingTaskId, setBookingTaskId] = useState<string | null>(null);
   const [actingTaskId, setActingTaskId] = useState<string | null>(null);
@@ -79,8 +80,15 @@ export function EpisodeRecallPanel({ episodeId, patientId }: { episodeId: string
         const episodeData = await episodeResponse.json();
         const level = episodeData.episode?.recallRiskLevel ?? null;
         setRiskLevel(level && RECALL_RISK_LEVELS.includes(level) ? level : null);
+        setRiskLevelKnown(true);
+        setError(null);
+      } else {
+        setRiskLevelKnown(false);
+        // Review-javítás: ha az epizód-GET elhasal, ne mutassunk hamis
+        // "Alacsony" szintet néma fallbackként — jelezzük, és a rizikó-függő
+        // ajánlatokat a render a riskLevel=null + hiba együttesből visszafogja.
+        setError('A rizikószint betöltése sikertelen — a lista friss, de a szint ismeretlen');
       }
-      setError(null);
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Hiba történt');
     } finally {
@@ -174,13 +182,17 @@ export function EpisodeRecallPanel({ episodeId, patientId }: { episodeId: string
   // A jelenlegi kadenciából kikerült, még szabad auto sorok — törlésre
   // FELAJÁNLVA (a szolgáltatás nem törölte őket, a döntés a felhasználóé).
   const cadence = recallCadenceForRisk(riskLevel);
-  const obsoleteAutoTasks = tasks.filter(
-    (task) =>
-      task.source === 'auto' &&
-      !task.completedAt &&
-      !task.appointmentId &&
-      !cadence.includes(task.intervalDays),
-  );
+  // Ismeretlen rizikószintnél (epizód-GET hiba) nem ajánlunk törlést — a
+  // null→low fallback különben a kadenciában lévő sorokat is felajánlaná.
+  const obsoleteAutoTasks = riskLevelKnown
+    ? tasks.filter(
+        (task) =>
+          task.source === 'auto' &&
+          !task.completedAt &&
+          !task.appointmentId &&
+          !cadence.includes(task.intervalDays),
+      )
+    : [];
 
   const deleteObsolete = async () => {
     setDeletingObsolete(true);
@@ -196,10 +208,12 @@ export function EpisodeRecallPanel({ episodeId, patientId }: { episodeId: string
         }
       }
       setError(null);
-      await load();
     } catch (err) {
       setError(err instanceof Error ? err.message : 'Hiba történt');
     } finally {
+      // Részleges siker esetén is frissítünk (review-javítás): a már törölt
+      // sorok ne maradjanak a listában/ajánlat-sávban a hibaüzenet mellett.
+      await load();
       setDeletingObsolete(false);
     }
   };
