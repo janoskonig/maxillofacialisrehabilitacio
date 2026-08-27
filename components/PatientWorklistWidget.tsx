@@ -994,7 +994,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                           disabled={!!isConvertingAll}
                           className={`text-xs font-medium disabled:opacity-50 text-left ${
                             chainBookingRequiredByEpisodeId[item.episodeId]
-                              ? 'text-amber-900 dark:text-amber-200 font-semibold ring-1 ring-amber-400 rounded px-1.5 py-0.5 bg-amber-50 dark:bg-amber-950/40'
+                              ? 'text-blue-900 dark:text-blue-200 ring-1 ring-blue-300 dark:ring-blue-800 rounded px-1.5 py-0.5 bg-blue-50 dark:bg-blue-950/40'
                               : 'text-medical-primary hover:underline'
                           }`}
                         >
