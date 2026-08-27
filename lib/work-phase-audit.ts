@@ -10,7 +10,9 @@
  * A helper a snapshotot az élő `episode_work_phases` sorból veszi, ezért a
  * törlés-flow-kban a `DELETE FROM episode_work_phases` ELŐTT kell hívni
  * (ugyanabban a tranzakcióban). Ha a fázis-sor már nem létezik, az audit
- * bejegyzés akkor is beíródik, csak a snapshot oszlopok maradnak NULL-on.
+ * bejegyzés akkor is beíródik, de az `episode_work_phase_id` és a snapshot
+ * oszlopok NULL-on maradnak (az FK INSERT-kor is validál, ezért nemlétező
+ * id-t nem írhatunk bele).
  */
 
 export type WorkPhaseAuditQueryable = {
@@ -35,7 +37,7 @@ export async function insertWorkPhaseAudit(
     `INSERT INTO episode_work_phase_audit
        (episode_work_phase_id, episode_id, old_status, new_status, changed_by, reason,
         work_phase_code, custom_label, pool, duration_minutes)
-     SELECT $1::uuid, $2::uuid, $3, $4, $5, $6,
+     SELECT ewp.id, $2::uuid, $3, $4, $5, $6,
             ewp.work_phase_code, ewp.custom_label, ewp.pool, ewp.duration_minutes
        FROM (VALUES (1)) AS _egysor
        LEFT JOIN episode_work_phases ewp ON ewp.id = $1::uuid`,
