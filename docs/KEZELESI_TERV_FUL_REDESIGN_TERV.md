@@ -18,11 +18,11 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 | WP | Státusz | PR | Megjegyzés |
 |---|---|---|---|
 | WP-0.0 harness | ✅ | [#58](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/58) | Pillanatkép-alapú teszt-DB (a legacy lánc friss DB-n törik); route-teszteknél cleanup-minta a rollback helyett — dokumentálva |
-| WP-0.1 skip felszabadítás | ⬜ | — | |
+| WP-0.1 skip felszabadítás | ✅ | [#61](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/61) | Review-javítás: work_phase_id-elsődleges párosítás (testvér-fázis foglalását nem bántja) + FOR UPDATE |
 | WP-0.2 intent-lejáratás + horgony | ✅ | [#60](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/60) | #10-nél a skip-ági horgony-változat került be (az első intent padlója marad `now`) |
 | WP-0.3 audit-tombstone (084) | ✅ | [#63](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/63) | Közös `insertWorkPhaseAudit` helper; review-javítás: nemlétező fázisnál NULL id-s tombstone |
 | WP-0.4 slot_intent_id (085) | ⬜ | — | |
-| WP-0.5 reorder SAVEPOINT | ⬜ | — | |
+| WP-0.5 reorder SAVEPOINT | ✅ | [#62](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/62) | Review-javítás: epizód-státusz kapu a tranzakción belül (FOR SHARE) |
 | WP-0.6 köteg EWP-link | ⬜ | — | |
 | WP-0.7 GET + tombstone (086) | ⬜ | — | |
 | WP-0.8 kis javítások (#08/#09/#11/#13) | ⬜ | — | |
