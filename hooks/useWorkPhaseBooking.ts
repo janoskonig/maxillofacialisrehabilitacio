@@ -83,7 +83,7 @@ export interface WorkPhaseBookingApi {
   rowStateFor: (item: WorklistItemBackend) => WorklistRowState;
   /** Epizód-szintű blokk (episode_blocks) — a terv-kártya tetején jelezzük. */
   blockedItem: WorklistItemBackend | null;
-  /** Kötelező lánc-foglalás jelzés az epizódra. */
+  /** Lánc-foglalási ajánlat az epizódra: több lépés egy menetben foglalható. */
   chainBookingRequired: boolean;
   /** Van-e azonnal foglalható (READY) fázis az epizódban. */
   hasReady: boolean;

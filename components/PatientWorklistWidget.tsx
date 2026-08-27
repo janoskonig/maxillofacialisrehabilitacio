@@ -733,19 +733,19 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
     );
   }
 
-  const showChainMandatoryBanner = Object.keys(chainBookingRequiredByEpisodeId).some(
+  const showChainOfferBanner = Object.keys(chainBookingRequiredByEpisodeId).some(
     (eid) =>
       chainBookingRequiredByEpisodeId[eid] && sortedItems.some((i) => i.episodeId === eid)
   );
 
   return (
     <div className="space-y-3">
-      {showChainMandatoryBanner && (
-        <div className="rounded-lg border-2 border-amber-400 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-950 dark:text-amber-200">
-          <p className="font-semibold">Teljes sorozat lefoglalása kötelező lépés</p>
-          <p className="mt-1 text-amber-900/90 dark:text-amber-300/90">
+      {showChainOfferBanner && (
+        <div className="rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-3 py-2 text-sm text-blue-900 dark:text-blue-200">
+          <p className="font-semibold">Több lépés is foglalható egyszerre</p>
+          <p className="mt-1 text-blue-800/90 dark:text-blue-300/90">
             Ha az epizódhoz több munkafázis tartozik, az első sorban az „Összes szükséges időpont lefoglalása”
-            gombbal foglald le egyszerre a szükséges időpontokat — ne csak az első lépést egyenként.
+            gombbal egy menetben lefoglalhatod őket — a láncolást a rendszer számolja.
           </p>
         </div>
       )}
@@ -998,7 +998,7 @@ export function PatientWorklistWidget({ patientId, patientName, visible = true }
                           disabled={!!isConvertingAll}
                           className={`text-xs font-medium disabled:opacity-50 text-left ${
                             chainBookingRequiredByEpisodeId[item.episodeId]
-                              ? 'text-amber-900 dark:text-amber-200 font-semibold ring-1 ring-amber-400 rounded px-1.5 py-0.5 bg-amber-50 dark:bg-amber-950/40'
+                              ? 'text-blue-900 dark:text-blue-200 ring-1 ring-blue-300 dark:ring-blue-800 rounded px-1.5 py-0.5 bg-blue-50 dark:bg-blue-950/40'
                               : 'text-medical-primary hover:underline'
                           }`}
                         >

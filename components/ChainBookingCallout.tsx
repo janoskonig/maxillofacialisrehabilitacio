@@ -2,10 +2,11 @@
 
 import { useEffect, useState } from 'react';
 import Link from 'next/link';
-import { AlertTriangle } from 'lucide-react';
+import { Info } from 'lucide-react';
 
 /**
- * Kötelező „teljes sorozat” foglalás — epizód nézetben (PatientForm), ha a backend szerint több lépés/intent van.
+ * „Teljes sorozat egy menetben foglalható” ajánlat — epizód nézetben (PatientForm),
+ * ha a backend szerint több lépés/intent van. Csak informál, nem tilt.
  */
 export function ChainBookingCallout({ episodeId }: { episodeId: string | null | undefined }) {
   const [needs, setNeeds] = useState<boolean | null>(null);
@@ -35,13 +36,13 @@ export function ChainBookingCallout({ episodeId }: { episodeId: string | null | 
   if (!episodeId || !needs) return null;
 
   return (
-    <div className="mb-4 flex gap-3 rounded-lg border-2 border-amber-400 dark:border-amber-700 bg-amber-50 dark:bg-amber-950/40 px-4 py-3 text-sm text-amber-950 dark:text-amber-200">
-      <AlertTriangle className="h-5 w-5 flex-shrink-0 text-amber-600 dark:text-amber-300" aria-hidden />
+    <div className="mb-4 flex gap-3 rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-4 py-3 text-sm text-blue-900 dark:text-blue-200">
+      <Info className="h-5 w-5 flex-shrink-0 text-blue-600 dark:text-blue-300" aria-hidden />
       <div className="space-y-1">
-        <p className="font-semibold">Teljes kezelési sorozat időpontjainak lefoglalása kötelező lépés</p>
-        <p className="text-amber-900/90">
+        <p className="font-semibold">Több lépés is foglalható egyszerre</p>
+        <p className="text-blue-800/90 dark:text-blue-300/90">
           Ehhez az epizódhoz több munkafázis tartozik. A munkalistán az „Összes szükséges időpont lefoglalása”
-          gombbal egyszerre foglalhatod a szükséges időpontokat (jóváhagyás után).
+          gombbal egy menetben lefoglalhatod őket — a láncolást a rendszer számolja.
         </p>
         <p>
           <Link href="/?tab=worklist" className="font-medium text-medical-primary underline">
