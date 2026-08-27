@@ -82,14 +82,29 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   const workPhaseCode = `tooth_${tt.treatment_code}`;
   const customLabel = `${tt.labelHu} – ${tt.tooth_number}`;
 
-  await pool.query(
-    `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, tooth_treatment_id, custom_label)
-     VALUES ($1, $2, $3, 'work', 30, 7, $4, $5, $6)`,
-    [episodeId, workPhaseCode, nextIdx, nextSeq, toothTreatmentId, customLabel]
-  );
+  // A fázis-INSERT és a tooth_treatments.status visszaállítása EGY
+  // tranzakcióban fut: külön commitolva egy közbeeső hiba kétállapotú
+  // invariáns-sértést hagyna (van fog-fázis, de a sor 'pending' maradt — a
+  // fog-szinkron szűrője és a Fogkezelés fül nézete szétcsúszna).
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    await client.query(
+      `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, tooth_treatment_id, custom_label)
+       VALUES ($1, $2, $3, 'work', 30, 7, $4, $5, $6)`,
+      [episodeId, workPhaseCode, nextIdx, nextSeq, toothTreatmentId, customLabel]
+    );
 
-  if (tt.status === 'pending') {
-    await pool.query(`UPDATE tooth_treatments SET status = 'episode_linked' WHERE id = $1`, [toothTreatmentId]);
+    if (tt.status === 'pending') {
+      await client.query(`UPDATE tooth_treatments SET status = 'episode_linked' WHERE id = $1`, [toothTreatmentId]);
+    }
+
+    await client.query('COMMIT');
+  } catch (txError) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw txError;
+  } finally {
+    client.release();
   }
 
   try {

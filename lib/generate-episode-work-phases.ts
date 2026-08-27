@@ -18,6 +18,12 @@
  *   • A '__legacy__' őr nem a túl széles `source_episode_pathway_id IS NULL`
  *     predikátum, hanem a sablon fázis-kódjaira szűkített kérdés — így egy
  *     ad-hoc (NULL-source) sor nem hiúsítja meg a sablon generálását.
+ *   • Review-javítás: a régi (__legacy__ úton generált, NULL-source) terv
+ *     elleni őr PERZISZTENS adatra épül, nem hívásonkénti memóriára — a valós
+ *     ágon minden generate nézi a NULL-source élő sorokat ÉS a NULL-source
+ *     tombstone-okat a sablon fázis-kódjai szerint. Így akárhányadik generate
+ *     idempotens (a bootstrap INSERT azonnali commitja után is), és a legacy
+ *     tervből törölt fázisok sem élednek fel.
  */
 
 import type { Pool } from 'pg';
@@ -59,12 +65,6 @@ export async function generateEpisodeWorkPhases(
     // episode_pathways table might not exist yet
   }
 
-  // A patient_episodes.care_pathway_id-ból bootstrapolt episode_pathways sorok
-  // id-i: ezekre az őr a régi, NULL-source-ú (a hibás '__legacy__' ágon
-  // generált) sablon-fázisokat is figyeli, nehogy a javítás után ugyanaz a
-  // sablon másodszor is beszúródjon (kódaudit #07 "kétszer szúródik be" ága).
-  const bootstrappedPathwayIds = new Set<string>();
-
   if (epPathways.length === 0 && ep.care_pathway_id) {
     try {
       // Nincs ON CONFLICT: a 006-os migráció a 2-oszlopos unique constraintet
@@ -77,7 +77,6 @@ export async function generateEpisodeWorkPhases(
         [episodeId, ep.care_pathway_id]
       );
       epPathways = ins.rows;
-      for (const row of ins.rows) bootstrappedPathwayIds.add(row.id);
     } catch (err) {
       const code = (err as { code?: string } | null)?.code;
       if (code === '23505') {
@@ -168,30 +167,41 @@ export async function generateEpisodeWorkPhases(
         );
         if (alreadyExists.rows.length > 0) continue;
 
+        // A régi (hibás '__legacy__' úton generált) terv lenyomata: NULL-source
+        // élő sorok a sablon kódjaival. PERZISZTENS őr, nem hívásonkénti
+        // memória: a bootstrap episode_pathways INSERT azonnal commitol, így a
+        // 2. generate-nél az epizódnak már van pathway-sora — az őrnek AKKOR IS
+        // meg kell fognia a legacy tervet, különben a teljes sablon duplán
+        // szúródna be (review MAJOR 1; ugyanez fedi a 23505-ös konkurens ágat).
+        // Az árva NULL-source sorokat nem bántjuk, csak nem duplikálunk.
+        const legacyGenerated = await client.query(
+          `SELECT 1 FROM episode_work_phases
+           WHERE episode_id = $1 AND source_episode_pathway_id IS NULL
+             ${hasToothCol ? 'AND tooth_treatment_id IS NULL' : ''}
+             AND work_phase_code = ANY($2::text[])
+           LIMIT 1`,
+          [episodeId, templateCodes]
+        );
+        if (legacyGenerated.rows.length > 0) continue;
+
         // Törlés-tombstone (kódaudit #01): ha ebből a sablonból már töröltek
         // fázist, a sablon nem generálandó újra — a törölt sor nem "hiányzó".
+        // A legacy (NULL-source) terv sorainak törlésekor a tombstone
+        // source_episode_pathway_id-ja is NULL, ezért a sablon-forrás melletti
+        // (episode_id, work_phase_code) szerinti NULL-source találat is véd
+        // (review MAJOR 2) — nélküle a teljesen kitörölt legacy terv egyetlen
+        // generate-től feléledne.
         if (hasTombstones) {
           const tombstoned = await client.query(
-            `SELECT 1 FROM episode_work_phase_tombstones WHERE source_episode_pathway_id = $1 LIMIT 1`,
-            [epPw.id]
+            `SELECT 1 FROM episode_work_phase_tombstones
+             WHERE source_episode_pathway_id = $1
+                OR (episode_id = $2 AND source_episode_pathway_id IS NULL
+                    AND tooth_treatment_id IS NULL
+                    AND work_phase_code = ANY($3::text[]))
+             LIMIT 1`,
+            [epPw.id, episodeId, templateCodes]
           );
           if (tombstoned.rows.length > 0) continue;
-        }
-
-        // Frissen bootstrapolt episode_pathways sor (kódaudit #07 "kétszer
-        // szúródik be" ága): ha a tervet korábban a hibás '__legacy__' út már
-        // legenerálta (NULL-source sorok a sablon kódjaival), nem szúrjuk be
-        // másodszor — az árva sorokat nem bántjuk, csak nem duplikálunk.
-        if (bootstrappedPathwayIds.has(epPw.id)) {
-          const legacyGenerated = await client.query(
-            `SELECT 1 FROM episode_work_phases
-             WHERE episode_id = $1 AND source_episode_pathway_id IS NULL
-               ${hasToothCol ? 'AND tooth_treatment_id IS NULL' : ''}
-               AND work_phase_code = ANY($2::text[])
-             LIMIT 1`,
-            [episodeId, templateCodes]
-          );
-          if (legacyGenerated.rows.length > 0) continue;
         }
       }
 

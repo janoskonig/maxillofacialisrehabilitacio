@@ -299,6 +299,61 @@ describe('generate-episode-work-phases (WP-0.7)', () => {
       episodeId,
     ]);
     expect(epPathways.rows).toHaveLength(1);
+
+    // Review MAJOR 1: a MÁSODIK generate is idempotens. A bootstrap INSERT az
+    // 1. hívásnál azonnal commitolt, így itt az epizódnak már van
+    // episode_pathways sora — az őr nem támaszkodhat hívásonkénti memóriára
+    // (bootstrappedPathwayIds), csak perzisztens adatra (NULL-source élő sorok
+    // a sablon kódjaival), különben a sablon duplán szúródna be (3 → 6 sor).
+    const res2 = await callGenerate(episodeId, doctor);
+    expect(res2.status).toBe(200);
+    expect((await res2.json()).generated).toBe(false);
+    expect((await phaseRows(episodeId)).map((r) => r.work_phase_code)).toEqual(TEMPLATE_CODES);
+  });
+
+  it('review MAJOR 2: a legacy (NULL-source) terv törölt fázisai egyetlen generate-től sem élednek fel', async () => {
+    const doctor = await makeDoctor();
+    const { episodeId } = await makeEpisodeWithLegacyPathwayColumn();
+    const pool = getDbPool();
+
+    // A hibás '__legacy__' úton generált terv lenyomata: NULL-source sorok a
+    // sablon kódjaival, episode_pathways sor nélkül.
+    const legacyRows: Array<{ id: string }> = [];
+    for (let i = 0; i < TEMPLATE_CODES.length; i++) {
+      legacyRows.push(
+        await createTestWorkPhase(undefined, episodeId, {
+          workPhaseCode: TEMPLATE_CODES[i],
+          seq: i,
+        })
+      );
+    }
+
+    // Az orvos MINDEN fázist töröl — a tombstone-ok source_episode_pathway_id-ja
+    // NULL (a törölt sorok NULL-source-ok voltak).
+    for (const row of legacyRows) {
+      const delRes = await callDelete(episodeId, row.id, doctor);
+      expect(delRes.status).toBe(200);
+    }
+    expect(await phaseRows(episodeId)).toHaveLength(0);
+
+    const tombstones = await pool.query(
+      `SELECT work_phase_code, source_episode_pathway_id FROM episode_work_phase_tombstones
+        WHERE episode_id = $1 ORDER BY work_phase_code`,
+      [episodeId]
+    );
+    expect(tombstones.rows).toHaveLength(3);
+    for (const t of tombstones.rows) {
+      expect(t.source_episode_pathway_id).toBeNull();
+    }
+
+    // Egyetlen generate sem támasztja fel a törölt tervet: a valós ági
+    // tombstone-őrnek a NULL-source tombstone-okat is látnia kell
+    // (episode_id + work_phase_code szerint), különben — mivel élő NULL-source
+    // sor sincs — mindhárom fázis újra beszúródna.
+    const res = await callGenerate(episodeId, doctor);
+    expect(res.status).toBe(200);
+    expect((await res.json()).generated).toBe(false);
+    expect(await phaseRows(episodeId)).toHaveLength(0);
   });
 
   it('jogosultság: a generate technikusnak 403, a GET olvasásra mindenkinek szabad', async () => {
