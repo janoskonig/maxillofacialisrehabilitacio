@@ -56,15 +56,23 @@ export async function ensureRecallTasksForEpisode(
                FROM stage_events se
               WHERE se.episode_id = pe.id AND se.stage_code = 'STAGE_6') AS stage6_at,
             GREATEST(
+              -- Horgony: teljesült KEZELÉS/KONTROLL (a 2026-08-27-i döntés
+              -- szövege szerint) — a puszta konzultáció/egyéb nem horgony,
+              -- különben egy csak-konzultáción járt beteg kartonnyitása
+              -- azonnal lejárt recall-sort szülne. NULL típus (legacy sor)
+              -- kezelésnek számít.
               (SELECT MAX(a.start_time)
                  FROM appointments a
                 WHERE a.episode_id = pe.id
-                  AND a.appointment_status = 'completed'),
+                  AND a.appointment_status = 'completed'
+                  AND (a.appointment_type IS NULL
+                       OR a.appointment_type NOT IN ('elso_konzultacio', 'egyeb'))),
               (SELECT MAX(COALESCE(pa.start_time, ewp.completed_at))
                  FROM episode_work_phases ewp
                  LEFT JOIN appointments pa ON pa.id = ewp.appointment_id
                 WHERE ewp.episode_id = pe.id
-                  AND ewp.status = 'completed')
+                  AND ewp.status = 'completed'
+                  AND ewp.pool <> 'consult')
             ) AS last_completed_at
        FROM patient_episodes pe
        JOIN patients p ON p.id = pe.patient_id

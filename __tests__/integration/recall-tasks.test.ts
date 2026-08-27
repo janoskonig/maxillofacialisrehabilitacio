@@ -887,3 +887,69 @@ describe('kapu-lazítás (2026-08-27 felhasználói döntés): auto-recall átad
     });
   });
 });
+
+describe('kapu-lazítás pontosítás: csak kezelés/kontroll horgonyoz, konzultáció nem', () => {
+  it('csak teljesült ELSŐ KONZULTÁCIÓVAL bíró epizódra nem születik auto-sor', async () => {
+    await withRollback(async (client) => {
+      const doctor = await createTestUser(client);
+      const patient = await createTestPatient(client);
+      const episode = await createTestEpisode(client, patient.id);
+
+      const consultAt = new Date('2026-01-10T09:00:00.000Z');
+      const slot = await createTestSlot(client, doctor.id, { startTime: consultAt });
+      const appt = await createTestAppointment(client, {
+        patientId: patient.id,
+        timeSlotId: slot.id,
+        episodeId: episode.id,
+        startTime: consultAt,
+        appointmentStatus: 'completed',
+      });
+      await client.query(
+        `UPDATE appointments SET appointment_type = 'elso_konzultacio' WHERE id = $1`,
+        [appt.id]
+      );
+
+      const generated = await ensureRecallTasksForEpisode(episode.id, client);
+      expect(generated).toBe(0);
+
+      const { rows } = await client.query(
+        `SELECT 1 FROM episode_tasks WHERE episode_id = $1 AND task_type = 'recall_due'`,
+        [episode.id]
+      );
+      expect(rows).toHaveLength(0);
+    });
+  });
+
+  it("teljesült 'kontroll' típusú időpont viszont horgonyoz", async () => {
+    await withRollback(async (client) => {
+      const doctor = await createTestUser(client);
+      const patient = await createTestPatient(client);
+      const episode = await createTestEpisode(client, patient.id);
+
+      const controlAt = new Date('2026-07-01T09:00:00.000Z');
+      const slot = await createTestSlot(client, doctor.id, { startTime: controlAt });
+      const appt = await createTestAppointment(client, {
+        patientId: patient.id,
+        timeSlotId: slot.id,
+        episodeId: episode.id,
+        startTime: controlAt,
+        appointmentStatus: 'completed',
+      });
+      await client.query(
+        `UPDATE appointments SET appointment_type = 'kontroll' WHERE id = $1`,
+        [appt.id]
+      );
+
+      await ensureRecallTasksForEpisode(episode.id, client);
+
+      const { rows } = await client.query(
+        `SELECT recall_interval_days, due_at FROM episode_tasks
+          WHERE episode_id = $1 AND task_type = 'recall_due'
+          ORDER BY recall_interval_days`,
+        [episode.id]
+      );
+      expect(rows).toHaveLength(2);
+      expect(new Date(rows[0].due_at).getTime()).toBe(controlAt.getTime() + 180 * DAY_MS);
+    });
+  });
+});
