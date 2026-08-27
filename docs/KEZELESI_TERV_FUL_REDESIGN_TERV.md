@@ -27,7 +27,7 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 | WP-0.7 GET + tombstone (086) | ✅ | [#66](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/66) | GET route + roleHandler a generate-en; tombstone KÜLÖN táblával (nem deleted_at — indoklás a PR-ban); review 2 majorja javítva perzisztens őrökkel, piros-ellenőrzéssel |
 | WP-0.8 kis javítások (#08/#09/#11/#13) | ✅ | [#68](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/68) | + a 3 release-hézag (Mégsem kész ág, betegportál-lemondás, hold-lejárat); review-javítás: flag-olvasás tranzakción kívül, index-hű #08 szonda, #13 sorrend-őr. **Ezzel a FÁZIS 0 teljes.** |
 | WP-0.9 pinning-teszt | ✅ | [#59](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/59) | A 029+059 együttes (hatályos) állapotot pinneli; index-őr regexek toleránsak |
-| WP-1.1 validáció-zajcsökkentés | ⬜ | — | |
+| WP-1.1 validáció-zajcsökkentés | ✅ | [#70](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/70) | Warningok kivezetve, errors|approved|ready modell; mellékjavítás: a batch route alias-hibája (42P01) miatt a Gantt-badge eddig némán 500-azott |
 | WP-1.2 integritás kivezetés | ⬜ | — | |
 | WP-1.3 lánc-banner szöveg | ✅ | [#67](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/67) | Mindhárom előfordulás (terv-kártya, worklist-widget, ChainBookingCallout) ajánlattá fogalmazva, amber→kék |
 | WP-1.4 feltételes időpont egy kártya | ✅ | [#69](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/69) | Új ConditionalAppointmentOffers komponens; jegyzet: az e-mail-hiányos küldés-gomb disabled marad (technikai előfeltétel, nem klinikai kapu); 2 örökölt hiba külön feladat-chipben (LIMIT 50 csonkolás, halott AppointmentBooking.tsx) |
