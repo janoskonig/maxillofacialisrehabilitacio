@@ -1651,8 +1651,10 @@ export function EpisodeStepsManager({
 
               {/* ─── Terv-validáció (WP3, WP-1.1) ─────────────────────── */}
               {/* Üres terv (nincs aktív lépés) → a validációs panel helyett a
-                  kártya üres-állapota jelez; badge sehol nem jelenik meg. */}
-              {steps.some((s) => s.status !== 'skipped') ? (
+                  kártya üres-állapota jelez; badge sehol nem jelenik meg.
+                  A szerverrel (batch/GET mergedFilter) egyezően csak a nem
+                  összevont (primary) sorokat számoljuk. */}
+              {primarySteps.some((s) => s.status !== 'skipped') ? (
                 <PlanValidationPanel episodeId={episodeId} patientId={patientId} signature={planSignature} />
               ) : steps.length > 0 ? (
                 <div className="mb-4 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 p-3 text-sm text-gray-600 dark:text-gray-400">
