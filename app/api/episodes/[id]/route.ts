@@ -13,6 +13,8 @@ import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { releaseWorkPhasesForDelete } from '@/lib/work-phase-delete';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
+import { isRecallRiskLevel } from '@/lib/recall-cadence';
+import { syncRecallTasksForRiskChange, type RecallRiskSyncResult } from '@/lib/recall-tasks';
 
 export const dynamic = 'force-dynamic';
 
@@ -24,8 +26,12 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   const pool = getDbPool();
   const episodeId = params.id;
 
-  const hasPlanStartCol = await probeColumnExists(pool, 'patient_episodes', 'plan_start_date');
+  const [hasPlanStartCol, hasRecallRiskCol] = await Promise.all([
+    probeColumnExists(pool, 'patient_episodes', 'plan_start_date'),
+    probeColumnExists(pool, 'patient_episodes', 'recall_risk_level'),
+  ]);
   const planStartSelect = hasPlanStartCol ? ', pe.plan_start_date as "planStartDate"' : '';
+  const recallRiskSelect = hasRecallRiskCol ? ', pe.recall_risk_level as "recallRiskLevel"' : '';
   const epRow = await pool.query(
     `SELECT pe.id, pe.patient_id as "patientId", pe.reason, pe.pathway_code as "pathwayCode",
       pe.chief_complaint as "chiefComplaint", pe.case_title as "caseTitle", pe.status,
@@ -33,7 +39,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
       pe.parent_episode_id as "parentEpisodeId", pe.trigger_type as "triggerType",
       pe.created_at as "createdAt", pe.created_by as "createdBy",
       pe.care_pathway_id as "carePathwayId", pe.assigned_provider_id as "assignedProviderId",
-      pe.treatment_type_id as "treatmentTypeId",
+      pe.treatment_type_id as "treatmentTypeId"${recallRiskSelect},
       pe.stage_version as "stageVersion", pe.snapshot_version as "snapshotVersion",
       cp.name as "carePathwayName",
       COALESCE(u.doktor_neve, u.email) as "assignedProviderName",
@@ -95,6 +101,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     treatmentTypeId: row.treatmentTypeId,
     treatmentTypeCode: row.treatmentTypeCode,
     treatmentTypeLabel: row.treatmentTypeLabel,
+    recallRiskLevel: hasRecallRiskCol ? (row.recallRiskLevel ?? null) : null,
     stageVersion: row.stageVersion ?? 0,
     snapshotVersion: row.snapshotVersion ?? 0,
     currentRulesetVersion,
@@ -117,7 +124,13 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
 
   if (body.action === 'addPathway') {
     const jaw = body.jaw && ['felso', 'also'].includes(body.jaw) ? body.jaw : null;
-    return await handleAddPathway(pool, episodeId, body.carePathwayId, jaw);
+    return await handleAddPathway(
+      pool,
+      episodeId,
+      body.carePathwayId,
+      jaw,
+      auth.email ?? auth.userId ?? 'unknown'
+    );
   }
   if (body.action === 'removePathway') {
     return await handleRemovePathway(
@@ -130,12 +143,16 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     );
   }
 
-  const { carePathwayId, carePathwayVersion, assignedProviderId, treatmentTypeId, planStartDate } = body;
-  const hasPlanStartCol = await probeColumnExists(pool, 'patient_episodes', 'plan_start_date');
+  const { carePathwayId, carePathwayVersion, assignedProviderId, treatmentTypeId, planStartDate, recallRiskLevel } = body;
+  const [hasPlanStartCol, hasRecallRiskCol] = await Promise.all([
+    probeColumnExists(pool, 'patient_episodes', 'plan_start_date'),
+    probeColumnExists(pool, 'patient_episodes', 'recall_risk_level'),
+  ]);
   const updates: string[] = [];
   const values: unknown[] = [];
   let idx = 1;
   let planStartChanged = false;
+  let recallRiskProvided = false;
 
   if (carePathwayId !== undefined) {
     updates.push(`care_pathway_id = $${idx}`);
@@ -171,13 +188,28 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     idx++;
     planStartChanged = true;
   }
+  if (recallRiskLevel !== undefined && hasRecallRiskCol) {
+    // Gondozási rizikószint (WP-3.2): csak a JAVASOLT recall-kadenciát állítja,
+    // semmit nem tilt és nem töröl. NULL = a mai 'low' viselkedés.
+    if (recallRiskLevel !== null && recallRiskLevel !== '' && !isRecallRiskLevel(recallRiskLevel)) {
+      return NextResponse.json(
+        { error: 'recallRiskLevel csak low, medium, high vagy null lehet' },
+        { status: 400 },
+      );
+    }
+    updates.push(`recall_risk_level = $${idx}`);
+    values.push(recallRiskLevel || null);
+    idx++;
+    recallRiskProvided = true;
+  }
 
   if (updates.length === 0) {
     return NextResponse.json({ error: 'Nincs módosítandó mező' }, { status: 400 });
   }
 
+  const beforeRecallRiskSelect = hasRecallRiskCol ? ', recall_risk_level' : '';
   const before = await pool.query(
-    `SELECT patient_id, care_pathway_id, care_pathway_version, assigned_provider_id, treatment_type_id FROM patient_episodes WHERE id = $1`,
+    `SELECT patient_id, care_pathway_id, care_pathway_version, assigned_provider_id, treatment_type_id${beforeRecallRiskSelect} FROM patient_episodes WHERE id = $1`,
     [episodeId]
   );
   if (before.rows.length === 0) {
@@ -190,6 +222,8 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     (carePathwayVersion !== undefined && prev.care_pathway_version !== carePathwayVersion);
   const providerChanged =
     assignedProviderId !== undefined && String(prev.assigned_provider_id ?? '') !== String(assignedProviderId ?? '');
+  const recallRiskChanged =
+    recallRiskProvided && (prev.recall_risk_level ?? null) !== (recallRiskLevel || null);
 
   values.push(episodeId);
   await pool.query(
@@ -223,10 +257,25 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     }
   }
 
+  // Rizikószint-váltás → az új kadencia hiányzó auto recall-sorai létrejönnek,
+  // a feleslegessé vált auto sorok pedig törlésre FELAJÁNLVA kerülnek a
+  // válaszba (a szolgáltatás nem töröl, kézi sort nem érint, foglalást nem
+  // mond le — a döntés a felhasználóé).
+  let recall: RecallRiskSyncResult | null = null;
+  if (recallRiskChanged) {
+    try {
+      recall = await syncRecallTasksForRiskChange(episodeId);
+    } catch (e) {
+      logger.error('Recall-szinkron sikertelen a rizikószint-váltás után:', e);
+    }
+  }
+
   const planStartAfterSelect = hasPlanStartCol ? ', pe.plan_start_date as "planStartDate"' : '';
   const after = await pool.query(
     `SELECT pe.id, pe.care_pathway_id as "carePathwayId", pe.care_pathway_version as "carePathwayVersion",
-      pe.assigned_provider_id as "assignedProviderId", pe.treatment_type_id as "treatmentTypeId"${planStartAfterSelect},
+      pe.assigned_provider_id as "assignedProviderId", pe.treatment_type_id as "treatmentTypeId"${
+        hasRecallRiskCol ? ', pe.recall_risk_level as "recallRiskLevel"' : ''
+      }${planStartAfterSelect},
       tt.code as "treatmentTypeCode", tt.label_hu as "treatmentTypeLabel"
      FROM patient_episodes pe
      LEFT JOIN treatment_types tt ON pe.treatment_type_id = tt.id
@@ -243,7 +292,7 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     }
   }
 
-  return NextResponse.json({ episode });
+  return NextResponse.json(recallRiskProvided ? { episode, recall } : { episode });
 });
 
 // ────────────────────────────────────────────────────────────────────────────
@@ -267,7 +316,8 @@ async function handleAddPathway(
   pool: Awaited<ReturnType<typeof getDbPool>>,
   episodeId: string,
   carePathwayId: unknown,
-  jaw: 'felso' | 'also' | null
+  jaw: 'felso' | 'also' | null,
+  changedBy = 'unknown'
 ) {
   if (!carePathwayId || typeof carePathwayId !== 'string') {
     return NextResponse.json({ error: 'carePathwayId kötelező (string UUID)' }, { status: 400 });
@@ -357,11 +407,28 @@ async function handleAddPathway(
         pIdx += 8;
       }
 
-      await client.query(
+      const insertedPhases = await client.query(
         `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, source_episode_pathway_id, seq)
-         VALUES ${insertPlaceholders.join(', ')}`,
+         VALUES ${insertPlaceholders.join(', ')}
+         RETURNING id`,
         insertValues
       );
+
+      // WP-2.1 (review MAJOR): a sablon-alkalmazás elsődleges UI-útja is
+      // fázisonkénti template_apply audit sort ír — a generate-tel azonos
+      // mintával, a mutációval EGY tranzakcióban.
+      const pathwayName: string | null = pw.rows[0]?.name ?? null;
+      for (const inserted of insertedPhases.rows as Array<{ id: string }>) {
+        await insertWorkPhaseAudit(client, {
+          episodeWorkPhaseId: inserted.id,
+          episodeId,
+          oldStatus: null,
+          newStatus: 'pending',
+          changedBy,
+          changeType: 'template_apply',
+          reason: `Sablon alkalmazása: ${pathwayName ?? carePathwayId}`,
+        });
+      }
     }
 
     await client.query('COMMIT');
@@ -480,6 +547,8 @@ async function handleRemovePathway(
         oldStatus: ph.status,
         newStatus: 'deleted',
         changedBy,
+        // WP-2.1: a sablon-eltávolítás megkülönböztethető a kézi törléstől.
+        changeType: 'template_remove',
         reason: force
           ? 'Sablon force-eltávolítása az epizódról (foglalt/teljesített fázisokkal együtt, a foglalások lemondásra kerültek)'
           : 'Sablon eltávolítása az epizódról',

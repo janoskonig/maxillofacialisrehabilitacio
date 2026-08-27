@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { getFullWorkPhaseQuery } from '@/lib/episode-work-phase-select';
+import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -89,11 +90,23 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    await client.query(
+    const inserted = await client.query(
       `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, tooth_treatment_id, custom_label)
-       VALUES ($1, $2, $3, 'work', 30, 7, $4, $5, $6)`,
+       VALUES ($1, $2, $3, 'work', 30, 7, $4, $5, $6)
+       RETURNING id`,
       [episodeId, workPhaseCode, nextIdx, nextSeq, toothTreatmentId, customLabel]
     );
+
+    // WP-2.1: a fogkezelésből létrehozott fázis is naplózódik.
+    await insertWorkPhaseAudit(client, {
+      episodeWorkPhaseId: inserted.rows[0].id,
+      episodeId,
+      oldStatus: null,
+      newStatus: 'pending',
+      changedBy: auth.email ?? auth.userId ?? 'unknown',
+      changeType: 'create',
+      reason: `Fogkezelésből hozzáadva: ${tt.labelHu} – ${tt.tooth_number}`,
+    });
 
     if (tt.status === 'pending') {
       await client.query(`UPDATE tooth_treatments SET status = 'episode_linked' WHERE id = $1`, [toothTreatmentId]);

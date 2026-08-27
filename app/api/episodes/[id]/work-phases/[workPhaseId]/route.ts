@@ -71,6 +71,7 @@ export const DELETE = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász
       oldStatus: phase.status,
       newStatus: 'deleted',
       changedBy: auth.email ?? auth.userId ?? 'unknown',
+      changeType: 'delete',
       reason:
         released.cancelledAppointments > 0
           ? `Manuálisan törölve (${released.cancelledAppointments} foglalás lemondva)`
@@ -161,6 +162,7 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     await client.query('BEGIN');
     const phaseRow = await client.query(
       `SELECT ewp.id, ewp.episode_id, ewp.work_phase_code, ewp.status, ewp.pathway_order_index,
+              ewp.duration_minutes, ewp.default_days_offset, ewp.custom_label,
               pe.status as episode_status
        FROM episode_work_phases ewp
        JOIN patient_episodes pe ON ewp.episode_id = pe.id
@@ -184,24 +186,49 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     if (isTimingOnly) {
       const sets: string[] = [];
       const vals: unknown[] = [];
+      // WP-2.1: a ténylegesen változó mezők ember-olvasható listája az audit
+      // reason-jébe — a no-op UPDATE (azonos érték) nem termel napló-sort.
+      const auditChanges: string[] = [];
       let pi = 1;
 
       if (typeof defaultDaysOffset === 'number' && defaultDaysOffset >= 0) {
         sets.push(`default_days_offset = $${pi++}`);
         vals.push(defaultDaysOffset);
+        if (defaultDaysOffset !== phase.default_days_offset) {
+          auditChanges.push(`eltolás ${phase.default_days_offset}→${defaultDaysOffset} nap`);
+        }
       }
       if (typeof durationMinutes === 'number' && durationMinutes > 0) {
         sets.push(`duration_minutes = $${pi++}`);
         vals.push(durationMinutes);
+        if (durationMinutes !== phase.duration_minutes) {
+          auditChanges.push(`időtartam ${phase.duration_minutes}→${durationMinutes} perc`);
+        }
       }
       if (typeof customLabel === 'string') {
         sets.push(`custom_label = $${pi++}`);
-        vals.push(customLabel.trim() || null);
+        const newLabel = customLabel.trim() || null;
+        vals.push(newLabel);
+        if (newLabel !== (phase.custom_label ?? null)) {
+          auditChanges.push(`címke „${phase.custom_label ?? '—'}” → „${newLabel ?? '—'}”`);
+        }
       }
 
       if (sets.length > 0) {
         vals.push(workPhaseId);
         await client.query(`UPDATE episode_work_phases SET ${sets.join(', ')} WHERE id = $${pi}`, vals);
+      }
+
+      if (auditChanges.length > 0) {
+        await insertWorkPhaseAudit(client, {
+          episodeWorkPhaseId: workPhaseId,
+          episodeId,
+          oldStatus: phase.status,
+          newStatus: phase.status,
+          changedBy: auth.email ?? auth.userId ?? 'unknown',
+          changeType: 'timing_change',
+          reason: `Időzítés/címke módosítva: ${auditChanges.join(', ')}`,
+        });
       }
 
       await client.query('COMMIT');

@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { getFullWorkPhaseQuery } from '@/lib/episode-work-phase-select';
+import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 
 export const dynamic = 'force-dynamic';
 
@@ -29,7 +30,7 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     await client.query('BEGIN');
 
     const stepsResult = await client.query(
-      `SELECT es.id, es.episode_id, es.status, es.merged_into_episode_work_phase_id, pe.status as ep_status
+      `SELECT es.id, es.episode_id, es.work_phase_code, es.status, es.merged_into_episode_work_phase_id, pe.status as ep_status
        FROM episode_work_phases es
        JOIN patient_episodes pe ON es.episode_id = pe.id
        WHERE es.episode_id = $1 AND es.id = ANY($2)
@@ -66,6 +67,27 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
       `UPDATE episode_work_phases SET merged_into_episode_work_phase_id = $1 WHERE id = ANY($2) AND episode_id = $3`,
       [primaryId, secondaryIds, episodeId]
     );
+
+    // WP-2.1: az összevonás naplózása — soronként a másodlagos (beolvasztott)
+    // fázisokon; a reason az elsődleges fázis kódját hordozza.
+    const rowById = new Map(
+      (stepsResult.rows as Array<{ id: string; work_phase_code: string; status: string }>).map(
+        (r) => [r.id, r]
+      )
+    );
+    const primaryCode = rowById.get(primaryId)?.work_phase_code ?? primaryId;
+    for (const secondaryId of secondaryIds as string[]) {
+      const row = rowById.get(secondaryId);
+      await insertWorkPhaseAudit(client, {
+        episodeWorkPhaseId: secondaryId,
+        episodeId,
+        oldStatus: row?.status ?? null,
+        newStatus: row?.status ?? null,
+        changedBy: auth.email ?? auth.userId ?? 'unknown',
+        changeType: 'merge',
+        reason: `Összevonva a(z) ${primaryCode} fázis alá`,
+      });
+    }
 
     await client.query('COMMIT');
 

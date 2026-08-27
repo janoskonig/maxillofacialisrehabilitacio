@@ -417,8 +417,15 @@ export default function PatientStagesPage() {
             />
           )}
 
+          {/* 2/b) Gondozás — rövid és hosszú távú visszarendelések egy kártyán.
+              Üres állapotban is látszik (kézi visszarendelés így is felvehető);
+              a rizikócsoport-választó csak a javasolt kadenciát állítja. */}
           {activeEpisode && (
-            <EpisodeRecallPanel episodeId={activeEpisode.id} patientId={patientId} />
+            <EpisodeRecallPanel
+              key={activeEpisode.id}
+              episodeId={activeEpisode.id}
+              patientId={patientId}
+            />
           )}
 
           {/* 3) Gyors foglalás — tervfüggetlen időpontfoglalás (konzultáció, kontroll)

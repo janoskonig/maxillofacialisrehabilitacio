@@ -60,7 +60,7 @@ export async function runRebalance(jobRunId?: string): Promise<{
            JOIN patient_episodes pe ON pe.id = et.episode_id AND pe.status = 'open'
            JOIN patients p ON p.id = pe.patient_id AND p.halal_datum IS NULL
           WHERE et.task_type = 'recall_due'
-            AND et.recall_interval_days IN (180, 365)
+            AND et.recall_interval_days IS NOT NULL
             AND et.completed_at IS NULL
             AND et.due_at <= CURRENT_TIMESTAMP + INTERVAL '7 days') as recall`
     ),
