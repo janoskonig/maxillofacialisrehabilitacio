@@ -5,6 +5,11 @@ import { logActivity } from '@/lib/activity';
 import { logger } from '@/lib/logger';
 import { pathwayTemplatesFromCarePathwayRow } from '@/lib/pathway-work-phases-for-episode';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
+import {
+  createEpisodeVisit,
+  createEpisodeVisitsBatch,
+  hasEpisodeVisitsTable,
+} from '@/lib/episode-visits';
 
 export const dynamic = 'force-dynamic';
 
@@ -164,21 +169,43 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
                 );
                 const nextSeq: number = (maxSeqRow.rows[0].max_seq ?? -1) + 1;
                 const pathwayName: string | null = pathwayCheck.rows[0]?.name ?? null;
+                // WP-4.1a invariáns: minden új fázis vizitbe születik —
+                // fázisonként külön (egyfős) vizit. A tábla-probe a route
+                // meglévő information_schema-mintáját követi.
+                const hasVisits = await hasEpisodeVisitsTable(client);
+                const visitIds: Array<string | null> = hasVisits
+                  ? await createEpisodeVisitsBatch(
+                      client,
+                      episodeId,
+                      phases.map((p) => ({ daysOffset: p.default_days_offset ?? 0 }))
+                    )
+                  : phases.map(() => null);
                 for (let i = 0; i < phases.length; i++) {
                   const p = phases[i];
                   const insertedPhase = await client.query(
-                    `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, seq, pool, duration_minutes, default_days_offset, status)
-                     VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending')
+                    `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, seq, pool, duration_minutes, default_days_offset, status${hasVisits ? ', visit_id' : ''})
+                     VALUES ($1, $2, $3, $4, $5, $6, $7, 'pending'${hasVisits ? ', $8' : ''})
                      RETURNING id`,
-                    [
-                      episodeId,
-                      p.work_phase_code,
-                      i,
-                      nextSeq + i,
-                      p.pool || 'work',
-                      p.duration_minutes ?? 30,
-                      p.default_days_offset ?? 0,
-                    ]
+                    hasVisits
+                      ? [
+                          episodeId,
+                          p.work_phase_code,
+                          i,
+                          nextSeq + i,
+                          p.pool || 'work',
+                          p.duration_minutes ?? 30,
+                          p.default_days_offset ?? 0,
+                          visitIds[i],
+                        ]
+                      : [
+                          episodeId,
+                          p.work_phase_code,
+                          i,
+                          nextSeq + i,
+                          p.pool || 'work',
+                          p.duration_minutes ?? 30,
+                          p.default_days_offset ?? 0,
+                        ]
                   );
                   // WP-2.1 (review minor): a default sablon fázisai itt is
                   // fázisonkénti template_apply audit sort kapnak, a route
@@ -223,12 +250,22 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
       const workPhaseCode = `tooth_${tt.treatment_code}`;
       const customLabel = `${tt.label_hu} – ${tt.tooth_number}`;
 
+      // WP-4.1a invariáns: a fog-fázis is vizitbe születik (egyfős vizit).
+      const hasVisitsForTooth = await hasEpisodeVisitsTable(client);
+      let toothVisitId: string | null = null;
+      if (hasVisitsForTooth) {
+        const visit = await createEpisodeVisit(client, { episodeId, daysOffset: 7 });
+        toothVisitId = visit.id;
+      }
+
       const insertedTooth = await client.query(
         `INSERT INTO episode_work_phases
-           (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, tooth_treatment_id, custom_label, status)
-         VALUES ($1, $2, $3, 'work', 30, 7, $4, $5, $6, 'pending')
+           (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, tooth_treatment_id, custom_label, status${hasVisitsForTooth ? ', visit_id' : ''})
+         VALUES ($1, $2, $3, 'work', 30, 7, $4, $5, $6, 'pending'${hasVisitsForTooth ? ', $7' : ''})
          RETURNING id`,
-        [episodeId, workPhaseCode, nextIdx, nextSeq, treatmentId, customLabel]
+        hasVisitsForTooth
+          ? [episodeId, workPhaseCode, nextIdx, nextSeq, treatmentId, customLabel, toothVisitId]
+          : [episodeId, workPhaseCode, nextIdx, nextSeq, treatmentId, customLabel]
       );
       // WP-2.1 (review minor): a fog-fázis létrehozása is naplózódik —
       // change_type 'create', a from-tooth-treatment route mintájára.

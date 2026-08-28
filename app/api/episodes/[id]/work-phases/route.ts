@@ -8,6 +8,7 @@ import {
   getLostAppointmentWorkPhaseIds,
 } from '@/lib/scheduling-integrity';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
+import { createEpisodeVisit, listEpisodeVisits } from '@/lib/episode-visits';
 
 export const dynamic = 'force-dynamic';
 
@@ -47,9 +48,12 @@ export const GET = authedHandler(async (_req, { auth, params }) => {
     pool,
     episodeId
   );
+  // WP-4.1a: vizit-metaadatok — a WP-4.3 alkalom-kártyás UI erre épül.
+  const visits = await listEpisodeVisits(pool, episodeId);
 
   return NextResponse.json({
     workPhases: allPhases.rows,
+    visits,
     lostAppointmentWorkPhaseIds,
     autoRepair: autoRepair
       ? {
@@ -135,11 +139,17 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // WP-4.1a invariáns: minden új fázis vizitbe születik — új egyfős vizit a
+    // vizit-lista végére, days_offset := a fázis default_days_offset-je.
+    const visit = await createEpisodeVisit(client, {
+      episodeId,
+      daysOffset: defaultDaysOffset,
+    });
     const inserted = await client.query(
-      `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, custom_label, source_episode_pathway_id)
-       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL)
+      `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, custom_label, source_episode_pathway_id, visit_id)
+       VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, $9)
        RETURNING id`,
-      [episodeId, workPhaseCode, nextIdx, phasePool, durationMinutes, defaultDaysOffset, nextSeq, customLabel]
+      [episodeId, workPhaseCode, nextIdx, phasePool, durationMinutes, defaultDaysOffset, nextSeq, customLabel, visit.id]
     );
     await insertWorkPhaseAudit(client, {
       episodeWorkPhaseId: inserted.rows[0].id,

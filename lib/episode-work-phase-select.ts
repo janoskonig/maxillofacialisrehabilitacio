@@ -10,7 +10,11 @@ export const EPISODE_WORK_PHASE_SELECT_COLUMNS = `ewp.id, ewp.episode_id as "epi
     ewp.source_episode_pathway_id as "sourceEpisodePathwayId", ewp.seq,
     ewp.custom_label as "customLabel",
     ewp.tooth_treatment_id as "toothTreatmentId",
-    ewp.merged_into_episode_work_phase_id as "mergedIntoWorkPhaseId"`;
+    ewp.merged_into_episode_work_phase_id as "mergedIntoWorkPhaseId",
+    ewp.visit_id as "visitId", ewp.jaw,
+    COALESCE((SELECT json_agg(ewpt.tooth_number ORDER BY ewpt.tooth_number)
+              FROM episode_work_phase_teeth ewpt
+              WHERE ewpt.episode_work_phase_id = ewp.id), '[]'::json) as "teeth"`;
 
 export function getToothTreatmentJoin(): string {
   return `LEFT JOIN tooth_treatments tt ON ewp.tooth_treatment_id = tt.id
