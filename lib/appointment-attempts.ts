@@ -1,7 +1,8 @@
 /**
  * Appointment "attempt" számolás (migration 029).
  *
- * Egy munkafázis (`step_code`) több appointmenten keresztül zárulhat le, ha az
+ * Egy munkafázis (`work_phase_id`, legacy sorokon `step_code`) több
+ * appointmenten keresztül zárulhat le, ha az
  * első próbák sikertelenek (rossz lenyomat, beteg nem tűrte stb.). Az
  * `appointments.attempt_number` oszlop minden új foglaláskor a "valós próbák"
  * számát tükrözi.
@@ -36,11 +37,22 @@ interface Querier {
 export const ATTEMPT_COUNTING_STATUSES = ['completed', 'unsuccessful', 'no_show'] as const;
 
 /**
- * Visszaadja a `(episode_id, step_code)` párhoz a következő `attempt_number`
- * értéket. Az 1 a default — soha nem ad vissza 0-t vagy negatív számot.
+ * Visszaadja a munkafázishoz tartozó következő `attempt_number` értéket.
+ * Az 1 a default — soha nem ad vissza 0-t vagy negatív számot.
  *
- * Ha az `episodeId` vagy a `stepCode` hiányzik (pl. consult / kontroll
+ * WP-4.1b: az elsődleges identitás a `work_phase_id` — két azonos
+ * `work_phase_code`-ú fázis ("N alkalom ugyanabból a fázisból") próbái nem
+ * keveredhetnek. A `step_code` CSAK a legacy, `work_phase_id IS NULL` sorok
+ * fallbackje (a `lib/work-phase-delete.ts` bevett mintája).
+ *
+ * Ha nincs `workPhaseId`, a régi `(episode_id, step_code)` számolás fut
+ * változatlanul (legacy DB-k / link nélküli foglalások). Ha az `episodeId`
+ * vagy (workPhaseId hiányában) a `stepCode` hiányzik (pl. consult / kontroll
  * foglalás), 1-et ad vissza.
+ *
+ * FIGYELEM: `workPhaseId`-t csak akkor adj át, ha az `appointments.work_phase_id`
+ * oszlop létezik (migration 025) — a hívók a `probeAppointmentsWorkPhaseIdColumn`
+ * eredményével kapuzzák.
  *
  * @param db   Aktív tranzakciós klienssel hívd, hogy a számolás konzisztens
  *             legyen az ugyanabban a tranzakcióban végzett változtatásokkal.
@@ -48,9 +60,33 @@ export const ATTEMPT_COUNTING_STATUSES = ['completed', 'unsuccessful', 'no_show'
 export async function nextAttemptNumber(
   db: Querier,
   episodeId: string | null | undefined,
-  stepCode: string | null | undefined
+  stepCode: string | null | undefined,
+  workPhaseId?: string | null
 ): Promise<number> {
-  if (!episodeId || !stepCode) return 1;
+  if (!episodeId) return 1;
+
+  if (workPhaseId) {
+    // work_phase_id-elsődleges számolás; a legacy (NULL linkű) sorokat a
+    // step_code fallback fogja meg, hogy a 025 előtti próbák se vesszenek el.
+    const params: unknown[] = [episodeId, workPhaseId];
+    let legacyClause = '';
+    if (stepCode) {
+      params.push(stepCode);
+      legacyClause = ` OR (work_phase_id IS NULL AND step_code = $3)`;
+    }
+    const result = await db.query(
+      `SELECT COUNT(*)::int AS prior_attempts
+         FROM appointments
+        WHERE episode_id = $1
+          AND (work_phase_id = $2${legacyClause})
+          AND appointment_status IN ('completed', 'unsuccessful', 'no_show')`,
+      params
+    );
+    const prior = Number(result.rows[0]?.prior_attempts ?? 0);
+    return prior + 1;
+  }
+
+  if (!stepCode) return 1;
 
   const result = await db.query(
     `SELECT COUNT(*)::int AS prior_attempts

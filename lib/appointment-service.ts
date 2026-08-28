@@ -323,7 +323,15 @@ export async function createAppointment(
         // the earliest pending step, so this only catches out-of-order manual
         // bookings. Overridable (with audit) by staff giving a ≥10-char reason.
         if (typeof stepCode === 'string' && stepCode.length > 0) {
-          const prereq = await checkStepPrerequisites(client, episodeId, stepCode);
+          // WP-4.1b: a cél fázist work_phase_id szerint adjuk át, ha a kliens
+          // küldte — duplikált work_phase_code-nál a code-alapú célfeloldás az
+          // első azonos kódú sorra mutatna.
+          const prereq = await checkStepPrerequisites(
+            client,
+            episodeId,
+            stepCode,
+            typeof workPhaseIdRaw === 'string' && workPhaseIdRaw.length > 0 ? workPhaseIdRaw : null,
+          );
           if (!prereq.allowed) {
             const mayOverrideOrder =
               (auth.role === 'admin' || auth.role === 'beutalo_orvos' || auth.role === 'fogpótlástanász') &&
@@ -494,14 +502,33 @@ export async function createAppointment(
     // The idx_appointments_unique_pending_step index allows at most one pending
     // appointment per (episode_id, step_code, step_seq). When the user picks a
     // new slot for the same step, we cancel the old one and free its slot.
-    if (episodeId && effectiveStepCode != null && effectiveStepSeq != null) {
+    //
+    // WP-4.1b: az azonosítás work_phase_id-elsődleges — duplikált
+    // work_phase_code-nál ("N alkalom ugyanabból a fázisból") a testvér-fázis
+    // pending foglalását nem mondhatjuk le. A (step_code, step_seq) pár csak a
+    // legacy, work_phase_id IS NULL sorok fallbackje (work-phase-delete minta).
+    const rebookMatchConds: string[] = [];
+    const rebookParams: unknown[] = [episodeId, timeSlotId];
+    if (effectiveWorkPhaseId && hasWorkPhaseIdColumn) {
+      rebookParams.push(effectiveWorkPhaseId);
+      rebookMatchConds.push(`work_phase_id = $${rebookParams.length}`);
+    }
+    if (effectiveStepCode != null && effectiveStepSeq != null) {
+      rebookParams.push(effectiveStepCode, effectiveStepSeq);
+      const legacyGuard = effectiveWorkPhaseId && hasWorkPhaseIdColumn ? 'work_phase_id IS NULL AND ' : '';
+      rebookMatchConds.push(
+        `(${legacyGuard}step_code = $${rebookParams.length - 1} AND step_seq = $${rebookParams.length})`
+      );
+    }
+    if (episodeId && rebookMatchConds.length > 0) {
       const existing = await client.query(
         `SELECT id, time_slot_id FROM appointments
-          WHERE episode_id = $1 AND step_code = $2 AND step_seq = $3
+          WHERE episode_id = $1
+            AND (${rebookMatchConds.join(' OR ')})
             AND appointment_status IS NULL
-            AND time_slot_id != $4
+            AND time_slot_id != $2
           FOR UPDATE`,
-        [episodeId, effectiveStepCode, effectiveStepSeq, timeSlotId],
+        rebookParams,
       );
       for (const row of existing.rows) {
         await client.query(
@@ -519,13 +546,21 @@ export async function createAppointment(
       }
     }
 
-    // Migration 029: compute the next attempt_number for this (episode_id,
-    // step_code) pair so that retry bookings after an `'unsuccessful'` attempt
-    // get `attempt_number = N + 1`. Pure rebooks (cancel pending → new pending)
+    // Migration 029: compute the next attempt_number for this work phase so
+    // that retry bookings after an `'unsuccessful'` attempt get
+    // `attempt_number = N + 1`. Pure rebooks (cancel pending → new pending)
     // do NOT increment — see lib/appointment-attempts.ts for the counting rule.
+    // WP-4.1b: work_phase_id-elsődleges számolás (fallback step_code a legacy
+    // sorokra), hogy duplikált work_phase_code-nál a testvér-fázis próbái ne
+    // számítsanak bele.
     const hasAttemptColumns = await probeAttemptColumns(client);
     const computedAttemptNumber = hasAttemptColumns
-      ? await nextAttemptNumber(client, episodeId, effectiveStepCode)
+      ? await nextAttemptNumber(
+          client,
+          episodeId,
+          effectiveStepCode,
+          hasWorkPhaseIdColumn ? effectiveWorkPhaseId : null
+        )
       : 1;
 
     // Build INSERT dynamically so the new work_phase_id column only participates

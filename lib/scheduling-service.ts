@@ -143,20 +143,34 @@ export interface StepPrerequisiteCheckResult {
  * trips this — it only catches OUT-OF-ORDER manual bookings (e.g. a try-in booked
  * before its impression). Returns `{ allowed: true }` when the target step is not
  * found in the plan (no plan / ad-hoc step) so it never blocks non-plan bookings.
+ *
+ * WP-4.1b: a cél fázist elsődlegesen a `targetWorkPhaseId` azonosítja —
+ * duplikált `work_phase_code`-nál ("N alkalom ugyanabból a fázisból") a
+ * code-alapú feloldás mindig az ELSŐ azonos kódú sort találná meg. A lefedettség
+ * (van-e foglalás a korábbi fázisra) szintén work_phase_id-elsődleges; a
+ * `step_code` csak a `work_phase_id IS NULL` legacy appointment-sorok fallbackje.
  */
 export async function checkStepPrerequisites(
   client: PoolClient,
   episodeId: string,
   targetStepCode: string,
+  targetWorkPhaseId?: string | null,
 ): Promise<StepPrerequisiteCheckResult> {
-  const r = await client.query(
-    `WITH target AS (
-       SELECT COALESCE(seq, pathway_order_index) AS ord, pathway_order_index AS pidx
+  const targetCte = targetWorkPhaseId
+    ? `SELECT COALESCE(seq, pathway_order_index) AS ord, pathway_order_index AS pidx
+       FROM episode_work_phases
+       WHERE episode_id = $1 AND id = $3
+       LIMIT 1`
+    : `SELECT COALESCE(seq, pathway_order_index) AS ord, pathway_order_index AS pidx
        FROM episode_work_phases
        WHERE episode_id = $1 AND work_phase_code = $2
        ORDER BY COALESCE(seq, pathway_order_index), pathway_order_index
-       LIMIT 1
-     )
+       LIMIT 1`;
+  const params: unknown[] = targetWorkPhaseId
+    ? [episodeId, targetStepCode, targetWorkPhaseId]
+    : [episodeId, targetStepCode];
+  const r = await client.query(
+    `WITH target AS (${targetCte})
      SELECT ewp.work_phase_code, ewp.custom_label
      FROM episode_work_phases ewp, target
      WHERE ewp.episode_id = $1
@@ -166,12 +180,13 @@ export async function checkStepPrerequisites(
        AND NOT EXISTS (
          SELECT 1 FROM appointments a
          WHERE a.episode_id = $1
-           AND (a.work_phase_id = ewp.id OR a.step_code = ewp.work_phase_code)
+           AND (a.work_phase_id = ewp.id
+                OR (a.work_phase_id IS NULL AND a.step_code = ewp.work_phase_code))
            AND (a.appointment_status IS NULL OR a.appointment_status = 'completed')
        )
      ORDER BY COALESCE(ewp.seq, ewp.pathway_order_index), ewp.pathway_order_index
      LIMIT 1`,
-    [episodeId, targetStepCode],
+    params,
   );
   if ((r.rowCount ?? 0) > 0) {
     return {

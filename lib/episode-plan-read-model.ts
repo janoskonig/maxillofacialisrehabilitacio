@@ -5,9 +5,15 @@ import { SQL_APPOINTMENT_VISIBLE_STATUS_FRAGMENT } from './active-appointment';
 export function sqlBookedFutureAppointmentsWithEffectiveStep(): string {
   // Visible-status excludes no_show: a múltbeli no_show-t nem akarjuk
   // jövőbeli foglalásként mutatni, akkor sem ha a slot start_time még jövőben van.
+  //
+  // WP-4.1b: a `work_phase_id` oszlop az identitás-elsődleges párosításhoz —
+  // az EWP-oldali link (ewp.appointment_id = a.id) nyer, fallback az
+  // appointment saját work_phase_id-je. Duplikált work_phase_code-nál csak
+  // ezzel dönthető el, MELYIK fázis foglalása ez.
   return `SELECT a.id, a.episode_id,
           COALESCE(ewp.work_phase_code, a.step_code) AS step_code,
           a.step_seq,
+          COALESCE(ewp.id, a.work_phase_id) AS work_phase_id,
           COALESCE(a.start_time, ats.start_time) AS effective_start,
           a.dentist_email
    FROM appointments a
