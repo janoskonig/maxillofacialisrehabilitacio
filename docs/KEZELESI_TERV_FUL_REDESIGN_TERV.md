@@ -39,8 +39,8 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 | WP-3.3 Gondozás kártya | ✅ | [#73](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/73) | Rizikó-választó + egy időrendi lista + kézi felvétel + törlés-AJÁNLAT (új, őrzött DELETE végpont); A kadencia-számok a #76-ban jóváhagyva; az élesítés az orvos per-epizód rizikó-választásán múlik. **Ezzel a FÁZIS 3 teljes.** |
 | D1+D2 recall-döntések | ✅ | [#76](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/76) | Kadencia-számok jóváhagyva; STAGE_6 kapu lazítva (horgony: utolsó teljesült kezelés, átadás előtt is) |
 | WP-4.1a vizit-séma (089) | ✅ | [#77](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/77) | episode_visits + visit_id/jaw/fog-kapcsolótábla + újrafuttatható backfill; review-javítás: láncolt merge-csoport (ciklusos backfill, lánc-lapítás a merge-ben, árva-vizit takarítás) |
-| WP-4.1b step_code→work_phase_id identitás | 🔄 | — | Az ismétlés előfeltétele; a fázis legkockázatosabb része |
-| WP-4.2 vizit API + forecast | ⬜ | — | |
+| WP-4.1b step_code→work_phase_id identitás | ✅ | [#78](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/78) | Minden identitás-út wp-elsődleges (legacy fallback); review: CRITICAL param-kötési hiba a prereq-ágon javítva; mellékjavítás: a worklist „korábbi próbák" lekérdezés eddig némán elhasalt (ats.end_time) |
+| WP-4.2 vizit API + forecast | 🔄 | — | + hozott findingok: projektor slot_intents.work_phase_id kitöltés, lefedettség-halmazok wp-kulcsra |
 | WP-4.3 vizit-kártyás UI | ⬜ | — | |
 
 ---
