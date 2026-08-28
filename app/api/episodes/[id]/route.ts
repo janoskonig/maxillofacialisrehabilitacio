@@ -14,6 +14,7 @@ import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { releaseWorkPhasesForDelete } from '@/lib/work-phase-delete';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 import { isRecallRiskLevel } from '@/lib/recall-cadence';
+import { createEpisodeVisitsBatch, deleteEpisodeVisitsIfEmpty } from '@/lib/episode-visits';
 import { syncRecallTasksForRiskChange, type RecallRiskSyncResult } from '@/lib/recall-tasks';
 
 export const dynamic = 'force-dynamic';
@@ -385,6 +386,15 @@ async function handleAddPathway(
       );
       let nextSeq: number = (maxSeqRow.rows[0].max_seq ?? -1) + 1;
 
+      // WP-4.1a invariáns: minden új fázis vizitbe születik — a sablon-
+      // alkalmazás fázisonként külön (egyfős) vizitet hoz létre, a mai
+      // soronkénti modell megfelelőjeként.
+      const visitIds = await createEpisodeVisitsBatch(
+        client,
+        episodeId,
+        templates.map((t) => ({ daysOffset: t.default_days_offset ?? 7 }))
+      );
+
       const insertValues: unknown[] = [];
       const insertPlaceholders: string[] = [];
       let pIdx = 1;
@@ -392,7 +402,7 @@ async function handleAddPathway(
       for (let i = 0; i < templates.length; i++) {
         const ph = templates[i];
         insertPlaceholders.push(
-          `($${pIdx}, $${pIdx + 1}, $${pIdx + 2}, $${pIdx + 3}, $${pIdx + 4}, $${pIdx + 5}, $${pIdx + 6}, $${pIdx + 7})`
+          `($${pIdx}, $${pIdx + 1}, $${pIdx + 2}, $${pIdx + 3}, $${pIdx + 4}, $${pIdx + 5}, $${pIdx + 6}, $${pIdx + 7}, $${pIdx + 8})`
         );
         insertValues.push(
           episodeId,
@@ -402,13 +412,14 @@ async function handleAddPathway(
           ph.duration_minutes ?? 30,
           ph.default_days_offset ?? 7,
           epPathwayId,
-          nextSeq + i
+          nextSeq + i,
+          visitIds[i]
         );
-        pIdx += 8;
+        pIdx += 9;
       }
 
       const insertedPhases = await client.query(
-        `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, source_episode_pathway_id, seq)
+        `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, source_episode_pathway_id, seq, visit_id)
          VALUES ${insertPlaceholders.join(', ')}
          RETURNING id`,
         insertValues
@@ -520,13 +531,14 @@ async function handleRemovePathway(
     await client.query('BEGIN');
 
     const phasesToDelete = await client.query(
-      `SELECT id, work_phase_code, status FROM episode_work_phases WHERE source_episode_pathway_id = $1 FOR UPDATE`,
+      `SELECT id, work_phase_code, status, visit_id FROM episode_work_phases WHERE source_episode_pathway_id = $1 FOR UPDATE`,
       [epPathwayId]
     );
     const phaseRows = phasesToDelete.rows as Array<{
       id: string;
       work_phase_code: string | null;
       status: string;
+      visit_id: string | null;
     }>;
     await releaseWorkPhasesForDelete(
       client,
@@ -556,6 +568,14 @@ async function handleRemovePathway(
     }
 
     await client.query(`DELETE FROM episode_work_phases WHERE source_episode_pathway_id = $1`, [epPathwayId]);
+
+    // WP-4.1a (review-javítás): a törölt sorok kiürült vizitjei nem maradnak
+    // árván. Csak üres vizitet töröl — vegyes (más sablonból is tagot
+    // tartalmazó) vizit marad.
+    await deleteEpisodeVisitsIfEmpty(
+      client,
+      Array.from(new Set(phaseRows.map((r) => r.visit_id).filter((v): v is string => !!v)))
+    );
 
     await client.query(
       `DELETE FROM episode_pathways WHERE id = $1`,

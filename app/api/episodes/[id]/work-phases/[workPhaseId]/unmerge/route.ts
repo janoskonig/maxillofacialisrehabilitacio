@@ -4,6 +4,7 @@ import { roleHandler } from '@/lib/api/route-handler';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { getFullWorkPhaseQuery } from '@/lib/episode-work-phase-select';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
+import { createEpisodeVisit } from '@/lib/episode-visits';
 
 export const dynamic = 'force-dynamic';
 
@@ -44,13 +45,26 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     const updated = await client.query(
       `UPDATE episode_work_phases SET merged_into_episode_work_phase_id = NULL
        WHERE merged_into_episode_work_phase_id = $1 AND episode_id = $2
-       RETURNING id, status`,
+       RETURNING id, status, default_days_offset`,
       [workPhaseId, episodeId]
     );
 
     if (updated.rows.length === 0) {
       await client.query('ROLLBACK');
       return NextResponse.json({ error: 'Nincs összevont munkafázis ehhez a fő munkafázishoz' }, { status: 404 });
+    }
+
+    // WP-4.1a: a kiengedett fázis új egyfős vizitet kap a vizit-lista végére
+    // (a primary vizitjében csak a primary és az ott maradó tagok maradnak).
+    for (const row of updated.rows as Array<{ id: string; default_days_offset: number | null }>) {
+      const visit = await createEpisodeVisit(client, {
+        episodeId,
+        daysOffset: row.default_days_offset ?? null,
+      });
+      await client.query(`UPDATE episode_work_phases SET visit_id = $1 WHERE id = $2`, [
+        visit.id,
+        row.id,
+      ]);
     }
 
     for (const row of updated.rows as Array<{ id: string; status: string }>) {

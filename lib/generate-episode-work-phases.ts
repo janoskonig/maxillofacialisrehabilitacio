@@ -29,6 +29,11 @@
 import type { Pool } from 'pg';
 import { normalizePathwayWorkPhaseArray } from './pathway-work-phases-for-episode';
 import { insertWorkPhaseAudit } from './work-phase-audit';
+import {
+  createEpisodeVisit,
+  createEpisodeVisitsBatch,
+  hasEpisodeVisitsTable,
+} from './episode-visits';
 
 export type GenerateWorkPhasesResult =
   | { status: 'ok'; totalGenerated: number }
@@ -133,6 +138,10 @@ export async function generateEpisodeWorkPhases(
     );
     const hasToothCol = toothColProbe.rows.length > 0;
 
+    // WP-4.1a: vizit-tábla (089-es migráció) — régebbi környezetben még
+    // hiányozhat, ezért probe-oljuk a hasToothCol mintájára.
+    const hasVisits = await hasEpisodeVisitsTable(client);
+
     const maxSeqRow = await client.query(
       `SELECT COALESCE(MAX(seq), -1) as max_seq FROM episode_work_phases WHERE episode_id = $1`,
       [episodeId]
@@ -222,6 +231,19 @@ export async function generateEpisodeWorkPhases(
         }
       }
 
+      // WP-4.1a invariáns: minden új fázis vizitbe születik — a sablon-
+      // alkalmazás fázisonként külön (egyfős) vizitet hoz létre, a mai
+      // soronkénti modell megfelelőjeként. days_offset := a fázis
+      // default_days_offset-je.
+      let visitIds: Array<string | null> = templates.map(() => null);
+      if (hasVisits) {
+        visitIds = await createEpisodeVisitsBatch(
+          client,
+          episodeId,
+          templates.map((t) => ({ daysOffset: t.default_days_offset ?? 7 }))
+        );
+      }
+
       const insertValues: unknown[] = [];
       const insertPlaceholders: string[] = [];
       let pIdx = 1;
@@ -230,7 +252,7 @@ export async function generateEpisodeWorkPhases(
         const ph = templates[i];
         const sourceId = epPw.id === '__legacy__' ? null : epPw.id;
         insertPlaceholders.push(
-          `($${pIdx}, $${pIdx + 1}, $${pIdx + 2}, $${pIdx + 3}, $${pIdx + 4}, $${pIdx + 5}, $${pIdx + 6}, $${pIdx + 7})`
+          `($${pIdx}, $${pIdx + 1}, $${pIdx + 2}, $${pIdx + 3}, $${pIdx + 4}, $${pIdx + 5}, $${pIdx + 6}, $${pIdx + 7}${hasVisits ? `, $${pIdx + 8}` : ''})`
         );
         insertValues.push(
           episodeId,
@@ -242,11 +264,12 @@ export async function generateEpisodeWorkPhases(
           sourceId,
           nextSeq + i
         );
-        pIdx += 8;
+        if (hasVisits) insertValues.push(visitIds[i]);
+        pIdx += hasVisits ? 9 : 8;
       }
 
       const insertedPhases = await client.query(
-        `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, source_episode_pathway_id, seq)
+        `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, source_episode_pathway_id, seq${hasVisits ? ', visit_id' : ''})
          VALUES ${insertPlaceholders.join(', ')}
          RETURNING id`,
         insertValues
@@ -298,11 +321,19 @@ export async function generateEpisodeWorkPhases(
           [episodeId]
         );
         const nextIdx = (maxIdxRow.rows[0].max_idx ?? -1) + 1;
+        // WP-4.1a: a fog-szinkron sora is vizitbe születik (egyfős vizit).
+        let toothVisitId: string | null = null;
+        if (hasVisits) {
+          const visit = await createEpisodeVisit(client, { episodeId, daysOffset: 7 });
+          toothVisitId = visit.id;
+        }
         const insertedTooth = await client.query(
-          `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, tooth_treatment_id, custom_label)
-           VALUES ($1, $2, $3, 'work', 30, 7, $4, $5, $6)
+          `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, tooth_treatment_id, custom_label${hasVisits ? ', visit_id' : ''})
+           VALUES ($1, $2, $3, 'work', 30, 7, $4, $5, $6${hasVisits ? ', $7' : ''})
            RETURNING id`,
-          [episodeId, workPhaseCode, nextIdx, nextSeq, row.id, customLabel]
+          hasVisits
+            ? [episodeId, workPhaseCode, nextIdx, nextSeq, row.id, customLabel, toothVisitId]
+            : [episodeId, workPhaseCode, nextIdx, nextSeq, row.id, customLabel]
         );
         // WP-2.1: a fog-szinkron által létrehozott fázis is naplózódik —
         // change_type 'create' (nem sablonból jön), a reason jelzi a forrást.
