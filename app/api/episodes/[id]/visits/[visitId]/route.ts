@@ -17,6 +17,9 @@ export const PATCH = roleHandler([...ROLES], async (req, { auth, params }) => {
   const episodeId = params.id;
   const visitId = params.visitId;
   const body = await req.json().catch(() => ({}));
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+    return NextResponse.json({ error: 'JSON objektum body szükséges' }, { status: 400 });
+  }
 
   const pool = getDbPool();
   const client = await pool.connect();
@@ -28,7 +31,7 @@ export const PATCH = roleHandler([...ROLES], async (req, { auth, params }) => {
        FROM episode_visits v
        JOIN patient_episodes pe ON pe.id = v.episode_id
        WHERE v.id = $1 AND v.episode_id = $2
-       FOR UPDATE OF v`,
+       FOR UPDATE OF v FOR SHARE OF pe`,
       [visitId, episodeId]
     );
     if (row.rows.length === 0) {
@@ -152,7 +155,7 @@ export const DELETE = roleHandler([...ROLES], async (req, { auth, params }) => {
        FROM episode_visits v
        JOIN patient_episodes pe ON pe.id = v.episode_id
        WHERE v.id = $1 AND v.episode_id = $2
-       FOR UPDATE OF v`,
+       FOR UPDATE OF v FOR SHARE OF pe`,
       [visitId, episodeId]
     );
     if (row.rows.length === 0) {

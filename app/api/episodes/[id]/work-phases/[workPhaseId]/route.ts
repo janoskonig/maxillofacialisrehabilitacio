@@ -165,14 +165,30 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
 
   const pool = getDbPool();
 
+  const hasScopeFields =
+    targetVisitId !== undefined || newJaw !== undefined || newTeeth !== undefined;
+
+  // Review-javítás (WP-4.2): a státusz-váltás és a hatókör/vizit-módosítás
+  // külön hívás — kombinálva a hatókör-mezők némán elvesznének a státusz-ágon.
+  if (newStatus !== undefined && hasScopeFields) {
+    return NextResponse.json(
+      {
+        error:
+          'A státusz-váltás és a vizit/hatókör-módosítás (visitId, jaw, teeth) külön kérésben küldendő',
+      },
+      { status: 400 }
+    );
+  }
+  if (targetVisitId !== undefined && typeof targetVisitId !== 'string') {
+    return NextResponse.json({ error: 'A visitId string azonosító legyen' }, { status: 400 });
+  }
+
   const isTimingOnly =
     newStatus === undefined &&
     (defaultDaysOffset !== undefined ||
       durationMinutes !== undefined ||
       customLabel !== undefined ||
-      targetVisitId !== undefined ||
-      newJaw !== undefined ||
-      newTeeth !== undefined);
+      hasScopeFields);
 
   const client = await pool.connect();
   // Skip ágon: hány jövőbeli foglalást mondtunk le (a válaszban visszaadjuk).
@@ -264,14 +280,20 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
             { status: 404 }
           );
         }
-        await client.query(`UPDATE episode_work_phases SET visit_id = $1 WHERE id = $2`, [
-          targetVisitId,
-          workPhaseId,
-        ]);
-        // A kiürült régi (egyfős) alkalom nem maradhat árván.
+        // Review-javítás: a merge-csoport "egy alkalom" — a primary
+        // áthelyezése a rejtett (merged) gyerekeit is viszi, különben a
+        // csoport némán kettéhasadna és zombi vizit maradna hátra.
+        const moved = await client.query(
+          `UPDATE episode_work_phases SET visit_id = $1
+           WHERE id = $2 OR merged_into_episode_work_phase_id = $2
+           RETURNING id`,
+          [targetVisitId, workPhaseId]
+        );
+        // A kiürült régi (egyfős/csoport-) alkalom nem maradhat árván.
         if (phase.visit_id) {
           await deleteEpisodeVisitsIfEmpty(client, [phase.visit_id as string]);
         }
+        const movedChildren = (moved.rowCount ?? 1) - 1;
         await insertWorkPhaseAudit(client, {
           episodeWorkPhaseId: workPhaseId,
           episodeId,
@@ -279,7 +301,10 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
           newStatus: phase.status,
           changedBy: auth.email ?? auth.userId ?? 'unknown',
           changeType: 'visit_change',
-          reason: 'Áthelyezve másik alkalomba',
+          reason:
+            movedChildren > 0
+              ? `Áthelyezve másik alkalomba (+${movedChildren} összevont al-fázis)`
+              : 'Áthelyezve másik alkalomba',
         });
       }
 

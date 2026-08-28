@@ -10,15 +10,22 @@ export function sqlBookedFutureAppointmentsWithEffectiveStep(): string {
   // az EWP-oldali link (ewp.appointment_id = a.id) nyer, fallback az
   // appointment saját work_phase_id-je. Duplikált work_phase_code-nál csak
   // ezzel dönthető el, MELYIK fázis foglalása ez.
+  //
+  // WP-4.2 (review-javítás): összevont (merged) GYEREKHEZ kötött foglalásnál
+  // a csoport PRIMARY-jának id-ját adjuk vissza — a lánc-sorok / terv-sorok a
+  // gyerekeket kiszűrik (mergedFilter), így a gyerek-id-s párosítás sosem
+  // találna; a csoport "egy alkalom", a foglalás a primary sorhoz horgonyoz.
   return `SELECT a.id, a.episode_id,
           COALESCE(ewp.work_phase_code, a.step_code) AS step_code,
           a.step_seq,
-          COALESCE(ewp.id, a.work_phase_id) AS work_phase_id,
+          COALESCE(ewp.merged_into_episode_work_phase_id, ewp.id,
+                   awp.merged_into_episode_work_phase_id, a.work_phase_id) AS work_phase_id,
           COALESCE(a.start_time, ats.start_time) AS effective_start,
           a.dentist_email
    FROM appointments a
    JOIN available_time_slots ats ON a.time_slot_id = ats.id
    LEFT JOIN episode_work_phases ewp ON ewp.appointment_id = a.id
+   LEFT JOIN episode_work_phases awp ON awp.id = a.work_phase_id
    WHERE a.episode_id = ANY($1)
      AND COALESCE(a.start_time, ats.start_time) > CURRENT_TIMESTAMP
      AND ${SQL_APPOINTMENT_VISIBLE_STATUS_FRAGMENT}`;

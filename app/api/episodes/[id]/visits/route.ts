@@ -4,6 +4,7 @@ import { roleHandler } from '@/lib/api/route-handler';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { createEpisodeVisit, listEpisodeVisits } from '@/lib/episode-visits';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
+import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 
 export const dynamic = 'force-dynamic';
 
@@ -41,6 +42,9 @@ async function episodeOpenGate(
 export const POST = roleHandler([...ROLES], async (req, { auth, params }) => {
   const episodeId = params.id;
   const body = await req.json().catch(() => ({}));
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+    return NextResponse.json({ error: 'JSON objektum body szükséges' }, { status: 400 });
+  }
 
   const daysOffset = body.daysOffset;
   if (daysOffset != null && (!Number.isInteger(daysOffset) || daysOffset < 0)) {
@@ -49,11 +53,15 @@ export const POST = roleHandler([...ROLES], async (req, { auth, params }) => {
       { status: 400 }
     );
   }
+  if (body.plannedDurationMinutes != null &&
+      (!Number.isInteger(body.plannedDurationMinutes) || body.plannedDurationMinutes <= 0)) {
+    return NextResponse.json(
+      { error: 'A plannedDurationMinutes pozitív egész perc legyen' },
+      { status: 400 }
+    );
+  }
   const label = typeof body.label === 'string' ? body.label.trim().slice(0, 200) || null : null;
-  const plannedDurationMinutes =
-    Number.isInteger(body.plannedDurationMinutes) && body.plannedDurationMinutes > 0
-      ? body.plannedDurationMinutes
-      : null;
+  const plannedDurationMinutes = body.plannedDurationMinutes ?? null;
 
   const pool = getDbPool();
   const client = await pool.connect();
@@ -107,10 +115,18 @@ export const POST = roleHandler([...ROLES], async (req, { auth, params }) => {
 export const PATCH = roleHandler([...ROLES], async (req, { auth, params }) => {
   const episodeId = params.id;
   const body = await req.json().catch(() => ({}));
+  if (body === null || typeof body !== 'object' || Array.isArray(body)) {
+    return NextResponse.json({ error: 'JSON objektum body szükséges' }, { status: 400 });
+  }
   const orderedVisitIds = body.orderedVisitIds;
 
   if (!Array.isArray(orderedVisitIds) || orderedVisitIds.some((v) => typeof v !== 'string')) {
     return NextResponse.json({ error: 'orderedVisitIds: string[] kötelező' }, { status: 400 });
+  }
+  // Review-javítás: duplikált id a Set-validáción átcsúszna, és a szándékolt
+  // sorrend nem az lenne, ami tárolódik.
+  if (new Set(orderedVisitIds).size !== orderedVisitIds.length) {
+    return NextResponse.json({ error: 'orderedVisitIds nem tartalmazhat ismétlődő azonosítót' }, { status: 400 });
   }
 
   const pool = getDbPool();
@@ -147,6 +163,28 @@ export const PATCH = roleHandler([...ROLES], async (req, { auth, params }) => {
       );
     }
 
+    // Review-javítás: a sorrend igazsága az EWP COALESCE(seq, pathway_order_index)
+    // — a forecast/next-step/projektor azon jár. A vizit-sorrend átírása a
+    // fázis-seq-eket is átszámozza (vizit-sorrend, azon belül a mai sorrend),
+    // különben a megjelenített alkalom-sorrend és a becslés némán széttartana.
+    await client.query(
+      `WITH ordered AS (
+         SELECT e.id,
+                ROW_NUMBER() OVER (
+                  ORDER BY v_ord.ord NULLS LAST,
+                           COALESCE(e.seq, e.pathway_order_index),
+                           e.pathway_order_index, e.id
+                ) - 1 AS new_seq
+         FROM episode_work_phases e
+         LEFT JOIN unnest($2::uuid[]) WITH ORDINALITY AS v_ord(visit_id, ord)
+           ON e.visit_id = v_ord.visit_id
+         WHERE e.episode_id = $1
+       )
+       UPDATE episode_work_phases SET seq = ordered.new_seq
+       FROM ordered WHERE episode_work_phases.id = ordered.id`,
+      [episodeId, orderedVisitIds]
+    );
+
     await insertWorkPhaseAudit(client, {
       episodeWorkPhaseId: null,
       episodeId,
@@ -160,6 +198,11 @@ export const PATCH = roleHandler([...ROLES], async (req, { auth, params }) => {
     const visits = await listEpisodeVisits(client, episodeId);
     await client.query('COMMIT');
 
+    try {
+      await projectRemainingSteps(episodeId);
+    } catch {
+      /* non-blocking — a projektor a következő releváns eseménynél újrafut */
+    }
     try {
       await emitSchedulingEvent('episode', episodeId, 'visits_reordered');
     } catch {

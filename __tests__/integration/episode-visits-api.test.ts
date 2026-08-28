@@ -46,7 +46,7 @@ async function seedEpisodeWithVisits() {
     seq: 1,
     defaultDaysOffset: 10,
   });
-  await backfillEpisodeVisits(pool, episode.id);
+  await backfillEpisodeVisits(pool, episode.id as string);
   const visits = await pool.query(
     `SELECT id, seq FROM episode_visits WHERE episode_id = $1 ORDER BY seq`,
     [episode.id]
@@ -241,5 +241,122 @@ describe('WP-4.2 — fázis-áthelyezés és hatókör a work-phase PATCH-en', (
       params: { id: episode.id, workPhaseId: p2.id },
     });
     expect(badRes.status).toBe(400);
+  });
+});
+
+describe('WP-4.2 — review-javítások', () => {
+  it('status + hatókör-mező kombinálva 400 (nem vész el némán)', async () => {
+    const { p1, episode } = await seedEpisodeWithVisits();
+    const user = await authUser();
+    const req = await authedRequest(
+      `http://test.local/api/episodes/${episode.id}/work-phases/${p1.id}`,
+      { user, method: 'PATCH', body: { status: 'completed', jaw: 'felso' } }
+    );
+    const res = await workPhasePatch(req, { params: { id: episode.id, workPhaseId: p1.id } });
+    expect(res.status).toBe(400);
+  });
+
+  it('merge-csoport primary-jének áthelyezése a rejtett gyerekeket is viszi', async () => {
+    const pool = getDbPool();
+    const patient = await createTestPatient();
+    const episode = await createTestEpisode(undefined, patient.id);
+    const primary = await createWp41aWorkPhase(undefined, episode.id, {
+      workPhaseCode: 'lenyomat',
+      seq: 0,
+    });
+    const child = await createWp41aWorkPhase(undefined, episode.id, {
+      workPhaseCode: 'harapasregisztracio',
+      seq: 1,
+      mergedInto: primary.id,
+    });
+    await backfillEpisodeVisits(pool, episode.id as string);
+    const user = await authUser();
+
+    const createReq = await authedRequest(`http://test.local/api/episodes/${episode.id}/visits`, {
+      user,
+      method: 'POST',
+      body: { label: 'Cél-alkalom' },
+    });
+    const createRes = await createVisitPost(createReq, { params: { id: episode.id } });
+    const target = (await createRes.json()).visit;
+
+    const moveReq = await authedRequest(
+      `http://test.local/api/episodes/${episode.id}/work-phases/${primary.id}`,
+      { user, method: 'PATCH', body: { visitId: target.id } }
+    );
+    const moveRes = await workPhasePatch(moveReq, {
+      params: { id: episode.id, workPhaseId: primary.id },
+    });
+    expect(moveRes.status).toBe(200);
+
+    const rows = await pool.query(
+      `SELECT id, visit_id FROM episode_work_phases WHERE id = ANY($1::uuid[])`,
+      [[primary.id, child.id]]
+    );
+    for (const r of rows.rows) expect(r.visit_id).toBe(target.id);
+    // A régi (kiürült) csoport-vizit nem maradt árván.
+    const visits = await pool.query(
+      `SELECT id FROM episode_visits WHERE episode_id = $1`,
+      [episode.id]
+    );
+    expect(visits.rows).toHaveLength(1);
+    expect(visits.rows[0].id).toBe(target.id);
+  });
+
+  it('a vizit-átrendezés az EWP fázis-sorrendet is átszámozza (forecast-konzisztencia)', async () => {
+    const { pool, episode, p1, p2, visits } = await seedEpisodeWithVisits();
+    const user = await authUser();
+
+    // p1 (lenyomat) az első vizitben, p2 (atadas) a másodikban — fordítsuk meg.
+    const reordered = [...visits].reverse().map((v) => v.id);
+    const req = await authedRequest(`http://test.local/api/episodes/${episode.id}/visits`, {
+      user,
+      method: 'PATCH',
+      body: { orderedVisitIds: reordered },
+    });
+    const res = await reorderVisitsPatch(req, { params: { id: episode.id } });
+    expect(res.status).toBe(200);
+
+    const order = await pool.query(
+      `SELECT id FROM episode_work_phases WHERE episode_id = $1
+       ORDER BY COALESCE(seq, pathway_order_index), pathway_order_index`,
+      [episode.id]
+    );
+    // A forecast/next-step sorrend-igazsága most az új vizit-sorrendet követi:
+    // p2 (atadas) megelőzi p1-et (lenyomat).
+    expect(order.rows.map((r: { id: string }) => r.id)).toEqual([p2.id, p1.id]);
+  });
+
+  it('duplikált id az orderedVisitIds-ben 400', async () => {
+    const { episode, visits } = await seedEpisodeWithVisits();
+    const user = await authUser();
+    const req = await authedRequest(`http://test.local/api/episodes/${episode.id}/visits`, {
+      user,
+      method: 'PATCH',
+      body: { orderedVisitIds: [visits[0].id, visits[0].id, visits[1].id] },
+    });
+    const res = await reorderVisitsPatch(req, { params: { id: episode.id } });
+    expect(res.status).toBe(400);
+  });
+
+  it('nem-objektum JSON body 400 (nem 500)', async () => {
+    const { episode, visits } = await seedEpisodeWithVisits();
+    const user = await authUser();
+    const req = await authedRequest(`http://test.local/api/episodes/${episode.id}/visits`, {
+      user,
+      method: 'POST',
+      body: null,
+    });
+    const res = await createVisitPost(req, { params: { id: episode.id } });
+    expect(res.status).toBe(400);
+
+    const patchReq = await authedRequest(
+      `http://test.local/api/episodes/${episode.id}/visits/${visits[0].id}`,
+      { user, method: 'PATCH', body: 'csak-egy-string' as unknown as Record<string, unknown> }
+    );
+    const patchRes = await visitPatch(patchReq, {
+      params: { id: episode.id, visitId: visits[0].id },
+    });
+    expect(patchRes.status).toBe(400);
   });
 });

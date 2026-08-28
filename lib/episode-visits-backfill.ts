@@ -82,9 +82,29 @@ export interface EpisodeVisitsBackfillResult {
 }
 
 export async function backfillEpisodeVisits(
-  db: EpisodeVisitsBackfillQueryable
+  db: EpisodeVisitsBackfillQueryable,
+  /**
+   * WP-4.2: opcionális epizód-szűkítés — teszthez / célzott újrafuttatáshoz.
+   * Nélküle a teljes állomány visit_id IS NULL sorai kapnak vizitet (migráció).
+   */
+  episodeId?: string
 ): Promise<EpisodeVisitsBackfillResult> {
-  const primaries = await db.query(BACKFILL_PRIMARY_VISITS_SQL);
+  const scoped = episodeId != null;
+  const primarySql = scoped
+    ? BACKFILL_PRIMARY_VISITS_SQL.replace(
+        'WHERE ewp.visit_id IS NULL',
+        'WHERE ewp.visit_id IS NULL\n    AND ewp.episode_id = $1'
+      )
+    : BACKFILL_PRIMARY_VISITS_SQL;
+  if (scoped && primarySql === BACKFILL_PRIMARY_VISITS_SQL) {
+    throw new Error('backfillEpisodeVisits: az epizód-szűkítés horgonya nem található a SQL-ben');
+  }
+  const childSql = scoped
+    ? `${BACKFILL_CHILD_VISITS_SQL}\n  AND child.episode_id = $1`
+    : BACKFILL_CHILD_VISITS_SQL;
+  const params = scoped ? [episodeId] : undefined;
+
+  const primaries = await db.query(primarySql, params);
 
   // Ciklusban rowCount = 0-ig: láncolt csoportnál (C → B → A) az első kör csak
   // a közvetlen gyerekeket éri el, a mélyebb szintek a következő körökben
@@ -92,7 +112,7 @@ export async function backfillEpisodeVisits(
   // visit_id IS NULL sort ír), így a ciklus véges.
   let childrenLinked = 0;
   for (;;) {
-    const children = await db.query(BACKFILL_CHILD_VISITS_SQL);
+    const children = await db.query(childSql, params);
     const linked = children.rowCount ?? 0;
     if (linked === 0) break;
     childrenLinked += linked;
