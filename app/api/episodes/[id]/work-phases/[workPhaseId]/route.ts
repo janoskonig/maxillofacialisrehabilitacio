@@ -11,6 +11,7 @@ import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 import { SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT } from '@/lib/active-appointment';
 import { insertWorkPhaseTombstones, releaseWorkPhasesForDelete } from '@/lib/work-phase-delete';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
+import { deleteEpisodeVisitsIfEmpty } from '@/lib/episode-visits';
 
 export const dynamic = 'force-dynamic';
 
@@ -35,7 +36,7 @@ export const DELETE = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász
   try {
     await client.query('BEGIN');
     const row = await client.query(
-      `SELECT ewp.id, ewp.episode_id, ewp.work_phase_code, ewp.status,
+      `SELECT ewp.id, ewp.episode_id, ewp.work_phase_code, ewp.status, ewp.visit_id,
               pe.status as episode_status
        FROM episode_work_phases ewp
        JOIN patient_episodes pe ON ewp.episode_id = pe.id
@@ -85,6 +86,13 @@ export const DELETE = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász
     await insertWorkPhaseTombstones(client, episodeId, [workPhaseId], auth.email ?? auth.userId ?? 'unknown');
 
     await client.query(`DELETE FROM episode_work_phases WHERE id = $1`, [workPhaseId]);
+
+    // WP-4.1a (review-javítás): a törölt sor kiürült (egyfős) vizitje nem
+    // maradhat árván a vizit-listában. Csak üres vizitet töröl — ha a vizitben
+    // más fázis is van (pl. merge-csoport gyereke), a vizit marad.
+    if (phase.visit_id) {
+      await deleteEpisodeVisitsIfEmpty(client, [phase.visit_id as string]);
+    }
 
     await client.query(
       `WITH numbered AS (

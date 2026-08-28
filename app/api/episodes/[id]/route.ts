@@ -14,7 +14,7 @@ import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { releaseWorkPhasesForDelete } from '@/lib/work-phase-delete';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 import { isRecallRiskLevel } from '@/lib/recall-cadence';
-import { createEpisodeVisitsBatch } from '@/lib/episode-visits';
+import { createEpisodeVisitsBatch, deleteEpisodeVisitsIfEmpty } from '@/lib/episode-visits';
 import { syncRecallTasksForRiskChange, type RecallRiskSyncResult } from '@/lib/recall-tasks';
 
 export const dynamic = 'force-dynamic';
@@ -531,13 +531,14 @@ async function handleRemovePathway(
     await client.query('BEGIN');
 
     const phasesToDelete = await client.query(
-      `SELECT id, work_phase_code, status FROM episode_work_phases WHERE source_episode_pathway_id = $1 FOR UPDATE`,
+      `SELECT id, work_phase_code, status, visit_id FROM episode_work_phases WHERE source_episode_pathway_id = $1 FOR UPDATE`,
       [epPathwayId]
     );
     const phaseRows = phasesToDelete.rows as Array<{
       id: string;
       work_phase_code: string | null;
       status: string;
+      visit_id: string | null;
     }>;
     await releaseWorkPhasesForDelete(
       client,
@@ -567,6 +568,14 @@ async function handleRemovePathway(
     }
 
     await client.query(`DELETE FROM episode_work_phases WHERE source_episode_pathway_id = $1`, [epPathwayId]);
+
+    // WP-4.1a (review-javítás): a törölt sorok kiürült vizitjei nem maradnak
+    // árván. Csak üres vizitet töröl — vegyes (más sablonból is tagot
+    // tartalmazó) vizit marad.
+    await deleteEpisodeVisitsIfEmpty(
+      client,
+      Array.from(new Set(phaseRows.map((r) => r.visit_id).filter((v): v is string => !!v)))
+    );
 
     await client.query(
       `DELETE FROM episode_pathways WHERE id = $1`,

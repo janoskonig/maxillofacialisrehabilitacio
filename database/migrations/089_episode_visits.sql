@@ -133,12 +133,27 @@ FROM primaries p
 WHERE ewp.id = p.ewp_id;
 
 -- 2) A beolvasztott gyerekek a primary vizitjét kapják.
-UPDATE episode_work_phases child
-SET visit_id = parent.visit_id
-FROM episode_work_phases parent
-WHERE child.merged_into_episode_work_phase_id = parent.id
-  AND child.episode_id = parent.episode_id
-  AND child.visit_id IS NULL
-  AND parent.visit_id IS NOT NULL;
+--
+-- CIKLUSBAN (review-javítás): láncolt merge-csoportnál (C → B → A) egyetlen
+-- UPDATE a statement-snapshotból olvas — a lánc alja (C) kimaradna, mert a
+-- köztes szülő (B) visit_id-ja a snapshot pillanatában még NULL. A ciklus
+-- addig fut, amíg van hozzárendelhető gyerek (ROW_COUNT = 0-ig); minden kör
+-- legalább egy lánc-szinttel lejjebb ér, így véges.
+DO $$
+DECLARE
+  affected INT;
+BEGIN
+  LOOP
+    UPDATE episode_work_phases child
+    SET visit_id = parent.visit_id
+    FROM episode_work_phases parent
+    WHERE child.merged_into_episode_work_phase_id = parent.id
+      AND child.episode_id = parent.episode_id
+      AND child.visit_id IS NULL
+      AND parent.visit_id IS NOT NULL;
+    GET DIAGNOSTICS affected = ROW_COUNT;
+    EXIT WHEN affected = 0;
+  END LOOP;
+END $$;
 
 COMMIT;

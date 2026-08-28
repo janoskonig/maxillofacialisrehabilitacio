@@ -21,6 +21,7 @@ import {
 } from '@/app/api/episodes/[id]/work-phases/route';
 import { POST as mergeWorkPhases } from '@/app/api/episodes/[id]/work-phases/merge/route';
 import { POST as unmergeWorkPhases } from '@/app/api/episodes/[id]/work-phases/[workPhaseId]/unmerge/route';
+import { DELETE as deleteWorkPhase } from '@/app/api/episodes/[id]/work-phases/[workPhaseId]/route';
 
 /**
  * WP-4.1a: vizit-séma (089-es migráció) — viselkedési tesztek.
@@ -101,6 +102,47 @@ describe('WP-4.1a vizit-séma', () => {
       expect((await getWp41aPhaseRow(client, a.id))?.visit_id).toBe(aRow?.visit_id);
       expect((await getWp41aPhaseRow(client, b.id))?.visit_id).toBe(aRow?.visit_id);
       expect((await getWp41aPhaseRow(client, c.id))?.visit_id).toBe(cRow?.visit_id);
+    });
+  });
+
+  it('(a2) backfill: láncolt (3 mélységű) merge-csoport EGY vizitet kap egyetlen futással', async () => {
+    await withRollback(async (client) => {
+      const patient = await createTestPatient(client);
+      const episode = await createTestEpisode(client, patient.id);
+
+      // Lánc: C → B → A (A a primary; B az A gyereke; C a B gyereke).
+      // A review-hiba: egyetlen set-alapú gyerek-UPDATE a statement-snapshotból
+      // olvas, így a lánc alja (C) visit_id NULL-lal maradna.
+      const a = await createWp41aWorkPhase(client, episode.id, {
+        workPhaseCode: 'lenyomat',
+        seq: 0,
+        defaultDaysOffset: 5,
+      });
+      const b = await createWp41aWorkPhase(client, episode.id, {
+        workPhaseCode: 'probafazis',
+        seq: 1,
+        mergedInto: a.id,
+      });
+      const c = await createWp41aWorkPhase(client, episode.id, {
+        workPhaseCode: 'atadas',
+        seq: 2,
+        mergedInto: b.id,
+      });
+
+      // EGYETLEN futás — két futás nélkül is mindhárom sornak vizitet kell kapnia.
+      const result = await backfillEpisodeVisits(client);
+      expect(result.childrenLinked).toBeGreaterThanOrEqual(2);
+
+      const aRow = await getWp41aPhaseRow(client, a.id);
+      const bRow = await getWp41aPhaseRow(client, b.id);
+      const cRow = await getWp41aPhaseRow(client, c.id);
+      expect(aRow?.visit_id).toBeTruthy();
+      expect(bRow?.visit_id).toBe(aRow?.visit_id);
+      expect(cRow?.visit_id).toBe(aRow?.visit_id);
+
+      const visits = await listWp41aVisits(client, episode.id);
+      expect(visits).toHaveLength(1);
+      expect(visits[0].id).toBe(aRow?.visit_id);
     });
   });
 
@@ -246,6 +288,97 @@ describe('WP-4.1a vizit-séma', () => {
     const visits = await listWp41aVisits(undefined, episode.id);
     expect(visits).toHaveLength(1);
     expect(visits[0].days_offset).toBe(9);
+  });
+
+  it('(c3) láncolt merge a route-on át: egy vizit, lapos merged_into', async () => {
+    const doctor = await makeDoctor();
+    const patient = await createTestPatient();
+    const episode = await createTestEpisode(undefined, patient.id);
+
+    const mk = async (label: string, offset: number) => {
+      const req = await authedRequest(
+        `http://test.local/api/episodes/${episode.id}/work-phases`,
+        { user: doctor, method: 'POST', body: { label, defaultDaysOffset: offset } }
+      );
+      const res = await createWorkPhase(req, { params: { id: episode.id } });
+      expect(res.status).toBe(201);
+      return (await res.json()).workPhase as { id: string; visitId: string };
+    };
+    const a = await mk('A fázis', 5);
+    const b = await mk('B fázis', 3);
+    const c = await mk('C fázis', 7);
+
+    // 1. kör: B → A (meglévő csoport A primaryvel).
+    const merge1 = await authedRequest(
+      `http://test.local/api/episodes/${episode.id}/work-phases/merge`,
+      { user: doctor, method: 'POST', body: { stepIds: [a.id, b.id] } }
+    );
+    expect((await mergeWorkPhases(merge1, { params: { id: episode.id } })).status).toBe(200);
+
+    // 2. kör: [C, A] — A-nak saját gyereke van (B). A review-hiba: B a régi
+    // vizitben maradna, és a lánc mély lenne (B → A → C).
+    const merge2 = await authedRequest(
+      `http://test.local/api/episodes/${episode.id}/work-phases/merge`,
+      { user: doctor, method: 'POST', body: { stepIds: [c.id, a.id] } }
+    );
+    expect((await mergeWorkPhases(merge2, { params: { id: episode.id } })).status).toBe(200);
+
+    // Lapos lánc: A és B is KÖZVETLENÜL C-re mutat.
+    const pool = getDbPool();
+    const chain = await pool.query(
+      `SELECT id, merged_into_episode_work_phase_id FROM episode_work_phases WHERE id = ANY($1)`,
+      [[a.id, b.id, c.id]]
+    );
+    const mergedInto = new Map(
+      (chain.rows as Array<{ id: string; merged_into_episode_work_phase_id: string | null }>).map(
+        (r) => [r.id, r.merged_into_episode_work_phase_id]
+      )
+    );
+    expect(mergedInto.get(c.id)).toBeNull();
+    expect(mergedInto.get(a.id)).toBe(c.id);
+    expect(mergedInto.get(b.id)).toBe(c.id);
+
+    // A csoport EGY vizitben van (C vizitjében), az epizódnak egy vizitje maradt.
+    const aRow = await getWp41aPhaseRow(undefined, a.id);
+    const bRow = await getWp41aPhaseRow(undefined, b.id);
+    const cRow = await getWp41aPhaseRow(undefined, c.id);
+    expect(cRow?.visit_id).toBe(c.visitId);
+    expect(aRow?.visit_id).toBe(c.visitId);
+    expect(bRow?.visit_id).toBe(c.visitId);
+
+    const visits = await listWp41aVisits(undefined, episode.id);
+    expect(visits).toHaveLength(1);
+    expect(visits[0].id).toBe(c.visitId);
+  });
+
+  it('(c4) fázis törlése után nem marad árva üres vizit', async () => {
+    const doctor = await makeDoctor();
+    const patient = await createTestPatient();
+    const episode = await createTestEpisode(undefined, patient.id);
+
+    const req = await authedRequest(
+      `http://test.local/api/episodes/${episode.id}/work-phases`,
+      { user: doctor, method: 'POST', body: { label: 'Törlendő fázis', defaultDaysOffset: 4 } }
+    );
+    const res = await createWorkPhase(req, { params: { id: episode.id } });
+    expect(res.status).toBe(201);
+    const phase = (await res.json()).workPhase as { id: string; visitId: string };
+
+    const visitsBefore = await listWp41aVisits(undefined, episode.id);
+    expect(visitsBefore).toHaveLength(1);
+
+    const delReq = await authedRequest(
+      `http://test.local/api/episodes/${episode.id}/work-phases/${phase.id}`,
+      { user: doctor, method: 'DELETE' }
+    );
+    const delRes = await deleteWorkPhase(delReq, {
+      params: { id: episode.id, workPhaseId: phase.id },
+    });
+    expect(delRes.status).toBe(200);
+
+    // A kiürült egyfős vizit a törléssel együtt tűnik el.
+    const visitsAfter = await listWp41aVisits(undefined, episode.id);
+    expect(visitsAfter).toHaveLength(0);
   });
 
   it('(d) GET visszaadja a visit_id/jaw/teeth mezőket és a visits[] metaadatot', async () => {

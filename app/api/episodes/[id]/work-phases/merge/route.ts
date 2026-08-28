@@ -69,6 +69,22 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
       [primaryId, secondaryIds, episodeId]
     );
 
+    // Láncolt merge LAPÍTÁSA (review-javítás): ha egy secondary maga is
+    // csoport-primary volt (vannak rá mutató gyerekek), a gyerekei átkerülnek
+    // az ÚJ primary alá — a merged_into lánc mindig lapos marad (gyerek →
+    // csoport-primary, sosem gyerek → gyerek), és lentebb a vizit-tagságuk is
+    // a primary vizitjébe költözik. E nélkül a csoport két vizitre esne szét.
+    const reparented = await client.query(
+      `UPDATE episode_work_phases
+       SET merged_into_episode_work_phase_id = $1
+       WHERE merged_into_episode_work_phase_id = ANY($2) AND episode_id = $3 AND id <> $1
+       RETURNING id, status`,
+      [primaryId, secondaryIds, episodeId]
+    );
+    const reparentedRows = reparented.rows as Array<{ id: string; status: string }>;
+    // A vizit-mozgatás a secondarykre ÉS az átcsoportosított gyerekeikre is.
+    const movedIds: string[] = [...secondaryIds, ...reparentedRows.map((r) => r.id)];
+
     // WP-4.1a: a merge vizit-tagságot is jelent — a gyerekek a primary
     // vizitjébe kerülnek. A merged_into mező írása változatlanul megmarad
     // (kompatibilitás). Ha a primarynek (backfill előtti sor) még nincs
@@ -93,11 +109,11 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     const oldVisitRows = await client.query(
       `SELECT DISTINCT visit_id FROM episode_work_phases
        WHERE id = ANY($1) AND visit_id IS NOT NULL AND visit_id <> $2`,
-      [secondaryIds, primaryVisitId]
+      [movedIds, primaryVisitId]
     );
     await client.query(
       `UPDATE episode_work_phases SET visit_id = $1 WHERE id = ANY($2) AND episode_id = $3`,
-      [primaryVisitId, secondaryIds, episodeId]
+      [primaryVisitId, movedIds, episodeId]
     );
     // A gyerekek kiürült (egyfős) vizitjei nem maradnak árván a listában.
     await deleteEpisodeVisitsIfEmpty(
@@ -123,6 +139,19 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
         changedBy: auth.email ?? auth.userId ?? 'unknown',
         changeType: 'merge',
         reason: `Összevonva a(z) ${primaryCode} fázis alá`,
+      });
+    }
+    // A lapításnál átcsoportosított (korábbi csoport-gyerek) sorok is kapnak
+    // napló-sort — ők nem szerepeltek a kérés stepIds-ében.
+    for (const child of reparentedRows) {
+      await insertWorkPhaseAudit(client, {
+        episodeWorkPhaseId: child.id,
+        episodeId,
+        oldStatus: child.status,
+        newStatus: child.status,
+        changedBy: auth.email ?? auth.userId ?? 'unknown',
+        changeType: 'merge',
+        reason: `Átcsoportosítva a(z) ${primaryCode} fázis alá (láncolt összevonás lapítása)`,
       });
     }
 

@@ -57,7 +57,14 @@ SET visit_id = p.visit_id
 FROM primaries p
 WHERE ewp.id = p.ewp_id`;
 
-/** 2. lépés: a beolvasztott gyerekek a primary vizitjét kapják. */
+/**
+ * 2. lépés: a beolvasztott gyerekek a primary vizitjét kapják.
+ *
+ * FIGYELEM (review-javítás): egyetlen futás a statement-snapshotból olvas —
+ * láncolt csoportnál (C → B → A) a lánc alja kimaradna. Ezért a
+ * backfillEpisodeVisits CIKLUSBAN futtatja rowCount = 0-ig (a migrációban
+ * ugyanez DO $$ ... LOOP + GET DIAGNOSTICS formában él).
+ */
 export const BACKFILL_CHILD_VISITS_SQL = `
 UPDATE episode_work_phases child
 SET visit_id = parent.visit_id
@@ -78,9 +85,21 @@ export async function backfillEpisodeVisits(
   db: EpisodeVisitsBackfillQueryable
 ): Promise<EpisodeVisitsBackfillResult> {
   const primaries = await db.query(BACKFILL_PRIMARY_VISITS_SQL);
-  const children = await db.query(BACKFILL_CHILD_VISITS_SQL);
+
+  // Ciklusban rowCount = 0-ig: láncolt csoportnál (C → B → A) az első kör csak
+  // a közvetlen gyerekeket éri el, a mélyebb szintek a következő körökben
+  // kapják meg a vizitet. Minden kör legalább egy szinttel lejjebb ér (csak
+  // visit_id IS NULL sort ír), így a ciklus véges.
+  let childrenLinked = 0;
+  for (;;) {
+    const children = await db.query(BACKFILL_CHILD_VISITS_SQL);
+    const linked = children.rowCount ?? 0;
+    if (linked === 0) break;
+    childrenLinked += linked;
+  }
+
   return {
     visitsCreated: primaries.rowCount ?? 0,
-    childrenLinked: children.rowCount ?? 0,
+    childrenLinked,
   };
 }
