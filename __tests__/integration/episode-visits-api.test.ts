@@ -360,3 +360,35 @@ describe('WP-4.2 — review-javítások', () => {
     expect(patchRes.status).toBe(400);
   });
 });
+
+describe('WP-4.3 review-javítás — egy-kockás áthelyezés is átszámozza a fázis-sorrendet', () => {
+  it('C áthelyezése az 1. alkalomba: az EWP-sorrend [A, C, B] lesz (motor = megjelenítés)', async () => {
+    const pool = getDbPool();
+    const patient = await createTestPatient();
+    const episode = await createTestEpisode(undefined, patient.id);
+    const a = await createWp41aWorkPhase(undefined, episode.id, { workPhaseCode: 'lenyomat', seq: 0 });
+    const b = await createWp41aWorkPhase(undefined, episode.id, { workPhaseCode: 'probafelvetel', seq: 1 });
+    const c = await createWp41aWorkPhase(undefined, episode.id, { workPhaseCode: 'atadas', seq: 2 });
+    await backfillEpisodeVisits(pool, episode.id as string);
+    const visits = await pool.query(
+      `SELECT id FROM episode_visits WHERE episode_id = $1 ORDER BY seq`,
+      [episode.id]
+    );
+    const firstVisitId = visits.rows[0].id;
+    const user = await authUser();
+
+    const req = await authedRequest(
+      `http://test.local/api/episodes/${episode.id}/work-phases/${c.id}`,
+      { user, method: 'PATCH', body: { visitId: firstVisitId } }
+    );
+    const res = await workPhasePatch(req, { params: { id: episode.id, workPhaseId: c.id } });
+    expect(res.status).toBe(200);
+
+    const order = await pool.query(
+      `SELECT id FROM episode_work_phases WHERE episode_id = $1
+       ORDER BY COALESCE(seq, pathway_order_index), pathway_order_index`,
+      [episode.id]
+    );
+    expect(order.rows.map((r: { id: string }) => r.id)).toEqual([a.id, c.id, b.id]);
+  });
+});
