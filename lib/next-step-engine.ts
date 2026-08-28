@@ -8,8 +8,8 @@ import { getDbPool } from './db';
 import { computeStepWindow } from './step-window';
 import { resolveSchedulingAnchor } from './scheduling-anchor';
 import {
-  computePhaseWindowChain,
-  type PhaseWindowChainRow,
+  computeVisitAwareWindowChain,
+  type VisitAwareChainRow,
 } from './phase-window-chain';
 import { sqlBookedFutureAppointmentsWithEffectiveStep } from './episode-plan-read-model';
 import {
@@ -142,6 +142,10 @@ export interface EpisodeWorkPhaseRow {
   pool?: string | null;
   duration_minutes?: number | null;
   custom_label?: string | null;
+  /** WP-4.2: a sor vizitje ("Alkalom") — a forecast-lánc egysége. */
+  visit_id?: string | null;
+  /** WP-4.2: a vizit days_offset-je; NULL → a fázis default_days_offset-je a fallback. */
+  visit_days_offset?: number | null;
 }
 
 /** Get episode_work_phases if they've been generated. Returns null when no rows exist.
@@ -154,19 +158,30 @@ async function getEpisodeWorkPhases(
   // A schema-probe modulszintű cache-ből szolgálja ki ezeket az ellenőrzéseket
   // (lib/schema-probe.ts) — egy request-en belül több hívásra is csak az
   // első jár DB-vel, a többi a cache-ből megy.
-  const [mergedFilter, hasDefaultDaysOffset, hasCustomLabel] = await Promise.all([
-    getMergedFilterFragment(pool, 'episode_work_phases'),
+  const [mergedFilter, hasDefaultDaysOffset, hasCustomLabel, hasVisitId] = await Promise.all([
+    getMergedFilterFragment(pool, 'ewp'),
     probeColumnExists(pool, 'episode_work_phases', 'default_days_offset'),
     probeColumnExists(pool, 'episode_work_phases', 'custom_label'),
+    probeColumnExists(pool, 'episode_work_phases', 'visit_id'),
   ]);
   let optionalCols = '';
-  if (hasDefaultDaysOffset) optionalCols += ', default_days_offset';
-  if (hasCustomLabel) optionalCols += ', custom_label';
+  if (hasDefaultDaysOffset) optionalCols += ', ewp.default_days_offset';
+  if (hasCustomLabel) optionalCols += ', ewp.custom_label';
+  // WP-4.2: vizit-tagság + vizit-szintű days_offset a forecast-lánchoz
+  // ("egy vizit fázisai egy alkalom"). A 089 előtti sémán elmarad — a sorok
+  // egyfős egységként viselkednek, a mai működés szerint.
+  let visitJoin = '';
+  if (hasVisitId) {
+    optionalCols += ', ewp.visit_id, v.days_offset AS visit_days_offset';
+    visitJoin = ' LEFT JOIN episode_visits v ON ewp.visit_id = v.id';
+  }
 
   const r = await pool.query(
-    `SELECT work_phase_code, pathway_order_index, seq, status, completed_at, pool, duration_minutes${optionalCols}
-     FROM episode_work_phases WHERE episode_id = $1 ${mergedFilter}
-     ORDER BY COALESCE(seq, pathway_order_index), pathway_order_index`,
+    `SELECT ewp.id, ewp.work_phase_code, ewp.pathway_order_index, ewp.seq, ewp.status,
+            ewp.completed_at, ewp.pool, ewp.duration_minutes${optionalCols}
+     FROM episode_work_phases ewp${visitJoin}
+     WHERE ewp.episode_id = $1 ${mergedFilter}
+     ORDER BY COALESCE(ewp.seq, ewp.pathway_order_index), ewp.pathway_order_index`,
     [episodeId]
   );
   if (r.rows.length === 0) return null;
@@ -228,6 +243,70 @@ function displayLabelForEpisodeWorkPhase(
   return pathwayTemplate.work_phase_code;
 }
 
+/**
+ * WP-4.2: jövőbeli foglalások térképei — work_phase_id-elsődlegesen.
+ * A step_code térkép CSAK a work_phase_id NÉLKÜLI (legacy) foglalás-sorokat
+ * tartalmazza: duplikált work_phase_code-nál (két állcsont / több fog) a
+ * csupasz kód-kulcs a TESTVÉR fázist is foglaltnak mutatná.
+ */
+interface BookedStartMaps {
+  byWorkPhaseId: Map<string, Date>;
+  legacyByCode: Map<string, Date>;
+}
+
+function buildBookedStartMaps(
+  rows: Array<{ step_code: string | null; work_phase_id?: string | null; effective_start: Date | string }>
+): BookedStartMaps {
+  const byWorkPhaseId = new Map<string, Date>();
+  const legacyByCode = new Map<string, Date>();
+  for (const row of rows) {
+    const start = new Date(row.effective_start);
+    if (row.work_phase_id) {
+      const existing = byWorkPhaseId.get(row.work_phase_id);
+      if (!existing || start.getTime() < existing.getTime()) byWorkPhaseId.set(row.work_phase_id, start);
+    } else if (row.step_code) {
+      const existing = legacyByCode.get(row.step_code);
+      if (!existing || start.getTime() < existing.getTime()) legacyByCode.set(row.step_code, start);
+    }
+  }
+  return { byWorkPhaseId, legacyByCode };
+}
+
+function bookedStartForRow(row: EpisodeWorkPhaseRow, maps: BookedStartMaps): Date | null {
+  if (row.id) {
+    const byId = maps.byWorkPhaseId.get(row.id);
+    if (byId) return byId;
+  }
+  return maps.legacyByCode.get(row.work_phase_code) ?? null;
+}
+
+/** Sor-szintű lánc-kulcs: az EWP id az elsődleges (a work_phase_code duplikálódhat). */
+function chainRowKey(row: EpisodeWorkPhaseRow, index: number): string {
+  return row.id ?? `${row.work_phase_code}#${index}`;
+}
+
+/** WP-4.2: vizit-tudatos lánc-sorok építése az epizód fázisaiból. */
+function buildVisitAwareChainRows(
+  episodeWorkPhases: EpisodeWorkPhaseRow[],
+  pathwayWorkPhases: PathwayWorkPhaseTemplate[] | null,
+  bookedMaps: BookedStartMaps
+): VisitAwareChainRow[] {
+  return episodeWorkPhases.map((row, i) => {
+    const ps = pathwayWorkPhases?.find((p) => p.work_phase_code === row.work_phase_code)
+      ?? episodeWorkPhaseAsPathwayTemplate(row);
+    return {
+      rowKey: chainRowKey(row, i),
+      workPhaseCode: row.work_phase_code,
+      defaultDaysOffset: (row.default_days_offset ?? ps.default_days_offset) ?? 14,
+      status: row.status,
+      completedAt: row.completed_at ? new Date(row.completed_at) : null,
+      bookedStart: bookedStartForRow(row, bookedMaps),
+      visitId: row.visit_id ?? null,
+      visitDaysOffset: row.visit_days_offset ?? null,
+    };
+  });
+}
+
 /** Prefer per-episode duration (user-edited, incl. merged-slot total on primary row) over pathway template. */
 function durationMinutesForEpisodeStep(
   episodeRow: { duration_minutes?: number | null },
@@ -271,13 +350,14 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
     // A már LEFOGLALT (jövőbeli időponttal bíró) lépéseket nem ajánljuk újra
     // „következő lépésként" — különben a forecast az első, már befoglalt fázist
     // adná vissza (gyakran múltbeli ablakkal), ellentmondva az idővonalnak.
-    // A foglalásokat step_code szerint nézzük, ahogy az allPendingSteps is.
-    const bookedByCode = new Map<string, Date>();
+    // WP-4.2: a párosítás work_phase_id-elsődleges (legacy step_code fallback) —
+    // duplikált work_phase_code-nál a testvér foglalása nem nyomja el ezt a sort.
+    let bookedMaps: BookedStartMaps = { byWorkPhaseId: new Map(), legacyByCode: new Map() };
     try {
       const bookedRes = await pool.query(sqlBookedFutureAppointmentsWithEffectiveStep(), [[episodeId]]);
-      for (const row of bookedRes.rows as Array<{ step_code: string | null; effective_start: Date | string }>) {
-        if (row.step_code) bookedByCode.set(row.step_code, new Date(row.effective_start));
-      }
+      bookedMaps = buildBookedStartMaps(
+        bookedRes.rows as Array<{ step_code: string | null; work_phase_id?: string | null; effective_start: Date | string }>
+      );
     } catch {
       /* tolerate — foglalás-infó nélkül a korábbi viselkedésre esünk vissza */
     }
@@ -286,7 +366,7 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
     // Első olyan pending lépés, amelyhez még NINCS jövőbeli foglalás. Ha minden
     // hátralévő lépés már foglalt, a régi viselkedésre esünk vissza (első pending).
     const pendingStep =
-      pendingCandidates.find((s) => !bookedByCode.has(s.work_phase_code)) ?? pendingCandidates[0];
+      pendingCandidates.find((s) => bookedStartForRow(s, bookedMaps) === null) ?? pendingCandidates[0];
     if (!pendingStep) {
       const lastStep = pathwayWorkPhases?.[pathwayWorkPhases.length - 1];
       const sentinel = lastStep ?? episodeWorkPhaseAsPathwayTemplate(episodeWorkPhases[episodeWorkPhases.length - 1]);
@@ -313,7 +393,10 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
     const fallback = await getEpisodeSchedulingFallback(pool, episodeId);
     const anchorDate = anchorFromStats(lastResolvedAt, completedStats, fallback);
 
-    const daysOffset = pendingStep.default_days_offset ?? matchingStep.default_days_offset ?? 14;
+    // WP-4.2: a vizit-szintű days_offset az elsődleges ("ennyi nappal az előző
+    // alkalom után"); NULL vizit-offsetnél a fázis offsetje a fallback.
+    const daysOffset =
+      pendingStep.visit_days_offset ?? pendingStep.default_days_offset ?? matchingStep.default_days_offset ?? 14;
     const { windowStart, windowEnd } = computeStepWindow(anchorDate, daysOffset);
 
     return {
@@ -437,37 +520,30 @@ export async function allPendingSteps(episodeId: string): Promise<AllPendingStep
     const fallback = await getEpisodeSchedulingFallback(pool, episodeId);
     const initialAnchor = anchorFromStats(lastResolvedAt, completedStats, fallback);
 
-    const bookedByCode = new Map<string, Date>();
+    // WP-4.2: work_phase_id-elsődleges foglalás-térképek (legacy step_code
+    // fallback) — duplikált kódnál a testvér foglalása nem hat erre a sorra.
+    let bookedMaps: BookedStartMaps = { byWorkPhaseId: new Map(), legacyByCode: new Map() };
     try {
       const bookedRes = await pool.query(sqlBookedFutureAppointmentsWithEffectiveStep(), [[episodeId]]);
-      for (const row of bookedRes.rows as Array<{ step_code: string | null; effective_start: Date | string }>) {
-        if (row.step_code) {
-          bookedByCode.set(row.step_code, new Date(row.effective_start));
-        }
-      }
+      bookedMaps = buildBookedStartMaps(
+        bookedRes.rows as Array<{ step_code: string | null; work_phase_id?: string | null; effective_start: Date | string }>
+      );
     } catch {
       /* tolerate */
     }
 
-    const chainRows: PhaseWindowChainRow[] = episodeWorkPhases.map((row) => {
-      const ps = pathwayWorkPhases?.find((p) => p.work_phase_code === row.work_phase_code)
-        ?? episodeWorkPhaseAsPathwayTemplate(row);
-      return {
-        workPhaseCode: row.work_phase_code,
-        defaultDaysOffset: (row.default_days_offset ?? ps.default_days_offset) ?? 14,
-        status: row.status,
-        completedAt: row.completed_at ? new Date(row.completed_at) : null,
-        bookedStart: bookedByCode.get(row.work_phase_code) ?? null,
-      };
-    });
-    const chainWindows = computePhaseWindowChain(chainRows, initialAnchor);
+    // WP-4.2: vizit-tudatos lánc — egy vizit fázisai EGY alkalom (közös ablak),
+    // a vizitek között a cél-vizit days_offset-je a lépésköz.
+    const chainRows = buildVisitAwareChainRows(episodeWorkPhases, pathwayWorkPhases, bookedMaps);
+    const chainWindows = computeVisitAwareWindowChain(chainRows, initialAnchor);
+    const rowKeyByPhase = new Map(episodeWorkPhases.map((row, i) => [row, chainRowKey(row, i)]));
 
     const results: PendingStep[] = [];
     for (let i = 0; i < pendingSteps.length; i++) {
       const pending = pendingSteps[i];
       const ps = pathwayWorkPhases?.find((p) => p.work_phase_code === pending.work_phase_code)
         ?? episodeWorkPhaseAsPathwayTemplate(pending);
-      const chained = chainWindows.get(pending.work_phase_code);
+      const chained = chainWindows.get(rowKeyByPhase.get(pending) ?? pending.work_phase_code);
       const windowStart = chained?.earliestAllowedStart ?? chained?.windowStart ?? initialAnchor;
       const windowEnd = chained?.windowEnd ?? windowStart;
 
@@ -566,8 +642,15 @@ export interface EpisodeBatchData {
   openedAt: Date;
   /** Tervezési kezdődátum — anchor ha nincs teljesített fázis / időpont. */
   planStartDate?: Date | null;
-  /** step_code → jövőbeli foglalás start (batch enrichment). */
+  /**
+   * step_code → jövőbeli foglalás start (batch enrichment). WP-4.2: ha a
+   * hívó a work_phase_id térképet is átadja, ide CSAK a work_phase_id
+   * nélküli (legacy) foglalások kerüljenek — különben a duplikált kódú
+   * testvér-fázis is foglaltnak látszana.
+   */
   futureBookedStartByStepCode?: Map<string, Date>;
+  /** WP-4.2: work_phase_id → jövőbeli foglalás start (elsődleges kulcs). */
+  futureBookedStartByWorkPhaseId?: Map<string, Date>;
   currentStage: string | null;
 }
 
@@ -601,7 +684,11 @@ export function allPendingStepsWithData(
   if (episodeWorkPhases) {
     const resolvedSteps = episodeWorkPhases.filter((s) => s.status === 'completed' || s.status === 'skipped');
     const pendingSteps = episodeWorkPhases.filter((s) => s.status === 'pending' || s.status === 'scheduled');
-    const bookedByCode = data.futureBookedStartByStepCode ?? new Map<string, Date>();
+    // WP-4.2: work_phase_id-elsődleges foglalás-térkép (legacy step_code fallback).
+    const bookedMaps: BookedStartMaps = {
+      byWorkPhaseId: data.futureBookedStartByWorkPhaseId ?? new Map<string, Date>(),
+      legacyByCode: data.futureBookedStartByStepCode ?? new Map<string, Date>(),
+    };
 
     const lastResolvedAt = resolvedSteps
       .map((s) => s.completed_at)
@@ -615,18 +702,11 @@ export function allPendingStepsWithData(
       openedAt,
     });
 
-    const chainRows: PhaseWindowChainRow[] = episodeWorkPhases.map((row) => {
-      const ps = pathwayWorkPhases?.find((p) => p.work_phase_code === row.work_phase_code)
-        ?? episodeWorkPhaseAsPathwayTemplate(row);
-      return {
-        workPhaseCode: row.work_phase_code,
-        defaultDaysOffset: (row.default_days_offset ?? ps.default_days_offset) ?? 14,
-        status: row.status,
-        completedAt: row.completed_at ? new Date(row.completed_at) : null,
-        bookedStart: bookedByCode.get(row.work_phase_code) ?? null,
-      };
-    });
-    const chainWindows = computePhaseWindowChain(chainRows, initialAnchor);
+    // WP-4.2: vizit-tudatos lánc — egy vizit fázisai EGY alkalom (közös ablak),
+    // a vizitek között a cél-vizit days_offset-je a lépésköz.
+    const chainRows = buildVisitAwareChainRows(episodeWorkPhases, pathwayWorkPhases, bookedMaps);
+    const chainWindows = computeVisitAwareWindowChain(chainRows, initialAnchor);
+    const rowKeyByPhase = new Map(episodeWorkPhases.map((row, i) => [row, chainRowKey(row, i)]));
 
     const results: PendingStep[] = [];
 
@@ -654,7 +734,7 @@ export function allPendingStepsWithData(
     for (const pending of pendingSteps) {
       const ps = pathwayWorkPhases?.find((p) => p.work_phase_code === pending.work_phase_code)
         ?? episodeWorkPhaseAsPathwayTemplate(pending);
-      const chained = chainWindows.get(pending.work_phase_code);
+      const chained = chainWindows.get(rowKeyByPhase.get(pending) ?? pending.work_phase_code);
       const windowStart = chained?.earliestAllowedStart ?? chained?.windowStart ?? initialAnchor;
       const windowEnd = chained?.windowEnd ?? windowStart;
 

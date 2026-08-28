@@ -7,7 +7,7 @@ import { createHash } from 'crypto';
 import { getDbPool } from './db';
 import { nextRequiredStep, isBlocked } from './next-step-engine';
 import { normalizePathwayWorkPhaseArray } from './pathway-work-phases-for-episode';
-import { getMergedFilterFragment } from './schema-probe';
+import { getMergedFilterFragment, probeColumnExists } from './schema-probe';
 import { projectRemainingVisits, computeCompletionWindow } from './episode-forecast-projection';
 import type { EpisodeForecastItem } from './forecast-types';
 
@@ -147,7 +147,16 @@ async function getForecastProgressInputs(
   // Az alias a lenti query-ben `ewp` — a fragmentnek is ezt kell hivatkoznia,
   // különben `42P01 invalid reference to FROM-clause entry for table
   // "episode_work_phases"` (ugyanaz a hiba, mint a plan-validation route-ban volt).
-  const mergedFilter = await getMergedFilterFragment(pool, 'ewp');
+  const [mergedFilter, hasVisitId] = await Promise.all([
+    getMergedFilterFragment(pool, 'ewp'),
+    probeColumnExists(pool, 'episode_work_phases', 'visit_id'),
+  ]);
+  // WP-4.2: egy vizit ("Alkalom") fázisai EGY alkalomnak számítanak — a
+  // hátralévő "vizitszám" a KÜLÖNBÖZŐ vizitek száma, nem a fázis-sorok
+  // darabszáma. Vizit nélküli (degradált/legacy) sor önálló alkalomnak számít
+  // (COALESCE az id-re); egyfős viziteknél (backfill-állapot) az érték a mai
+  // darabszámmal azonos.
+  const unitExpr = hasVisitId ? 'DISTINCT COALESCE(ewp.visit_id, ewp.id)' : '*';
   const [apptRes, stepRes] = await Promise.all([
     pool.query(
       `SELECT COUNT(*)::int AS c FROM appointments WHERE episode_id = $1 AND appointment_status = 'completed'`,
@@ -155,8 +164,8 @@ async function getForecastProgressInputs(
     ),
     pool.query(
       `SELECT
-         COUNT(*)::int AS total,
-         COUNT(*) FILTER (WHERE status IN ('pending', 'scheduled'))::int AS remaining
+         COUNT(${unitExpr})::int AS total,
+         COUNT(${unitExpr}) FILTER (WHERE status IN ('pending', 'scheduled'))::int AS remaining
        FROM episode_work_phases ewp
        WHERE ewp.episode_id = $1 ${mergedFilter}`,
       [episodeId]
