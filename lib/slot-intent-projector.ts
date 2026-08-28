@@ -90,7 +90,7 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       // plan_start_date column may predate migration 039 — fall back without it.
       (await client.query(`SELECT opened_at FROM patient_episodes WHERE id = $1 FOR SHARE`, [episodeId]));
     const apptsRow = await client.query(
-      `SELECT a.step_code, a.step_seq,
+      `SELECT a.step_code, a.step_seq, a.work_phase_id,
               COALESCE(a.start_time, ats.start_time) AS start_time,
               a.appointment_status
        FROM appointments a
@@ -172,23 +172,31 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     const pathwayByCode = new Map<string, PathwayWorkPhaseTemplate>();
     for (const s of steps) pathwayByCode.set(s.work_phase_code, s);
 
-    // Appointment coverage: keyed by step_code (not step_seq) to avoid index mismatches
+    // WP-4.2: a lefedettség work_phase_id-elsődleges. A step_code halmazokba
+    // CSAK a work_phase_id NÉLKÜLI (legacy) foglalás-sorok kerülnek —
+    // duplikált work_phase_code-nál (két állcsont / több fog) a csupasz
+    // kód-kulcs a TESTVÉR fázist is lefedettnek mutatná / járatná le.
     const completedStepCodes = new Set<string>();
     const bookedStepCodes = new Set<string>();
+    const completedWpIds = new Set<string>();
+    const bookedWpIds = new Set<string>();
     let lastHardAnchor = planStartDate ?? openedAt;
     for (const a of apptsRow.rows) {
       const startTime = a.start_time ? new Date(a.start_time) : null;
       if (a.appointment_status === 'completed') {
-        completedStepCodes.add(a.step_code);
+        if (a.work_phase_id) completedWpIds.add(a.work_phase_id);
+        else completedStepCodes.add(a.step_code);
         if (startTime && startTime > lastHardAnchor) lastHardAnchor = startTime;
       } else {
-        bookedStepCodes.add(a.step_code);
+        if (a.work_phase_id) bookedWpIds.add(a.work_phase_id);
+        else bookedStepCodes.add(a.step_code);
         if (startTime && startTime > lastHardAnchor) lastHardAnchor = startTime;
       }
     }
 
     // Episode steps: authoritative source for which steps exist, their order, and completion status
     interface EwpRow {
+      id: string;
       work_phase_code: string;
       step_seq: number;
       status: string;
@@ -214,7 +222,7 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       );
       if (col && col.rows.length > 0) mergedIntoFilter = ' AND merged_into_episode_work_phase_id IS NULL';
       const esResult = await client.query(
-        `SELECT work_phase_code, COALESCE(seq, pathway_order_index) as step_seq, status, completed_at,
+        `SELECT id, work_phase_code, COALESCE(seq, pathway_order_index) as step_seq, status, completed_at,
                 default_days_offset, duration_minutes
          FROM episode_work_phases WHERE episode_id = $1${mergedIntoFilter}
          ORDER BY COALESCE(seq, pathway_order_index)`,
@@ -230,7 +238,9 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     if (episodeWorkPhaseRows) {
       for (const es of episodeWorkPhaseRows) {
         if (es.status === 'completed' || es.status === 'skipped') {
-          completedStepCodes.add(es.work_phase_code);
+          // WP-4.2: a teljesült/kihagyott sor a SAJÁT id-jával fed le — a
+          // csupasz kód a duplikált testvért is elnyomná.
+          completedWpIds.add(es.id);
           if (es.completed_at) {
             const t = new Date(es.completed_at);
             if (t > lastHardAnchor) lastHardAnchor = t;
@@ -239,34 +249,44 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       }
     }
 
-    // Expire stale intents: completed or already-booked step_codes, or pathway hash mismatch
-    const coveredCodes = [...Array.from(completedStepCodes), ...Array.from(bookedStepCodes)];
-    if (coveredCodes.length > 0 || pathwayHash) {
+    // Stale intent lejáratás — work_phase_id-elsődlegesen (WP-4.2): a
+    // wp-linkelt nyitott intent akkor jár le, ha a SAJÁT fázisa lefedett;
+    // a legacy (work_phase_id NULL) intentre a régi, kód-alapú (konzervatív)
+    // szabály marad. Hash-eltérés mindkettőt lejáratja.
+    const coveredWpIds = [...Array.from(completedWpIds), ...Array.from(bookedWpIds)];
+    const legacyCoveredCodes = [...Array.from(completedStepCodes), ...Array.from(bookedStepCodes)];
+    if (coveredWpIds.length > 0 || legacyCoveredCodes.length > 0 || pathwayHash) {
       await client.query(
         `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP
          WHERE episode_id = $1
            AND state = 'open'
            AND (
-             step_code = ANY($2::text[])
-             OR (source_pathway_hash IS NOT NULL AND source_pathway_hash IS DISTINCT FROM $3)
+             (work_phase_id IS NOT NULL AND work_phase_id = ANY($2::uuid[]))
+             OR (work_phase_id IS NULL AND step_code = ANY($3::text[]))
+             OR (source_pathway_hash IS NOT NULL AND source_pathway_hash IS DISTINCT FROM $4)
            )`,
-        [episodeId, coveredCodes, pathwayHash]
+        [episodeId, coveredWpIds, legacyCoveredCodes, pathwayHash]
       );
     }
 
     interface Projection {
       stepCode: string; stepSeq: number; pool: string;
+      workPhaseId: string | null;
       durationMinutes: number; windowStart: Date; windowEnd: Date; expiresAt: Date;
       suggestedStart: Date | null; suggestedEnd: Date | null;
     }
     const projections: Projection[] = [];
 
     // Use episode_work_phases when available (authoritative list); fall back to pathway indices
-    const stepsToProject: Array<{ stepCode: string; stepSeq: number; offset: number; durationMinutes: number; pool: string }> = [];
+    const stepsToProject: Array<{ stepCode: string; stepSeq: number; workPhaseId: string | null; offset: number; durationMinutes: number; pool: string }> = [];
 
     if (episodeWorkPhaseRows) {
       for (const es of episodeWorkPhaseRows) {
         if (es.status !== 'pending' && es.status !== 'scheduled') continue;
+        // WP-4.2: a lefedettség sor-szintű — a SAJÁT fázis foglalása/teljesítése
+        // nyom el; a legacy (wp-link nélküli) appointment kód szerint fed
+        // (nem tudjuk, melyik testvérhez tartozik — konzervatív).
+        if (completedWpIds.has(es.id) || bookedWpIds.has(es.id)) continue;
         if (completedStepCodes.has(es.work_phase_code)) continue;
         if (bookedStepCodes.has(es.work_phase_code)) continue;
         const pw = pathwayByCode.get(es.work_phase_code);
@@ -274,6 +294,7 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
         stepsToProject.push({
           stepCode: es.work_phase_code,
           stepSeq: es.step_seq,
+          workPhaseId: es.id,
           offset: (es.default_days_offset ?? pw?.default_days_offset) ?? 14,
           durationMinutes:
             ewpDur != null && ewpDur > 0 ? ewpDur : (pw?.duration_minutes ?? 30),
@@ -288,6 +309,7 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
         stepsToProject.push({
           stepCode: step.work_phase_code,
           stepSeq: i,
+          workPhaseId: null,
           offset: step.default_days_offset ?? 14,
           durationMinutes: step.duration_minutes ?? 30,
           pool: slotPoolForStep(step),
@@ -313,6 +335,7 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
 
       projections.push({
         stepCode: sp.stepCode, stepSeq: sp.stepSeq, pool: sp.pool,
+        workPhaseId: sp.workPhaseId,
         durationMinutes: sp.durationMinutes,
         windowStart, windowEnd, expiresAt,
         suggestedStart, suggestedEnd,
@@ -322,7 +345,44 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       anchor = suggestedStart;
     }
 
-    // Batch UPSERT: reopens expired intents, does NOT touch converted or cancelled
+    // Árva nyitott intentek lejáratása — az UPSERT ELŐTT (WP-4.2): olyan
+    // nyitott sor, aminek (step_code, step_seq) kulcsa nincs a projekcióban,
+    // vagy work_phase_id-je más kulcs alá tartozik (pl. reorder után elmozdult
+    // seq). Az előre-lejáratás nélkül az idx_slot_intents_unique_open_work_phase
+    // partiális unique (work_phase_id, state='open') 23505-tel buktatná az
+    // INSERT-et, mielőtt a régi utó-takarítás sorra kerülne.
+    const projByKey = new Map(projections.map((p) => [`${p.stepCode}:${p.stepSeq}`, p]));
+    const keyByWpId = new Map(
+      projections.filter((p) => p.workPhaseId).map((p) => [p.workPhaseId as string, `${p.stepCode}:${p.stepSeq}`])
+    );
+    const openRows = await client.query(
+      `SELECT id, step_code, step_seq, work_phase_id FROM slot_intents
+       WHERE episode_id = $1 AND state = 'open'`,
+      [episodeId]
+    );
+    const orphanIds = openRows.rows
+      .filter((r: { step_code: string; step_seq: number; work_phase_id: string | null }) => {
+        const key = `${r.step_code}:${r.step_seq}`;
+        const proj = projByKey.get(key);
+        if (!proj) return true;
+        // Kulcs-egyezés, de a wp-hozzárendelés máshova mutat → árva.
+        if (r.work_phase_id && proj.workPhaseId && r.work_phase_id !== proj.workPhaseId) return true;
+        // A projekció wp-je egy MÁSIK nyitott sor kulcsán ül → azt az orphan
+        // ág (proj hiánya) fogja meg; itt nincs teendő.
+        if (r.work_phase_id && keyByWpId.get(r.work_phase_id) !== key) return true;
+        return false;
+      })
+      .map((r: { id: string }) => r.id);
+    if (orphanIds.length > 0) {
+      await client.query(
+        `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP WHERE id = ANY($1::uuid[])`,
+        [orphanIds]
+      );
+    }
+
+    // Batch UPSERT: reopens expired intents, does NOT touch converted or cancelled.
+    // WP-4.2: a work_phase_id-t is írjuk (a 025-ös migráció eredeti szándéka) —
+    // az újranyitás is kitölti, így a konverzió wp-elsődleges guardjai élnek.
     if (projections.length > 0) {
       const values: string[] = [];
       const params: unknown[] = [episodeId, pathwayHash];
@@ -330,17 +390,19 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
 
       for (const p of projections) {
         values.push(
-          `($1, $${paramIdx}, $${paramIdx+1}, $${paramIdx+2}, $${paramIdx+3}, $${paramIdx+4}, $${paramIdx+5}, 'open', $2, $${paramIdx+6}, $${paramIdx+7}, $${paramIdx+8})`
+          `($1, $${paramIdx}, $${paramIdx+1}, $${paramIdx+2}, $${paramIdx+3}, $${paramIdx+4}, $${paramIdx+5}, 'open', $2, $${paramIdx+6}, $${paramIdx+7}, $${paramIdx+8}, $${paramIdx+9})`
         );
         params.push(p.stepCode, p.stepSeq, p.pool, p.durationMinutes,
-                     p.windowStart, p.windowEnd, p.expiresAt, p.suggestedStart, p.suggestedEnd);
-        paramIdx += 9;
+                     p.windowStart, p.windowEnd, p.expiresAt, p.suggestedStart, p.suggestedEnd,
+                     p.workPhaseId);
+        paramIdx += 10;
       }
 
       await client.query(
         `INSERT INTO slot_intents
            (episode_id, step_code, step_seq, pool, duration_minutes,
-            window_start, window_end, state, source_pathway_hash, expires_at, suggested_start, suggested_end)
+            window_start, window_end, state, source_pathway_hash, expires_at, suggested_start, suggested_end,
+            work_phase_id)
          VALUES ${values.join(', ')}
          ON CONFLICT (episode_id, step_code, step_seq) DO UPDATE SET
            window_start = EXCLUDED.window_start,
@@ -349,27 +411,11 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
            expires_at = EXCLUDED.expires_at,
            suggested_start = EXCLUDED.suggested_start,
            suggested_end = EXCLUDED.suggested_end,
+           work_phase_id = EXCLUDED.work_phase_id,
            state = 'open',
            updated_at = CURRENT_TIMESTAMP
          WHERE slot_intents.state IN ('open', 'expired')`,
         params
-      );
-    }
-
-    // Expire orphan open intents: step_codes no longer pending, or old step_seq mismatches from previous projections
-    const projectedKeys = new Set(projections.map((p) => `${p.stepCode}:${p.stepSeq}`));
-    const orphanExpire = await client.query(
-      `SELECT id, step_code, step_seq FROM slot_intents
-       WHERE episode_id = $1 AND state = 'open'`,
-      [episodeId]
-    );
-    const orphanIds = orphanExpire.rows
-      .filter((r: { step_code: string; step_seq: number }) => !projectedKeys.has(`${r.step_code}:${r.step_seq}`))
-      .map((r: { id: string }) => r.id);
-    if (orphanIds.length > 0) {
-      await client.query(
-        `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP WHERE id = ANY($1::uuid[])`,
-        [orphanIds]
       );
     }
 

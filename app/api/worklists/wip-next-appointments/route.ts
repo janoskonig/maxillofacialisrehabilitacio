@@ -98,7 +98,7 @@ export const GET = authedHandler(async (req, { auth }) => {
       `SELECT column_name FROM information_schema.columns
        WHERE table_name = 'episode_work_phases' AND column_name IN (
          'merged_into_episode_work_phase_id', 'default_days_offset', 'custom_label',
-         'tooth_treatment_id', 'source_episode_pathway_id'
+         'tooth_treatment_id', 'source_episode_pathway_id', 'visit_id'
        )`
     );
     const names = new Set(epCols.rows.map((r: { column_name: string }) => r.column_name));
@@ -116,6 +116,12 @@ export const GET = authedHandler(async (req, { auth }) => {
     if (names.has('source_episode_pathway_id')) {
       ewpSiteJoins += ' LEFT JOIN episode_pathways ewp_ep ON ewp.source_episode_pathway_id = ewp_ep.id';
       ewpSiteSelect += ', ewp_ep.jaw AS "siteJaw"';
+    }
+    // WP-4.2: vizit-tagság + vizit-szintű days_offset a lánc-ablakhoz
+    // (egy vizit fázisai EGY alkalom; a vizitek között a vizit offsetje lép).
+    if (names.has('visit_id')) {
+      ewpOptionalCols += ', ewp.visit_id, ewp_v.days_offset AS visit_days_offset';
+      ewpSiteJoins += ' LEFT JOIN episode_visits ewp_v ON ewp.visit_id = ewp_v.id';
     }
   } catch {
     /* columns may not exist */
@@ -400,8 +406,12 @@ export const GET = authedHandler(async (req, { auth }) => {
     }
   }
 
-  // Jövőbeli foglalások step_code szerint — munkafázis ablak láncoláshoz (előző tényleges dátum).
+  // Jövőbeli foglalások — munkafázis ablak láncoláshoz (előző tényleges dátum).
+  // WP-4.2: work_phase_id-elsődleges kulcsolás; a step_code térképbe CSAK a
+  // work_phase_id nélküli (legacy) sorok kerülnek — duplikált kódnál a
+  // testvér-fázis foglalása nem hat a másik sorra.
   const futureBookedByEpisode = new Map<string, Map<string, Date>>();
+  const futureBookedByWpByEpisode = new Map<string, Map<string, Date>>();
   if (allEpisodeIds.length > 0) {
     const bookedFutureBatch = await pool.query(
       sqlBookedFutureAppointmentsWithEffectiveStep(),
@@ -410,10 +420,20 @@ export const GET = authedHandler(async (req, { auth }) => {
     for (const row of bookedFutureBatch.rows as Array<{
       episode_id: string;
       step_code: string | null;
+      work_phase_id: string | null;
       effective_start: Date | string;
     }>) {
-      if (!row.step_code) continue;
       const start = new Date(row.effective_start);
+      if (row.work_phase_id) {
+        const inner = futureBookedByWpByEpisode.get(row.episode_id) ?? new Map<string, Date>();
+        const existing = inner.get(row.work_phase_id);
+        if (!existing || start.getTime() < existing.getTime()) {
+          inner.set(row.work_phase_id, start);
+        }
+        futureBookedByWpByEpisode.set(row.episode_id, inner);
+        continue;
+      }
+      if (!row.step_code) continue;
       const inner = futureBookedByEpisode.get(row.episode_id) ?? new Map<string, Date>();
       const existing = inner.get(row.step_code);
       if (!existing || start.getTime() < existing.getTime()) {
@@ -444,6 +464,7 @@ export const GET = authedHandler(async (req, { auth }) => {
       openedAt: openedAtMap.get(episodeId) ?? new Date(),
       planStartDate: planStartDateMap.get(episodeId) ?? null,
       futureBookedStartByStepCode: futureBookedByEpisode.get(episodeId) ?? new Map(),
+      futureBookedStartByWorkPhaseId: futureBookedByWpByEpisode.get(episodeId) ?? new Map(),
       currentStage: stageMap.get(episodeId) ?? null,
     };
 

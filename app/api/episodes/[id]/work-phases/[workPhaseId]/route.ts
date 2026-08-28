@@ -155,13 +155,40 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
      * (audit / nyomonkövetés). FK-ja az appointments táblára mutat.
      */
     appointmentId: completedAppointmentId,
+    /** WP-4.2: fázis áthelyezése másik alkalomba (ugyanazon epizód vizitje). */
+    visitId: targetVisitId,
+    /** WP-4.2: állcsont-hatókör ('felso' | 'also' | 'mindketto' | null). */
+    jaw: newJaw,
+    /** WP-4.2: fog-hatókör — a teljes fogszám-lista felülírása (string[]). */
+    teeth: newTeeth,
   } = body;
 
   const pool = getDbPool();
 
+  const hasScopeFields =
+    targetVisitId !== undefined || newJaw !== undefined || newTeeth !== undefined;
+
+  // Review-javítás (WP-4.2): a státusz-váltás és a hatókör/vizit-módosítás
+  // külön hívás — kombinálva a hatókör-mezők némán elvesznének a státusz-ágon.
+  if (newStatus !== undefined && hasScopeFields) {
+    return NextResponse.json(
+      {
+        error:
+          'A státusz-váltás és a vizit/hatókör-módosítás (visitId, jaw, teeth) külön kérésben küldendő',
+      },
+      { status: 400 }
+    );
+  }
+  if (targetVisitId !== undefined && typeof targetVisitId !== 'string') {
+    return NextResponse.json({ error: 'A visitId string azonosító legyen' }, { status: 400 });
+  }
+
   const isTimingOnly =
     newStatus === undefined &&
-    (defaultDaysOffset !== undefined || durationMinutes !== undefined || customLabel !== undefined);
+    (defaultDaysOffset !== undefined ||
+      durationMinutes !== undefined ||
+      customLabel !== undefined ||
+      hasScopeFields);
 
   const client = await pool.connect();
   // Skip ágon: hány jövőbeli foglalást mondtunk le (a válaszban visszaadjuk).
@@ -171,6 +198,7 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     const phaseRow = await client.query(
       `SELECT ewp.id, ewp.episode_id, ewp.work_phase_code, ewp.status, ewp.pathway_order_index,
               ewp.duration_minutes, ewp.default_days_offset, ewp.custom_label,
+              ewp.visit_id, ewp.jaw,
               pe.status as episode_status
        FROM episode_work_phases ewp
        JOIN patient_episodes pe ON ewp.episode_id = pe.id
@@ -237,6 +265,118 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
           changeType: 'timing_change',
           reason: `Időzítés/címke módosítva: ${auditChanges.join(', ')}`,
         });
+      }
+
+      // ─── WP-4.2: áthelyezés másik alkalomba ─────────────────────────────
+      if (typeof targetVisitId === 'string' && targetVisitId !== phase.visit_id) {
+        const targetVisit = await client.query(
+          `SELECT id FROM episode_visits WHERE id = $1 AND episode_id = $2 FOR UPDATE`,
+          [targetVisitId, episodeId]
+        );
+        if (targetVisit.rows.length === 0) {
+          await client.query('ROLLBACK');
+          return NextResponse.json(
+            { error: 'A cél-alkalom nem található ebben az epizódban', code: 'VISIT_NOT_FOUND' },
+            { status: 404 }
+          );
+        }
+        // Review-javítás: a merge-csoport "egy alkalom" — a primary
+        // áthelyezése a rejtett (merged) gyerekeit is viszi, különben a
+        // csoport némán kettéhasadna és zombi vizit maradna hátra.
+        const moved = await client.query(
+          `UPDATE episode_work_phases SET visit_id = $1
+           WHERE id = $2 OR merged_into_episode_work_phase_id = $2
+           RETURNING id`,
+          [targetVisitId, workPhaseId]
+        );
+        // A kiürült régi (egyfős/csoport-) alkalom nem maradhat árván.
+        if (phase.visit_id) {
+          await deleteEpisodeVisitsIfEmpty(client, [phase.visit_id as string]);
+        }
+        const movedChildren = (moved.rowCount ?? 1) - 1;
+        await insertWorkPhaseAudit(client, {
+          episodeWorkPhaseId: workPhaseId,
+          episodeId,
+          oldStatus: phase.status,
+          newStatus: phase.status,
+          changedBy: auth.email ?? auth.userId ?? 'unknown',
+          changeType: 'visit_change',
+          reason:
+            movedChildren > 0
+              ? `Áthelyezve másik alkalomba (+${movedChildren} összevont al-fázis)`
+              : 'Áthelyezve másik alkalomba',
+        });
+      }
+
+      // ─── WP-4.2: állcsont-hatókör ───────────────────────────────────────
+      if (newJaw !== undefined) {
+        if (newJaw !== null && !['felso', 'also', 'mindketto'].includes(newJaw)) {
+          await client.query('ROLLBACK');
+          return NextResponse.json(
+            { error: "A jaw értéke 'felso' | 'also' | 'mindketto' | null lehet" },
+            { status: 400 }
+          );
+        }
+        if ((newJaw ?? null) !== (phase.jaw ?? null)) {
+          await client.query(`UPDATE episode_work_phases SET jaw = $1 WHERE id = $2`, [
+            newJaw,
+            workPhaseId,
+          ]);
+          await insertWorkPhaseAudit(client, {
+            episodeWorkPhaseId: workPhaseId,
+            episodeId,
+            oldStatus: phase.status,
+            newStatus: phase.status,
+            changedBy: auth.email ?? auth.userId ?? 'unknown',
+            changeType: 'scope_change',
+            reason: `Állcsont-hatókör: ${phase.jaw ?? '—'} → ${newJaw ?? '—'}`,
+          });
+        }
+      }
+
+      // ─── WP-4.2: fog-hatókör (a teljes lista felülírása) ────────────────
+      if (newTeeth !== undefined) {
+        if (
+          !Array.isArray(newTeeth) ||
+          newTeeth.some((t) => typeof t !== 'string' && typeof t !== 'number')
+        ) {
+          await client.query('ROLLBACK');
+          return NextResponse.json(
+            { error: 'A teeth fogszám-lista legyen (string[] vagy number[])' },
+            { status: 400 }
+          );
+        }
+        const teethList = Array.from(
+          new Set(newTeeth.map((t: string | number) => String(t).trim().slice(0, 5)))
+        ).filter((t) => t.length > 0);
+        const oldTeethRows = await client.query(
+          `SELECT tooth_number FROM episode_work_phase_teeth WHERE episode_work_phase_id = $1 ORDER BY tooth_number`,
+          [workPhaseId]
+        );
+        const oldTeeth = oldTeethRows.rows.map((r: { tooth_number: string }) => r.tooth_number);
+        const changed =
+          oldTeeth.length !== teethList.length ||
+          [...teethList].sort().join(',') !== [...oldTeeth].sort().join(',');
+        if (changed) {
+          await client.query(`DELETE FROM episode_work_phase_teeth WHERE episode_work_phase_id = $1`, [
+            workPhaseId,
+          ]);
+          for (const tooth of teethList) {
+            await client.query(
+              `INSERT INTO episode_work_phase_teeth (episode_work_phase_id, tooth_number) VALUES ($1, $2)`,
+              [workPhaseId, tooth]
+            );
+          }
+          await insertWorkPhaseAudit(client, {
+            episodeWorkPhaseId: workPhaseId,
+            episodeId,
+            oldStatus: phase.status,
+            newStatus: phase.status,
+            changedBy: auth.email ?? auth.userId ?? 'unknown',
+            changeType: 'scope_change',
+            reason: `Fog-hatókör: [${oldTeeth.join(', ') || '—'}] → [${teethList.join(', ') || '—'}]`,
+          });
+        }
       }
 
       await client.query('COMMIT');
