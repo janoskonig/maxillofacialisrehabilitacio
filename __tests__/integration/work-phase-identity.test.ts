@@ -15,6 +15,11 @@
  *   (d) Legacy (work_phase_id NULL) sorokra a step_code-fallback változatlan.
  *   (e) mark_unsuccessful: a testvér-fázis aktív foglalása nem tartja
  *       'scheduled'-ben a sikertelen próba fázisát.
+ *   (f) Kézi work-pool foglalás (createAppointment workPhaseId-vel, a
+ *       worklist/slot-picker út): pathway-s epizódon a step-prereq őr wp-ága
+ *       nem dob SQL-hibát — teljesült prereq mellett a foglalás sikeres,
+ *       hiányzó prereq 409-es validationError (nem 500), és duplikált
+ *       work_phase_code-nál a testvér foglalása nem fedi le a korábbi fázist.
  *
  * Route-handlereket hívó teszteknél a factory-k pool-lal (db nélkül) futnak és
  * afterEach-ben takarítunk (docs/INTEGRATION_TESTS.md, 2. minta); a route-ok
@@ -27,6 +32,7 @@ import { POST as convertAllIntentsPost } from '@/app/api/episodes/[id]/convert-a
 import { POST as convertIntentPost } from '@/app/api/slot-intents/[id]/convert/route';
 import { PATCH as attemptOutcomePatch } from '@/app/api/appointments/[id]/attempt-outcome/route';
 import { nextAttemptNumber } from '@/lib/appointment-attempts';
+import { createAppointment } from '@/lib/appointment-service';
 import { enrichWorklistPriorAttempts } from '@/lib/worklist-prior-attempts';
 import type { WorklistItemBackend } from '@/lib/worklist-types';
 import {
@@ -40,6 +46,12 @@ import {
   createTestWorkPhase,
 } from './helpers/factories';
 import { assignEpisodeProvider } from './helpers/factories-wp41b';
+import {
+  cleanupCreatedWp03,
+  createTestCarePathway,
+  createTestEpisodePathway,
+  createTestTreatmentType,
+} from './helpers/factories-wp03';
 import { withRollback } from './helpers/db';
 import { authedRequest, type TestAuthUser } from './helpers/auth';
 
@@ -51,6 +63,13 @@ const createdEpisodeIds: string[] = [];
 afterEach(async () => {
   const pool = getDbPool();
   if (createdEpisodeIds.length > 0) {
+    // Az appointment-entitású outbox-eseményeket az appointment-sorok törlése
+    // ELŐTT takarítjuk, különben árván maradnak a közös teszt-DB-ben.
+    await pool.query(
+      `DELETE FROM scheduling_events
+        WHERE entity_id IN (SELECT id FROM appointments WHERE episode_id = ANY($1::uuid[]))`,
+      [createdEpisodeIds],
+    );
     await pool.query(`DELETE FROM appointments WHERE episode_id = ANY($1::uuid[])`, [
       createdEpisodeIds,
     ]);
@@ -59,6 +78,7 @@ afterEach(async () => {
     ]);
     createdEpisodeIds.length = 0;
   }
+  await cleanupCreatedWp03();
   await cleanupCreated();
 });
 
@@ -663,5 +683,281 @@ describe('WP-4.1b/e — mark_unsuccessful: a testvér foglalása nem tartja sche
     );
     expect(ewpBAfter.rows[0].status).toBe('scheduled');
     expect(ewpBAfter.rows[0].appointment_id).toBe(apptB.id);
+  });
+});
+
+/**
+ * (f) Kézi work-pool foglalás: a worklist/slot-picker út a
+ * `createAppointment`-en át fut, és pathway-s epizódon a step-prereq őr
+ * work_phase_id-s (wp) ágát hívja. A review-ban talált CRITICAL hiba itt
+ * csapott le: a wp-ág 3 paramétert kötött, de a SQL csak $1-et és $3-at
+ * hivatkozta → node-pg 'could not determine data type of parameter $2',
+ * azaz MINDEN kézi work-pool foglalás 500-ra futott volna.
+ */
+describe('WP-4.1b/f — kézi foglalás (createAppointment) workPhaseId-vel, pathway-s epizódon', () => {
+  /** Pathway-s epizód-váz: episode_pathways sor, hogy a work pool ne
+   *  downgrade-elődjön consultra és a prereq-őr ténylegesen lefusson. */
+  async function pathwayEpisode(user: TestAuthUser): Promise<{
+    patientId: string;
+    episodeId: string;
+  }> {
+    const patient = await createTestPatient();
+    const episode = await createTestEpisode(undefined, patient.id);
+    createdEpisodeIds.push(episode.id);
+    await assignEpisodeProvider(undefined, episode.id, user.id);
+    const tt = await createTestTreatmentType();
+    const cp = await createTestCarePathway(undefined, tt.id);
+    await createTestEpisodePathway(undefined, episode.id, cp.id);
+    return { patientId: patient.id, episodeId: episode.id };
+  }
+
+  /** A useWorkPhaseBooking kliens-út paraméterezése: work pool + stepCode +
+   *  workPhaseId együtt (a standard worklist/slot-picker foglalás mindig
+   *  küld workPhaseId-t). */
+  function bookWork(
+    user: TestAuthUser,
+    args: {
+      patientId: string;
+      episodeId: string;
+      timeSlotId: string;
+      stepCode: string;
+      stepSeq: number;
+      workPhaseId: string;
+    },
+  ) {
+    return createAppointment(
+      getDbPool(),
+      {
+        patientId: args.patientId,
+        timeSlotId: args.timeSlotId,
+        episodeId: args.episodeId,
+        appointmentType: null,
+        pool: 'work',
+        stepCode: args.stepCode,
+        stepSeq: args.stepSeq,
+        workPhaseId: args.workPhaseId,
+        requiresPrecommit: false,
+        // A CHECK constraint (appointments_created_via_check) engedélyezett
+        // értéke — a kézi worklist/slot-picker út is ezt küldi.
+        createdVia: 'worklist',
+      },
+      { email: user.email, userId: user.id, role: user.role },
+    );
+  }
+
+  it('(f/a) teljesült prereq mellett a foglalás SIKERES — nem SQL-hiba', async () => {
+    const pool = getDbPool();
+    const user = await authUser();
+    const { patientId, episodeId } = await pathwayEpisode(user);
+
+    // Prereq fázis (elokeszites) pending, de AKTÍV foglalás fedi
+    // (work_phase_id-vel horgonyzott) → nem blokkol.
+    const prep = await createTestWorkPhase(undefined, episodeId, {
+      workPhaseCode: 'elokeszites',
+      seq: 0,
+      pool: 'work',
+      status: 'pending',
+    });
+    const target = await createTestWorkPhase(undefined, episodeId, {
+      workPhaseCode: 'lenyomat',
+      seq: 1,
+      pool: 'work',
+      status: 'pending',
+    });
+    const prepSlot = await createTestSlot(undefined, user.id, {
+      startTime: new Date(Date.now() + 2 * MS_PER_DAY),
+      state: 'booked',
+      status: 'booked',
+    });
+    await createTestAppointment(undefined, {
+      patientId,
+      timeSlotId: prepSlot.id,
+      episodeId,
+      workPhaseId: prep.id,
+      stepCode: 'elokeszites',
+      stepSeq: 0,
+      startTime: new Date(Date.now() + 2 * MS_PER_DAY),
+    });
+
+    const freeSlot = await createTestSlot(undefined, user.id, {
+      startTime: new Date(Date.now() + 6 * MS_PER_DAY),
+    });
+
+    const res = await bookWork(user, {
+      patientId,
+      episodeId,
+      timeSlotId: freeSlot.id,
+      stepCode: 'lenyomat',
+      stepSeq: 1,
+      workPhaseId: target.id,
+    });
+    expect(res.ok).toBe(true);
+    if (!res.ok) throw new Error('unreachable');
+
+    const ewpAfter = await pool.query(
+      `SELECT status, appointment_id FROM episode_work_phases WHERE id = $1`,
+      [target.id]
+    );
+    expect(ewpAfter.rows[0].status).toBe('scheduled');
+    expect(ewpAfter.rows[0].appointment_id).toBe(res.result.appointment.id);
+
+    const slotAfter = await pool.query(
+      `SELECT state, status FROM available_time_slots WHERE id = $1`,
+      [freeSlot.id]
+    );
+    expect(slotAfter.rows[0].state).toBe('booked');
+  });
+
+  it('(f/b) duplikált kód: a testvér foglalása nem fedi le a korábbi, még üres fázist', async () => {
+    const pool = getDbPool();
+    const user = await authUser();
+    const { patientId, episodeId } = await pathwayEpisode(user);
+
+    // Két azonos kódú fázis: az ELSŐ (A) üres, a MÁSODIK (B) foglalt.
+    const ewpA = await createTestWorkPhase(undefined, episodeId, {
+      workPhaseCode: 'lenyomat',
+      seq: 0,
+      pool: 'work',
+      status: 'pending',
+    });
+    const ewpB = await createTestWorkPhase(undefined, episodeId, {
+      workPhaseCode: 'lenyomat',
+      seq: 1,
+      pool: 'work',
+      status: 'pending',
+    });
+    const target = await createTestWorkPhase(undefined, episodeId, {
+      workPhaseCode: 'probaidomitas',
+      seq: 2,
+      pool: 'work',
+      status: 'pending',
+    });
+
+    const slotB = await createTestSlot(undefined, user.id, {
+      startTime: new Date(Date.now() + 4 * MS_PER_DAY),
+      state: 'booked',
+      status: 'booked',
+    });
+    const apptB = await createTestAppointment(undefined, {
+      patientId,
+      timeSlotId: slotB.id,
+      episodeId,
+      workPhaseId: ewpB.id,
+      stepCode: 'lenyomat',
+      stepSeq: 1,
+      startTime: new Date(Date.now() + 4 * MS_PER_DAY),
+    });
+    await pool.query(
+      `UPDATE episode_work_phases SET status = 'scheduled', appointment_id = $1 WHERE id = $2`,
+      [apptB.id, ewpB.id]
+    );
+
+    const freeSlot = await createTestSlot(undefined, user.id, {
+      startTime: new Date(Date.now() + 10 * MS_PER_DAY),
+    });
+
+    // A B fázis 'lenyomat' foglalása csupasz step_code-egyezéssel HAMISAN
+    // lefedné az A fázist is — work_phase_id-elsődlegesen viszont A üres,
+    // tehát a 'probaidomitas' foglalása blokkolt.
+    const blocked = await bookWork(user, {
+      patientId,
+      episodeId,
+      timeSlotId: freeSlot.id,
+      stepCode: 'probaidomitas',
+      stepSeq: 2,
+      workPhaseId: target.id,
+    });
+    expect(blocked.ok).toBe(false);
+    if (blocked.ok) throw new Error('unreachable');
+    expect(blocked.validationError.code).toBe('STEP_PREREQUISITE_NOT_MET');
+    expect(blocked.validationError.status).toBe(409);
+    expect(blocked.validationError.error).toContain('lenyomat');
+
+    // Amint az A fázist a SAJÁT (work_phase_id-s) foglalása fedi, a döntés
+    // átfordul: a 'probaidomitas' foglalás sikeres.
+    const slotA = await createTestSlot(undefined, user.id, {
+      startTime: new Date(Date.now() + 2 * MS_PER_DAY),
+      state: 'booked',
+      status: 'booked',
+    });
+    await createTestAppointment(undefined, {
+      patientId,
+      timeSlotId: slotA.id,
+      episodeId,
+      workPhaseId: ewpA.id,
+      stepCode: 'lenyomat',
+      stepSeq: 0,
+      startTime: new Date(Date.now() + 2 * MS_PER_DAY),
+    });
+
+    const allowed = await bookWork(user, {
+      patientId,
+      episodeId,
+      timeSlotId: freeSlot.id,
+      stepCode: 'probaidomitas',
+      stepSeq: 2,
+      workPhaseId: target.id,
+    });
+    expect(allowed.ok).toBe(true);
+    if (!allowed.ok) throw new Error('unreachable');
+
+    // A testvér-fázis (B) foglalása érintetlen.
+    const ewpBAfter = await pool.query(
+      `SELECT status, appointment_id FROM episode_work_phases WHERE id = $1`,
+      [ewpB.id]
+    );
+    expect(ewpBAfter.rows[0].status).toBe('scheduled');
+    expect(ewpBAfter.rows[0].appointment_id).toBe(apptB.id);
+  });
+
+  it('(f/c) hiányzó prereq: szabályos 409-es validationError, nem exception/500', async () => {
+    const pool = getDbPool();
+    const user = await authUser();
+    const { patientId, episodeId } = await pathwayEpisode(user);
+
+    await createTestWorkPhase(undefined, episodeId, {
+      workPhaseCode: 'elokeszites',
+      seq: 0,
+      pool: 'work',
+      status: 'pending',
+    });
+    const target = await createTestWorkPhase(undefined, episodeId, {
+      workPhaseCode: 'lenyomat',
+      seq: 1,
+      pool: 'work',
+      status: 'pending',
+    });
+    const freeSlot = await createTestSlot(undefined, user.id, {
+      startTime: new Date(Date.now() + 5 * MS_PER_DAY),
+    });
+
+    // Ha a wp-ág SQL-je hibás (paraméter-kötés), ez a hívás exceptionnel
+    // (route-on át 500-zal) esne el — a szándékolt viselkedés a 409-es,
+    // kódolt validationError.
+    const res = await bookWork(user, {
+      patientId,
+      episodeId,
+      timeSlotId: freeSlot.id,
+      stepCode: 'lenyomat',
+      stepSeq: 1,
+      workPhaseId: target.id,
+    });
+    expect(res.ok).toBe(false);
+    if (res.ok) throw new Error('unreachable');
+    expect(res.validationError.code).toBe('STEP_PREREQUISITE_NOT_MET');
+    expect(res.validationError.status).toBe(409);
+
+    // A tranzakció visszagördült: a fázis pending maradt, a slot szabad.
+    const ewpAfter = await pool.query(
+      `SELECT status, appointment_id FROM episode_work_phases WHERE id = $1`,
+      [target.id]
+    );
+    expect(ewpAfter.rows[0].status).toBe('pending');
+    expect(ewpAfter.rows[0].appointment_id).toBeNull();
+    const slotAfter = await pool.query(
+      `SELECT state FROM available_time_slots WHERE id = $1`,
+      [freeSlot.id]
+    );
+    expect(slotAfter.rows[0].state).toBe('free');
   });
 });

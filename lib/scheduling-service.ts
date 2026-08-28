@@ -156,10 +156,13 @@ export async function checkStepPrerequisites(
   targetStepCode: string,
   targetWorkPhaseId?: string | null,
 ): Promise<StepPrerequisiteCheckResult> {
+  // Fontos: csak a SQL-ben ténylegesen hivatkozott paramétereket kötjük —
+  // extra bind paraméter node-pg alatt hibát dob ("could not determine data
+  // type of parameter"), így a wp-ágon a $2 az id, nem a step_code.
   const targetCte = targetWorkPhaseId
     ? `SELECT COALESCE(seq, pathway_order_index) AS ord, pathway_order_index AS pidx
        FROM episode_work_phases
-       WHERE episode_id = $1 AND id = $3
+       WHERE episode_id = $1 AND id = $2
        LIMIT 1`
     : `SELECT COALESCE(seq, pathway_order_index) AS ord, pathway_order_index AS pidx
        FROM episode_work_phases
@@ -167,7 +170,7 @@ export async function checkStepPrerequisites(
        ORDER BY COALESCE(seq, pathway_order_index), pathway_order_index
        LIMIT 1`;
   const params: unknown[] = targetWorkPhaseId
-    ? [episodeId, targetStepCode, targetWorkPhaseId]
+    ? [episodeId, targetWorkPhaseId]
     : [episodeId, targetStepCode];
   const r = await client.query(
     `WITH target AS (${targetCte})
