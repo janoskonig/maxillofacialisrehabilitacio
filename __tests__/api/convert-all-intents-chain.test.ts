@@ -118,8 +118,13 @@ describe('convert-all-intents — episode-level per-step override (regression)',
     // user reported.
     expect(SRC).toMatch(/information_schema\.columns/);
     expect(SRC).toMatch(/column_name\s*=\s*'default_days_offset'/);
+    // WP-4.1b: a párosítás work_phase_id-elsődleges LATERAL + LIMIT 1 —
+    // a sima code-alapú JOIN duplikált work_phase_code-nál megsokszorozta az
+    // intent-sorokat. A code-egyezés a legacy (work_phase_id IS NULL) fallback.
+    expect(SRC).toMatch(/LEFT JOIN LATERAL/);
+    expect(SRC).toMatch(/e\.id\s*=\s*si\.work_phase_id/);
     expect(SRC).toMatch(
-      /LEFT JOIN episode_work_phases ewp[\s\S]*?ewp\.episode_id\s*=\s*si\.episode_id[\s\S]*?ewp\.work_phase_code\s*=\s*si\.step_code/
+      /si\.work_phase_id IS NULL AND e\.episode_id\s*=\s*si\.episode_id AND e\.work_phase_code\s*=\s*si\.step_code/
     );
     expect(SRC).toMatch(/ewp\.default_days_offset\s+AS\s+episode_offset/);
   });

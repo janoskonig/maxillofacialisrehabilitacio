@@ -309,14 +309,18 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos'
           ewp.appointmentId === appointmentId &&
           (ewp.status === 'completed' || ewp.status === 'scheduled')
         ) {
+          // WP-4.1b: work_phase_id-elsődleges párosítás — duplikált
+          // work_phase_code-nál a testvér-fázis aktív foglalása nem
+          // akadályozhatja meg ennek a fázisnak a visszanyitását. A step_code
+          // csak a work_phase_id IS NULL legacy sorok fallbackje.
           const otherActive = await client.query(
             `SELECT 1 FROM appointments a
              WHERE a.episode_id = $1
-               AND a.step_code = $2
+               AND (a.work_phase_id = $4 OR (a.work_phase_id IS NULL AND a.step_code = $2))
                AND a.id <> $3
                AND ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}
              LIMIT 1`,
-            [episodeIdForEwp, stepCodeForEwp, appointmentId]
+            [episodeIdForEwp, stepCodeForEwp, appointmentId, ewp.id]
           );
           if (otherActive.rows.length === 0) {
             await revertWorkPhaseLinkToPending(client, {

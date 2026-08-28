@@ -20,6 +20,7 @@ interface AttemptRow {
   id: string;
   episode_id: string;
   step_code: string | null;
+  work_phase_id: string | null;
   attempt_number: number;
   appointment_status: 'unsuccessful' | 'no_show' | 'completed' | null;
   start_time: Date | string | null;
@@ -69,17 +70,29 @@ export async function enrichWorklistPriorAttempts(
   if (episodeIds.length === 0 || stepCodes.length === 0) return;
 
   // Egyetlen lekérés a teljes batch-re. A WHERE feltétel az összes (ep, step)
-  // párt lefedi, a TS oldalon szűrjük a tényleges item-ekre.
+  // párt lefedi, a TS oldalon szűrjük a tényleges item-ekre. A work_phase_id
+  // oszlop a 025-ös migrációval jött; a 029 (attempt_number, amire a probe már
+  // szűrt) későbbi, így itt biztosan létezik.
+  //
+  // WP-4.1b mellékjavítás: a korábbi `ats.end_time` hivatkozás a mai sémán
+  // (az available_time_slots-nak NINCS end_time oszlopa) minden hívásnál
+  // elhasalt, és a catch némán elnyelte — a priorAttempts enrichment így
+  // valójában soha nem futott le. A slot-oldali end_time-ot a
+  // start_time + duration_minutes képletből számoljuk.
   let rows: AttemptRow[];
   try {
     const result = await pool.query<AttemptRow>(
       `SELECT a.id,
               a.episode_id,
               a.step_code,
+              a.work_phase_id,
               a.attempt_number,
               a.appointment_status,
               COALESCE(a.start_time, ats.start_time) AS start_time,
-              COALESCE(a.end_time,   ats.end_time)   AS end_time,
+              COALESCE(
+                a.end_time,
+                ats.start_time + make_interval(mins => COALESCE(ats.duration_minutes, 30))
+              ) AS end_time,
               a.dentist_email,
               a.attempt_failed_reason,
               a.attempt_failed_at,
@@ -99,19 +112,41 @@ export async function enrichWorklistPriorAttempts(
     return;
   }
 
-  // Csoportosítás (episodeId, stepCode) szerint.
-  const grouped = new Map<string, AttemptRow[]>();
-  for (const row of rows) {
-    if (!row.step_code) continue;
-    const key = `${row.episode_id}::${row.step_code}`;
-    if (!lookupKeys.has(key)) continue;
-    let list = grouped.get(key);
+  // Csoportosítás — WP-4.1b: work_phase_id-elsődleges identitás.
+  //   • byWorkPhase: a work_phase_id-vel linkelt sorok, fázisonként külön —
+  //     duplikált work_phase_code-nál ("N alkalom ugyanabból a fázisból") a
+  //     testvér-fázis próbái nem keveredhetnek.
+  //   • byCodeLegacy: a work_phase_id IS NULL (legacy) sorok (ep, step_code)
+  //     szerint — ezek a workPhaseId-s itemekhez is hozzátartoznak fallbackként.
+  //   • byCodeAll: MINDEN sor (ep, step_code) szerint — a workPhaseId nélküli
+  //     itemek a korábbi viselkedést kapják (nincs miből fázisra szűkíteni).
+  const byWorkPhase = new Map<string, AttemptRow[]>();
+  const byCodeLegacy = new Map<string, AttemptRow[]>();
+  const byCodeAll = new Map<string, AttemptRow[]>();
+  const push = (map: Map<string, AttemptRow[]>, key: string, row: AttemptRow): void => {
+    let list = map.get(key);
     if (!list) {
       list = [];
-      grouped.set(key, list);
+      map.set(key, list);
     }
     list.push(row);
+  };
+  for (const row of rows) {
+    if (!row.step_code) continue;
+    const codeKey = `${row.episode_id}::${row.step_code}`;
+    if (!lookupKeys.has(codeKey)) continue;
+    push(byCodeAll, codeKey, row);
+    if (row.work_phase_id) {
+      push(byWorkPhase, row.work_phase_id, row);
+    } else {
+      push(byCodeLegacy, codeKey, row);
+    }
   }
+
+  const attemptSortKey = (r: AttemptRow): [number, number] => [
+    Number(r.attempt_number ?? 1),
+    r.start_time ? new Date(r.start_time).getTime() : 0,
+  ];
 
   // Item-szintű döntés: a `bookedAppointmentId` (ha van) az "aktuális" sor;
   // minden más a `priorAttempts`-be megy. Ha nincs bookedAppointmentId, és
@@ -119,7 +154,22 @@ export async function enrichWorklistPriorAttempts(
   // korábbi `unsuccessful`/`no_show` előtte.
   for (const item of items) {
     if (!item.episodeId || !item.stepCode) continue;
-    const list = grouped.get(`${item.episodeId}::${item.stepCode}`) ?? [];
+    const codeKey = `${item.episodeId}::${item.stepCode}`;
+    let list: AttemptRow[];
+    if (item.workPhaseId) {
+      // Fázis-linkelt próbák + a legacy (link nélküli) sorok fallbackje,
+      // a batch-lekérés eredeti (attempt_number, start_time) rendezésével.
+      list = [
+        ...(byWorkPhase.get(item.workPhaseId) ?? []),
+        ...(byCodeLegacy.get(codeKey) ?? []),
+      ].sort((a, b) => {
+        const [an, at] = attemptSortKey(a);
+        const [bn, bt] = attemptSortKey(b);
+        return an - bn || at - bt;
+      });
+    } else {
+      list = byCodeAll.get(codeKey) ?? [];
+    }
 
     let currentRow: AttemptRow | undefined;
     if (item.bookedAppointmentId) {

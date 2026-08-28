@@ -62,24 +62,47 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
 
   // The episode-level per-step override (`episode_work_phases.default_days_offset`)
   // is OPTIONAL on legacy DBs — probe information_schema once and degrade gracefully
-  // when the column is missing. The LEFT JOIN is also the canonical place to read
-  // any future episode-level overrides without re-shaping callers.
+  // when the column is missing. The LATERAL lookup is also the canonical place to
+  // read any future episode-level overrides without re-shaping callers.
+  //
+  // WP-4.1b: a párosítás work_phase_id-elsődleges, és LATERAL + LIMIT 1 —
+  // a korábbi sima code-alapú LEFT JOIN duplikált work_phase_code-nál
+  // ("N alkalom ugyanabból a fázisból") MEGSOKSZOROZTA az intent-sorokat,
+  // így ugyanaz az intent kétszer került a konverziós ciklusba (a második kör
+  // hamis "Intent nem található vagy már nem open" skipped-bejegyzést termelt).
   let ewpOffsetSelect = ', NULL::int AS episode_offset';
   let ewpJoinSql = '';
   try {
     const colCheck = await pool.query(
-      `SELECT 1 FROM information_schema.columns
-       WHERE table_schema = 'public'
-         AND table_name = 'episode_work_phases'
-         AND column_name = 'default_days_offset'
-       LIMIT 1`
+      `SELECT
+         EXISTS (
+           SELECT 1 FROM information_schema.columns
+           WHERE table_schema = 'public'
+             AND table_name = 'episode_work_phases'
+             AND column_name = 'default_days_offset'
+         ) AS has_offset,
+         EXISTS (
+           SELECT 1 FROM information_schema.columns
+           WHERE table_schema = 'public'
+             AND table_name = 'slot_intents'
+             AND column_name = 'work_phase_id'
+         ) AS has_intent_wp`
     );
-    if (colCheck.rows.length > 0) {
+    if (colCheck.rows[0]?.has_offset === true) {
+      const wpMatch =
+        colCheck.rows[0]?.has_intent_wp === true
+          ? `(si.work_phase_id IS NOT NULL AND e.id = si.work_phase_id)
+             OR (si.work_phase_id IS NULL AND e.episode_id = si.episode_id AND e.work_phase_code = si.step_code)`
+          : `e.episode_id = si.episode_id AND e.work_phase_code = si.step_code`;
       ewpOffsetSelect = ', ewp.default_days_offset AS episode_offset';
       ewpJoinSql =
-        `LEFT JOIN episode_work_phases ewp
-            ON ewp.episode_id = si.episode_id
-           AND ewp.work_phase_code = si.step_code`;
+        `LEFT JOIN LATERAL (
+           SELECT e.default_days_offset
+           FROM episode_work_phases e
+           WHERE ${wpMatch}
+           ORDER BY COALESCE(e.seq, e.pathway_order_index) NULLS LAST
+           LIMIT 1
+         ) ewp ON true`;
     }
   } catch {
     /* tolerate missing information_schema access — fall back to template only */

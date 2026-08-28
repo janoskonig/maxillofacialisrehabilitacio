@@ -660,9 +660,23 @@ export const GET = authedHandler(async (req, { auth }) => {
       providerEmail: string | null;
       hasStepIdentity: boolean;
     };
+    // WP-4.1b: work_phase_id-elsődleges párosítás. A workPhaseId-s item CSAK a
+    // saját fázisához linkelt foglalást (workPhaseMap), vagy link nélküli
+    // legacy sort (exactMapLegacy) kaphat BOOKED-ként — duplikált
+    // work_phase_code-nál a testvér-fázis foglalása különben mindkét soron
+    // megjelenne. A workPhaseId nélküli itemek a korábbi step_code / step_seq /
+    // epizód-fallback láncot kapják változatlanul.
+    const workPhaseMap = new Map<string, BookedEntry>();
     const exactMap = new Map<string, BookedEntry>();
+    const exactMapLegacy = new Map<string, BookedEntry>();
     const stepSeqMap = new Map<string, BookedEntry>();
     const episodeMap = new Map<string, BookedEntry>();
+    const putEarliest = (map: Map<string, BookedEntry>, key: string, entry: BookedEntry): void => {
+      const existing = map.get(key);
+      if (!existing || entry.startTime < existing.startTime) {
+        map.set(key, entry);
+      }
+    };
     for (const row of bookedResult.rows) {
       const start = new Date(row.effective_start).toISOString();
       const hasStepIdentity = row.step_code != null || row.step_seq != null;
@@ -672,40 +686,42 @@ export const GET = authedHandler(async (req, { auth }) => {
         providerEmail: row.dentist_email,
         hasStepIdentity,
       };
+      if (row.work_phase_id) {
+        putEarliest(workPhaseMap, String(row.work_phase_id), entry);
+      }
       if (row.step_code) {
         const exactKey = `${row.episode_id}:${row.step_code}`;
-        const existing = exactMap.get(exactKey);
-        if (!existing || start < existing.startTime) {
-          exactMap.set(exactKey, entry);
+        putEarliest(exactMap, exactKey, entry);
+        if (!row.work_phase_id) {
+          putEarliest(exactMapLegacy, exactKey, entry);
         }
       }
       if (row.step_seq != null) {
-        const seqKey = `${row.episode_id}:${row.step_seq}`;
-        const existing = stepSeqMap.get(seqKey);
-        if (!existing || start < existing.startTime) {
-          stepSeqMap.set(seqKey, entry);
-        }
+        putEarliest(stepSeqMap, `${row.episode_id}:${row.step_seq}`, entry);
       }
-      const epExisting = episodeMap.get(row.episode_id);
-      if (!epExisting || start < epExisting.startTime) {
-        episodeMap.set(row.episode_id, entry);
-      }
+      putEarliest(episodeMap, row.episode_id, entry);
     }
     for (const item of readyItems) {
       const exactKey = item.stepCode ? `${item.episodeId}:${item.stepCode}` : null;
-      const seqKey = item.stepSeq != null ? `${item.episodeId}:${item.stepSeq}` : null;
-      const epFallbackCandidate =
-        (item.stepSeq === 0 || item.stepSeq === undefined)
-          ? episodeMap.get(item.episodeId)
-          : null;
-      const epFallback =
-        epFallbackCandidate && !epFallbackCandidate.hasStepIdentity
-          ? epFallbackCandidate
-          : null;
-      const booked = (exactKey && exactMap.get(exactKey))
-        || (seqKey && stepSeqMap.get(seqKey))
-        || epFallback
-        || null;
+      let booked: BookedEntry | null = null;
+      if (item.workPhaseId) {
+        booked = workPhaseMap.get(String(item.workPhaseId))
+          ?? (exactKey ? (exactMapLegacy.get(exactKey) ?? null) : null);
+      } else {
+        const seqKey = item.stepSeq != null ? `${item.episodeId}:${item.stepSeq}` : null;
+        const epFallbackCandidate =
+          (item.stepSeq === 0 || item.stepSeq === undefined)
+            ? episodeMap.get(item.episodeId)
+            : null;
+        const epFallback =
+          epFallbackCandidate && !epFallbackCandidate.hasStepIdentity
+            ? epFallbackCandidate
+            : null;
+        booked = (exactKey && exactMap.get(exactKey))
+          || (seqKey && stepSeqMap.get(seqKey))
+          || epFallback
+          || null;
+      }
       if (booked) {
         item.bookedAppointmentId = booked.id;
         item.bookedAppointmentStartTime = booked.startTime;

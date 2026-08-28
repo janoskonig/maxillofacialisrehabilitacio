@@ -207,14 +207,34 @@ export async function convertIntentToAppointment(
         return { ok: false, status: 404, error: 'Epizód nem található' };
       }
 
-      // Guard: refuse to book a step that is already completed/skipped
+      // WP-4.1b: az identitás elsődleges kulcsa az intent `work_phase_id`-je.
+      // A szonda cache-elt (process-szintű); itt, a guardok ELŐTT olvassuk ki,
+      // hogy a work_phase_id-elsődleges ágak csak 025+ sémán fussanak.
+      // (Audit #11 miatt a tranzakció saját clientjén fut, nem a poolon.)
+      const hasWorkPhaseIdColumn = await probeAppointmentsWorkPhaseIdColumn(client);
+      const intentWorkPhaseId = hasWorkPhaseIdColumn
+        ? ((intent as { work_phase_id?: string | null }).work_phase_id ?? null)
+        : null;
+
+      // Guard: refuse to book a step that is already completed/skipped.
+      // WP-4.1b: ha az intentnek van work_phase_id-je, CSAK az ahhoz tartozó
+      // fázis állapotát nézzük — duplikált work_phase_code-nál a testvér-fázis
+      // completed/skipped státusza nem blokkolhatja ezt a foglalást. A
+      // work_phase_id nélküli (legacy) intentre marad a step_code út.
       try {
-        const stepDoneCheck = await client.query(
-          `SELECT status FROM episode_work_phases
-           WHERE episode_id = $1 AND work_phase_code = $2 AND status IN ('completed', 'skipped')
-           LIMIT 1`,
-          [intent.episode_id, intent.step_code]
-        );
+        const stepDoneCheck = intentWorkPhaseId
+          ? await client.query(
+              `SELECT status FROM episode_work_phases
+               WHERE id = $1 AND episode_id = $2 AND status IN ('completed', 'skipped')
+               LIMIT 1`,
+              [intentWorkPhaseId, intent.episode_id]
+            )
+          : await client.query(
+              `SELECT status FROM episode_work_phases
+               WHERE episode_id = $1 AND work_phase_code = $2 AND status IN ('completed', 'skipped')
+               LIMIT 1`,
+              [intent.episode_id, intent.step_code]
+            );
         if (stepDoneCheck.rows.length > 0) {
           await client.query(
             `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
@@ -227,16 +247,31 @@ export async function convertIntentToAppointment(
         /* table may not exist */
       }
 
-      // Guard: refuse to book when same step already has an active appointment.
-      // Uses the canonical SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT so this check
-      // matches the worklist's "this step is BOOKED" predicate exactly.
-      const existingStepAppt = await client.query(
-        `SELECT 1 FROM appointments a
-         WHERE a.episode_id = $1 AND a.step_code = $2
-           AND ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}
-         LIMIT 1`,
-        [intent.episode_id, intent.step_code]
-      );
+      // Guard: refuse to book when the SAME phase already has an active
+      // appointment. Uses the canonical SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT
+      // so this check matches the worklist's "this step is BOOKED" predicate.
+      //
+      // WP-4.1b: work_phase_id-elsődleges párosítás — a testvér-fázis (azonos
+      // work_phase_code, másik episode_work_phases sor) aktív foglalása nem
+      // 409-elheti ezt a konverziót. A step_code csak a work_phase_id IS NULL
+      // legacy appointment-sorok fallbackje; work_phase_id nélküli intentnél
+      // marad a régi (episode_id, step_code) szűrés.
+      const existingStepAppt = intentWorkPhaseId
+        ? await client.query(
+            `SELECT 1 FROM appointments a
+             WHERE a.episode_id = $1
+               AND (a.work_phase_id = $2 OR (a.work_phase_id IS NULL AND a.step_code = $3))
+               AND ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}
+             LIMIT 1`,
+            [intent.episode_id, intentWorkPhaseId, intent.step_code]
+          )
+        : await client.query(
+            `SELECT 1 FROM appointments a
+             WHERE a.episode_id = $1 AND a.step_code = $2
+               AND ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}
+             LIMIT 1`,
+            [intent.episode_id, intent.step_code]
+          );
       if (existingStepAppt.rows.length > 0) {
         await client.query(
           `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
@@ -468,10 +503,10 @@ export async function convertIntentToAppointment(
       // disable the canonical unique-index protection on the new appointment.
       // WP-0.8 (audit #11): a szonda a tranzakció saját `client`-jén fut —
       // pool-t adva neki nyitott tranzakcióból kérne új kapcsolatot.
-      const hasWorkPhaseIdColumn = await probeAppointmentsWorkPhaseIdColumn(client);
+      // (WP-4.1b: a probe és az intent work_phase_id kiolvasása feljebb, a
+      // STEP_ALREADY_DONE / STEP_ALREADY_BOOKED guardok előtt történik.)
       let resolvedWorkPhaseId: string | null = null;
       if (hasWorkPhaseIdColumn) {
-        const intentWorkPhaseId = (intent as { work_phase_id?: string | null }).work_phase_id ?? null;
         if (intentWorkPhaseId) {
           resolvedWorkPhaseId = intentWorkPhaseId;
         } else {
@@ -511,9 +546,13 @@ export async function convertIntentToAppointment(
       // Migration 029: compute attempt_number for retries (e.g. after a previous
       // attempt was marked 'unsuccessful'). Cancellation/rebook does NOT
       // increment — see lib/appointment-attempts.ts for the counting rule.
+      // WP-4.1b: a próba-számlálás work_phase_id-elsődleges — két azonos kódú
+      // fázis (ismétlés) próbái nem keveredhetnek. A resolvedWorkPhaseId itt
+      // vagy az intent linkje, vagy az egyértelmű (episode_id, step_code)
+      // fallback-lookup eredménye; NULL-nál a legacy step_code számolás fut.
       const hasAttemptColumns = await probeAttemptColumns(client);
       const computedAttemptNumber = hasAttemptColumns
-        ? await nextAttemptNumber(client, intent.episode_id, intent.step_code)
+        ? await nextAttemptNumber(client, intent.episode_id, intent.step_code, resolvedWorkPhaseId)
         : 1;
 
       const insertColumns = [

@@ -318,15 +318,19 @@ export const PATCH = roleHandler(
         }
 
         if (ewpId) {
-          // Van-e másik aktív (nem cancelled, nem unsuccessful) appointment a step-re?
+          // Van-e másik aktív (nem cancelled, nem unsuccessful) appointment a
+          // fázisra? WP-4.1b: work_phase_id-elsődleges párosítás — duplikált
+          // work_phase_code-nál a testvér-fázis aktív foglalása nem tarthatja
+          // 'scheduled'-ben ezt a fázist. A step_code csak a work_phase_id IS
+          // NULL legacy sorok fallbackje (work-phase-delete minta).
           const activeRow = await client.query(
             `SELECT 1 FROM appointments a
               WHERE a.episode_id = $1
-                AND a.step_code = $2
+                AND (a.work_phase_id = $4 OR (a.work_phase_id IS NULL AND a.step_code = $2))
                 AND a.id <> $3
                 AND ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}
               LIMIT 1`,
-            [episodeId, stepCode, appointmentId]
+            [episodeId, stepCode, appointmentId, ewpId]
           );
           const hasOtherActive = activeRow.rows.length > 0;
 
