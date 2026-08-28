@@ -217,6 +217,14 @@ export function EpisodeStepsManager({
   const [addingStep, setAddingStep] = useState(false);
   /** Cél-alkalom az új kockának: 'new' = új alkalom a terv végére (alapérték). */
   const [adderTargetVisitId, setAdderTargetVisitId] = useState<string>('new');
+  // Review-javítás: ha a kiválasztott cél-alkalom időközben megszűnt (kiürült
+  // vizit szerveroldali takarítása), a választó álljon vissza — különben a
+  // következő hozzáadás VISIT_NOT_FOUND hibára futna.
+  useEffect(() => {
+    if (adderTargetVisitId !== 'new' && !visits.some((v) => v.id === adderTargetVisitId)) {
+      setAdderTargetVisitId('new');
+    }
+  }, [visits, adderTargetVisitId]);
 
   // Free-text step form
   const [freeLabel, setFreeLabel] = useState('');
@@ -595,8 +603,8 @@ export function EpisodeStepsManager({
   };
 
   /** Kocka (merge-csoporttal együtt) áthelyezése egy meglévő alkalomba. */
-  const moveTileToVisit = useCallback(async (step: EpisodeStep, targetVisitId: string) => {
-    if (step.visitId === targetVisitId) return;
+  const moveTileToVisit = useCallback(async (step: EpisodeStep, targetVisitId: string): Promise<boolean> => {
+    if (step.visitId === targetVisitId) return true;
     const prevSteps = steps;
     const prevVisits = visits;
     // Optimista frissítés: a csoport együtt mozog, a kiürült forrás-alkalom
@@ -629,11 +637,13 @@ export function EpisodeStepsManager({
       await loadSteps();
       void loadProjections();
       notifyPlanChanged();
+      return true;
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba az áthelyezésnél', 'error');
       setSteps(prevSteps);
       setVisits(prevVisits);
       void loadSteps();
+      return false;
     } finally {
       setSaving(false);
     }
@@ -650,11 +660,24 @@ export function EpisodeStepsManager({
         setSaving(false);
       }
       if (!visit) return;
-      await moveTileToVisit(step, visit.id);
+      const ok = await moveTileToVisit(step, visit.id);
+      if (!ok) {
+        // Review-javítás: ha a POST /visits sikerült, de az áthelyezés elbukott,
+        // a frissen létrehozott üres alkalom ne maradjon szemétként hátra.
+        try {
+          await fetch(`/api/episodes/${episodeId}/visits/${visit.id}`, {
+            method: 'DELETE',
+            credentials: 'include',
+          });
+        } catch {
+          /* best-effort — üres vizit, kézzel is törölhető */
+        }
+        void loadSteps();
+      }
       return;
     }
     await moveTileToVisit(step, target);
-  }, [createVisit, moveTileToVisit]);
+  }, [createVisit, moveTileToVisit, episodeId, loadSteps]);
 
   /** Üres alkalom törlése (csak üresre engedett — a szerver is őrzi). */
   const handleDeleteEmptyVisit = async (visitId: string) => {

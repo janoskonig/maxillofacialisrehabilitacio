@@ -116,6 +116,8 @@ interface FetchCall {
 function installFetchMock(opts: {
   visits?: MockVisit[];
   workPhases?: MockPhaseRow[];
+  /** Review-javítás teszthez: a work-phase PATCH 500-zal bukjon. */
+  failWorkPhasePatch?: boolean;
 } = {}) {
   const calls: FetchCall[] = [];
   let createdVisitCounter = 0;
@@ -189,6 +191,9 @@ function installFetchMock(opts: {
       return jsonResponse({ ok: true });
     }
     if (/\/work-phases\/[^/]+$/.test(url) && method === 'PATCH') {
+      if (opts.failWorkPhasePatch) {
+        return jsonResponse({ error: 'Szimulált szerver-hiba' }, 500);
+      }
       const wpId = url.split('/').pop() as string;
       const row = (opts.workPhases ?? []).find((w) => w.id === wpId);
       return jsonResponse({ workPhase: row ?? makePhase({ id: wpId }) });
@@ -450,5 +455,41 @@ describe('WP-4.3 vizit-kártyás kezelési terv', () => {
 
     expect(screen.getByText(/Alkalomhoz nem rendelt munkafázisok/)).toBeTruthy();
     expect(screen.getByText('Árva fázis')).toBeTruthy();
+  });
+});
+
+describe('optimista hibaág (review-javítás)', () => {
+  it('sikertelen áthelyezésnél a kocka visszaáll és a lista újratöltődik', async () => {
+    const { calls } = installFetchMock({
+      visits: [
+        makeVisit({ id: 'v1', seq: 0 }),
+        makeVisit({ id: 'v2', seq: 1, label: 'Második' }),
+      ],
+      workPhases: [
+        makePhase({ id: 'w1', visitId: 'v1' }),
+        makePhase({ id: 'w2', visitId: 'v2', customLabel: 'Átadás', seq: 1 }),
+      ],
+      failWorkPhasePatch: true,
+    });
+    renderManager();
+    await screen.findByText('1. alkalom');
+    const getsBefore = calls.filter(
+      (c) => c.url === `/api/episodes/${EPISODE_ID}/work-phases` && c.method === 'GET'
+    ).length;
+
+    const moveButtons = screen.getAllByRole('button', { name: /Áthelyezés/ });
+    fireEvent.click(moveButtons[0]);
+    const menu = await screen.findByRole('menu');
+    fireEvent.click(within(menu).getByText(/2\. alkalom — Második/));
+
+    // Visszatöltés: a GET újra lefut, és a kocka az 1. alkalomban marad.
+    await waitFor(() => {
+      const getsAfter = calls.filter(
+        (c) => c.url === `/api/episodes/${EPISODE_ID}/work-phases` && c.method === 'GET'
+      ).length;
+      expect(getsAfter).toBeGreaterThan(getsBefore);
+    });
+    const card1 = screen.getByText('1. alkalom').closest('[data-visit-card]') ?? document.body;
+    expect(within(card1 as HTMLElement).getAllByText('Lenyomatvétel').length).toBeGreaterThan(0);
   });
 });

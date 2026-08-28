@@ -193,6 +193,8 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
   const client = await pool.connect();
   // Skip ágon: hány jövőbeli foglalást mondtunk le (a válaszban visszaadjuk).
   let skipCancelledAppointments: number | null = null;
+  // Vizit-áthelyezésnél a COMMIT után újravetítünk (seq-átszámozás → intent-kulcsok).
+  let visitMoved = false;
   try {
     await client.query('BEGIN');
     const phaseRow = await client.query(
@@ -294,6 +296,28 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
           await deleteEpisodeVisitsIfEmpty(client, [phase.visit_id as string]);
         }
         const movedChildren = (moved.rowCount ?? 1) - 1;
+        // Review-javítás (WP-4.3, major): a sorrend igazsága az EWP
+        // COALESCE(seq, pathway_order_index) — az áthelyezés után a fázis-seq
+        // a vizit-sorrendet kövesse (vizit seq, azon belül a mai sorrend),
+        // különben a megjelenített alkalom-sorrend és a motor/becslés/lánc
+        // némán széttartana (a kollekció-reorder route pontosan így számoz át).
+        await client.query(
+          `WITH ordered AS (
+             SELECT e.id,
+                    ROW_NUMBER() OVER (
+                      ORDER BY v.seq NULLS LAST,
+                               COALESCE(e.seq, e.pathway_order_index),
+                               e.pathway_order_index, e.id
+                    ) - 1 AS new_seq
+             FROM episode_work_phases e
+             LEFT JOIN episode_visits v ON e.visit_id = v.id
+             WHERE e.episode_id = $1
+           )
+           UPDATE episode_work_phases SET seq = ordered.new_seq
+           FROM ordered WHERE episode_work_phases.id = ordered.id`,
+          [episodeId]
+        );
+        visitMoved = true;
         await insertWorkPhaseAudit(client, {
           episodeWorkPhaseId: workPhaseId,
           episodeId,
@@ -381,6 +405,13 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
 
       await client.query('COMMIT');
 
+      if (visitMoved) {
+        try {
+          await projectRemainingSteps(episodeId);
+        } catch {
+          /* non-blocking — a projektor a következő releváns eseménynél újrafut */
+        }
+      }
       try {
         await emitSchedulingEvent('episode', episodeId, 'step_timing_updated');
       } catch {
