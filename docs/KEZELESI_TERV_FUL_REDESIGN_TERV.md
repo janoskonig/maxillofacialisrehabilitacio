@@ -1,7 +1,7 @@
 # Kezelési terv & időpont fül — újratervezési és javítási terv
 
-**Státusz:** FÁZIS 0–3 VÉGREHAJTVA (2026-08-27, PR #58–#76) · **FÁZIS 4 JÓVÁHAGYVA
-2026-08-28-án, VÉGREHAJTÁS ALATT** (külön `episode_visits` táblával) ·
+**Státusz:** A TELJES TERV VÉGREHAJTVA — FÁZIS 0–3: 2026-08-27 (PR #58–#76),
+FÁZIS 4: 2026-08-28 (PR #77–#80, külön `episode_visits` táblával) ·
 **Készült:** 2026-08-27 · **Alap-commit:** `09d6446` (main)
 **Címzett:** végrehajtó agent-szett. Ez a fájl a kanonikus forrás; ha valami ellentmond a
 beszélgetésnek, ez a fájl nyer.
@@ -41,7 +41,7 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 | WP-4.1a vizit-séma (089) | ✅ | [#77](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/77) | episode_visits + visit_id/jaw/fog-kapcsolótábla + újrafuttatható backfill; review-javítás: láncolt merge-csoport (ciklusos backfill, lánc-lapítás a merge-ben, árva-vizit takarítás) |
 | WP-4.1b step_code→work_phase_id identitás | ✅ | [#78](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/78) | Minden identitás-út wp-elsődleges (legacy fallback); review: CRITICAL param-kötési hiba a prereq-ágon javítva; mellékjavítás: a worklist „korábbi próbák" lekérdezés eddig némán elhasalt (ats.end_time) |
 | WP-4.2 vizit API + forecast | ✅ | [#79](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/79) | Vizit CRUD + PATCH visitId/jaw/teeth + vizit-tudatos forecast (kompat-invariáns fuzz-igazolva) + wp-tudatos projektor; review: 4 major javítva (kombinált body, csoport-mozgatás, reorder=EWP-átszámozás, scoped backfill), 1 medium cáfolva (advisory lock) |
-| WP-4.3 vizit-kártyás UI | 🔄 | — | |
+| WP-4.3 vizit-kártyás UI | ✅ | [#80](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/80) | Alkalom-kártyák + kockák (hatókör-badge), drag-drop + teljes nem-drag alternatíva, „Feltöltés sablonból"; élőben ellenőrizve; review-major (visit-move seq-átszámozás) javítva. **Ezzel a FÁZIS 4 és a TELJES TERV kész.** |
 
 ---
 
