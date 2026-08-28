@@ -1,62 +1,57 @@
 'use client';
 
+/**
+ * Kezelési terv kártya — WP-4.3 óta vizit-alapú („puzzle") nézet:
+ * a terv alkalom-kártyák (VisitCard) függőleges sora, egy kártya = egy vizit
+ * (episode_visits). A kártyákban a munkafázisok kezelés-kockákként
+ * (VisitPhaseTile) jelennek meg; a kockák drag-droppal ÉS menüből is
+ * áthelyezhetők másik alkalomba, az alkalmak átrendezhetők (drag + fel/le
+ * gombok). A sablon másodlagos művelet: „Feltöltés sablonból" (explicit
+ * generate — a WP-0.7 óta automatikus újragenerálás nincs).
+ */
 import { useState, useEffect, useCallback, useMemo, useRef } from 'react';
 import { useToast } from '@/contexts/ToastContext';
 import {
-  Loader2, SkipForward, RotateCcw, CheckCircle2, Circle, Clock,
-  ChevronDown, ChevronUp, ChevronRight, GripVertical, Trash2,
-  Plus, Search, FileText, Layers, PenLine, Merge, Unlink, Calendar, SendHorizontal,
-  AlertTriangle, CalendarDays, UserRound, CalendarPlus, CalendarClock, CalendarX2, Link2, Undo2,
+  Loader2, ChevronDown, ChevronUp, ChevronRight,
+  Plus, Search, FileText, Layers, PenLine, Merge,
+  AlertTriangle, CalendarDays, UserRound,
 } from 'lucide-react';
-import { WorkPhaseTaskDelegateBlock } from './WorkPhaseTaskDelegateBlock';
 import { PlanValidationPanel } from './PlanValidationPanel';
-import { LONG_DURATION_MINUTES } from '@/lib/treatment-plan-validation';
 import { useWorkPhaseBooking } from '@/hooks/useWorkPhaseBooking';
 import { WorkPhaseBookingModals } from './WorkPhaseBookingModals';
 import { PlanStartDateControl } from './PlanStartDateControl';
 import { PlanHistoryLog } from './PlanHistoryLog';
-import type { WorklistRowState } from '@/lib/worklist-types';
 import {
-  DndContext, closestCenter, KeyboardSensor, PointerSensor, useSensor, useSensors,
-  type DragEndEvent, type Modifier,
+  DndContext, closestCenter, pointerWithin, rectIntersection,
+  KeyboardSensor, PointerSensor, useSensor, useSensors, useDroppable,
+  type CollisionDetection, type DragEndEvent, type DragStartEvent, type Modifier,
 } from '@dnd-kit/core';
 import {
-  SortableContext, verticalListSortingStrategy, useSortable,
-  sortableKeyboardCoordinates,
+  SortableContext, verticalListSortingStrategy,
+  sortableKeyboardCoordinates, arrayMove,
 } from '@dnd-kit/sortable';
-import { CSS } from '@dnd-kit/utilities';
+import {
+  type ConfirmAction,
+  type EpisodeStep,
+  type EpisodeVisit,
+  type StepProjectionInfo,
+  formatShortDate,
+  formatWaitDays,
+  mapVisitsResponse,
+  mapWorkPhaseApiToEpisodeStep,
+  mapWorkPhasesResponse,
+  summarizeVisitStatus,
+  visitDateInfo,
+  visitDisplayLabel,
+  visitTotalMinutes,
+} from './visit-plan/visit-plan-types';
+import { VisitCard } from './visit-plan/VisitCard';
+import { VisitPhaseTile, type RowBookingActions } from './visit-plan/VisitPhaseTile';
 
 const restrictToVerticalAxis: Modifier = (args) => ({
   ...args.transform,
   x: 0,
 });
-
-interface EpisodeStep {
-  id: string;
-  episodeId: string;
-  stepCode: string;
-  pathwayOrderIndex: number;
-  pool: string;
-  durationMinutes: number;
-  defaultDaysOffset: number;
-  status: 'pending' | 'scheduled' | 'completed' | 'skipped';
-  appointmentId: string | null;
-  createdAt: string;
-  completedAt: string | null;
-  sourceEpisodePathwayId: string | null;
-  seq: number | null;
-  customLabel?: string | null;
-  toothTreatmentId?: string | null;
-  mergedIntoStepId?: string | null;
-  toothNumber?: number | null;
-  treatmentLabel?: string | null;
-  /**
-   * WP-1.2: az integritás-javítás során elveszett a sor foglalása (a
-   * hivatkozott időpontot lemondták/törölték), és azóta sincs új. A sorban
-   * halk jelzést mutatunk: „nincs élő időpont — foglaljon újat".
-   */
-  lostAppointment?: boolean;
-}
 
 interface LinkedToothTreatment {
   id: string;
@@ -86,35 +81,12 @@ const JAW_SHORT: Record<string, string> = {
   also: 'alsó',
 };
 
-// ─── Tervezett ütemezés (step-projections) — a lépéssorba fésülve ────────────
-
-/** A GET /api/episodes/:id/step-projections sorainak itt használt szelete. */
-interface StepProjectionInfo {
-  /** Kanonikus episode_work_phases.id — ezen join-olunk az EpisodeStep.id-hoz. */
-  workPhaseId?: string | null;
-  status: string;
-  actualDate: string | null;
-  windowStart: string | null;
-  windowEnd: string | null;
-  waitFromNowDays: number | null;
-}
-
 interface StepProjectionSummary {
   completedCount: number;
   remainingCount: number;
   estimatedCompletionEarliest: string | null;
   estimatedCompletionLatest: string | null;
   nextStepWaitDays: number | null;
-}
-
-function formatShortDate(iso: string): string {
-  return new Date(iso).toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' });
-}
-
-function formatWaitDays(days: number): string {
-  if (days === 0) return 'ma';
-  if (days === 1) return '1 nap múlva';
-  return `${days} nap múlva`;
 }
 
 function estimatedCompletionText(s: StepProjectionSummary): string | null {
@@ -124,48 +96,6 @@ function estimatedCompletionText(s: StepProjectionSummary): string | null {
   if (l) return `legkésőbb ${formatShortDate(l)}`;
   if (e) return `legkorábban ${formatShortDate(e)}`;
   return null;
-}
-
-/** Map work-phase API row (camelCase) to local EpisodeStep shape (stepCode = work phase code). */
-function mapWorkPhaseApiToEpisodeStep(row: Record<string, unknown>): EpisodeStep {
-  const code = (row.workPhaseCode ?? row.stepCode) as string;
-  return {
-    id: String(row.id),
-    episodeId: String(row.episodeId),
-    stepCode: code,
-    pathwayOrderIndex: Number(row.pathwayOrderIndex),
-    pool: String(row.pool),
-    durationMinutes: Number(row.durationMinutes),
-    defaultDaysOffset: Number(row.defaultDaysOffset),
-    status: row.status as EpisodeStep['status'],
-    appointmentId: row.appointmentId != null ? String(row.appointmentId) : null,
-    createdAt: String(row.createdAt),
-    completedAt: row.completedAt != null ? String(row.completedAt) : null,
-    sourceEpisodePathwayId:
-      row.sourceEpisodePathwayId != null ? String(row.sourceEpisodePathwayId) : null,
-    seq: row.seq != null ? Number(row.seq) : null,
-    customLabel: row.customLabel != null ? String(row.customLabel) : null,
-    toothTreatmentId: row.toothTreatmentId != null ? String(row.toothTreatmentId) : null,
-    mergedIntoStepId:
-      row.mergedIntoWorkPhaseId != null ? String(row.mergedIntoWorkPhaseId) : null,
-    toothNumber: row.toothNumber != null ? Number(row.toothNumber) : null,
-    treatmentLabel: row.treatmentLabel != null ? String(row.treatmentLabel) : null,
-  };
-}
-
-function mapWorkPhasesResponse(
-  rows: unknown[] | undefined,
-  lostAppointmentWorkPhaseIds?: unknown[]
-): EpisodeStep[] {
-  if (!rows?.length) return [];
-  const lostIds = new Set(
-    (lostAppointmentWorkPhaseIds ?? []).map((id) => String(id))
-  );
-  return rows.map((r) => {
-    const step = mapWorkPhaseApiToEpisodeStep(r as Record<string, unknown>);
-    if (lostIds.has(step.id)) step.lostAppointment = true;
-    return step;
-  });
 }
 
 export interface EpisodeStepsManagerProps {
@@ -185,19 +115,6 @@ export interface EpisodeStepsManagerProps {
   refreshTrigger?: number;
 }
 
-const poolLabels: Record<string, string> = {
-  consult: 'Konzultáció',
-  work: 'Munkafázis',
-  control: 'Kontroll',
-};
-
-const statusConfig: Record<string, { icon: typeof Circle; label: string; color: string; bgColor: string }> = {
-  pending: { icon: Circle, label: 'Várakozik', color: 'text-gray-400 dark:text-gray-500', bgColor: 'bg-gray-50 dark:bg-gray-800/60' },
-  scheduled: { icon: Clock, label: 'Időpont foglalva', color: 'text-blue-500 dark:text-blue-400', bgColor: 'bg-blue-50 dark:bg-blue-950/40' },
-  completed: { icon: CheckCircle2, label: 'Kész', color: 'text-green-500 dark:text-green-400', bgColor: 'bg-green-50 dark:bg-green-950/40' },
-  skipped: { icon: SkipForward, label: 'Átugorva', color: 'text-amber-500 dark:text-amber-400', bgColor: 'bg-amber-50 dark:bg-amber-950/40' },
-};
-
 const PATHWAY_COLORS = [
   'bg-indigo-100 dark:bg-indigo-950/50 text-indigo-700 dark:text-indigo-300',
   'bg-emerald-100 dark:bg-emerald-950/50 text-emerald-700 dark:text-emerald-300',
@@ -208,647 +125,32 @@ const PATHWAY_COLORS = [
 
 type AdderTab = 'catalog' | 'freetext' | 'tooth';
 
-type ConfirmAction = 'skip' | 'unskip' | 'delete' | 'timing' | 'reopen';
+// ─── „Új alkalom" zóna: droppable + kattintható (nem-drag alternatíva) ───────
 
-/** Terv-sorhoz párosított worklist-foglalási akciók (useWorkPhaseBooking-ból). */
-interface RowBookingActions {
-  state: WorklistRowState;
-  onBook: () => void;
-  onLink: () => void;
-  onMarkDoneRetro: () => void;
-  onMarkUnsuccessful: () => void;
-}
-
-// ─── Sortable step row ───────────────────────────────────────────────────────
-
-function SortableStepRow({
-  step, idx, isNext, stepLabel, pathwayLabel, pathwayColor,
-  mergedChildren, projection, rowBooking,
-  onSkipConfirm, onUnskipConfirm, onDelete, onReopenConfirm,
-  mergeMode, mergeSelected, onToggleMerge,
-  onEditTiming, onUnmerge, canDelegate, onDelegateClick, delegateOpen,
-  onDeleteChild,
-}: {
-  step: EpisodeStep;
-  idx: number;
-  isNext: boolean;
-  stepLabel: string;
-  pathwayLabel: string | null;
-  pathwayColor: string;
-  mergedChildren: EpisodeStep[];
-  projection: StepProjectionInfo | null;
-  rowBooking: RowBookingActions | null;
-  onSkipConfirm: () => void;
-  onUnskipConfirm: () => void;
-  onDelete: () => void;
-  onReopenConfirm: () => void;
-  mergeMode: boolean;
-  mergeSelected: boolean;
-  onToggleMerge: () => void;
-  onEditTiming: () => void;
-  onUnmerge: () => void;
-  canDelegate: boolean;
-  onDelegateClick: () => void;
-  delegateOpen: boolean;
-  onDeleteChild: (child: EpisodeStep) => void;
-}) {
-  const {
-    attributes, listeners, setNodeRef, setActivatorNodeRef,
-    transform, transition, isDragging,
-  } = useSortable({ id: step.id });
-
-  const style: React.CSSProperties = {
-    transform: CSS.Transform.toString(transform),
-    transition: transition ?? undefined,
-    opacity: isDragging ? 0.5 : 1,
-    zIndex: isDragging ? 50 : undefined,
-    position: 'relative' as const,
-  };
-
-  const config = statusConfig[step.status] ?? statusConfig.pending;
-  const StatusIcon = config.icon;
-  const canSkip = step.status === 'pending' || step.status === 'scheduled';
-  const canUnskip = step.status === 'skipped';
-  // A tervből bármelyik sor elhagyható — a foglalt időpontot a szerver mondja
-  // le, a kész fázis pedig az előzményekből is kikerül.
-  const canDelete = true;
-  const isAdHoc = !step.sourceEpisodePathwayId;
-  const isTooth = !!step.toothTreatmentId;
-  const hasMerged = mergedChildren.length > 0;
-
-  // Kész / kihagyott → vékony, halvány sor (kevesebb zaj a tervben).
-  if (step.status === 'completed' || step.status === 'skipped') {
-    return (
-      <div ref={setNodeRef} style={style}>
-        <div
-          className={`flex items-center gap-2 px-3 py-2 rounded-lg bg-gray-50 dark:bg-gray-800/60 ${
-            step.status === 'completed' ? 'opacity-70' : 'opacity-60'
-          }`}
-        >
-          <span className="text-xs font-mono text-gray-400 dark:text-gray-500 w-5 text-right shrink-0">{idx + 1}.</span>
-          <StatusIcon className={`w-4 h-4 shrink-0 ${config.color}`} />
-          <span
-            className={`flex-1 min-w-0 truncate text-sm ${
-              step.status === 'skipped' ? 'line-through text-gray-400 dark:text-gray-500' : 'text-gray-600 dark:text-gray-400'
-            }`}
-          >
-            {stepLabel}
-          </span>
-          {step.status === 'completed' && (step.completedAt || projection?.actualDate) && (
-            <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">
-              {formatShortDate((step.completedAt ?? projection?.actualDate) as string)}
-            </span>
-          )}
-          <span className="text-xs text-gray-400 dark:text-gray-500 shrink-0">{config.label}</span>
-          {step.status === 'completed' && !mergeMode && (
-            <button
-              onClick={onReopenConfirm}
-              className="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-              title="Mégsem kész — visszaállítás várakozóra (indoklás szükséges)"
-            >
-              <Undo2 className="w-3 h-3" />
-              Mégsem kész
-            </button>
-          )}
-          {canUnskip && !mergeMode && (
-            <button
-              onClick={onUnskipConfirm}
-              className="shrink-0 inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-              title="Visszaállítás várakozóra"
-            >
-              <RotateCcw className="w-3 h-3" />
-              Visszaállít
-            </button>
-          )}
-          {canDelete && !mergeMode && (
-            <button
-              onClick={onDelete}
-              className="shrink-0 p-1 text-gray-400 dark:text-gray-500 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 rounded transition-colors"
-              title="Munkafázis elhagyása a tervből"
-            >
-              <Trash2 className="w-3.5 h-3.5" />
-            </button>
-          )}
-        </div>
-      </div>
-    );
-  }
-
+function NewVisitZone({ onCreate, saving }: { onCreate: () => void; saving: boolean }) {
+  const { setNodeRef, isOver } = useDroppable({ id: 'new-visit-zone' });
   return (
-    <div ref={setNodeRef} style={style}>
-      <div
-        className={`flex items-center gap-2 flex-wrap px-3 py-2.5 rounded-lg transition-colors ${
-          isDragging ? 'shadow-lg ring-2 ring-medical-primary/30' : ''
-        } ${isNext ? 'bg-medical-primary/5 border border-medical-primary/20' : config.bgColor}`}
+    <div
+      ref={setNodeRef}
+      data-testid="new-visit-zone"
+      className={`rounded-xl border-2 border-dashed px-3 py-3 flex items-center gap-2 flex-wrap transition-colors ${
+        isOver
+          ? 'border-medical-primary bg-medical-primary/5'
+          : 'border-gray-300 dark:border-gray-700'
+      }`}
+    >
+      <button
+        type="button"
+        onClick={onCreate}
+        disabled={saving}
+        className="inline-flex items-center gap-1.5 px-3 py-1.5 text-sm font-medium text-medical-primary rounded-md hover:bg-medical-primary/10 transition-colors disabled:opacity-50"
       >
-        {mergeMode && (
-          <input
-            type="checkbox"
-            checked={mergeSelected}
-            onChange={onToggleMerge}
-            className="w-4 h-4 shrink-0 accent-medical-primary"
-          />
-        )}
-
-        {/* Drag handle */}
-        <button
-          ref={setActivatorNodeRef}
-          className="touch-none p-1 rounded hover:bg-gray-200 dark:hover:bg-gray-700 cursor-grab active:cursor-grabbing shrink-0"
-          {...attributes}
-          {...listeners}
-          tabIndex={-1}
-          aria-label="Húzd át"
-        >
-          <GripVertical className="w-4 h-4 text-gray-400 dark:text-gray-500" />
-        </button>
-
-        {/* Step number + icon */}
-        <div className="flex items-center gap-2 shrink-0">
-          <span className="text-xs font-mono text-gray-400 dark:text-gray-500 w-5 text-right">{idx + 1}.</span>
-          <StatusIcon className={`w-4 h-4 ${config.color}`} />
-        </div>
-
-        {/* Step info — min szélesség alatt az akciósor új sorba törik */}
-        <div className="flex-1 min-w-[220px]">
-          <div className="flex items-center gap-2 flex-wrap">
-            <span className="text-sm font-medium text-gray-900 dark:text-gray-100">
-              {stepLabel}
-            </span>
-            {isNext && (
-              <span className="text-xs font-medium text-medical-primary bg-medical-primary/10 px-1.5 py-0.5 rounded">
-                Következő
-              </span>
-            )}
-            {pathwayLabel && (
-              <span className={`text-xs font-medium px-1.5 py-0.5 rounded ${pathwayColor}`}>
-                {pathwayLabel}
-              </span>
-            )}
-            {isTooth && (
-              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-teal-100 dark:bg-teal-950/50 text-teal-700 dark:text-teal-300">
-                fog #{step.toothNumber}
-              </span>
-            )}
-            {isAdHoc && !isTooth && (
-              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-400">
-                egyedi
-              </span>
-            )}
-            {hasMerged && (
-              <span className="text-xs font-medium px-1.5 py-0.5 rounded bg-violet-100 dark:bg-violet-950/50 text-violet-700 dark:text-violet-300">
-                +{mergedChildren.length} összevonva
-              </span>
-            )}
-          </div>
-          <div className="flex items-center gap-2 mt-0.5 flex-wrap">
-            <span className="text-xs text-gray-500 dark:text-gray-400">{poolLabels[step.pool] ?? step.pool}</span>
-            <span className="text-xs text-gray-400 dark:text-gray-500">·</span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              {step.durationMinutes} perc
-              {hasMerged ? ' (foglalható blokk)' : ''}
-            </span>
-            <span className="text-xs text-gray-400 dark:text-gray-500">·</span>
-            <span className="text-xs text-gray-500 dark:text-gray-400">{step.defaultDaysOffset} nap offset</span>
-            <span className="text-xs text-gray-400 dark:text-gray-500">·</span>
-            <span className={`text-xs ${config.color}`}>{config.label}</span>
-            {/* Tervezett ütemezés — foglalt időpont / becsült időablak a vetítésből */}
-            {step.status === 'scheduled' && projection?.actualDate && (
-              <>
-                <span className="text-xs text-gray-400 dark:text-gray-500">·</span>
-                <span className="text-xs text-blue-600 dark:text-blue-300">
-                  📅 {formatShortDate(projection.actualDate)}
-                  {projection.waitFromNowDays != null && projection.waitFromNowDays > 0 &&
-                    ` (${formatWaitDays(projection.waitFromNowDays)})`}
-                </span>
-              </>
-            )}
-            {step.status === 'pending' && projection?.windowStart && projection?.windowEnd && (
-              <>
-                <span className="text-xs text-gray-400 dark:text-gray-500">·</span>
-                <span className="text-xs text-gray-600 dark:text-gray-400">
-                  🕐 {formatShortDate(projection.windowStart)} – {formatShortDate(projection.windowEnd)}
-                  {projection.waitFromNowDays != null &&
-                    ` (${projection.waitFromNowDays === 0 ? 'most ütemezendő' : formatWaitDays(projection.waitFromNowDays)})`}
-                </span>
-              </>
-            )}
-          </div>
-          {/* WP-1.2: klinikai jelentésű, halk sor-jelzés — a lépés foglalása
-              az integritás-takarítás során veszett el (a hivatkozott időpont
-              már nem élő), és azóta nincs új. Nem banner, nem blokkol. */}
-          {step.status === 'pending' && step.lostAppointment && (
-            <div className="flex items-center gap-1.5 mt-1 text-xs text-blue-700 dark:text-blue-300">
-              <CalendarX2 className="w-3.5 h-3.5 shrink-0" />
-              <span>Ehhez a lépéshez már nincs élő időpont — foglaljon újat.</span>
-            </div>
-          )}
-          {/* Merged children list */}
-          {hasMerged && (
-            <div className="mt-1 ml-1 space-y-0.5">
-              {mergedChildren.map((child) => (
-                <div key={child.id} className="flex items-center gap-1.5 text-xs text-violet-600 dark:text-violet-300">
-                  <Merge className="w-3 h-3" />
-                  <span>{child.customLabel || child.treatmentLabel || child.stepCode.replace(/_/g, ' ')}</span>
-                  {child.toothNumber && <span className="text-violet-400 dark:text-violet-500">(fog #{child.toothNumber})</span>}
-                  {!mergeMode && (
-                    <button
-                      onClick={() => onDeleteChild(child)}
-                      className="p-0.5 text-violet-400 dark:text-violet-500 hover:text-red-600 dark:hover:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 rounded transition-colors"
-                      title="Ez az összevont alfázis elhagyása a tervből"
-                    >
-                      <Trash2 className="w-3 h-3" />
-                    </button>
-                  )}
-                </div>
-              ))}
-            </div>
-          )}
-        </div>
-
-        {/* Actions — egy sorban jobbra zárva; szűk helyen saját sorba törik és belül tördel */}
-        <div className="flex grow items-center gap-1 flex-wrap justify-end">
-          {rowBooking && !mergeMode && rowBooking.state === 'READY' && (
-            <>
-              <button
-                onClick={rowBooking.onBook}
-                className="inline-flex items-center gap-1 px-2.5 py-1 text-xs font-semibold text-white bg-medical-primary rounded hover:bg-medical-primary-dark transition-colors"
-                title="Időpont foglalása erre a munkafázisra"
-              >
-                <CalendarPlus className="w-3 h-3" />
-                Foglalás
-              </button>
-              <button
-                onClick={rowBooking.onLink}
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 rounded hover:bg-indigo-100 dark:hover:bg-indigo-900/40 transition-colors"
-                title="Már létező jövőbeli foglalás (pl. páciens portál) hozzárendelése ehhez a munkafázishoz"
-              >
-                <Link2 className="w-3 h-3" />
-                Meglévő foglalás
-              </button>
-              <button
-                onClick={rowBooking.onMarkDoneRetro}
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                title="A munkafázis elkészült, nem itt foglalt időponttal (utólagos jelölés)"
-              >
-                Elkészült (utólag)
-              </button>
-            </>
-          )}
-          {rowBooking && !mergeMode && rowBooking.state === 'BOOKED' && (
-            <>
-              <button
-                onClick={rowBooking.onBook}
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-medical-primary bg-medical-primary/10 rounded hover:bg-medical-primary/20 transition-colors"
-                title="Áthelyezés másik időpontra (a jelenlegi foglalás automatikusan törlődik)"
-              >
-                <CalendarClock className="w-3 h-3" />
-                Áthelyezés
-              </button>
-              <button
-                onClick={rowBooking.onMarkUnsuccessful}
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-orange-700 dark:text-orange-300 bg-orange-50 dark:bg-orange-950/40 rounded hover:bg-orange-100 dark:hover:bg-orange-900/40 transition-colors"
-                title="A próba sikertelen volt — új próba szükséges (indok kötelező)"
-              >
-                <AlertTriangle className="w-3 h-3" />
-                Sikertelen próba
-              </button>
-              <button
-                onClick={rowBooking.onMarkDoneRetro}
-                className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-                title="A munkafázis elkészült (nem itt foglalt), utólag jelölés"
-              >
-                Elkészült (utólag)
-              </button>
-            </>
-          )}
-          {rowBooking && rowBooking.state === 'BOOKING_IN_PROGRESS' && (
-            <span className="text-xs text-gray-500 dark:text-gray-400 px-1">Foglalás…</span>
-          )}
-          {rowBooking && rowBooking.state === 'OVERRIDE_REQUIRED' && (
-            <span
-              className="text-xs font-medium px-2 py-0.5 rounded bg-orange-100 dark:bg-orange-950/50 text-orange-800 dark:text-orange-300"
-              title="A foglaláshoz felülírási megerősítés szükséges — a megnyitott ablak bezárása után újra foglalható"
-            >
-              Felülírás szükséges
-            </span>
-          )}
-          {rowBooking && rowBooking.state === 'NEEDS_REVIEW' && (
-            <span
-              className="text-xs font-medium px-2 py-0.5 rounded bg-amber-100 dark:bg-amber-950/50 text-amber-800 dark:text-amber-300"
-              title="Hiányzó foglalási adat (időtartam, időablak vagy pool) — ellenőrizd a munkafázis beállításait"
-            >
-              Ellenőrizendő
-            </span>
-          )}
-          {canDelegate && !mergeMode && (
-            <button
-              onClick={onDelegateClick}
-              className={`inline-flex items-center gap-1 px-2 py-1 text-xs font-medium rounded transition-colors ${
-                delegateOpen
-                  ? 'text-indigo-700 dark:text-indigo-300 bg-indigo-100 dark:bg-indigo-950/50'
-                  : 'text-indigo-600 dark:text-indigo-300 bg-indigo-50 dark:bg-indigo-950/40 hover:bg-indigo-100 dark:hover:bg-indigo-900/40'
-              }`}
-              title="Feladat kiosztása / felosztása"
-            >
-              <SendHorizontal className="w-3 h-3" />
-              Feladat
-            </button>
-          )}
-          {!mergeMode && (
-            <button
-              onClick={onEditTiming}
-              className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-medical-primary hover:bg-medical-primary/10 rounded transition-colors"
-              title="Időzítés szerkesztése"
-            >
-              <Calendar className="w-3.5 h-3.5" />
-            </button>
-          )}
-          {hasMerged && !mergeMode && (
-            <button
-              onClick={onUnmerge}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-violet-600 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/40 rounded hover:bg-violet-100 dark:hover:bg-violet-900/40 transition-colors"
-              title="Összevonás felbontása"
-            >
-              <Unlink className="w-3 h-3" />
-              Szétbont
-            </button>
-          )}
-          {canDelete && !mergeMode && (
-            <button
-              onClick={onDelete}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-red-600 dark:text-red-300 bg-red-50 dark:bg-red-950/40 rounded hover:bg-red-100 dark:hover:bg-red-900/40 transition-colors"
-              title="Munkafázis elhagyása a tervből"
-            >
-              <Trash2 className="w-3 h-3" />
-              Elhagyom
-            </button>
-          )}
-          {canSkip && !mergeMode && (
-            <button
-              onClick={onSkipConfirm}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-amber-700 dark:text-amber-300 bg-amber-100 dark:bg-amber-950/50 rounded hover:bg-amber-200 dark:hover:bg-amber-900/40 transition-colors"
-              title="Munkafázis átugrása"
-            >
-              <SkipForward className="w-3 h-3" />
-              Átugrom
-            </button>
-          )}
-          {canUnskip && !mergeMode && (
-            <button
-              onClick={onUnskipConfirm}
-              className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-gray-600 dark:text-gray-400 bg-gray-100 dark:bg-gray-800 rounded hover:bg-gray-200 dark:hover:bg-gray-700 transition-colors"
-              title="Visszaállítás"
-            >
-              <RotateCcw className="w-3 h-3" />
-              Visszaállít
-            </button>
-          )}
-        </div>
-      </div>
-    </div>
-  );
-}
-
-// ─── Step row + inline confirm (combined) ────────────────────────────────────
-
-function StepRowWithConfirm({
-  step, idx, isNext, stepLabel, pathwayLabel, pathwayColor,
-  mergedChildren, projection, rowBooking,
-  confirmStepId, confirmAction, skipReason, saving,
-  mergeMode, mergeSelected, onToggleMerge,
-  onSkipConfirm, onUnskipConfirm, onDelete, onReopenConfirm,
-  onSkip, onUnskip, onDeleteConfirm, onReopen, onCancel, onSkipReasonChange,
-  onEditTiming, onUnmerge, onDeleteChild,
-  episodeId, delegatePhaseId, setDelegatePhaseId,
-}: {
-  step: EpisodeStep; idx: number; isNext: boolean; stepLabel: string;
-  pathwayLabel: string | null; pathwayColor: string;
-  mergedChildren: EpisodeStep[];
-  projection: StepProjectionInfo | null;
-  rowBooking: RowBookingActions | null;
-  confirmStepId: string | null; confirmAction: ConfirmAction | null;
-  skipReason: string; saving: boolean;
-  mergeMode: boolean; mergeSelected: boolean; onToggleMerge: () => void;
-  onSkipConfirm: () => void; onUnskipConfirm: () => void; onDelete: () => void;
-  onReopenConfirm: () => void;
-  onSkip: () => void; onUnskip: () => void; onDeleteConfirm: (stepId: string) => void;
-  onReopen: () => void;
-  onCancel: () => void; onSkipReasonChange: (v: string) => void;
-  onEditTiming: () => void; onUnmerge: () => void;
-  onDeleteChild: (child: EpisodeStep) => void;
-  episodeId: string;
-  delegatePhaseId: string | null;
-  setDelegatePhaseId: (id: string | null) => void;
-}) {
-  // A törlés-megerősítés a sorhoz tartozó összevont alfázisra is vonatkozhat —
-  // azok nem külön sorként, hanem a szülő alatt jelennek meg.
-  const confirmChild = mergedChildren.find((c) => c.id === confirmStepId) ?? null;
-  const isConfirming = confirmStepId === step.id || confirmChild !== null;
-  const deleteTarget = confirmChild ?? step;
-  const deleteTargetLabel = confirmChild
-    ? confirmChild.customLabel || confirmChild.treatmentLabel || confirmChild.stepCode.replace(/_/g, ' ')
-    : stepLabel;
-  const canDelegate = step.status === 'pending' || step.status === 'scheduled';
-  const delegateOpen = delegatePhaseId === step.id;
-  return (
-    <div>
-      <SortableStepRow
-        step={step} idx={idx} isNext={isNext}
-        stepLabel={stepLabel} pathwayLabel={pathwayLabel} pathwayColor={pathwayColor}
-        mergedChildren={mergedChildren}
-        projection={projection} rowBooking={rowBooking}
-        onSkipConfirm={onSkipConfirm} onUnskipConfirm={onUnskipConfirm} onDelete={onDelete}
-        onReopenConfirm={onReopenConfirm}
-        mergeMode={mergeMode} mergeSelected={mergeSelected} onToggleMerge={onToggleMerge}
-        onEditTiming={onEditTiming} onUnmerge={onUnmerge}
-        onDeleteChild={onDeleteChild}
-        canDelegate={canDelegate}
-        delegateOpen={delegateOpen}
-        onDelegateClick={() => setDelegatePhaseId(delegateOpen ? null : step.id)}
-      />
-      {delegateOpen && (
-        <div className="ml-12 mb-2">
-          <WorkPhaseTaskDelegateBlock
-            episodeId={episodeId}
-            workPhaseId={step.id}
-            phaseLabel={stepLabel}
-            onClose={() => setDelegatePhaseId(null)}
-          />
-        </div>
-      )}
-      {isConfirming && (
-        <div className="mt-1 ml-12 p-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900">
-          {confirmAction === 'skip' && (
-            <>
-              <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-                Biztosan átugorja a(z) <strong>{stepLabel}</strong> munkafázist?
-              </p>
-              {rowBooking?.state === 'BOOKED' ? (
-                <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">
-                  Ehhez a munkafázishoz 1 jövőbeli foglalt időpont tartozik — az átugrással az időpont is lemondásra kerül.
-                </p>
-              ) : step.status === 'scheduled' ? (
-                <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">
-                  Ehhez a munkafázishoz foglalt időpont tartozik — az átugrással a jövőbeli időpont lemondásra kerül, a már megtörtént vizitet nem érinti.
-                </p>
-              ) : null}
-              <input
-                type="text" value={skipReason} onChange={(e) => onSkipReasonChange(e.target.value)}
-                placeholder="Ok (opcionális, pl. már megtörtént)"
-                className="w-full text-sm border border-gray-300 dark:border-gray-700 rounded px-2 py-1.5 mb-2"
-              />
-              <div className="flex items-center gap-2">
-                <button onClick={onSkip} disabled={saving}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-amber-500 text-white rounded text-xs font-medium hover:bg-amber-600 disabled:opacity-50">
-                  {saving && <Loader2 className="w-3 h-3 animate-spin" />} Átugrás
-                </button>
-                <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Mégse</button>
-              </div>
-            </>
-          )}
-          {confirmAction === 'unskip' && (
-            <>
-              <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">Visszaállítja a(z) <strong>{stepLabel}</strong> munkafázist várakozóra?</p>
-              <div className="flex items-center gap-2">
-                <button onClick={onUnskip} disabled={saving}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-600 text-white rounded text-xs font-medium hover:bg-gray-700 disabled:opacity-50">
-                  {saving && <Loader2 className="w-3 h-3 animate-spin" />} Visszaállítás
-                </button>
-                <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Mégse</button>
-              </div>
-            </>
-          )}
-          {confirmAction === 'reopen' && (
-            <>
-              <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-                Visszaállítja a(z) <strong>{stepLabel}</strong> kész munkafázist várakozóra? Indoklás szükséges.
-              </p>
-              <input
-                type="text" value={skipReason} onChange={(e) => onSkipReasonChange(e.target.value)}
-                placeholder="Indoklás (legalább 5 karakter, pl. tévedésből jelölve késznek)"
-                className="w-full text-sm border border-gray-300 dark:border-gray-700 rounded px-2 py-1.5 mb-2"
-              />
-              <div className="flex items-center gap-2">
-                <button onClick={onReopen} disabled={saving || skipReason.trim().length < 5}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-gray-600 text-white rounded text-xs font-medium hover:bg-gray-700 disabled:opacity-50">
-                  {saving && <Loader2 className="w-3 h-3 animate-spin" />} Visszaállítás várakozóra
-                </button>
-                <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Mégse</button>
-              </div>
-            </>
-          )}
-          {confirmAction === 'delete' && (
-            <>
-              <p className="text-sm text-gray-700 dark:text-gray-300 mb-2">
-                Biztosan elhagyja a(z) <strong>{deleteTargetLabel}</strong> munkafázist a tervből? Ez a művelet nem vonható vissza.
-              </p>
-              {deleteTarget.status === 'scheduled' && (
-                <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">
-                  Ehhez a munkafázishoz foglalt időpont tartozik — a törléssel az időpont is lemondásra kerül.
-                </p>
-              )}
-              {deleteTarget.status === 'completed' && (
-                <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">
-                  Ez a munkafázis teljesítettként van jelölve — törléssel a terv előzményéből is eltűnik.
-                </p>
-              )}
-              {!confirmChild && mergedChildren.length > 0 && (
-                <p className="text-sm text-violet-700 dark:text-violet-300 mb-2">
-                  Az összevont {mergedChildren.length} alfázis nem törlődik: önálló terv-sorként marad meg.
-                </p>
-              )}
-              <div className="flex items-center gap-2">
-                <button onClick={() => onDeleteConfirm(deleteTarget.id)} disabled={saving}
-                  className="inline-flex items-center gap-1 px-3 py-1.5 bg-red-500 text-white rounded text-xs font-medium hover:bg-red-600 disabled:opacity-50">
-                  {saving && <Loader2 className="w-3 h-3 animate-spin" />} Elhagyás
-                </button>
-                <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Mégse</button>
-              </div>
-            </>
-          )}
-          {confirmAction === 'timing' && (
-            <TimingEditor
-              step={step}
-              mergedChildCount={mergedChildren.length}
-              saving={saving}
-              onCancel={onCancel}
-            />
-          )}
-        </div>
-      )}
-    </div>
-  );
-}
-
-// ─── Timing editor (inline) ───────────────────────────────────────────────────
-
-function TimingEditor({ step, mergedChildCount, saving, onCancel }: {
-  step: EpisodeStep;
-  mergedChildCount: number;
-  saving: boolean;
-  onCancel: () => void;
-}) {
-  const [daysOffset, setDaysOffset] = useState(step.defaultDaysOffset);
-  const [duration, setDuration] = useState(step.durationMinutes);
-  const [localSaving, setLocalSaving] = useState(false);
-  const { showToast } = useToast();
-
-  const handleSave = async () => {
-    setLocalSaving(true);
-    try {
-      const res = await fetch(`/api/episodes/${step.episodeId}/work-phases/${step.id}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ defaultDaysOffset: daysOffset, durationMinutes: duration }),
-      });
-      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
-      showToast('Időzítés frissítve', 'success');
-      onCancel();
-      window.dispatchEvent(new Event('episode-work-phases-reload'));
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Hiba történt', 'error');
-    } finally {
-      setLocalSaving(false);
-    }
-  };
-
-  return (
-    <div>
-      <p className="text-sm text-gray-700 dark:text-gray-300 mb-2 font-medium">Időzítés szerkesztése</p>
-      {mergedChildCount > 0 && (
-        <p className="text-xs text-violet-700 dark:text-violet-300 bg-violet-50 dark:bg-violet-950/40 border border-violet-100 dark:border-violet-800 rounded-md px-2 py-1.5 mb-2">
-          Összevont csoport: ez a percszám az <strong>egész</strong> egy időpontra eső blokkra vonatkozik
-          (foglalható slot). A részlépések külön perce csak tájékoztató; szétbontás után külön állítható.
-        </p>
-      )}
-      <div className="flex items-center gap-3 mb-2">
-        <div className="flex items-center gap-1">
-          <label className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">Nap offset:</label>
-          <input type="number" value={daysOffset} onChange={(e) => setDaysOffset(Math.max(0, parseInt(e.target.value) || 0))}
-            min={0} className="w-16 text-sm border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-center" />
-        </div>
-        <div className="flex items-center gap-1">
-          <label className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap">Időtartam:</label>
-          <input type="number" value={duration} onChange={(e) => setDuration(Math.max(5, parseInt(e.target.value) || 30))}
-            min={5} step={5} className="w-16 text-sm border border-gray-300 dark:border-gray-700 rounded px-2 py-1 text-center" />
-          <span className="text-xs text-gray-400 dark:text-gray-500">perc</span>
-        </div>
-      </div>
-      {/* WP-1.1: hosszú időtartam — halk inline hint, csak itt, a szerkesztő
-          sorban (nem badge, nem összesítő). Nem blokkol semmit. */}
-      {duration > LONG_DURATION_MINUTES && (
-        <p className="text-xs text-amber-600 dark:text-amber-400 mb-2">
-          Szokatlanul hosszú időtartam ({duration} perc) — ellenőrizze, hogy valóban egy alkalomra szánja.
-        </p>
-      )}
-      <div className="flex items-center gap-2">
-        <button onClick={handleSave} disabled={saving || localSaving}
-          className="inline-flex items-center gap-1 px-3 py-1.5 bg-medical-primary text-white rounded text-xs font-medium hover:bg-medical-primary-dark disabled:opacity-50">
-          {(saving || localSaving) && <Loader2 className="w-3 h-3 animate-spin" />} Mentés
-        </button>
-        <button onClick={onCancel} className="px-3 py-1.5 text-xs text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200">Mégse</button>
-      </div>
+        <Plus className="w-4 h-4" />
+        Új alkalom
+      </button>
+      <span className="text-xs text-gray-400 dark:text-gray-500">
+        Kezelés-kockát ide ejtve a kocka új alkalomba kerül.
+      </span>
     </div>
   );
 }
@@ -868,6 +170,7 @@ export function EpisodeStepsManager({
 }: EpisodeStepsManagerProps) {
   const { showToast } = useToast();
   const [steps, setSteps] = useState<EpisodeStep[]>([]);
+  const [visits, setVisits] = useState<EpisodeVisit[]>([]);
   const [stepLabels, setStepLabels] = useState<Map<string, string>>(new Map());
   const [catalogItems, setCatalogItems] = useState<StepCatalogItem[]>([]);
   const [loading, setLoading] = useState(true);
@@ -877,12 +180,12 @@ export function EpisodeStepsManager({
   const [confirmAction, setConfirmAction] = useState<ConfirmAction | null>(null);
   const [saving, setSaving] = useState(false);
   const [expanded, setExpanded] = useState(true);
-  const [, setReordering] = useState(false);
   const [episodePathways, setEpisodePathways] = useState<EpisodePathwayInfo[]>(initialEpisodePathways ?? []);
   const [mounted, setMounted] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
+  const [activeDragType, setActiveDragType] = useState<'visit' | 'phase' | null>(null);
 
-  // Tervezett ütemezés (vetítés) — a lépéssorokba fésülve jelenik meg
+  // Tervezett ütemezés (vetítés) — az alkalom-kártyákba és a kockákba fésülve
   const [projections, setProjections] = useState<StepProjectionInfo[]>([]);
   const [projectionSummary, setProjectionSummary] = useState<StepProjectionSummary | null>(null);
   const [projectionBlockedReason, setProjectionBlockedReason] = useState<string | null>(null);
@@ -912,6 +215,8 @@ export function EpisodeStepsManager({
   const [adderTab, setAdderTab] = useState<AdderTab>('catalog');
   const [catalogSearch, setCatalogSearch] = useState('');
   const [addingStep, setAddingStep] = useState(false);
+  /** Cél-alkalom az új kockának: 'new' = új alkalom a terv végére (alapérték). */
+  const [adderTargetVisitId, setAdderTargetVisitId] = useState<string>('new');
 
   // Free-text step form
   const [freeLabel, setFreeLabel] = useState('');
@@ -941,7 +246,8 @@ export function EpisodeStepsManager({
       // WP-0.7: mellékhatás-mentes olvasás. Korábban a mutáló POST .../generate
       // töltötte a listát — a kártya megnyitása írt a DB-be, és a törölt
       // fázisokat visszatette. A generálás az aktiválás / sablon-alkalmazás
-      // dolga; ez itt csak GET.
+      // dolga; ez itt csak GET. WP-4.3: a válasz visits[] metaadata adja az
+      // alkalom-kártyákat.
       const res = await fetch(`/api/episodes/${episodeId}/work-phases`, {
         credentials: 'include',
       });
@@ -955,6 +261,7 @@ export function EpisodeStepsManager({
           data.lostAppointmentWorkPhaseIds
         )
       );
+      setVisits(mapVisitsResponse(data.visits));
     } catch (e) {
       console.error('Error loading episode steps:', e);
     }
@@ -1073,13 +380,24 @@ export function EpisodeStepsManager({
 
   // ─── Step actions ────────────────────────────────────────────────────────
 
+  /** „Feltöltés sablonból" — az explicit generate hívás (WP-0.7 óta csak így ír). */
   const handleGenerate = async () => {
     setGenerating(true);
     try {
+      const res = await fetch(`/api/episodes/${episodeId}/work-phases/generate`, {
+        method: 'POST',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
+      const data = await res.json().catch(() => ({}));
       await loadSteps();
-      showToast('Munkafázisok generálva', 'success');
-    } catch {
-      showToast('Nem sikerült generálni a munkafázisokat', 'error');
+      showToast(
+        typeof data.message === 'string' && data.message ? data.message : 'Sablon betöltve',
+        'success'
+      );
+      notifyPlanChanged();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Nem sikerült a sablon betöltése', 'error');
     } finally {
       setGenerating(false);
     }
@@ -1193,6 +511,9 @@ export function EpisodeStepsManager({
           : 'Munkafázis törölve',
         'success'
       );
+      // A kiürült alkalmat a szerver törli; az unmerge-elt gyerekek vizitje is
+      // ott dől el — teljes újratöltés tartja szinkronban a kártyákat.
+      await loadSteps();
       notifyPlanChanged();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba a törlésnél', 'error');
@@ -1201,51 +522,243 @@ export function EpisodeStepsManager({
     }
   };
 
-  // ─── Reorder (arrows) ───────────────────────────────────────────────────
+  // ─── Vizit-műveletek (WP-4.3) ───────────────────────────────────────────
 
-  const persistReorder = async (newPrimarySteps: EpisodeStep[]) => {
-    setReordering(true);
+  /** Alkalom-sorrend mentése (optimista; hibánál visszatöltés). */
+  const persistVisitOrder = useCallback(async (ordered: EpisodeVisit[]) => {
+    const prevVisits = visits;
+    setVisits(ordered);
+    setSaving(true);
     try {
-      const res = await fetch(`/api/episodes/${episodeId}/work-phases/reorder`, {
+      const res = await fetch(`/api/episodes/${episodeId}/visits`, {
         method: 'PATCH',
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify({ stepIds: newPrimarySteps.map((s) => s.id) }),
+        body: JSON.stringify({ orderedVisitIds: ordered.map((v) => v.id) }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
-      const data = await res.json();
-      setSteps(mapWorkPhasesResponse(data.workPhases ?? data.steps));
-      if (data.partial) {
-        // A sorrend mentve, de az időpont-átkötés nem sikerült — ne maradjon néma.
-        showToast(
-          typeof data.message === 'string' && data.message
-            ? data.message
-            : 'A sorrend mentve, de az időpontok átkötése nem sikerült maradéktalanul.',
-          'info',
-          8000
-        );
-      }
+      const data = await res.json().catch(() => ({}));
+      if (Array.isArray(data.visits)) setVisits(mapVisitsResponse(data.visits));
+      // A vizit-átrendezés a fázis-seq-eket is átszámozza a szerveren.
+      await loadSteps();
+      void loadProjections();
+      showToast('Alkalmak átrendezve', 'success');
       notifyPlanChanged();
     } catch (e) {
       showToast(e instanceof Error ? e.message : 'Hiba az átrendezésnél', 'error');
-      await loadSteps();
+      setVisits(prevVisits);
+      void loadSteps();
     } finally {
-      setReordering(false);
+      setSaving(false);
+    }
+  }, [visits, episodeId, loadSteps, loadProjections, notifyPlanChanged, showToast]);
+
+  /** Fel/le gombos átrendezés — a drag-drop nem-drag alternatívája. */
+  const handleMoveVisit = (visitId: string, direction: -1 | 1) => {
+    const from = visits.findIndex((v) => v.id === visitId);
+    const to = from + direction;
+    if (from < 0 || to < 0 || to >= visits.length) return;
+    void persistVisitOrder(arrayMove(visits, from, to));
+  };
+
+  /** Új üres alkalom a lista végére. Visszaadja az új vizitet (vagy null-t hibánál). */
+  const createVisit = useCallback(async (): Promise<EpisodeVisit | null> => {
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/visits`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({}),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
+      const data = await res.json();
+      const visit = data.visit ? mapVisitsResponse([data.visit])[0] : null;
+      if (visit) setVisits((prev) => [...prev, visit]);
+      return visit;
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Nem sikerült új alkalmat létrehozni', 'error');
+      return null;
+    }
+  }, [episodeId, showToast]);
+
+  const handleAddEmptyVisit = async () => {
+    setSaving(true);
+    try {
+      const visit = await createVisit();
+      if (visit) {
+        showToast('Új alkalom létrehozva', 'success');
+        notifyPlanChanged();
+      }
+    } finally {
+      setSaving(false);
     }
   };
 
-  // ─── DnD reorder ────────────────────────────────────────────────────────
+  /** Kocka (merge-csoporttal együtt) áthelyezése egy meglévő alkalomba. */
+  const moveTileToVisit = useCallback(async (step: EpisodeStep, targetVisitId: string) => {
+    if (step.visitId === targetVisitId) return;
+    const prevSteps = steps;
+    const prevVisits = visits;
+    // Optimista frissítés: a csoport együtt mozog, a kiürült forrás-alkalom
+    // eltűnik (a szerver is így viselkedik — deleteEpisodeVisitsIfEmpty).
+    const groupIds = new Set<string>([
+      step.id,
+      ...steps.filter((s) => s.mergedIntoStepId === step.id).map((s) => s.id),
+    ]);
+    setSteps((prev) =>
+      prev.map((s) => (groupIds.has(s.id) ? { ...s, visitId: targetVisitId } : s))
+    );
+    if (step.visitId) {
+      const sourceStillUsed = steps.some(
+        (s) => !groupIds.has(s.id) && s.visitId === step.visitId
+      );
+      if (!sourceStillUsed) {
+        setVisits((prev) => prev.filter((v) => v.id !== step.visitId));
+      }
+    }
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/work-phases/${step.id}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({ visitId: targetVisitId }),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
+      showToast('Áthelyezve másik alkalomba', 'success');
+      await loadSteps();
+      void loadProjections();
+      notifyPlanChanged();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Hiba az áthelyezésnél', 'error');
+      setSteps(prevSteps);
+      setVisits(prevVisits);
+      void loadSteps();
+    } finally {
+      setSaving(false);
+    }
+  }, [steps, visits, episodeId, loadSteps, loadProjections, notifyPlanChanged, showToast]);
+
+  /** „Áthelyezés másik alkalomba" (menü + drag): meglévő vizit vagy új alkalom. */
+  const handleMoveTile = useCallback(async (step: EpisodeStep, target: string | 'new') => {
+    if (target === 'new') {
+      setSaving(true);
+      let visit: EpisodeVisit | null = null;
+      try {
+        visit = await createVisit();
+      } finally {
+        setSaving(false);
+      }
+      if (!visit) return;
+      await moveTileToVisit(step, visit.id);
+      return;
+    }
+    await moveTileToVisit(step, target);
+  }, [createVisit, moveTileToVisit]);
+
+  /** Üres alkalom törlése (csak üresre engedett — a szerver is őrzi). */
+  const handleDeleteEmptyVisit = async (visitId: string) => {
+    setSaving(true);
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/visits/${visitId}`, {
+        method: 'DELETE',
+        credentials: 'include',
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
+      setVisits((prev) => prev.filter((v) => v.id !== visitId));
+      showToast('Üres alkalom törölve', 'success');
+      notifyPlanChanged();
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Hiba a törlésnél', 'error');
+      void loadSteps();
+    } finally {
+      setSaving(false);
+    }
+  };
+
+  /** Alkalom címke + eltolás mentése (PATCH /visits/:visitId). */
+  const handleSaveVisitMeta = async (
+    visitId: string,
+    patch: { label: string | null; daysOffset: number | null }
+  ): Promise<boolean> => {
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/visits/${visitId}`, {
+        method: 'PATCH',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify(patch),
+      });
+      if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
+      const data = await res.json().catch(() => ({}));
+      if (data.visit) {
+        const mapped = mapVisitsResponse([data.visit])[0];
+        setVisits((prev) => prev.map((v) => (v.id === visitId ? mapped : v)));
+      }
+      showToast('Alkalom frissítve', 'success');
+      // A days_offset a vizit-tudatos forecast bemenete — a becslés frissül.
+      void loadProjections();
+      notifyPlanChanged();
+      return true;
+    } catch (e) {
+      showToast(e instanceof Error ? e.message : 'Hiba a mentésnél', 'error');
+      return false;
+    }
+  };
+
+  // ─── DnD: kockák vizitek közé, alkalmak átrendezése ─────────────────────
+
+  const collisionDetection: CollisionDetection = useCallback((args) => {
+    const activeId = String(args.active.id);
+    if (activeId.startsWith('phase:')) {
+      // Kocka-húzásnál csak az alkalom-törzsek és az új-alkalom zóna a cél.
+      const containers = args.droppableContainers.filter((c) => {
+        const id = String(c.id);
+        return id.startsWith('visitdrop:') || id === 'new-visit-zone';
+      });
+      const within = pointerWithin({ ...args, droppableContainers: containers });
+      if (within.length > 0) return within;
+      return rectIntersection({ ...args, droppableContainers: containers });
+    }
+    // Alkalom-átrendezésnél a sortable kártyák egymás közt.
+    const containers = args.droppableContainers.filter((c) =>
+      String(c.id).startsWith('visit:')
+    );
+    return closestCenter({ ...args, droppableContainers: containers });
+  }, []);
+
+  const handleDragStart = (event: DragStartEvent) => {
+    setActiveDragType(String(event.active.id).startsWith('phase:') ? 'phase' : 'visit');
+  };
 
   const handleDragEnd = (event: DragEndEvent) => {
+    setActiveDragType(null);
     const { active, over } = event;
-    if (!over || active.id === over.id) return;
-    const oldIdx = primarySteps.findIndex((s) => s.id === active.id);
-    const newIdx = primarySteps.findIndex((s) => s.id === over.id);
-    if (oldIdx < 0 || newIdx < 0) return;
-    const newSteps = [...primarySteps];
-    const [removed] = newSteps.splice(oldIdx, 1);
-    newSteps.splice(newIdx, 0, removed);
-    persistReorder(newSteps);
+    if (!over) return;
+    const activeId = String(active.id);
+    const overId = String(over.id);
+
+    if (activeId.startsWith('visit:')) {
+      if (!overId.startsWith('visit:') || activeId === overId) return;
+      const from = visits.findIndex((v) => `visit:${v.id}` === activeId);
+      const to = visits.findIndex((v) => `visit:${v.id}` === overId);
+      if (from < 0 || to < 0 || from === to) return;
+      void persistVisitOrder(arrayMove(visits, from, to));
+      return;
+    }
+
+    if (activeId.startsWith('phase:')) {
+      const stepId = activeId.slice('phase:'.length);
+      const step = steps.find((s) => s.id === stepId);
+      if (!step) return;
+      if (overId === 'new-visit-zone') {
+        void handleMoveTile(step, 'new');
+        return;
+      }
+      if (overId.startsWith('visitdrop:')) {
+        const targetVisitId = overId.slice('visitdrop:'.length);
+        if (targetVisitId !== step.visitId) void handleMoveTile(step, targetVisitId);
+      }
+    }
   };
 
   // ─── Merge / Unmerge ────────────────────────────────────────────────────
@@ -1261,8 +774,8 @@ export function EpisodeStepsManager({
         body: JSON.stringify({ stepIds: Array.from(mergeSelection) }),
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
-      const data = await res.json();
-      setSteps(mapWorkPhasesResponse(data.workPhases ?? data.steps));
+      // Az összevonás a viziteket is átrendezi (a csoport egy alkalomba kerül).
+      await loadSteps();
       setMergeMode(false);
       setMergeSelection(new Set());
       showToast('Munkafázisok összevonva', 'success');
@@ -1282,8 +795,7 @@ export function EpisodeStepsManager({
         credentials: 'include',
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
-      const data = await res.json();
-      setSteps(mapWorkPhasesResponse(data.workPhases ?? data.steps));
+      await loadSteps();
       showToast('Összevonás felbontva', 'success');
       notifyPlanChanged();
     } catch (e) {
@@ -1294,6 +806,22 @@ export function EpisodeStepsManager({
   };
 
   // ─── Add tooth treatment to steps ──────────────────────────────────────
+
+  /** Új kocka a cél-alkalomba: a POST mindig új egyfős vizitet készít, a
+      cél-alkalom választásnál egy második PATCH viszi át (a kiürült auto-vizitet
+      a szerver takarítja). */
+  const moveNewPhaseToAdderTarget = async (newPhaseId: string | null) => {
+    if (!newPhaseId || adderTargetVisitId === 'new') return;
+    const res = await fetch(`/api/episodes/${episodeId}/work-phases/${newPhaseId}`, {
+      method: 'PATCH',
+      headers: { 'Content-Type': 'application/json' },
+      credentials: 'include',
+      body: JSON.stringify({ visitId: adderTargetVisitId }),
+    });
+    if (!res.ok) {
+      showToast('A munkafázis hozzáadva, de a cél-alkalomba helyezés nem sikerült', 'error');
+    }
+  };
 
   const addToothTreatmentStep = async (tt: LinkedToothTreatment) => {
     setAddingStep(true);
@@ -1306,7 +834,10 @@ export function EpisodeStepsManager({
       });
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
       const data = await res.json();
-      setSteps(mapWorkPhasesResponse(data.workPhases ?? data.steps));
+      const rows: Array<Record<string, unknown>> = data.workPhases ?? [];
+      const newRow = rows.find((r) => String(r.toothTreatmentId ?? '') === tt.id);
+      await moveNewPhaseToAdderTarget(newRow ? String(newRow.id) : null);
+      await loadSteps();
       await loadLinkedTreatments();
       showToast(`${tt.labelHu} – ${tt.toothNumber} hozzáadva`, 'success');
       notifyPlanChanged();
@@ -1331,7 +862,8 @@ export function EpisodeStepsManager({
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
       const data = await res.json();
       const row = data.workPhase ?? data.step;
-      setSteps((prev) => [...prev, mapWorkPhaseApiToEpisodeStep(row)]);
+      await moveNewPhaseToAdderTarget(row ? String(row.id) : null);
+      await loadSteps();
       showToast(`${item.labelHu} hozzáadva`, 'success');
       notifyPlanChanged();
     } catch (e) {
@@ -1358,7 +890,8 @@ export function EpisodeStepsManager({
       if (!res.ok) throw new Error((await res.json().catch(() => ({}))).error ?? 'Hiba');
       const data = await res.json();
       const row = data.workPhase ?? data.step;
-      setSteps((prev) => [...prev, mapWorkPhaseApiToEpisodeStep(row)]);
+      await moveNewPhaseToAdderTarget(row ? String(row.id) : null);
+      await loadSteps();
       setFreeLabel('');
       setFreeDuration(30);
       showToast('Egyedi munkafázis hozzáadva', 'success');
@@ -1414,8 +947,46 @@ export function EpisodeStepsManager({
     return m;
   }, [steps]);
 
-  const nextPendingIndex = primarySteps.findIndex((s) => s.status === 'pending' || s.status === 'scheduled');
-  const stepIds = useMemo(() => primarySteps.map((s) => s.id), [primarySteps]);
+  // ─── Alkalom-csoportosítás (WP-4.3) ─────────────────────────────────────
+  const visitGroups = useMemo(() => {
+    const known = new Set(visits.map((v) => v.id));
+    const byVisit = new Map<string, EpisodeStep[]>();
+    const unassigned: EpisodeStep[] = [];
+    for (const s of primarySteps) {
+      if (s.visitId && known.has(s.visitId)) {
+        const arr = byVisit.get(s.visitId) ?? [];
+        arr.push(s);
+        byVisit.set(s.visitId, arr);
+      } else {
+        // Vizit nélküli sor (backfill előtti / hibás adat) — külön szakaszban
+        // jelenik meg, az áthelyezés-menüvel besorolható.
+        unassigned.push(s);
+      }
+    }
+    return {
+      groups: visits.map((v) => ({ visit: v, phases: byVisit.get(v.id) ?? [] })),
+      unassigned,
+    };
+  }, [primarySteps, visits]);
+
+  /** A kockák globális sorszáma és a „Következő" jelölés az alkalom-sorrendben. */
+  const orderedPrimarySteps = useMemo(
+    () => [...visitGroups.groups.flatMap((g) => g.phases), ...visitGroups.unassigned],
+    [visitGroups]
+  );
+  const globalIdxByStepId = useMemo(() => {
+    const m = new Map<string, number>();
+    orderedPrimarySteps.forEach((s, i) => m.set(s.id, i));
+    return m;
+  }, [orderedPrimarySteps]);
+  const nextPendingStepId = useMemo(
+    () =>
+      orderedPrimarySteps.find((s) => s.status === 'pending' || s.status === 'scheduled')?.id ??
+      null,
+    [orderedPrimarySteps]
+  );
+
+  const visitSortableIds = useMemo(() => visits.map((v) => `visit:${v.id}`), [visits]);
 
   const hasPathways = carePathwayId || (episodePathways && episodePathways.length > 0);
   const availableToothTreatments = useMemo(
@@ -1428,7 +999,7 @@ export function EpisodeStepsManager({
   // Re-validate the plan whenever a step's identity, status, pool, duration or
   // offset changes (az offset a vetítési ablakokat tolja el).
   const planSignature = useMemo(
-    () => steps.map((s) => `${s.id}:${s.status}:${s.pool}:${s.durationMinutes}:${s.defaultDaysOffset}`).join('|'),
+    () => steps.map((s) => `${s.id}:${s.status}:${s.pool}:${s.durationMinutes}:${s.defaultDaysOffset}:${s.visitId ?? ''}`).join('|'),
     [steps]
   );
 
@@ -1461,7 +1032,7 @@ export function EpisodeStepsManager({
   const progressPct = nonSkippedCount > 0 ? (completedCount / nonSkippedCount) * 100 : 0;
   const completionText = projectionSummary ? estimatedCompletionText(projectionSummary) : null;
 
-  /** Terv-sor → worklist-akciók (workPhaseId-n párosítva). */
+  /** Terv-kocka → worklist-akciók (workPhaseId-n párosítva). */
   const buildRowBooking = (step: EpisodeStep): RowBookingActions | null => {
     if (!booking.enabled) return null;
     const item = booking.itemByWorkPhaseId.get(step.id);
@@ -1475,9 +1046,71 @@ export function EpisodeStepsManager({
     };
   };
 
+  const visitOptionLabel = useCallback(
+    (visit: EpisodeVisit, index: number): string => {
+      const group = visitGroups.groups.find((g) => g.visit.id === visit.id);
+      const title = visitDisplayLabel(visit, group?.phases ?? [], getStepLabel);
+      return `${index + 1}. alkalom — ${title}`;
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [visitGroups, stepLabels]
+  );
+
   const pendingCount = primarySteps.filter((s) => s.status === 'pending').length;
   const showConvertAllInAdder =
     booking.enabled && booking.hasReady && pendingCount >= 2 && !booking.chainBookingRequired;
+
+  /** Egy kocka (+ inline megerősítő) kirenderelése — kártyán belül és a
+      besorolatlan szakaszban is ugyanez. */
+  const renderTile = (step: EpisodeStep) => (
+    <VisitPhaseTile
+      key={step.id}
+      step={step}
+      idx={globalIdxByStepId.get(step.id) ?? 0}
+      isNext={step.id === nextPendingStepId}
+      stepLabel={getStepLabel(step)}
+      pathwayLabel={getPathwayLabel(step.sourceEpisodePathwayId)}
+      pathwayColor={getPathwayColor(step.sourceEpisodePathwayId)}
+      mergedChildren={mergedChildrenMap.get(step.id) ?? []}
+      projection={projectionByPhaseId.get(step.id) ?? null}
+      rowBooking={buildRowBooking(step)}
+      confirmStepId={confirmStepId}
+      confirmAction={confirmAction}
+      skipReason={skipReason}
+      saving={saving}
+      mergeMode={mergeMode}
+      mergeSelected={mergeSelection.has(step.id)}
+      onToggleMerge={() => {
+        setMergeSelection((prev) => {
+          const next = new Set(prev);
+          if (next.has(step.id)) next.delete(step.id); else next.add(step.id);
+          return next;
+        });
+      }}
+      onSkipConfirm={() => { setConfirmStepId(step.id); setConfirmAction('skip'); setSkipReason(''); }}
+      onUnskipConfirm={() => { setConfirmStepId(step.id); setConfirmAction('unskip'); }}
+      onDelete={() => { setConfirmStepId(step.id); setConfirmAction('delete'); }}
+      onReopenConfirm={() => { setConfirmStepId(step.id); setConfirmAction('reopen'); setSkipReason(''); }}
+      onSkip={() => handleSkip(step.id)}
+      onUnskip={() => handleUnskip(step.id)}
+      onDeleteConfirm={(id) => handleDelete(id)}
+      onReopen={() => handleReopen(step.id)}
+      onCancel={() => { setConfirmStepId(null); setConfirmAction(null); }}
+      onSkipReasonChange={setSkipReason}
+      onEditTiming={() => { setConfirmStepId(step.id); setConfirmAction('timing'); }}
+      onUnmerge={() => handleUnmerge(step.id)}
+      onDeleteChild={(child) => { setConfirmStepId(child.id); setConfirmAction('delete'); }}
+      episodeId={episodeId}
+      delegatePhaseId={delegatePhaseId}
+      setDelegatePhaseId={setDelegatePhaseId}
+      visits={visits}
+      visitOptionLabel={visitOptionLabel}
+      onMoveToVisit={(s, target) => void handleMoveTile(s, target)}
+      dragDisabled={mergeMode}
+    />
+  );
+
+  const hasAnyPlanContent = visits.length > 0 || primarySteps.length > 0;
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
@@ -1488,7 +1121,7 @@ export function EpisodeStepsManager({
         <div>
           <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Kezelési terv</h3>
           <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            Az epizód munkafázisai, állapotuk és tervezett ütemezésük
+            Az epizód alkalmai és munkafázisai, állapotuk és tervezett ütemezésük
           </p>
         </div>
         <div className="flex items-center gap-2">
@@ -1665,14 +1298,6 @@ export function EpisodeStepsManager({
                 </div>
               )}
 
-              {/* ─── Nincs sablon alkalmazva — a lista ezért üres ─────── */}
-              {!hasPathways && primarySteps.length === 0 && (
-                <div className="mb-3 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 p-3 text-sm text-amber-800 dark:text-amber-300">
-                  Nincs kezelési terv sablon alkalmazva az epizódra, ezért a munkafázis-lista üres.
-                  {settingsPanel && ' Sablont a fenti „Beállítások módosítása" gombbal választhat.'}
-                </div>
-              )}
-
               {/* ─── Terv-validáció (WP3, WP-1.1) ─────────────────────── */}
               {/* Üres terv (nincs aktív lépés) → a validációs panel helyett a
                   kártya üres-állapota jelez; badge sehol nem jelenik meg.
@@ -1691,17 +1316,6 @@ export function EpisodeStepsManager({
               <div className="mb-4">
                 {!adderOpen ? (
                   <div className="flex items-center gap-2 flex-wrap">
-                    {steps.length === 0 && hasPathways && (
-                      <button
-                        onClick={handleGenerate}
-                        disabled={generating}
-                        className="inline-flex items-center gap-2 px-3 py-1.5 bg-medical-primary text-white rounded-md text-sm hover:bg-medical-primary-dark disabled:opacity-50"
-                      >
-                        {generating && <Loader2 className="w-3.5 h-3.5 animate-spin" />}
-                        <Layers className="w-3.5 h-3.5" />
-                        Munkafázisok generálása sablonból
-                      </button>
-                    )}
                     <button
                       onClick={() => { setAdderTab('catalog'); setAdderOpen(true); }}
                       className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-dashed border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 rounded-md text-sm hover:border-medical-primary hover:text-medical-primary transition-colors"
@@ -1709,6 +1323,20 @@ export function EpisodeStepsManager({
                       <Plus className="w-3.5 h-3.5" />
                       Munkafázis hozzáadása
                     </button>
+                    {/* A sablon másodlagos művelet (WP-4.3): explicit feltöltés,
+                        utána a terv szabadon alakítható — automatikus
+                        újragenerálás nincs (WP-0.7). */}
+                    {hasPathways && (
+                      <button
+                        onClick={handleGenerate}
+                        disabled={generating}
+                        className="inline-flex items-center gap-1.5 px-3 py-1.5 border border-gray-300 dark:border-gray-700 text-gray-600 dark:text-gray-400 rounded-md text-sm hover:border-medical-primary hover:text-medical-primary transition-colors disabled:opacity-50"
+                        title="A kiválasztott sablon munkafázisainak beszúrása — a terv utána szabadon alakítható"
+                      >
+                        {generating ? <Loader2 className="w-3.5 h-3.5 animate-spin" /> : <Layers className="w-3.5 h-3.5" />}
+                        Feltöltés sablonból
+                      </button>
+                    )}
                     {showConvertAllInAdder && (
                       <button
                         type="button"
@@ -1769,6 +1397,29 @@ export function EpisodeStepsManager({
                       >
                         Bezárás
                       </button>
+                    </div>
+
+                    {/* Cél-alkalom választó — az új kocka ide kerül */}
+                    <div className="flex items-center gap-2 mb-3 flex-wrap">
+                      <label
+                        htmlFor="adder-target-visit"
+                        className="text-xs text-gray-500 dark:text-gray-400 whitespace-nowrap"
+                      >
+                        Cél-alkalom:
+                      </label>
+                      <select
+                        id="adder-target-visit"
+                        value={adderTargetVisitId}
+                        onChange={(e) => setAdderTargetVisitId(e.target.value)}
+                        className="text-sm border border-gray-300 dark:border-gray-700 rounded-md px-2 py-1.5 max-w-full"
+                      >
+                        <option value="new">Új alkalom (a terv végére)</option>
+                        {visits.map((v, i) => (
+                          <option key={v.id} value={v.id}>
+                            {visitOptionLabel(v, i)}
+                          </option>
+                        ))}
+                      </select>
                     </div>
 
                     {/* Catalog tab */}
@@ -1913,71 +1564,76 @@ export function EpisodeStepsManager({
                 </div>
               )}
 
-              {/* ─── Step list with DnD ──────────────────────────────── */}
-              {primarySteps.length === 0 ? (
-                hasPathways ? (
-                  <p className="text-sm text-gray-500 dark:text-gray-400 py-2">Még nincsenek munkafázisok. Adjon hozzá a fenti űrlapon.</p>
-                ) : null
+              {/* ─── Alkalom-kártyák (WP-4.3) ────────────────────────── */}
+              {!hasAnyPlanContent ? (
+                <div className="mb-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 p-3 text-sm text-gray-600 dark:text-gray-400">
+                  A kezelési terv még üres. Vegyen fel munkafázist a „Munkafázis
+                  hozzáadása" gombbal, hozzon létre alkalmat az „Új alkalom"
+                  gombbal{hasPathways ? ', vagy töltse fel a tervet sablonból' : ''}.
+                </div>
               ) : (
-                <div className="space-y-1">
-                  <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
-                    Húzza a munkafázisokat a kívánt sorrendbe. A kukával elhagyhatja a felesleges elemeket.
-                  </p>
-                  {mounted ? (
-                  <DndContext sensors={sensors} collisionDetection={closestCenter} onDragEnd={handleDragEnd} modifiers={[restrictToVerticalAxis]}>
-                    <SortableContext items={stepIds} strategy={verticalListSortingStrategy}>
-                      {primarySteps.map((step, idx) => (
-                        <StepRowWithConfirm
-                          key={step.id}
-                          step={step}
-                          idx={idx}
-                          isNext={idx === nextPendingIndex}
-                          stepLabel={getStepLabel(step)}
-                          pathwayLabel={getPathwayLabel(step.sourceEpisodePathwayId)}
-                          pathwayColor={getPathwayColor(step.sourceEpisodePathwayId)}
-                          mergedChildren={mergedChildrenMap.get(step.id) ?? []}
-                          projection={projectionByPhaseId.get(step.id) ?? null}
-                          rowBooking={buildRowBooking(step)}
-                          confirmStepId={confirmStepId}
-                          confirmAction={confirmAction}
-                          skipReason={skipReason}
+                <p className="text-xs text-gray-500 dark:text-gray-400 mb-2">
+                  Egy kártya = egy betegvizit-alkalom. A kezelés-kockák húzással
+                  vagy az „Áthelyezés" menüvel vihetők másik alkalomba; az
+                  alkalmak sorrendje húzással vagy a fel/le gombokkal módosítható.
+                </p>
+              )}
+
+              {mounted ? (
+                <DndContext
+                  sensors={sensors}
+                  collisionDetection={collisionDetection}
+                  onDragStart={handleDragStart}
+                  onDragEnd={handleDragEnd}
+                  onDragCancel={() => setActiveDragType(null)}
+                  modifiers={activeDragType === 'visit' ? [restrictToVerticalAxis] : []}
+                >
+                  <div className="space-y-2">
+                    <SortableContext items={visitSortableIds} strategy={verticalListSortingStrategy}>
+                      {visitGroups.groups.map(({ visit, phases }, index) => (
+                        <VisitCard
+                          key={visit.id}
+                          visit={visit}
+                          index={index}
+                          visitCount={visits.length}
+                          title={visitDisplayLabel(visit, phases, getStepLabel)}
+                          statusSummary={summarizeVisitStatus(phases)}
+                          totalMinutes={visitTotalMinutes(visit, phases)}
+                          dateInfo={visitDateInfo(phases, projectionByPhaseId)}
+                          phaseCount={phases.length}
                           saving={saving}
-                          mergeMode={mergeMode}
-                          mergeSelected={mergeSelection.has(step.id)}
-                          onToggleMerge={() => {
-                            setMergeSelection((prev) => {
-                              const next = new Set(prev);
-                              if (next.has(step.id)) next.delete(step.id); else next.add(step.id);
-                              return next;
-                            });
-                          }}
-                          onSkipConfirm={() => { setConfirmStepId(step.id); setConfirmAction('skip'); setSkipReason(''); }}
-                          onUnskipConfirm={() => { setConfirmStepId(step.id); setConfirmAction('unskip'); }}
-                          onDelete={() => { setConfirmStepId(step.id); setConfirmAction('delete'); }}
-                          onReopenConfirm={() => { setConfirmStepId(step.id); setConfirmAction('reopen'); setSkipReason(''); }}
-                          onSkip={() => handleSkip(step.id)}
-                          onUnskip={() => handleUnskip(step.id)}
-                          onDeleteConfirm={(id) => handleDelete(id)}
-                          onReopen={() => handleReopen(step.id)}
-                          onCancel={() => { setConfirmStepId(null); setConfirmAction(null); }}
-                          onSkipReasonChange={setSkipReason}
-                          onEditTiming={() => { setConfirmStepId(step.id); setConfirmAction('timing'); }}
-                          onUnmerge={() => handleUnmerge(step.id)}
-                          onDeleteChild={(child) => { setConfirmStepId(child.id); setConfirmAction('delete'); }}
-                          episodeId={episodeId}
-                          delegatePhaseId={delegatePhaseId}
-                          setDelegatePhaseId={setDelegatePhaseId}
-                        />
+                          onMoveUp={() => handleMoveVisit(visit.id, -1)}
+                          onMoveDown={() => handleMoveVisit(visit.id, 1)}
+                          onDeleteEmpty={() => void handleDeleteEmptyVisit(visit.id)}
+                          onSaveMeta={(patch) => handleSaveVisitMeta(visit.id, patch)}
+                        >
+                          {phases.map((step) => renderTile(step))}
+                        </VisitCard>
                       ))}
                     </SortableContext>
-                  </DndContext>
-                  ) : (
-                    <div className="animate-pulse space-y-2">
-                      {primarySteps.map((_, i) => (
-                        <div key={i} className="h-12 bg-gray-100 dark:bg-gray-800 rounded-lg" />
-                      ))}
-                    </div>
-                  )}
+
+                    {/* Vizit nélküli (backfill előtti) sorok — besorolhatók */}
+                    {visitGroups.unassigned.length > 0 && (
+                      <div className="rounded-xl border border-amber-200 dark:border-amber-800 bg-amber-50/40 dark:bg-amber-950/20">
+                        <div className="px-3 py-2 border-b border-amber-100 dark:border-amber-900 text-sm font-medium text-amber-800 dark:text-amber-300">
+                          Alkalomhoz nem rendelt munkafázisok — az „Áthelyezés"
+                          menüvel sorolhatók be
+                        </div>
+                        <div className="p-2 space-y-1">
+                          {visitGroups.unassigned.map((step) => renderTile(step))}
+                        </div>
+                      </div>
+                    )}
+
+                    {/* Új alkalom: gomb + ejtő-zóna */}
+                    <NewVisitZone onCreate={() => void handleAddEmptyVisit()} saving={saving} />
+                  </div>
+                </DndContext>
+              ) : (
+                <div className="animate-pulse space-y-2">
+                  {(visits.length > 0 ? visits : [1, 2]).map((_, i) => (
+                    <div key={i} className="h-16 bg-gray-100 dark:bg-gray-800 rounded-xl" />
+                  ))}
                 </div>
               )}
 
