@@ -55,6 +55,14 @@ export function KezeloorvosDelegationWidget({ patientId, canAssign = false, onCh
     loadInfo();
   }, [loadInfo]);
 
+  // A felelős orvos chip (EpisodeProviderControl) egy kattintással
+  // kezelőorvossá is teheti az orvost — erre a jelzésre frissül a fejléc.
+  useEffect(() => {
+    const handler = () => loadInfo();
+    window.addEventListener('kezeleoorvos-changed', handler);
+    return () => window.removeEventListener('kezeleoorvos-changed', handler);
+  }, [loadInfo]);
+
   const openModal = async () => {
     setError(null);
     setSelected(info?.userId ?? '');

@@ -327,7 +327,7 @@ export default function PatientStagesPage() {
             {useNewModel && activeEpisode && (
               <div className="mt-3 pt-3 border-t border-gray-100 dark:border-gray-800">
                 <PatientStageStepper
-                  key={activeEpisode.id}
+                  key={`stepper-${activeEpisode.id}`}
                   episodeId={activeEpisode.id}
                   currentStage={currentStage}
                   onStageChanged={handleStageChanged}
@@ -382,7 +382,10 @@ export default function PatientStagesPage() {
               soraiból történik (worklist-motor), a lánc-foglalással együtt. */}
           {activeEpisode && (
             <EpisodeStepsManager
-              key={activeEpisode.id}
+              // Egyedi kulcs: a testvér EpisodeRecallPanel ugyanezt az epizód-id-t
+              // használta kulcsnak, és a duplikált key újrarendereléskor árva
+              // (duplikált) kártya-példányokat hagyott a DOM-ban.
+              key={`plan-${activeEpisode.id}`}
               episodeId={activeEpisode.id}
               patientId={patientId}
               carePathwayId={activeEpisode.carePathwayId ?? null}
@@ -393,7 +396,16 @@ export default function PatientStagesPage() {
                 pathwayName: ep.pathwayName,
                 jaw: ep.jaw,
               }))}
+              assignedProviderId={activeEpisode.assignedProviderId ?? null}
               assignedProviderName={activeEpisode.assignedProviderName ?? null}
+              showProvider
+              canEditProvider={canEditEpisodeSettings}
+              onProviderChanged={() => {
+                // A felelős orvos váltása az epizód adata: a kártya-fejléc, a
+                // foglalási motor (worklist, intentek) és a stádium-javaslat is frissül.
+                refreshStagesAndEpisodes();
+                setSettingsVersion((v) => v + 1);
+              }}
               refreshTrigger={settingsVersion}
               settingsPanel={
                 canEditEpisodeSettings ? (
@@ -401,9 +413,7 @@ export default function PatientStagesPage() {
                     episodeId={activeEpisode.id}
                     patientId={patientId}
                     carePathwayId={activeEpisode.carePathwayId}
-                    assignedProviderId={activeEpisode.assignedProviderId}
                     carePathwayName={activeEpisode.carePathwayName}
-                    assignedProviderName={activeEpisode.assignedProviderName}
                     treatmentTypeId={activeEpisode.treatmentTypeId}
                     onSaved={() => {
                       refreshStagesAndEpisodes();
@@ -422,7 +432,7 @@ export default function PatientStagesPage() {
               a rizikócsoport-választó csak a javasolt kadenciát állítja. */}
           {activeEpisode && (
             <EpisodeRecallPanel
-              key={activeEpisode.id}
+              key={`recall-${activeEpisode.id}`}
               episodeId={activeEpisode.id}
               patientId={patientId}
             />

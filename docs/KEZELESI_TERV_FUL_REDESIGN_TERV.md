@@ -43,6 +43,7 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 | WP-4.1b step_code→work_phase_id identitás | ✅ | [#78](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/78) | Minden identitás-út wp-elsődleges (legacy fallback); review: CRITICAL param-kötési hiba a prereq-ágon javítva; mellékjavítás: a worklist „korábbi próbák" lekérdezés eddig némán elhasalt (ats.end_time) |
 | WP-4.2 vizit API + forecast | ✅ | [#79](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/79) | Vizit CRUD + PATCH visitId/jaw/teeth + vizit-tudatos forecast (kompat-invariáns fuzz-igazolva) + wp-tudatos projektor; review: 4 major javítva (kombinált body, csoport-mozgatás, reorder=EWP-átszámozás, scoped backfill), 1 medium cáfolva (advisory lock) |
 | WP-4.3 vizit-kártyás UI | ✅ | [#80](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/80) | Alkalom-kártyák + kockák (hatókör-badge), drag-drop + teljes nem-drag alternatíva, „Feltöltés sablonból"; élőben ellenőrizve; review-major (visit-move seq-átszámozás) javítva. **Ezzel a FÁZIS 4 és a TELJES TERV kész.** |
+| WP-6.2 Felelős orvos az epizódon, a sablontól leválasztva (2026-09-02) | ✅ | (munkafán) | Feltűnő chip a terv-kártya fejlécében (EpisodeProviderControl): orvos-választó, indok, lekapcsolás, váltás-történet; a sablon-szerkesztőből kikerült; PATCH /episodes/:id írja a `provider_assignment_events` naplót (092: lekapcsolás is), GET provider-history; a váltás előre hat (intentek lejárnak, új foglalás az új orvoshoz). 8 komponens- + 3 integrációs teszt. |
 | WP-6.1 Puzzle v2 — kéthasábos tábla (2026-09-02) | ✅ | `fb52424` (main) | Bal paletta (091 generikus katalógus: csonkpreparálás, precíziós-szituációs lenyomatvétel, átadás, …) + jobb alkalom-sorok kockákkal; vizitköz alap 7 nap, egy kattintással állítható; fázis-szintű offset kivezetve a UI-ból; optimista mutációk, kaszkád-újratöltés csak státusz-változásnál; POST work-phases `visitId` (egy kérés); merged gyerek leválik áthelyezésnél; vizit-szintű foglalás `prepare-booking`-gal; vizit-tudatos projektor. 13 komponens-, 5+29 helper-, 8 integrációs teszt. |
 
 ---
@@ -700,6 +701,34 @@ debounce-olva), `PhasePalette.tsx`, `VisitRow.tsx`, `VisitGap.tsx`, `PhasePill.t
 `VisitBookingButton.tsx`, `Popover.tsx`. Törölve: `VisitCard`, `VisitPhaseTile`,
 `MoveToVisitMenu`. A karton-szintű kaszkád (`onStepChanged`) csak státusz-változásnál fut;
 rutin-műveletről nincs siker-toast; a kompozíciós hívások egy kérésesek.
+
+### 6.2b Felelős orvos — az epizód elsőrendű tulajdonsága (WP-6.2)
+
+A felhasználó 2026-09-02-én: a felelős orvos legyen feltűnőbb, váljon le a sablonról,
+kötődjön az epizódhoz, de az epizód folyamán váltható maradjon.
+
+- **Modell:** a felelős orvos eddig is az epizódon élt (`patient_episodes.assigned_provider_id`),
+  de csak a sablon-szerkesztőben (EpisodePathwayEditor) volt állítható. Mostantól saját
+  vezérlője van (`components/EpisodeProviderControl.tsx`) a terv-kártya fejlécében — a
+  sablon-szerkesztő csak sablon. Nem kapu: hiányzó orvosnál borostyán nudge.
+- **Váltás az epizód folyamán:** bármikor, indokkal; a váltás ELŐRE hat — a nyitott
+  slot-intentek lejárnak (`invalidateIntentsForEpisode('provider_changed')`, meglévő), az új
+  foglalások az új orvos naptárába mennek (a foglalási motor az epizód `assigned_provider_id`-jét
+  nézi), a korábbi időpontok érintetlenek. A történet a `provider_assignment_events`
+  táblába kerül (régi → új, indok, ki, mikor) — a tábla a legacy event-partitioning
+  migrációval született, de eddig senki nem írt bele; a 092 a `new_user_id`-t nullable-re
+  oldja, hogy a lekapcsolás is rögzülhessen. `GET /api/episodes/:id/provider-history`.
+- **Kezelőorvos vs. felelős orvos:** a beteg-szintű kezelőorvos (fejléc-widget,
+  adatteljesség-felelős, ragadós) külön fogalom marad; a felelős-orvos váltás után az
+  ajánlat („legyen ő a kezelőorvos is?") a chipnél jelenik meg, ha a betegnek még nincs.
+- **Nem épült:** vizitenkénti (alkalmankénti) orvos — a modell epizód-szintű maradt;
+  ha kell, az `episode_visits` kaphat `provider_user_id` felülírást.
+- **Mellékjavítás (élő ellenőrzés találta):** a `/stages` oldalon a terv-kártya és a
+  gondozás-panel testvérként ugyanazt a `key={activeEpisode.id}`-t kapta (a régóta ismert
+  „duplikált React key" feladat-chip) — a felelős-orvos váltás utáni újrarenderelésnél
+  React árva kártya-példányokat hagyott a DOM-ban (4 terv-kártya, a régi nyitva ragadt
+  popoverrel). Egyedi kulcsok (`plan-`, `recall-`, `stepper-` előtag) — a chip frissülése ezen
+  múlt.
 
 ### 6.3 Nyitott / követés
 

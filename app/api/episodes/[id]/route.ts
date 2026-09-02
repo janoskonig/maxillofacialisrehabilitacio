@@ -16,6 +16,7 @@ import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 import { isRecallRiskLevel } from '@/lib/recall-cadence';
 import { createEpisodeVisitsBatch, deleteEpisodeVisitsIfEmpty } from '@/lib/episode-visits';
 import { syncRecallTasksForRiskChange, type RecallRiskSyncResult } from '@/lib/recall-tasks';
+import { recordProviderAssignment } from '@/lib/episode-provider';
 
 export const dynamic = 'force-dynamic';
 
@@ -144,7 +145,22 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     );
   }
 
-  const { carePathwayId, carePathwayVersion, assignedProviderId, treatmentTypeId, planStartDate, recallRiskLevel } = body;
+  const {
+    carePathwayId,
+    carePathwayVersion,
+    assignedProviderId,
+    treatmentTypeId,
+    planStartDate,
+    recallRiskLevel,
+    /** Felelős orvos váltásának indoka (opcionális) — a provider_assignment_events reason mezője. */
+    providerChangeReason,
+  } = body;
+  if (assignedProviderId !== undefined && assignedProviderId !== null && typeof assignedProviderId !== 'string') {
+    return NextResponse.json({ error: 'Az assignedProviderId string azonosító vagy null legyen' }, { status: 400 });
+  }
+  if (providerChangeReason !== undefined && providerChangeReason !== null && typeof providerChangeReason !== 'string') {
+    return NextResponse.json({ error: 'A providerChangeReason szöveg legyen' }, { status: 400 });
+  }
   const [hasPlanStartCol, hasRecallRiskCol] = await Promise.all([
     probeColumnExists(pool, 'patient_episodes', 'plan_start_date'),
     probeColumnExists(pool, 'patient_episodes', 'recall_risk_level'),
@@ -227,10 +243,45 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     recallRiskProvided && (prev.recall_risk_level ?? null) !== (recallRiskLevel || null);
 
   values.push(episodeId);
-  await pool.query(
-    `UPDATE patient_episodes SET ${updates.join(', ')} WHERE id = $${idx}`,
-    values
-  );
+  // A felelős orvos váltása és a váltás-napló (provider_assignment_events) EGY
+  // tranzakcióban: a történet ne maradhasson le a tényleges átállításról.
+  const client = await pool.connect();
+  try {
+    await client.query('BEGIN');
+    const newProviderId = providerChanged && assignedProviderId ? String(assignedProviderId) : null;
+    if (newProviderId) {
+      // Az orvos létezését az UPDATE ELŐTT ellenőrizzük — különben az FK-sértés
+      // generikus validációs hibaként jönne vissza, kód nélkül.
+      const providerRow = await client.query(
+        `SELECT id FROM users WHERE id = $1::uuid AND active IS DISTINCT FROM false
+           AND role IN ('fogpótlástanász', 'admin')`,
+        [newProviderId]
+      );
+      if (providerRow.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          { error: 'A megadott felelős orvos nem található vagy nem fogpótlástanász', code: 'PROVIDER_NOT_FOUND' },
+          { status: 400 }
+        );
+      }
+    }
+    await client.query(`UPDATE patient_episodes SET ${updates.join(', ')} WHERE id = $${idx}`, values);
+    if (providerChanged) {
+      await recordProviderAssignment(client, {
+        episodeId,
+        oldUserId: prev.assigned_provider_id ? String(prev.assigned_provider_id) : null,
+        newUserId: newProviderId,
+        reason: typeof providerChangeReason === 'string' ? providerChangeReason : null,
+        createdBy: auth.email ?? auth.userId ?? 'unknown',
+      });
+    }
+    await client.query('COMMIT');
+  } catch (txError) {
+    await client.query('ROLLBACK').catch(() => {});
+    throw txError;
+  } finally {
+    client.release();
+  }
 
   if (pathwayChanged) {
     try {

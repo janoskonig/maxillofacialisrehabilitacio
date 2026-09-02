@@ -5,13 +5,17 @@ import { useToast } from '@/contexts/ToastContext';
 import { Loader2, Plus, Trash2 } from 'lucide-react';
 import { extractSuggestedTreatmentTypeCodes } from '@/lib/treatment-type-normalize';
 
+/**
+ * Kezelési terv sablon szerkesztő — CSAK a sablonok (kezelési utak) és az
+ * állcsont-hozzárendelés. A felelős orvos innen kikerült: az epizód
+ * elsőrendű tulajdonsága, a terv-kártya fejlécében váltható
+ * (EpisodeProviderControl), a sablontól függetlenül.
+ */
 export interface EpisodePathwayEditorProps {
   episodeId: string;
   patientId?: string | null;
   carePathwayId?: string | null;
-  assignedProviderId?: string | null;
   carePathwayName?: string | null;
-  assignedProviderName?: string | null;
   treatmentTypeId?: string | null;
   onSaved?: () => void | Promise<void>;
   compact?: boolean;
@@ -23,11 +27,6 @@ interface PathwayOption {
   treatmentTypeCode?: string | null;
   treatmentTypeId?: string | null;
   reason?: string | null;
-}
-
-interface DoctorOption {
-  id: string;
-  name: string;
 }
 
 interface EpisodePathwayRow {
@@ -49,14 +48,12 @@ export function EpisodePathwayEditor({
   episodeId,
   patientId,
   carePathwayId,
-  assignedProviderId,
   treatmentTypeId: initialTreatmentTypeId,
   onSaved,
   compact = false,
 }: EpisodePathwayEditorProps) {
   const { showToast } = useToast();
   const [pathways, setPathways] = useState<PathwayOption[]>([]);
-  const [doctors, setDoctors] = useState<DoctorOption[]>([]);
   const [suggestedTreatmentTypeCodes, setSuggestedTreatmentTypeCodes] = useState<string[]>([]);
   const [loadingLists, setLoadingLists] = useState(true);
   const [saving, setSaving] = useState(false);
@@ -69,31 +66,19 @@ export function EpisodePathwayEditor({
   const [newJaw, setNewJaw] = useState<'felso' | 'also'>('felso');
   const [removingPathwayId, setRemovingPathwayId] = useState<string | null>(null);
 
-  // Provider state (still single per episode)
-  const [selectedProviderId, setSelectedProviderId] = useState<string>(assignedProviderId ?? '');
-  const [providerDirty, setProviderDirty] = useState(false);
-  const [savingProvider, setSavingProvider] = useState(false);
-
-  // Felajánlás: ha a betegnek még nincs kezelőorvosa, a frissen mentett felelős
-  // orvost egy kattintással kezelőorvosnak is be lehet állítani.
-  const [kezeleoorvosOffer, setKezeleoorvosOffer] = useState<{ userId: string; name: string } | null>(null);
-  const [assigningKezeleoorvos, setAssigningKezeleoorvos] = useState(false);
-
   const loadLists = useCallback(async () => {
     setLoadingLists(true);
     setError(null);
     try {
-      const [pathwaysRes, doctorsRes, patientRes, episodeRes] = await Promise.all([
+      const [pathwaysRes, patientRes, episodeRes] = await Promise.all([
         fetch('/api/care-pathways', { credentials: 'include' }),
-        fetch('/api/users/fogpotlastanasz', { credentials: 'include' }),
         patientId ? fetch(`/api/patients/${patientId}`, { credentials: 'include' }) : Promise.resolve(null),
         fetch(`/api/episodes/${episodeId}`, { credentials: 'include' }),
       ]);
-      if (!pathwaysRes.ok || !doctorsRes.ok) {
+      if (!pathwaysRes.ok) {
         throw new Error('Nem sikerült betölteni az adatokat');
       }
       const pathwaysData = await pathwaysRes.json();
-      const doctorsData = await doctorsRes.json();
       const allPathways = (pathwaysData.pathways ?? []).map((p: { id: string; name: string; treatmentTypeCode?: string | null; treatmentTypeId?: string | null; reason?: string | null }) => ({
         id: p.id,
         name: p.name,
@@ -113,22 +98,14 @@ export function EpisodePathwayEditor({
       } else {
         setSuggestedTreatmentTypeCodes([]);
       }
-      setDoctors(
-        (doctorsData.users ?? []).map((d: { id: string; name?: string; displayName?: string; email?: string }) => ({
-          id: d.id,
-          name: d.name ?? d.displayName ?? d.email ?? d.id,
-        }))
-      );
-
       if (episodeRes.ok) {
         const episodeData = await episodeRes.json();
         const ep = episodeData.episode;
         setEpisodePathways(ep?.episodePathways ?? []);
-        setSelectedProviderId(ep?.assignedProviderId ?? '');
       }
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Hiba történt');
-      showToast('Nem sikerült betölteni a sablonokat vagy orvosokat', 'error');
+      showToast('Nem sikerült betölteni a sablonokat', 'error');
     } finally {
       setLoadingLists(false);
     }
@@ -137,11 +114,6 @@ export function EpisodePathwayEditor({
   useEffect(() => {
     loadLists();
   }, [loadLists]);
-
-  useEffect(() => {
-    setSelectedProviderId(assignedProviderId ?? '');
-    setProviderDirty(false);
-  }, [assignedProviderId]);
 
   const handleAddPathway = async () => {
     if (!newPathwayId || addingPathway) return;
@@ -216,74 +188,6 @@ export function EpisodePathwayEditor({
     }
   };
 
-  const handleSaveProvider = async () => {
-    if (!providerDirty || savingProvider) return;
-    setSavingProvider(true);
-    setError(null);
-    try {
-      const res = await fetch(`/api/episodes/${episodeId}`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ assignedProviderId: selectedProviderId || null }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error ?? 'Hiba a felelős orvos mentésekor');
-      }
-      setProviderDirty(false);
-      showToast('Felelős orvos mentve', 'success');
-      await onSaved?.();
-
-      // Ha van patientId + választott orvos, és a betegnek még nincs
-      // kezelőorvosa, ajánljuk fel a beállítást (b opció).
-      if (patientId && selectedProviderId) {
-        try {
-          const kRes = await fetch(`/api/patients/${patientId}/kezeleoorvos`, { credentials: 'include' });
-          if (kRes.ok) {
-            const kData = await kRes.json();
-            if (!kData.kezeleoorvos?.userId) {
-              const doc = doctors.find((d) => d.id === selectedProviderId);
-              setKezeleoorvosOffer({ userId: selectedProviderId, name: doc?.name ?? 'a kiválasztott orvos' });
-            }
-          }
-        } catch {
-          /* a felajánlás nem kritikus — csendben kihagyjuk */
-        }
-      }
-    } catch (e) {
-      const msg = e instanceof Error ? e.message : 'Hiba';
-      setError(msg);
-      showToast(msg, 'error');
-    } finally {
-      setSavingProvider(false);
-    }
-  };
-
-  const handleAssignKezeleoorvos = async () => {
-    if (!kezeleoorvosOffer || !patientId || assigningKezeleoorvos) return;
-    setAssigningKezeleoorvos(true);
-    try {
-      const res = await fetch(`/api/patients/${patientId}/kezeleoorvos`, {
-        method: 'PATCH',
-        headers: { 'Content-Type': 'application/json' },
-        credentials: 'include',
-        body: JSON.stringify({ userId: kezeleoorvosOffer.userId }),
-      });
-      const data = await res.json();
-      if (!res.ok) {
-        throw new Error(data.error ?? 'Hiba a kezelőorvos beállításakor');
-      }
-      showToast('Kezelőorvos beállítva', 'success');
-      setKezeleoorvosOffer(null);
-      await onSaved?.();
-    } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Hiba', 'error');
-    } finally {
-      setAssigningKezeleoorvos(false);
-    }
-  };
-
   // Pathways already assigned — a pathway is still available if it hasn't been added for the currently selected jaw
   const assignedKeys = new Set(episodePathways.map((ep) => `${ep.carePathwayId}:${ep.jaw ?? '_none_'}`));
   const availablePathways = pathways.filter((p) => !assignedKeys.has(`${p.id}:${newJaw}`));
@@ -299,7 +203,7 @@ export function EpisodePathwayEditor({
     );
   }
 
-  if (error && episodePathways.length === 0 && !providerDirty) {
+  if (error && episodePathways.length === 0) {
     return (
       <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 p-4">
         <p className="text-sm text-red-600 dark:text-red-300">{error}</p>
@@ -320,10 +224,10 @@ export function EpisodePathwayEditor({
       aria-labelledby="episode-pathway-heading"
     >
       <h3 id="episode-pathway-heading" className={`font-semibold text-gray-900 dark:text-gray-100 ${compact ? 'text-sm mb-2' : 'text-base mb-3'}`}>
-        Kezelési terv sablonok és felelős orvos
+        Kezelési terv sablonok
       </h3>
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-        Ehhez az epizódhoz tartozó beállítások: alkalmazd a <strong>kezelési terv sablonokat</strong> (lépéssor: konzultáció → munkafázisok) és válaszd ki a <strong>felelős orvost</strong>. Egy epizódra több sablon is alkalmazható — lépéseik összefésülve jelennek meg, és a tervben szabadon egyéniesíthetők. A recall (kontroll) időpontok nem a terv részei — a Gyors foglalás blokkban foglalhatók.
+        Alkalmazd a <strong>kezelési terv sablonokat</strong> (lépéssor: konzultáció → munkafázisok). Egy epizódra több sablon is alkalmazható — lépéseik összefésülve jelennek meg, és a tervben szabadon egyéniesíthetők. A felelős orvos a terv-kártya fejlécében váltható, a sablontól függetlenül. A recall (kontroll) időpontok nem a terv részei — a Gyors foglalás blokkban foglalhatók.
       </p>
 
       <div className={`space-y-4 ${compact ? 'space-y-3' : ''}`}>
@@ -416,76 +320,6 @@ export function EpisodePathwayEditor({
           </div>
         )}
 
-        {/* Provider */}
-        <div>
-          <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1" htmlFor="episode-provider-select">
-            Felelős orvos
-          </label>
-          <div className="flex items-center gap-2">
-            <select
-              id="episode-provider-select"
-              value={selectedProviderId}
-              onChange={(e) => {
-                setSelectedProviderId(e.target.value);
-                setProviderDirty(true);
-              }}
-              className="flex-1 rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm disabled:opacity-50"
-              disabled={savingProvider}
-            >
-              <option value="">— Nincs beállítva</option>
-              {doctors.map((d) => (
-                <option key={d.id} value={d.id}>
-                  {d.name}
-                </option>
-              ))}
-            </select>
-            {providerDirty && (
-              <button
-                onClick={handleSaveProvider}
-                disabled={savingProvider}
-                className="inline-flex items-center gap-1.5 px-3 py-2 bg-medical-primary text-white rounded-md hover:bg-medical-primary-dark disabled:opacity-50 text-sm shrink-0"
-              >
-                {savingProvider && <Loader2 className="w-4 h-4 animate-spin" />}
-                Mentés
-              </button>
-            )}
-          </div>
-
-          {/* Felajánlás: legyen ő a kezelőorvos is (ha a betegnek még nincs) */}
-          {kezeleoorvosOffer && (
-            <div className="mt-2 rounded-md border border-medical-primary/30 bg-medical-primary/5 dark:bg-medical-primary/10 p-3 text-sm">
-              <p className="text-gray-700 dark:text-gray-200">
-                Ennek a betegnek még nincs <strong>kezelőorvosa</strong>. Beállítsuk{' '}
-                <strong>{kezeleoorvosOffer.name}</strong>-t kezelőorvosnak is? Ez jelenik meg a
-                főoldalon, és ő felel a beteg adatteljességéért.
-              </p>
-              <div className="mt-2 flex items-center gap-2">
-                <button
-                  onClick={handleAssignKezeleoorvos}
-                  disabled={assigningKezeleoorvos}
-                  className="inline-flex items-center gap-1.5 px-3 py-1.5 bg-medical-primary text-white rounded-md hover:bg-medical-primary-dark disabled:opacity-50 text-sm"
-                >
-                  {assigningKezeleoorvos && <Loader2 className="w-4 h-4 animate-spin" />}
-                  Igen, legyen kezelőorvos
-                </button>
-                <button
-                  onClick={() => setKezeleoorvosOffer(null)}
-                  disabled={assigningKezeleoorvos}
-                  className="px-3 py-1.5 text-sm text-gray-600 dark:text-gray-300 hover:underline disabled:opacity-50"
-                >
-                  Most nem
-                </button>
-              </div>
-            </div>
-          )}
-        </div>
-
-        {/* Guard: both pathway + provider needed */}
-        {episodePathways.length > 0 && !selectedProviderId && (
-          <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-2 rounded">
-            Felelős orvos kiválasztása szükséges a worklist foglaláshoz.
-          </p>
-        )}
         {episodePathways.length === 0 && (
           <p className="text-xs text-amber-700 dark:text-amber-300 bg-amber-50 dark:bg-amber-950/40 p-2 rounded">
             Alkalmazz legalább egy sablont, hogy a lépések generálhatók legyenek.

@@ -19,7 +19,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/contexts/ToastContext';
 import {
-  Loader2, ChevronDown, ChevronUp, ChevronRight, Plus, AlertTriangle, CalendarDays, UserRound,
+  Loader2, ChevronDown, ChevronUp, ChevronRight, Plus, AlertTriangle, CalendarDays, Layers,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, pointerWithin, rectIntersection,
@@ -34,6 +34,7 @@ import { WorkPhaseBookingModals } from './WorkPhaseBookingModals';
 import { PlanStartDateControl } from './PlanStartDateControl';
 import { PlanHistoryLog } from './PlanHistoryLog';
 import { WorkPhaseTaskDelegateBlock } from './WorkPhaseTaskDelegateBlock';
+import { EpisodeProviderControl } from './EpisodeProviderControl';
 import {
   effectiveStatus,
   formatShortDate,
@@ -90,10 +91,19 @@ export interface EpisodeStepsManagerProps {
   carePathwayName?: string | null;
   episodePathways?: EpisodePathwayInfo[];
   onStepChanged?: () => void;
-  /** Az epizód felelős orvosa — a terv-kártya metasorában jelenik meg. */
+  /**
+   * Az epizód felelős orvosa — a kártya fejlécében feltűnő chipként, a sablontól
+   * függetlenül (EpisodeProviderControl). `showProvider` nélkül nem jelenik meg.
+   */
+  assignedProviderId?: string | null;
   assignedProviderName?: string | null;
-  /** Kezelési út + felelős orvos szerkesztő (EpisodePathwayEditor) — a kártya
-      „Beállítások módosítása" gombja mögött nyílik. Csak jogosultnak adandó át. */
+  showProvider?: boolean;
+  /** admin / fogpótlástanász válthatja a felelős orvost. */
+  canEditProvider?: boolean;
+  /** Felelős orvos váltása után (karton + foglalási motor frissítése). */
+  onProviderChanged?: () => void;
+  /** Kezelési terv sablon szerkesztő (EpisodePathwayEditor) — a kártya
+      „Sablon módosítása" gombja mögött nyílik. Csak jogosultnak adandó át. */
   settingsPanel?: React.ReactNode;
   /** Külső frissítő kulcs (pl. beállítás-mentés után) — változásra teljes újratöltés. */
   refreshTrigger?: number;
@@ -136,7 +146,11 @@ export function EpisodeStepsManager({
   carePathwayName,
   episodePathways = [],
   onStepChanged,
-  assignedProviderName,
+  assignedProviderId = null,
+  assignedProviderName = null,
+  showProvider = false,
+  canEditProvider = false,
+  onProviderChanged,
   settingsPanel,
   refreshTrigger,
 }: EpisodeStepsManagerProps) {
@@ -456,27 +470,42 @@ export function EpisodeStepsManager({
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
-      <button
-        type="button"
-        onClick={() => setExpanded(!expanded)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors rounded-t-lg"
-        aria-expanded={expanded}
-      >
-        <div>
-          <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Kezelési terv</h3>
-          <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-            Alkalmak és kezelések — bal oldalról pakolható, egy alkalom = egy időpont
-          </p>
-        </div>
-        <div className="flex items-center gap-2">
-          {primaries.length > 0 && (
-            <span className="text-xs text-gray-500 dark:text-gray-400">
-              {primaries.filter((s) => s.status === 'completed' || s.status === 'skipped').length}/{primaries.length} kész
-            </span>
-          )}
-          {expanded ? <ChevronUp className="w-4 h-4 text-gray-400 dark:text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-400 dark:text-gray-500" />}
-        </div>
-      </button>
+      {/* Fejléc: cím (lenyitó) + a felelős orvos feltűnő chipje — a chip az
+          epizód tulajdonsága, a sablontól független, lecsukott kártyán is látszik. */}
+      <div className="flex items-center gap-3 px-4 py-3 flex-wrap">
+        <button
+          type="button"
+          onClick={() => setExpanded(!expanded)}
+          className="flex-1 min-w-[200px] flex items-center justify-between gap-2 text-left rounded-md -mx-1 px-1 hover:bg-gray-50 dark:hover:bg-gray-800/50 transition-colors"
+          aria-expanded={expanded}
+        >
+          <div className="min-w-0">
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Kezelési terv</h3>
+            <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
+              Alkalmak és kezelések — bal oldalról pakolható, egy alkalom = egy időpont
+            </p>
+          </div>
+          <div className="flex items-center gap-2 shrink-0">
+            {primaries.length > 0 && (
+              <span className="text-xs text-gray-500 dark:text-gray-400">
+                {primaries.filter((s) => s.status === 'completed' || s.status === 'skipped').length}/{primaries.length} kész
+              </span>
+            )}
+            {expanded ? <ChevronUp className="w-4 h-4 text-gray-400 dark:text-gray-500" /> : <ChevronDown className="w-4 h-4 text-gray-400 dark:text-gray-500" />}
+          </div>
+        </button>
+        {showProvider && (
+          <EpisodeProviderControl
+            episodeId={episodeId}
+            patientId={patientId ?? null}
+            assignedProviderId={assignedProviderId}
+            assignedProviderName={assignedProviderName}
+            canEdit={canEditProvider}
+            onChanged={onProviderChanged}
+            compact
+          />
+        )}
+      </div>
 
       {expanded && (
         <div className="px-3 pb-3 sm:px-4 sm:pb-4">
@@ -487,19 +516,13 @@ export function EpisodeStepsManager({
             </div>
           ) : (
             <>
-              {/* ─── Terv-meta: felelős orvos + sablon + beállítások ───── */}
-              {(assignedProviderName !== undefined || settingsPanel) && (
+              {/* ─── Terv-meta: sablon + sablon-beállítások (a felelős orvos a fejlécben) ── */}
+              {(pathwayDisplayName || settingsPanel) && (
                 <div className="mb-3 pb-3 border-b border-gray-100 dark:border-gray-800">
                   <div className="flex items-center gap-2 flex-wrap text-sm text-gray-700 dark:text-gray-300">
-                    <UserRound className="w-4 h-4 text-medical-primary shrink-0" />
-                    <span>
-                      Felelős orvos:{' '}
-                      <strong className="text-gray-900 dark:text-gray-100">
-                        {assignedProviderName || '— nincs beállítva'}
-                      </strong>
-                    </span>
+                    <Layers className="w-4 h-4 text-medical-primary shrink-0" />
                     <span className="text-gray-500 dark:text-gray-400">
-                      · Sablon:{' '}
+                      Sablon:{' '}
                       <strong className="text-gray-700 dark:text-gray-200">
                         {pathwayDisplayName || '— nincs alkalmazva'}
                       </strong>
@@ -511,7 +534,7 @@ export function EpisodeStepsManager({
                         className="ml-auto inline-flex items-center gap-1 text-medical-primary hover:underline text-sm font-medium shrink-0"
                         aria-expanded={settingsOpen}
                       >
-                        Beállítások módosítása
+                        Sablon módosítása
                         <ChevronRight className={`w-4 h-4 transition-transform ${settingsOpen ? 'rotate-90' : ''}`} />
                       </button>
                     )}
