@@ -200,7 +200,7 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     const phaseRow = await client.query(
       `SELECT ewp.id, ewp.episode_id, ewp.work_phase_code, ewp.status, ewp.pathway_order_index,
               ewp.duration_minutes, ewp.default_days_offset, ewp.custom_label,
-              ewp.visit_id, ewp.jaw,
+              ewp.visit_id, ewp.jaw, ewp.merged_into_episode_work_phase_id,
               pe.status as episode_status
        FROM episode_work_phases ewp
        JOIN patient_episodes pe ON ewp.episode_id = pe.id
@@ -282,6 +282,26 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
             { status: 404 }
           );
         }
+        // Puzzle v2: összevont GYEREK áthelyezése — a csoport nem hasadhat két
+        // vizitre, ezért a gyerek előbb kilép a csoportból (egysoros unmerge),
+        // és önálló fázisként költözik a cél-alkalomba.
+        let detachedFromGroup = false;
+        if (phase.merged_into_episode_work_phase_id) {
+          await client.query(
+            `UPDATE episode_work_phases SET merged_into_episode_work_phase_id = NULL WHERE id = $1`,
+            [workPhaseId]
+          );
+          detachedFromGroup = true;
+          await insertWorkPhaseAudit(client, {
+            episodeWorkPhaseId: workPhaseId,
+            episodeId,
+            oldStatus: phase.status,
+            newStatus: phase.status,
+            changedBy: auth.email ?? auth.userId ?? 'unknown',
+            changeType: 'unmerge',
+            reason: 'Kilépett az összevont csoportból (áthelyezés másik alkalomba)',
+          });
+        }
         // Review-javítás: a merge-csoport "egy alkalom" — a primary
         // áthelyezése a rejtett (merged) gyerekeit is viszi, különben a
         // csoport némán kettéhasadna és zombi vizit maradna hátra.
@@ -301,11 +321,16 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
         // a vizit-sorrendet kövesse (vizit seq, azon belül a mai sorrend),
         // különben a megjelenített alkalom-sorrend és a motor/becslés/lánc
         // némán széttartana (a kollekció-reorder route pontosan így számoz át).
+        // Puzzle v2: az áthelyezett sor (+ csoportja) a cél-alkalom VÉGÉRE
+        // kerül — ez az, amit az optimista kliens is rajzol, így a
+        // visszatöltés nem ugráltatja a kockát.
         await client.query(
           `WITH ordered AS (
              SELECT e.id,
                     ROW_NUMBER() OVER (
                       ORDER BY v.seq NULLS LAST,
+                               CASE WHEN e.id = $2 OR e.merged_into_episode_work_phase_id = $2
+                                    THEN 1 ELSE 0 END,
                                COALESCE(e.seq, e.pathway_order_index),
                                e.pathway_order_index, e.id
                     ) - 1 AS new_seq
@@ -315,7 +340,7 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
            )
            UPDATE episode_work_phases SET seq = ordered.new_seq
            FROM ordered WHERE episode_work_phases.id = ordered.id`,
-          [episodeId]
+          [episodeId, workPhaseId]
         );
         visitMoved = true;
         await insertWorkPhaseAudit(client, {
@@ -328,7 +353,9 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
           reason:
             movedChildren > 0
               ? `Áthelyezve másik alkalomba (+${movedChildren} összevont al-fázis)`
-              : 'Áthelyezve másik alkalomba',
+              : detachedFromGroup
+                ? 'Áthelyezve másik alkalomba (önálló fázisként)'
+                : 'Áthelyezve másik alkalomba',
         });
       }
 

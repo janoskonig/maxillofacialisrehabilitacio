@@ -7,7 +7,7 @@ import {
   canonicalizeStepCode,
 } from '@/lib/admin-process-schemas';
 import { invalidateStepLabelCache } from '@/lib/step-labels';
-import { invalidateCache } from '@/lib/catalog-cache';
+import { invalidateCachePrefix } from '@/lib/catalog-cache';
 import { invalidateUnmappedCache } from '@/lib/step-catalog-cache';
 
 const STEP_CODE_REGEX = /^[a-z0-9_]+$/;
@@ -229,7 +229,7 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
     );
   }
 
-  invalidateCache('work-phase-catalog');
+  invalidateCachePrefix('work-phase-catalog');
   invalidateStepLabelCache();
   invalidateUnmappedCache();
 

@@ -5,22 +5,33 @@ import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { getFullWorkPhaseQuery } from '@/lib/episode-work-phase-select';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 import { createEpisodeVisit } from '@/lib/episode-visits';
+import { DEFAULT_VISIT_GAP_DAYS } from '@/lib/visit-plan-constants';
+import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 
 export const dynamic = 'force-dynamic';
 
 /**
  * POST /api/episodes/:id/work-phases/from-tooth-treatment
  * Add a linked tooth treatment as a step in the episode's pathway.
- * Body: { toothTreatmentId: string }
+ * Body: { toothTreatmentId: string, visitId?: string }
+ *
+ * Puzzle v2: `visitId` → a fog-fázis a megadott, meglévő alkalomba születik
+ * (egy kérés); különben új alkalom a lista végére, DEFAULT_VISIT_GAP_DAYS
+ * lépésközzel. Válasz: { workPhases, workPhaseId, visit } — a `visit` az új
+ * alkalom metaadata (meglévőbe szúrásnál null).
  */
 export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const episodeId = params.id;
   const body = await req.json();
-  const { toothTreatmentId } = body;
+  const { toothTreatmentId, visitId: rawVisitId } = body;
 
   if (!toothTreatmentId || typeof toothTreatmentId !== 'string') {
     return NextResponse.json({ error: 'toothTreatmentId kötelező' }, { status: 400 });
   }
+  if (rawVisitId != null && typeof rawVisitId !== 'string') {
+    return NextResponse.json({ error: 'A visitId string azonosító legyen' }, { status: 400 });
+  }
+  const targetVisitId: string | null = typeof rawVisitId === 'string' ? rawVisitId : null;
 
   const pool = getDbPool();
 
@@ -88,18 +99,70 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   // tranzakcióban fut: külön commitolva egy közbeeső hiba kétállapotú
   // invariáns-sértést hagyna (van fog-fázis, de a sor 'pending' maradt — a
   // fog-szinkron szűrője és a Fogkezelés fül nézete szétcsúszna).
+  let insertedId: string | null = null;
+  let createdVisit: {
+    id: string;
+    seq: number;
+    label: string | null;
+    daysOffset: number | null;
+    plannedDurationMinutes: number | null;
+  } | null = null;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    // WP-4.1a invariáns: minden új fázis vizitbe születik — új egyfős vizit a
-    // vizit-lista végére, days_offset := a fázis default_days_offset-je (itt 7).
-    const visit = await createEpisodeVisit(client, { episodeId, daysOffset: 7 });
+    let visitIdToUse: string;
+    if (targetVisitId) {
+      const target = await client.query(
+        `SELECT id FROM episode_visits WHERE id = $1 AND episode_id = $2 FOR UPDATE`,
+        [targetVisitId, episodeId]
+      );
+      if (target.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          { error: 'A cél-alkalom nem található ebben az epizódban', code: 'VISIT_NOT_FOUND' },
+          { status: 404 }
+        );
+      }
+      visitIdToUse = targetVisitId;
+    } else {
+      // WP-4.1a invariáns: minden új fázis vizitbe születik — új alkalom a
+      // vizit-lista végére, a vizit-alap lépésközzel (7 nap).
+      const visit = await createEpisodeVisit(client, { episodeId, daysOffset: DEFAULT_VISIT_GAP_DAYS });
+      visitIdToUse = visit.id;
+      createdVisit = {
+        id: visit.id,
+        seq: visit.seq,
+        label: null,
+        daysOffset: DEFAULT_VISIT_GAP_DAYS,
+        plannedDurationMinutes: null,
+      };
+    }
     const inserted = await client.query(
       `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, tooth_treatment_id, custom_label, visit_id)
-       VALUES ($1, $2, $3, 'work', 30, 7, $4, $5, $6, $7)
+       VALUES ($1, $2, $3, 'work', 30, $8, $4, $5, $6, $7)
        RETURNING id`,
-      [episodeId, workPhaseCode, nextIdx, nextSeq, toothTreatmentId, customLabel, visit.id]
+      [episodeId, workPhaseCode, nextIdx, nextSeq, toothTreatmentId, customLabel, visitIdToUse, DEFAULT_VISIT_GAP_DAYS]
     );
+    insertedId = String(inserted.rows[0].id);
+    if (targetVisitId) {
+      // Fázis-seq az alkalom-sorrend szerint (a friss sor az alkalmán belül utolsó).
+      await client.query(
+        `WITH ordered AS (
+           SELECT e.id,
+                  ROW_NUMBER() OVER (
+                    ORDER BY v.seq NULLS LAST,
+                             COALESCE(e.seq, e.pathway_order_index),
+                             e.pathway_order_index, e.id
+                  ) - 1 AS new_seq
+           FROM episode_work_phases e
+           LEFT JOIN episode_visits v ON e.visit_id = v.id
+           WHERE e.episode_id = $1
+         )
+         UPDATE episode_work_phases SET seq = ordered.new_seq
+         FROM ordered WHERE episode_work_phases.id = ordered.id`,
+        [episodeId]
+      );
+    }
 
     // WP-2.1: a fogkezelésből létrehozott fázis is naplózódik.
     await insertWorkPhaseAudit(client, {
@@ -124,11 +187,21 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     client.release();
   }
 
+  if (targetVisitId) {
+    try {
+      await projectRemainingSteps(episodeId);
+    } catch {
+      /* non-blocking */
+    }
+  }
   try {
     await emitSchedulingEvent('episode', episodeId, 'step_added');
   } catch { /* non-blocking */ }
 
   const allPhases = await getFullWorkPhaseQuery(pool, episodeId);
 
-  return NextResponse.json({ workPhases: allPhases.rows }, { status: 201 });
+  return NextResponse.json(
+    { workPhases: allPhases.rows, workPhaseId: insertedId, visit: createdVisit },
+    { status: 201 }
+  );
 });

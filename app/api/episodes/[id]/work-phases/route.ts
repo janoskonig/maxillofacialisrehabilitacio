@@ -9,6 +9,9 @@ import {
 } from '@/lib/scheduling-integrity';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 import { createEpisodeVisit, listEpisodeVisits } from '@/lib/episode-visits';
+import { DEFAULT_VISIT_GAP_DAYS } from '@/lib/visit-plan-constants';
+import { probeColumnExists } from '@/lib/schema-probe';
+import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 
 export const dynamic = 'force-dynamic';
 
@@ -66,7 +69,23 @@ export const GET = authedHandler(async (_req, { auth, params }) => {
 
 /**
  * POST /api/episodes/:id/work-phases — add a work phase (from catalog or ad-hoc).
- * Body: { workPhaseCode?, stepCode? (legacy), pool?, durationMinutes?, defaultDaysOffset?, label? }
+ * Body: { workPhaseCode?, stepCode? (legacy), pool?, durationMinutes?, defaultDaysOffset?, label?,
+ *         visitId?, daysOffset? }
+ *
+ * Vizit-alapú terv (puzzle v2):
+ *   • `visitId` → a fázis a megadott, MEGLÉVŐ alkalomba születik, egy kérésben
+ *     (a korábbi POST + PATCH visitId kettős kör kivezetve); a fázis-seq az
+ *     alkalom-sorrend szerint átszámozódik, a friss sor az alkalom végére kerül.
+ *   • különben ÚJ alkalom a lista végére, lépésköze `daysOffset`
+ *     (alap: DEFAULT_VISIT_GAP_DAYS = 7 nap).
+ *   A munkafázisnak nincs saját várakozási ideje — az EWP `default_days_offset`
+ *   csak legacy fallback (vizit nélküli sorok), a lánc a vizit offsetjén jár.
+ *   Katalógus-elemnél a 091-es paletta-alapértékek (időtartam, pool) töltik a
+ *   meg nem adott mezőket.
+ *
+ * Válasz: { workPhase, visit } — a `visit` az újonnan létrehozott alkalom
+ * metaadata (meglévő alkalomba szúrásnál null), hogy a kliens újratöltés
+ * nélkül frissíthesse a tábláját.
  */
 export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const episodeId = params.id;
@@ -78,9 +97,28 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     durationMinutes: rawDuration,
     defaultDaysOffset: rawOffset,
     label,
+    visitId: rawVisitId,
+    daysOffset: rawVisitGap,
   } = body;
 
   const rawWorkPhaseCode = typeof rawWp === 'string' ? rawWp : typeof legacyCode === 'string' ? legacyCode : '';
+
+  if (rawVisitId != null && typeof rawVisitId !== 'string') {
+    return NextResponse.json({ error: 'A visitId string azonosító legyen' }, { status: 400 });
+  }
+  if (rawVisitGap != null && (!Number.isInteger(rawVisitGap) || rawVisitGap < 0)) {
+    return NextResponse.json({ error: 'A daysOffset nem-negatív egész nap legyen' }, { status: 400 });
+  }
+  const targetVisitId: string | null = typeof rawVisitId === 'string' ? rawVisitId : null;
+  // Az új alkalom lépésköze: explicit `daysOffset`; különben a legacy
+  // `defaultDaysOffset` mező (a régi kliensek „a lépés eltolása" értelemben
+  // küldik — a vizit-modellben ez az alkalom eltolása); különben 7 nap.
+  const visitGapDays: number =
+    Number.isInteger(rawVisitGap) && rawVisitGap >= 0
+      ? rawVisitGap
+      : typeof rawOffset === 'number' && Number.isInteger(rawOffset) && rawOffset >= 0
+        ? rawOffset
+        : DEFAULT_VISIT_GAP_DAYS;
 
   const pool = getDbPool();
 
@@ -93,9 +131,13 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   }
 
   const validPools = ['consult', 'work', 'control'];
-  const phasePool = typeof rawPool === 'string' && validPools.includes(rawPool) ? rawPool : 'work';
-  const durationMinutes = typeof rawDuration === 'number' && rawDuration > 0 ? rawDuration : 30;
-  const defaultDaysOffset = typeof rawOffset === 'number' && rawOffset >= 0 ? rawOffset : 7;
+  let phasePool: string | null =
+    typeof rawPool === 'string' && validPools.includes(rawPool) ? rawPool : null;
+  let durationMinutes: number | null =
+    typeof rawDuration === 'number' && rawDuration > 0 ? rawDuration : null;
+  // Legacy fallback-oszlop: a vizit lépésközét tükrözi, a láncban nem játszik,
+  // amíg a sornak van vizitje.
+  const defaultDaysOffset = typeof rawOffset === 'number' && rawOffset >= 0 ? rawOffset : visitGapDays;
 
   let workPhaseCode: string;
   let customLabel: string | null = null;
@@ -104,12 +146,27 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   if (rawWorkPhaseCode.trim().length > 0) {
     workPhaseCode = rawWorkPhaseCode.trim();
     createdVia = 'katalógusból';
+    const hasPalette = await probeColumnExists(pool, 'work_phase_catalog', 'palette_order');
     const catalogRow = await pool.query(
-      `SELECT work_phase_code FROM work_phase_catalog WHERE work_phase_code = $1 AND is_active = true`,
+      `SELECT work_phase_code${hasPalette ? ', default_duration_minutes, default_pool' : ''}
+       FROM work_phase_catalog WHERE work_phase_code = $1 AND is_active = true`,
       [workPhaseCode]
     );
-    if (catalogRow.rows.length === 0 && typeof label === 'string' && label.trim().length > 0) {
-      customLabel = label.trim();
+    if (catalogRow.rows.length === 0) {
+      if (typeof label === 'string' && label.trim().length > 0) {
+        customLabel = label.trim();
+      }
+    } else if (hasPalette) {
+      const cat = catalogRow.rows[0] as {
+        default_duration_minutes: number | null;
+        default_pool: string | null;
+      };
+      if (durationMinutes == null && cat.default_duration_minutes != null && cat.default_duration_minutes > 0) {
+        durationMinutes = Number(cat.default_duration_minutes);
+      }
+      if (phasePool == null && cat.default_pool && validPools.includes(cat.default_pool)) {
+        phasePool = cat.default_pool;
+      }
     }
   } else {
     const prefix = `adhoc_${Date.now().toString(36)}`;
@@ -121,6 +178,8 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
       return NextResponse.json({ error: 'Ad-hoc munkafázishoz label kötelező' }, { status: 400 });
     }
   }
+  phasePool ??= 'work';
+  durationMinutes ??= 30;
 
   const maxSeqRow = await pool.query(
     `SELECT COALESCE(MAX(seq), -1) as max_seq FROM episode_work_phases WHERE episode_id = $1`,
@@ -136,29 +195,84 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
 
   // A fázis-INSERT és a 'create' audit sor (WP-2.1) EGY tranzakcióban fut,
   // hogy a napló ne maradhasson le a létrehozásról.
+  let insertedId: string | null = null;
+  let createdVisit: {
+    id: string;
+    seq: number;
+    label: string | null;
+    daysOffset: number | null;
+    plannedDurationMinutes: number | null;
+  } | null = null;
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
-    // WP-4.1a invariáns: minden új fázis vizitbe születik — új egyfős vizit a
-    // vizit-lista végére, days_offset := a fázis default_days_offset-je.
-    const visit = await createEpisodeVisit(client, {
-      episodeId,
-      daysOffset: defaultDaysOffset,
-    });
+    let visitIdToUse: string;
+    if (targetVisitId) {
+      const target = await client.query(
+        `SELECT id FROM episode_visits WHERE id = $1 AND episode_id = $2 FOR UPDATE`,
+        [targetVisitId, episodeId]
+      );
+      if (target.rows.length === 0) {
+        await client.query('ROLLBACK');
+        return NextResponse.json(
+          { error: 'A cél-alkalom nem található ebben az epizódban', code: 'VISIT_NOT_FOUND' },
+          { status: 404 }
+        );
+      }
+      visitIdToUse = targetVisitId;
+    } else {
+      // WP-4.1a invariáns: minden új fázis vizitbe születik — új alkalom a
+      // vizit-lista végére, lépésköze a vizit-alap (7 nap) vagy a kért érték.
+      const visit = await createEpisodeVisit(client, {
+        episodeId,
+        daysOffset: visitGapDays,
+      });
+      visitIdToUse = visit.id;
+      createdVisit = {
+        id: visit.id,
+        seq: visit.seq,
+        label: null,
+        daysOffset: visitGapDays,
+        plannedDurationMinutes: null,
+      };
+    }
     const inserted = await client.query(
       `INSERT INTO episode_work_phases (episode_id, work_phase_code, pathway_order_index, pool, duration_minutes, default_days_offset, seq, custom_label, source_episode_pathway_id, visit_id)
        VALUES ($1, $2, $3, $4, $5, $6, $7, $8, NULL, $9)
        RETURNING id`,
-      [episodeId, workPhaseCode, nextIdx, phasePool, durationMinutes, defaultDaysOffset, nextSeq, customLabel, visit.id]
+      [episodeId, workPhaseCode, nextIdx, phasePool, durationMinutes, defaultDaysOffset, nextSeq, customLabel, visitIdToUse]
     );
+    insertedId = String(inserted.rows[0].id);
+    if (targetVisitId) {
+      // A sorrend igazsága az EWP COALESCE(seq, pathway_order_index) — meglévő
+      // alkalomba szúrva a fázis-seq az alkalom-sorrendet kövesse (a friss sor
+      // a max seq-jével az alkalmán belül utolsó), különben a megjelenített
+      // alkalom-sorrend és a motor/becslés/lánc némán széttartana.
+      await client.query(
+        `WITH ordered AS (
+           SELECT e.id,
+                  ROW_NUMBER() OVER (
+                    ORDER BY v.seq NULLS LAST,
+                             COALESCE(e.seq, e.pathway_order_index),
+                             e.pathway_order_index, e.id
+                  ) - 1 AS new_seq
+           FROM episode_work_phases e
+           LEFT JOIN episode_visits v ON e.visit_id = v.id
+           WHERE e.episode_id = $1
+         )
+         UPDATE episode_work_phases SET seq = ordered.new_seq
+         FROM ordered WHERE episode_work_phases.id = ordered.id`,
+        [episodeId]
+      );
+    }
     await insertWorkPhaseAudit(client, {
-      episodeWorkPhaseId: inserted.rows[0].id,
+      episodeWorkPhaseId: insertedId,
       episodeId,
       oldStatus: null,
       newStatus: 'pending',
       changedBy: auth.email ?? auth.userId ?? 'unknown',
       changeType: 'create',
-      reason: `Munkafázis hozzáadva (${createdVia})`,
+      reason: `Munkafázis hozzáadva (${createdVia}${targetVisitId ? ', meglévő alkalomba' : ', új alkalom'})`,
     });
     await client.query('COMMIT');
   } catch (txError) {
@@ -168,6 +282,14 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     client.release();
   }
 
+  if (targetVisitId) {
+    // Seq-átszámozás után az intent-kulcsok (step_code, step_seq) elmozdultak.
+    try {
+      await projectRemainingSteps(episodeId);
+    } catch {
+      /* non-blocking — a projektor a következő releváns eseménynél újrafut */
+    }
+  }
   try {
     await emitSchedulingEvent('episode', episodeId, 'step_added');
   } catch {
@@ -175,7 +297,9 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   }
 
   const allPhases = await getFullWorkPhaseQuery(pool, episodeId);
-  const added = allPhases.rows[allPhases.rows.length - 1];
+  const added =
+    allPhases.rows.find((r: { id: string }) => String(r.id) === insertedId) ??
+    allPhases.rows[allPhases.rows.length - 1];
 
-  return NextResponse.json({ workPhase: added }, { status: 201 });
+  return NextResponse.json({ workPhase: added, visit: createdVisit }, { status: 201 });
 });

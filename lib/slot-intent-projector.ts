@@ -8,6 +8,7 @@ import { getDbPool } from './db';
 import { computeStepWindow } from './step-window';
 import { slotPoolForStep, type PathwayWorkPhaseTemplate } from './next-step-engine';
 import { normalizePathwayWorkPhaseArray } from './pathway-work-phases-for-episode';
+import { groupProjectionUnits } from './slot-intent-projection-units';
 
 const BUDAPEST_TZ = 'Europe/Budapest';
 
@@ -203,6 +204,10 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       completed_at: Date | null;
       default_days_offset?: number | null;
       duration_minutes?: number | null;
+      /** Puzzle v2: a sor vizitje — a vetítés egysége. */
+      visit_id?: string | null;
+      /** Puzzle v2: a vizit days_offset-je; NULL → a fázis offsetje a fallback. */
+      visit_days_offset?: number | null;
     }
     let episodeWorkPhaseRows: EwpRow[] | null = null;
     await client.query('SAVEPOINT sp_ewp');
@@ -220,12 +225,32 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
           ),
         null,
       );
-      if (col && col.rows.length > 0) mergedIntoFilter = ' AND merged_into_episode_work_phase_id IS NULL';
+      if (col && col.rows.length > 0) mergedIntoFilter = ' AND e.merged_into_episode_work_phase_id IS NULL';
+      // Puzzle v2: vizit-tagság + vizit-szintű days_offset — egy alkalom
+      // fázisai egy vetítési egység (közös ablak, a horgony egyszer lép).
+      // A 089 előtti sémán elmarad; a sorok egyfős egységek maradnak.
+      let visitCols = '';
+      let visitJoin = '';
+      const visitCol = await withSavepoint(
+        client,
+        'sp_ewp_visit_col',
+        () =>
+          client.query(
+            `SELECT 1 FROM information_schema.columns
+             WHERE table_name = 'episode_work_phases' AND column_name = 'visit_id' LIMIT 1`
+          ),
+        null,
+      );
+      if (visitCol && visitCol.rows.length > 0) {
+        visitCols = ', e.visit_id, v.days_offset AS visit_days_offset';
+        visitJoin = ' LEFT JOIN episode_visits v ON e.visit_id = v.id';
+      }
       const esResult = await client.query(
-        `SELECT id, work_phase_code, COALESCE(seq, pathway_order_index) as step_seq, status, completed_at,
-                default_days_offset, duration_minutes
-         FROM episode_work_phases WHERE episode_id = $1${mergedIntoFilter}
-         ORDER BY COALESCE(seq, pathway_order_index)`,
+        `SELECT e.id, e.work_phase_code, COALESCE(e.seq, e.pathway_order_index) as step_seq, e.status, e.completed_at,
+                e.default_days_offset, e.duration_minutes${visitCols}
+         FROM episode_work_phases e${visitJoin}
+         WHERE e.episode_id = $1${mergedIntoFilter}
+         ORDER BY COALESCE(e.seq, e.pathway_order_index)`,
         [episodeId]
       );
       if (esResult.rows.length > 0) episodeWorkPhaseRows = esResult.rows as EwpRow[];
@@ -278,7 +303,11 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     const projections: Projection[] = [];
 
     // Use episode_work_phases when available (authoritative list); fall back to pathway indices
-    const stepsToProject: Array<{ stepCode: string; stepSeq: number; workPhaseId: string | null; offset: number; durationMinutes: number; pool: string }> = [];
+    const stepsToProject: Array<{
+      stepCode: string; stepSeq: number; workPhaseId: string | null; offset: number;
+      durationMinutes: number; pool: string;
+      visitId: string | null; visitDaysOffset: number | null;
+    }> = [];
 
     if (episodeWorkPhaseRows) {
       for (const es of episodeWorkPhaseRows) {
@@ -299,6 +328,8 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
           durationMinutes:
             ewpDur != null && ewpDur > 0 ? ewpDur : (pw?.duration_minutes ?? 30),
           pool: pw ? slotPoolForStep(pw) : 'work',
+          visitId: es.visit_id ?? null,
+          visitDaysOffset: es.visit_days_offset ?? null,
         });
       }
     } else {
@@ -313,6 +344,8 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
           offset: step.default_days_offset ?? 14,
           durationMinutes: step.duration_minutes ?? 30,
           pool: slotPoolForStep(step),
+          visitId: null,
+          visitDaysOffset: null,
         });
       }
     }
@@ -320,28 +353,34 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     // Determine the Budapest local time-of-day from the anchor (e.g. 12:30 Budapest)
     const anchorLocal = getBudapestHourMinute(lastHardAnchor);
 
+    // Puzzle v2: vizit-tudatos lánc — egy alkalom fázisai EGY egység: közös
+    // ablak és javasolt kezdés, a horgony csak az egység után lép; a vizitek
+    // között a vizit days_offset-je a lépésköz (fallback: az első tag fázis-
+    // offsetje). Vizit nélküli sor egyfős egység — a korábbi működés.
     let anchor = lastHardAnchor;
-    for (const sp of stepsToProject) {
-      const { windowStart, windowEnd } = computeStepWindow(anchor, sp.offset);
+    for (const unit of groupProjectionUnits(stepsToProject)) {
+      const { windowStart, windowEnd } = computeStepWindow(anchor, unit.offset);
       const expiresAt = new Date(windowEnd);
       expiresAt.setDate(expiresAt.getDate() + 30);
 
       // Compute target date (anchor + offset days), then place at the same Budapest local time
       const rawDate = new Date(anchor);
-      rawDate.setDate(rawDate.getDate() + sp.offset);
+      rawDate.setDate(rawDate.getDate() + unit.offset);
       const dateISO = rawDate.toISOString().slice(0, 10);
       const suggestedStart = budapestLocalToUTC(dateISO, anchorLocal.hour, anchorLocal.minute);
-      const suggestedEnd = new Date(suggestedStart.getTime() + sp.durationMinutes * 60 * 1000);
 
-      projections.push({
-        stepCode: sp.stepCode, stepSeq: sp.stepSeq, pool: sp.pool,
-        workPhaseId: sp.workPhaseId,
-        durationMinutes: sp.durationMinutes,
-        windowStart, windowEnd, expiresAt,
-        suggestedStart, suggestedEnd,
-      });
+      for (const sp of unit.members) {
+        const suggestedEnd = new Date(suggestedStart.getTime() + sp.durationMinutes * 60 * 1000);
+        projections.push({
+          stepCode: sp.stepCode, stepSeq: sp.stepSeq, pool: sp.pool,
+          workPhaseId: sp.workPhaseId,
+          durationMinutes: sp.durationMinutes,
+          windowStart, windowEnd, expiresAt,
+          suggestedStart, suggestedEnd,
+        });
+      }
 
-      // Chain anchor: next step anchors from this step's expected date
+      // Chain anchor: the next unit anchors from this unit's expected date
       anchor = suggestedStart;
     }
 

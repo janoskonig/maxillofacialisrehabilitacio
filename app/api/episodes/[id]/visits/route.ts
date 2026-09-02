@@ -5,6 +5,7 @@ import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { createEpisodeVisit, listEpisodeVisits } from '@/lib/episode-visits';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 import { projectRemainingSteps } from '@/lib/slot-intent-projector';
+import { DEFAULT_VISIT_GAP_DAYS } from '@/lib/visit-plan-constants';
 
 export const dynamic = 'force-dynamic';
 
@@ -38,6 +39,10 @@ async function episodeOpenGate(
 /**
  * POST /api/episodes/:id/visits — új üres alkalom ("vizit") a lista végére.
  * Body: { label?, daysOffset?, plannedDurationMinutes? }
+ *
+ * A `daysOffset` („ennyi nappal az előző alkalom után") elhagyva
+ * DEFAULT_VISIT_GAP_DAYS (7 nap) — a vizitek között alapvetésként egy hét
+ * telik el; a fázisnak magának nincs várakozási ideje.
  */
 export const POST = roleHandler([...ROLES], async (req, { auth, params }) => {
   const episodeId = params.id;
@@ -76,7 +81,7 @@ export const POST = roleHandler([...ROLES], async (req, { auth, params }) => {
     const visit = await createEpisodeVisit(client, {
       episodeId,
       label,
-      daysOffset: daysOffset ?? null,
+      daysOffset: daysOffset ?? DEFAULT_VISIT_GAP_DAYS,
       plannedDurationMinutes,
     });
 

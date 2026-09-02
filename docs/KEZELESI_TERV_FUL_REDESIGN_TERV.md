@@ -1,7 +1,8 @@
 # Kezelési terv & időpont fül — újratervezési és javítási terv
 
 **Státusz:** A TELJES TERV VÉGREHAJTVA — FÁZIS 0–3: 2026-08-27 (PR #58–#76),
-FÁZIS 4: 2026-08-28 (PR #77–#80, külön `episode_visits` táblával) ·
+FÁZIS 4: 2026-08-28 (PR #77–#80, külön `episode_visits` táblával);
+FÁZIS 6 (Puzzle v2, kéthasábos tábla): 2026-09-02 ·
 **Készült:** 2026-08-27 · **Alap-commit:** `09d6446` (main)
 **Címzett:** végrehajtó agent-szett. Ez a fájl a kanonikus forrás; ha valami ellentmond a
 beszélgetésnek, ez a fájl nyer.
@@ -42,6 +43,7 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 | WP-4.1b step_code→work_phase_id identitás | ✅ | [#78](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/78) | Minden identitás-út wp-elsődleges (legacy fallback); review: CRITICAL param-kötési hiba a prereq-ágon javítva; mellékjavítás: a worklist „korábbi próbák" lekérdezés eddig némán elhasalt (ats.end_time) |
 | WP-4.2 vizit API + forecast | ✅ | [#79](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/79) | Vizit CRUD + PATCH visitId/jaw/teeth + vizit-tudatos forecast (kompat-invariáns fuzz-igazolva) + wp-tudatos projektor; review: 4 major javítva (kombinált body, csoport-mozgatás, reorder=EWP-átszámozás, scoped backfill), 1 medium cáfolva (advisory lock) |
 | WP-4.3 vizit-kártyás UI | ✅ | [#80](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/80) | Alkalom-kártyák + kockák (hatókör-badge), drag-drop + teljes nem-drag alternatíva, „Feltöltés sablonból"; élőben ellenőrizve; review-major (visit-move seq-átszámozás) javítva. **Ezzel a FÁZIS 4 és a TELJES TERV kész.** |
+| WP-6.1 Puzzle v2 — kéthasábos tábla (2026-09-02) | ✅ | (munkafán, commit előtt) | Bal paletta (091 generikus katalógus: csonkpreparálás, precíziós-szituációs lenyomatvétel, átadás, …) + jobb alkalom-sorok kockákkal; vizitköz alap 7 nap, egy kattintással állítható; fázis-szintű offset kivezetve a UI-ból; optimista mutációk, kaszkád-újratöltés csak státusz-változásnál; POST work-phases `visitId` (egy kérés); merged gyerek leválik áthelyezésnél; vizit-szintű foglalás `prepare-booking`-gal; vizit-tudatos projektor. 13 komponens-, 5+29 helper-, 8 integrációs teszt. |
 
 ---
 
@@ -655,6 +657,58 @@ ismétléssel.** Ne írj új tervmotort a semmiből.
 Az élő epizódok terve nem törhet el. A meglévő EWP sorokból generálj vizit-hozzárendelést:
 összevont csoport → egy vizit; magányos sor → egy egyfős vizit. Ez adat-backfill, írd meg
 és próbáld ki eldobható DB-n (`scripts/sim/` harness mintájára), mielőtt élesbe megy.
+
+---
+
+## FÁZIS 6 — Puzzle v2: kéthasábos, „snappy" tervezés (2026-09-02)
+
+**Eredet.** A felhasználó 2026-09-02-én: a `/stages` terv-formálás „kusza, lomha,
+áttekinthetetlen". Kért: bal hasábban generikus kezelések (csonkpreparálás,
+precíziós-szituációs lenyomatvétel, átadás, …), jobb oldalon vizitek, amikbe pakolni
+lehet; a vizitek között alapból **1 hét**; a konkrét munkafázisnak **ne legyen
+cooldown-ja**; nagyon gyors, hiperkönnyű felület.
+
+### 6.1 Modell-döntések
+
+- **A vizitköz az egyetlen időbeli távolság.** `episode_visits.days_offset` alap 7 nap
+  (`lib/visit-plan-constants.ts` `DEFAULT_VISIT_GAP_DAYS`); a `POST /visits` és a
+  `POST /work-phases` új alkalma is ezzel születik. A fázis `default_days_offset`-je csak
+  legacy fallback (vizit nélküli sor); a UI-ból a „Nap offset" mező kikerült.
+- **Vizit-tudatos projektor** (`lib/slot-intent-projector.ts` +
+  `lib/slot-intent-projection-units.ts`): egy alkalom fázisai közös ablakot/javasolt
+  kezdést kapnak, a horgony egyszer lép — ugyanaz a csoportosítás, mint a
+  `computeVisitAwareWindowChain`-ben. Eddig a projektor soronként lépdelt (fázis-cooldown).
+- **Generikus paletta a katalógusban** (091): `work_phase_catalog.palette_order`,
+  `default_duration_minutes`, `default_pool`; 20 `gen_*` sor. `gen_atadas` szándékosan
+  illeszkedik a stádium-motor `_atadas` mintáira; a sebészi sablon átadása `_atadasa`
+  végű, hogy ne számítson protetikai átadásnak. A pathway-specifikus kódok maradnak,
+  keresésből érhetők el (címkénként egyszer).
+- **Egy alkalom = egy időpont.** A foglalás alkalom-szinten indul; ≥2 nyitott fázisnál a
+  `POST /visits/:id/prepare-booking` a sorrendben első (vagy már foglalt) fázis alá vonja
+  a többit (meglévő merge-mechanizmus), a primary perce a tagok összege (vagy a vizit
+  `planned_duration_minutes`); idempotens. Az összevont gyerek áthelyezése előbb
+  leválik a csoportról (a csoport nem hasad két vizitre).
+- **Nincs új tervmotor**: az EWP-sorrend igazsága marad (`COALESCE(seq, poi)`), a
+  meglévő alkalomba szúrt / áthelyezett sor az alkalom végére kerül — az optimista
+  kliens ugyanezt rajzolja, így a visszatöltés nem ugráltat.
+
+### 6.2 Kliens
+
+`components/EpisodeStepsManager.tsx` (konténer) + `components/visit-plan/`:
+`usePlanBoard.ts` (optimista állapot, `tmp…` id-k, hibánál visszaállás, vetítés
+debounce-olva), `PhasePalette.tsx`, `VisitRow.tsx`, `VisitGap.tsx`, `PhasePill.tsx`,
+`VisitBookingButton.tsx`, `Popover.tsx`. Törölve: `VisitCard`, `VisitPhaseTile`,
+`MoveToVisitMenu`. A karton-szintű kaszkád (`onStepChanged`) csak státusz-változásnál fut;
+rutin-műveletről nincs siker-toast; a kompozíciós hívások egy kérésesek.
+
+### 6.3 Nyitott / követés
+
+- A `default_days_offset` oszlop EWP-n és a pathway JSON-ban megmarad (sablon-alkalmazás
+  továbbra is fázisonként egyfős vizitet nyit a sablon offsetjével).
+- A `convert-all-intents` lánc-gap továbbra is a fázis-offsetből számol
+  (`gapByStep`); a projektor és a lánc már vizit-alapú — a köteg-foglalás a több-fázisú
+  alkalmakat előbb `prepare-booking`-gal vonja egybe (kliens), így egy alkalom = egy intent.
+- Admin katalógus-szerkesztő (`StepCatalogEditor`) még nem kezeli a paletta-mezőket.
 
 ---
 
