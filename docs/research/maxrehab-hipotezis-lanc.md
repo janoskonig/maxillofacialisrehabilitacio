@@ -10,7 +10,7 @@
 
 ## Definíciók
 
-- **OHIP-14:** 0–56, kisebb = jobb. **Δ** = T_k − T0, a javulás negatív. **MCID** előre rögzített (irodalmi ≈ 5 pont). Időpont a `completed_at − átadás` napokból újracímkézve (0 / 30 / 180 / 365 / 1095).
+- **OHIP-14:** 0–56, kisebb = jobb. **Δ** = Tk − T0, a javulás negatív. **MCID** előre rögzített (irodalmi ≈ 5 pont). Időpont a `completed_at − átadás` napokból újracímkézve (0 / 30 / 180 / 365 / 1095).
 - **Átadás:** az epizód első `STAGE_6` eseménye (`stage_events.at`); ennek hiányában első `STAGE_7`.
 - **Átfutás:** `patient_episodes.opened_at` → átadás, napokban; versengő esemény: halál (`patients.halal_datum`).
 - **Harmonizált D / F / M:** régi `status` és új `base` odontogram-modell együtt (háttéranyag A2); M nem caries-eredetű, külön jelentendő.
