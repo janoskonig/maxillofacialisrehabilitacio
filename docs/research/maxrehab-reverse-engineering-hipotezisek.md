@@ -549,7 +549,7 @@ Kapcsolók és adatgyűjtési lépések, amelyek nélkül a fenti közlemények 
 
 ## Függelék A: adatkinyerési SQL-vázlatok
 
-Csak vázlatok a séma-nevekkel; a tényleges futtatás a pszeudonimizált exporton, a kapuk mögött történjen. Postgres 14+.
+Csak vázlatok a séma-nevekkel; a tényleges futtatás a pszeudonimizált exporton, a kapuk mögött történjen. Postgres 14+. **Ellenőrzés (2026-09-02):** a hét vázlatot a repó migrációiból (`database/schema.sql` → legacy → tracked 001–093) felépített, üres Postgres 16 sémán `EXPLAIN`-nel futtattam; mind a hét feloldódik (tábla-, oszlop-, függvény- és típusnevek egyeznek). Elemszám- és eloszlás-ellenőrzés csak valódi adaton lehetséges.
 
 ### A1 · Felvételi (baseline) tábla betegenként
 
@@ -745,7 +745,8 @@ SELECT
   EXTRACT(YEAR FROM AGE(x.atadas_at::date, p.szuletesi_datum))::int    AS eletkor,
   LEFT(p.iranyitoszam, 2)                                               AS regio_elotag,
   (SELECT COUNT(*) FROM ohip_reminder_log l
-     WHERE l.patient_id = x.patient_id AND l.timepoint = 'T3')          AS t3_emlekeztetok,
+     WHERE l.patient_id = x.patient_id AND l.timepoint = 'T3'
+       AND COALESCE(l.episode_id, x.episode_id) = x.episode_id)         AS t3_emlekeztetok,
   p.halal_datum
 FROM atadott x
 JOIN patients p ON p.id = x.patient_id
