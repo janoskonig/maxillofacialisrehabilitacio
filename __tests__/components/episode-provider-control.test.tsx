@@ -7,19 +7,36 @@
  *   {assignedProviderId, providerChangeReason}-t küld, majd onChanged-et hív;
  * - a lekapcsolás assignedProviderId: null-lal megy;
  * - a váltások története a provider-history végpontból jön;
+ * - sikertelen mentésnél a toast a szerver üzenetét + [correlationId]-t adja, a
+ *   generikus 500-as „Hiba történt" helyett a művelet nevét;
  * - canEdit nélkül csak megjelenítés (nincs gomb).
  */
 import { describe, it, expect, afterEach, vi } from 'vitest';
 import { render, screen, fireEvent, waitFor, cleanup, within } from '@testing-library/react';
-import { ToastProvider } from '@/contexts/ToastContext';
+import { ToastProvider, useToast } from '@/contexts/ToastContext';
 import { EpisodeProviderControl } from '@/components/EpisodeProviderControl';
 
-function jsonResponse(body: unknown, status = 200) {
+function jsonResponse(body: unknown, status = 200, headers: Record<string, string> = {}) {
   return Promise.resolve({
     ok: status >= 200 && status < 300,
     status,
+    headers: { get: (name: string) => headers[name.toLowerCase()] ?? null },
     json: () => Promise.resolve(body),
-  } as Response);
+  } as unknown as Response);
+}
+
+/** A ToastProvider csak állapotot tart; a toast-szöveget ez a szonda teszi a DOM-ba. */
+function ToastProbe() {
+  const { toasts } = useToast();
+  return (
+    <ul>
+      {toasts.map((t) => (
+        <li key={t.id} data-testid="toast">
+          {t.message}
+        </li>
+      ))}
+    </ul>
+  );
 }
 
 interface FetchCall {
@@ -28,7 +45,15 @@ interface FetchCall {
   body: Record<string, unknown> | null;
 }
 
-function installFetchMock(opts: { failPatch?: boolean; history?: unknown[]; patientHasKezeleoorvos?: boolean } = {}) {
+function installFetchMock(
+  opts: {
+    failPatch?: boolean;
+    /** A sikertelen PATCH válasz-teste (alapból { error: 'Szimulált hiba' }). */
+    patchErrorBody?: Record<string, unknown>;
+    history?: unknown[];
+    patientHasKezeleoorvos?: boolean;
+  } = {}
+) {
   const calls: FetchCall[] = [];
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
@@ -52,7 +77,9 @@ function installFetchMock(opts: { failPatch?: boolean; history?: unknown[]; pati
       return jsonResponse({ events: opts.history ?? [] });
     }
     if (url === '/api/episodes/ep1' && method === 'PATCH') {
-      if (opts.failPatch) return jsonResponse({ error: 'Szimulált hiba' }, 500);
+      if (opts.failPatch) {
+        return jsonResponse(opts.patchErrorBody ?? { error: 'Szimulált hiba' }, 500, { 'x-correlation-id': 'corr-42' });
+      }
       return jsonResponse({ episode: { id: 'ep1', assignedProviderId: body?.assignedProviderId ?? null } });
     }
     if (url === '/api/patients/p1/kezeleoorvos' && method === 'GET') {
@@ -80,6 +107,7 @@ function renderControl(props: Partial<React.ComponentProps<typeof EpisodeProvide
         onChanged={onChanged}
         {...props}
       />
+      <ToastProbe />
     </ToastProvider>
   );
   return { onChanged };
@@ -179,6 +207,29 @@ describe('EpisodeProviderControl', () => {
     // A popover nyitva marad (a hibát toast jelzi), a szülő nem frissül
     await waitFor(() => expect(screen.getByRole('menu')).toBeTruthy());
     expect(onChanged).not.toHaveBeenCalled();
+  });
+
+  it('hibás mentésnél a toast a szerver üzenetét és a correlationId-t adja', async () => {
+    installFetchMock({ failPatch: true });
+    renderControl();
+    fireEvent.click(screen.getByRole('button', { name: /Felelős orvos:/ }));
+    const menu = await screen.findByRole('menu');
+    fireEvent.click(await within(menu).findByRole('menuitem', { name: /Dr. Második Béla/ }));
+    const toast = await screen.findByTestId('toast');
+    expect(toast.textContent).toContain('Szimulált hiba');
+    expect(toast.textContent).toContain('corr-42');
+  });
+
+  it('generikus 500-as „Hiba történt" helyett a toast a műveletet nevezi meg', async () => {
+    installFetchMock({ failPatch: true, patchErrorBody: { error: 'Hiba történt' } });
+    renderControl();
+    fireEvent.click(screen.getByRole('button', { name: /Felelős orvos:/ }));
+    const menu = await screen.findByRole('menu');
+    fireEvent.click(await within(menu).findByRole('menuitem', { name: /Dr. Második Béla/ }));
+    const toast = await screen.findByTestId('toast');
+    expect(toast.textContent).toContain('Nem sikerült a felelős orvos mentése');
+    expect(toast.textContent).not.toContain('Hiba történt');
+    expect(toast.textContent).toContain('corr-42');
   });
 
   it('canEdit nélkül csak megjelenítés', () => {

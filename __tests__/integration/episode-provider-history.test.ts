@@ -4,12 +4,15 @@
  *  - PATCH /api/episodes/:id assignedProviderId: a váltás rögzül (régi → új,
  *    indok, ki); változatlan orvosnál nincs sor; lekapcsolás (null) is rögzül
  *    (092: new_user_id nullable); ismeretlen orvos → 400 és nincs változás;
- *  - GET /api/episodes/:id/provider-history: névvel, legfrissebb elöl.
+ *  - GET /api/episodes/:id/provider-history: névvel, legfrissebb elöl;
+ *  - hiányzó napló-tábla (a 093 előtti, legacy migráció nélküli DB): a felelős
+ *    orvos váltása akkor is átmegy (SAVEPOINT, a sor kimarad, hangos log), a
+ *    történet üres lista, nem 500.
  *
  * Route-handlereket hívunk → pool + afterEach takarítás. A provider_assignment_events
  * sorok az epizóddal kaszkádolva törlődnek.
  */
-import { afterEach, describe, expect, it } from 'vitest';
+import { afterEach, describe, expect, it, vi } from 'vitest';
 import { getDbPool } from '@/lib/db';
 import {
   cleanupCreated,
@@ -103,6 +106,38 @@ describe('Felelős orvos — váltás-napló', () => {
     const ep = await pool.query(`SELECT assigned_provider_id FROM patient_episodes WHERE id = $1`, [episode.id]);
     expect(ep.rows[0].assigned_provider_id).toBe(drA.id);
     expect(await events(episode.id)).toHaveLength(1);
+  });
+
+  it('hiányzó napló-táblánál a váltás átmegy (a sor kimarad, hangos log), a történet üres', async () => {
+    const pool = getDbPool();
+    const drA = await createTestUser(undefined, { doktorNeve: 'Dr. Első Anna' });
+    const patient = await createTestPatient();
+    const episode = await createTestEpisode(undefined, patient.id);
+    const user = await authUser();
+    const errorSpy = vi.spyOn(console, 'error').mockImplementation(() => {});
+    await pool.query('ALTER TABLE provider_assignment_events RENAME TO provider_assignment_events__hidden');
+    try {
+      const res = await patchProvider(episode.id, user, {
+        assignedProviderId: drA.id,
+        providerChangeReason: 'napló-tábla nélkül',
+      });
+      expect(res.status).toBe(200);
+      expect((await res.json()).episode.assignedProviderId).toBe(drA.id);
+      const ep = await pool.query(`SELECT assigned_provider_id FROM patient_episodes WHERE id = $1`, [episode.id]);
+      expect(ep.rows[0].assigned_provider_id).toBe(drA.id);
+
+      const histReq = await authedRequest(`http://test.local/api/episodes/${episode.id}/provider-history`, { user });
+      const histRes = await providerHistoryGet(histReq, { params: { id: episode.id } });
+      expect(histRes.status).toBe(200);
+      expect((await histRes.json()).events).toEqual([]);
+    } finally {
+      await pool.query('ALTER TABLE provider_assignment_events__hidden RENAME TO provider_assignment_events');
+    }
+    // A mockRestore törli a rögzített hívásokat is — előbb olvassuk ki.
+    const logged = errorSpy.mock.calls.filter(([msg]) => String(msg).includes('[provider_assignment_events]'));
+    errorSpy.mockRestore();
+    expect(logged.length).toBeGreaterThanOrEqual(2); // PATCH (INSERT) + GET (SELECT)
+    expect(await events(episode.id)).toHaveLength(0);
   });
 
   it('GET provider-history: nevekkel, legfrissebb elöl', async () => {

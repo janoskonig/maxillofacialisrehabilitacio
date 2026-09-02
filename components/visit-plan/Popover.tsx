@@ -4,8 +4,24 @@
  * Minimális, függőség nélküli popover: gomb + lebegő panel. Kívülre
  * kattintás és Escape zár. Nem portálozik — a hívó adja a pozicionáló
  * (relative) wrappert, így a DnD-vel sem ütközik.
+ *
+ * Viewport-őr: a panel a gombhoz igazodik (align), ami keskeny (mobil)
+ * képernyőn kilóghat a bal/jobb szélen — pl. egy jobbra igazított, w-80 panel
+ * a kártya bal oldalán ülő gombon. Nyitáskor megmérjük, és ha kilóg, annyival
+ * toljuk vissza, hogy VIEWPORT_MARGIN_PX margóval a képernyőn maradjon; a
+ * szélessége sosem több a képernyőnél (max-w).
  */
-import { useEffect, useRef, useState, type ButtonHTMLAttributes, type ReactNode, type Ref } from 'react';
+import {
+  useEffect,
+  useLayoutEffect,
+  useRef,
+  useState,
+  type ButtonHTMLAttributes,
+  type ReactNode,
+  type Ref,
+} from 'react';
+
+const VIEWPORT_MARGIN_PX = 8;
 
 export interface PopoverProps {
   /** A nyitó gomb tartalma. */
@@ -27,6 +43,17 @@ export interface PopoverProps {
   triggerRef?: Ref<HTMLButtonElement>;
 }
 
+/**
+ * Mennyivel kell vízszintesen eltolni a panelt, hogy a képernyőn belül maradjon
+ * (0 = elfér). Külön függvény, hogy a mérés nélkül is tesztelhető legyen.
+ */
+export function viewportShiftX(rect: { left: number; right: number }, viewportWidth: number): number {
+  if (rect.left < VIEWPORT_MARGIN_PX) return Math.round(VIEWPORT_MARGIN_PX - rect.left);
+  const maxRight = viewportWidth - VIEWPORT_MARGIN_PX;
+  if (rect.right > maxRight) return Math.round(maxRight - rect.right);
+  return 0;
+}
+
 export function Popover({
   trigger, triggerClassName, triggerTitle, triggerAriaLabel, disabled,
   align = 'right', widthClass = 'w-64', children, open: controlledOpen, onOpenChange,
@@ -39,6 +66,8 @@ export function Popover({
     onOpenChange?.(v);
   };
   const rootRef = useRef<HTMLDivElement | null>(null);
+  const panelRef = useRef<HTMLDivElement | null>(null);
+  const [shiftX, setShiftX] = useState(0);
 
   useEffect(() => {
     if (!open) return;
@@ -55,6 +84,20 @@ export function Popover({
       document.removeEventListener('keydown', onKey);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [open]);
+
+  // Viewport-őr: nyitáskor (még eltolás nélkül) megmérjük a panelt. Zárásnál
+  // nullázunk, hogy a következő nyitás tiszta lappal mérjen.
+  useLayoutEffect(() => {
+    if (!open) {
+      setShiftX(0);
+      return;
+    }
+    const el = panelRef.current;
+    if (!el) return;
+    const rect = el.getBoundingClientRect();
+    if (rect.width === 0) return; // nincs layout (pl. teszt-DOM) — nincs mit igazítani
+    setShiftX(viewportShiftX(rect, window.innerWidth));
   }, [open]);
 
   return (
@@ -78,9 +121,11 @@ export function Popover({
       </button>
       {open && (
         <div
+          ref={panelRef}
           role="menu"
           onClick={(e) => e.stopPropagation()}
-          className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} z-30 mt-1 ${widthClass} max-h-80 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg p-1 text-left`}
+          style={shiftX !== 0 ? { transform: `translateX(${shiftX}px)` } : undefined}
+          className={`absolute ${align === 'right' ? 'right-0' : 'left-0'} z-30 mt-1 ${widthClass} max-w-[calc(100vw-1rem)] max-h-80 overflow-y-auto rounded-lg border border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 shadow-lg p-1 text-left`}
         >
           {children(() => setOpen(false))}
         </div>
