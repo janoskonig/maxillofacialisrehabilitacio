@@ -43,7 +43,7 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 | WP-4.1b step_code→work_phase_id identitás | ✅ | [#78](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/78) | Minden identitás-út wp-elsődleges (legacy fallback); review: CRITICAL param-kötési hiba a prereq-ágon javítva; mellékjavítás: a worklist „korábbi próbák" lekérdezés eddig némán elhasalt (ats.end_time) |
 | WP-4.2 vizit API + forecast | ✅ | [#79](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/79) | Vizit CRUD + PATCH visitId/jaw/teeth + vizit-tudatos forecast (kompat-invariáns fuzz-igazolva) + wp-tudatos projektor; review: 4 major javítva (kombinált body, csoport-mozgatás, reorder=EWP-átszámozás, scoped backfill), 1 medium cáfolva (advisory lock) |
 | WP-4.3 vizit-kártyás UI | ✅ | [#80](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/80) | Alkalom-kártyák + kockák (hatókör-badge), drag-drop + teljes nem-drag alternatíva, „Feltöltés sablonból"; élőben ellenőrizve; review-major (visit-move seq-átszámozás) javítva. **Ezzel a FÁZIS 4 és a TELJES TERV kész.** |
-| WP-6.2 Felelős orvos az epizódon, a sablontól leválasztva (2026-09-02) | ✅ | `1ba6d99` (main) | Feltűnő chip a terv-kártya fejlécében (EpisodeProviderControl): orvos-választó, indok, lekapcsolás, váltás-történet; a sablon-szerkesztőből kikerült; PATCH /episodes/:id írja a `provider_assignment_events` naplót (092: lekapcsolás is), GET provider-history; a váltás előre hat (intentek lejárnak, új foglalás az új orvoshoz). 8 komponens- + 3 integrációs teszt. |
+| WP-6.2 Felelős orvos az epizódon, a sablontól leválasztva (2026-09-02) | ✅ | `1ba6d99` (main) | Feltűnő chip a terv-kártya fejlécében (EpisodeProviderControl): orvos-választó, indok, lekapcsolás, váltás-történet; a sablon-szerkesztőből kikerült; PATCH /episodes/:id írja a `provider_assignment_events` naplót (092: lekapcsolás is), GET provider-history; a váltás előre hat (intentek lejárnak, új foglalás az új orvoshoz). 8 komponens- + 3 integrációs teszt. **Utójavítás (mobil élő ellenőrzés):** 093 — a napló-tábla és DEFAULT partíciója garantálva, a napló-sor SAVEPOINT-on belül (hiányzó tábla nem buktatja a váltást); a chip popovere viewport-őrrel; a toast a műveletet nevezi meg + correlationId. |
 | WP-6.1 Puzzle v2 — kéthasábos tábla (2026-09-02) | ✅ | `fb52424` (main) | Bal paletta (091 generikus katalógus: csonkpreparálás, precíziós-szituációs lenyomatvétel, átadás, …) + jobb alkalom-sorok kockákkal; vizitköz alap 7 nap, egy kattintással állítható; fázis-szintű offset kivezetve a UI-ból; optimista mutációk, kaszkád-újratöltés csak státusz-változásnál; POST work-phases `visitId` (egy kérés); merged gyerek leválik áthelyezésnél; vizit-szintű foglalás `prepare-booking`-gal; vizit-tudatos projektor. 13 komponens-, 5+29 helper-, 8 integrációs teszt. |
 
 ---
@@ -729,6 +729,33 @@ kötődjön az epizódhoz, de az epizód folyamán váltható maradjon.
   React árva kártya-példányokat hagyott a DOM-ban (4 terv-kártya, a régi nyitva ragadt
   popoverrel). Egyedi kulcsok (`plan-`, `recall-`, `stepper-` előtag) — a chip frissülése ezen
   múlt.
+- **Utójavítás — mobil élő ellenőrzés (2026-09-02 16:53, iPhone) találta:**
+  1. *A popover kilógott a képernyő bal szélén.* A chip a kártya bal oldalán ül, a panelje
+     jobbra igazított és `w-80` (320px) széles — 390px-es képernyőn ~40px lelógott, a fejléc, a
+     kereső és az indok-mező bal széle levágva. A `Popover` (visit-plan) mostantól nyitáskor
+     megméri a panelt, és ha a bal/jobb szélen kilóg, `translateX`-szel a képernyőn belülre
+     tolja (viewport-őr, 8px margó; `viewportShiftX` tiszta függvény), a szélessége sosem több
+     `calc(100vw-1rem)`-nél. Érintőképernyőn (`pointer: coarse`) a kereső nem fókuszál
+     automatikusan — a felugró billentyűzet eltakarná a listát. Minden visit-plan popover
+     (PhasePill, VisitRow, VisitGap, VisitBookingButton) ugyanezt kapja.
+  2. *Orvos választásakor „Hiba történt" (500), a felelős orvos nem állt át.* A
+     `provider_assignment_events` a legacy `migration_event_partitioning.sql`-ből jön, ami nem
+     tracked (a deploy csak `npm start`, migrációt nem futtat): ahol sosem futott le, a
+     napló-INSERT 42P01-gyel (undefined_table) bukott, és — egy tranzakció — vele az UPDATE is;
+     a 092 (`ALTER TABLE … DROP NOT NULL`) ott el is torlaszolta volna a tracked láncot.
+     Javítás három rétegben: **092 toleráns** (hiányzó táblánál NOTICE, nem hiba); **093**
+     létrehozza a táblát a legacy alakjával (nullable `new_user_id`, havi partíciók 2020-01 …
+     2028-12, `IF NOT EXISTS`), és meglévő táblához is **DEFAULT partíciót** ad (2029-től / lyuk
+     esetén sem 23514 „no partition found"); **a napló-sor SAVEPOINT-on belül** megy
+     (`lib/episode-provider.ts`) — hiányzó tábla/partíció (42P01/42703/23514) esetén a sor
+     kimarad hangos `logger.error`-ral, a felelős orvos váltása átmegy; minden más hiba
+     (pl. FK) továbbra is ROLLBACK. A történet-lekérdezés hiányzó táblánál üres lista. A
+     toast a generikus „Hiba történt" helyett a műveletet nevezi meg, `[kód · correlationId]`
+     címkével (`formatApiErrorParts`). **Éles teendő:** `npm run migrate` (092 + 093).
+     Tesztek: `episode-provider` (SAVEPOINT-ágak), `popover` (viewport-őr), 2 új komponens-
+     eset (toast-szöveg), integráció: `migration-093-provider-assignment-events` (092/093
+     hiányzó és meglévő táblán, partíció-routing, idempotencia), `episode-provider-history`
+     (+1: hiányzó táblánál a váltás átmegy).
 
 ### 6.3 Nyitott / követés
 

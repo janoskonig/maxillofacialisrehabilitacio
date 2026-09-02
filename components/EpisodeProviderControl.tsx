@@ -13,6 +13,7 @@
 import { useCallback, useEffect, useRef, useState } from 'react';
 import { UserRound, Check, Loader2, History, ChevronDown, UserX, Search } from 'lucide-react';
 import { useToast } from '@/contexts/ToastContext';
+import { formatApiErrorParts } from '@/lib/extract-api-error';
 import { Popover, MenuHeading } from './visit-plan/Popover';
 import type { ProviderAssignmentEvent } from '@/lib/episode-provider';
 
@@ -39,6 +40,33 @@ function formatDate(iso: string): string {
   const d = new Date(iso);
   if (Number.isNaN(d.getTime())) return iso;
   return d.toLocaleDateString('hu-HU', { year: 'numeric', month: 'short', day: 'numeric' });
+}
+
+const SAVE_ERROR_FALLBACK = 'Nem sikerült a felelős orvos mentése';
+
+/**
+ * Toast-szöveg a sikertelen mentéshez. A szerver konkrét üzenete (pl.
+ * PROVIDER_NOT_FOUND) marad; a generikus 500-as „Hiba történt" helyett a
+ * művelet neve áll, és mindkét esetben ott a [kód · correlationId] címke, hogy
+ * a felületi hiba a szerver-loggal összeköthető legyen.
+ */
+function describeSaveError(
+  body: { error?: unknown; code?: unknown; hint?: unknown } | null,
+  res: Pick<Response, 'status'> & { headers?: { get?: (name: string) => string | null } }
+): string {
+  const raw = typeof body?.error === 'string' ? body.error.trim() : '';
+  const message = raw && raw !== 'Hiba történt' ? raw : SAVE_ERROR_FALLBACK;
+  return formatApiErrorParts({ ...(body ?? {}), error: message }, res, SAVE_ERROR_FALLBACK);
+}
+
+/**
+ * Érintőképernyőn (mobil) ne fókuszáljuk automatikusan a keresőt: a felugró
+ * billentyűzet eltakarná az orvos-listát. Csak a nyitott panel renderelésekor
+ * (kliensen) hívjuk.
+ */
+function shouldAutoFocusSearch(): boolean {
+  if (typeof window === 'undefined' || typeof window.matchMedia !== 'function') return true;
+  return !window.matchMedia('(pointer: coarse)').matches;
 }
 
 export function EpisodeProviderControl({
@@ -122,8 +150,8 @@ export function EpisodeProviderControl({
         }),
       });
       if (!res.ok) {
-        const data = await res.json().catch(() => ({}));
-        throw new Error(data.error ?? 'Nem sikerült a felelős orvos mentése');
+        const data = await res.json().catch(() => null);
+        throw new Error(describeSaveError(data, res));
       }
       setReason('');
       setQuery('');
@@ -143,7 +171,7 @@ export function EpisodeProviderControl({
         }
       }
     } catch (e) {
-      showToast(e instanceof Error ? e.message : 'Nem sikerült a felelős orvos mentése', 'error');
+      showToast(e instanceof Error ? e.message : SAVE_ERROR_FALLBACK, 'error');
     } finally {
       setSaving(false);
     }
@@ -224,7 +252,7 @@ export function EpisodeProviderControl({
                   onChange={(e) => setQuery(e.target.value)}
                   placeholder="Orvos keresése…"
                   aria-label="Orvos keresése"
-                  autoFocus
+                  autoFocus={shouldAutoFocusSearch()}
                   className="w-full pl-7 pr-2 py-1 text-sm border border-gray-300 dark:border-gray-700 rounded-md bg-white dark:bg-gray-900"
                 />
               </div>
