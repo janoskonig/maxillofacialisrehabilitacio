@@ -1,4 +1,6 @@
-# MaxRehab „reverse engineering”: a rögzített változóktól a publikálható hipotézisekig
+# MaxRehab „reverse engineering” — háttéranyag: változó-leltár, buktatók, SQL-vázlatok
+
+> **Ez a háttéranyag.** A tömör, láncszerkezetű fő dokumentum (tudományos hipotézis → versengő predikciók → változók → H0/H1 → próba): [maxrehab-hipotezis-lanc.md](./maxrehab-hipotezis-lanc.md). Az itteni 2. fejezet a korábbi, bővebb irány-leírásokat őrzi.
 
 > **Cél.** A MaxRehab-ban már ma rögzített (vagy a rögzített adatokból származtatható) változókból visszafejteni, milyen tudományos közlemények írhatók meg az adatbázisból. Minden irányhoz a **változók → predikciók → hipotézis** láncot adom meg, ahol a hipotézis kötelező alakja:
 > **„… \<állítás\> …, mert … \<indoklás\> …”**.
