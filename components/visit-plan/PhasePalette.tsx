@@ -8,16 +8,24 @@
  * szöveges) fázis és a beteg fogkezelési igényei.
  */
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
-import { Search, Plus, Layers, Loader2, GripVertical } from 'lucide-react';
+import { Search, Plus, Layers, Loader2, GripVertical, MoreHorizontal, Star, StarOff, Clock3, Check } from 'lucide-react';
 import { useDraggable } from '@dnd-kit/core';
+import { Popover, MenuItem, MenuHeading } from './Popover';
 import { searchCatalog, type LinkedToothTreatment, type PaletteItem } from './visit-plan-types';
 
 export interface PhasePaletteProps {
   catalog: PaletteItem[];
   toothTreatments: LinkedToothTreatment[];
   onAddCatalog: (item: PaletteItem) => void;
-  onAddFreeText: (label: string) => void;
+  onAddFreeText: (label: string, opts?: { saveToPalette?: boolean }) => void;
   onAddTooth: (tt: LinkedToothTreatment) => void;
+  /** Paletta-karbantartás („sablonok"): felvétel / levétel / időtartam. Nincs → nincs menü. */
+  onUpdateCatalogItem?: (
+    stepCode: string,
+    patch: { paletteOrder?: number | null; defaultDurationMinutes?: number | null }
+  ) => void;
+  /** Következő szabad paletta-sorszám a felvételhez. */
+  nextPaletteOrder?: number;
   /** undefined → a gomb nem jelenik meg (nincs sablon az epizódon). */
   onApplyTemplate?: () => void;
   templateBusy?: boolean;
@@ -28,13 +36,16 @@ export interface PhasePaletteProps {
 }
 
 function PaletteEntry({
-  item, onAdd, dragEnabled, disabled,
+  item, onAdd, dragEnabled, disabled, onUpdate, nextPaletteOrder,
 }: {
   item: PaletteItem;
   onAdd: () => void;
   dragEnabled: boolean;
   disabled?: boolean;
+  onUpdate?: (patch: { paletteOrder?: number | null; defaultDurationMinutes?: number | null }) => void;
+  nextPaletteOrder: number;
 }) {
+  const [durationDraft, setDurationDraft] = useState<string>('');
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, isDragging } =
     useDraggable({
       id: `palette:${item.stepCode}`,
@@ -81,6 +92,62 @@ function PaletteEntry({
           </span>
         )}
       </button>
+      {onUpdate && (
+        <Popover
+          align="right"
+          widthClass="w-60"
+          disabled={disabled}
+          triggerAriaLabel={`${item.labelHu} — sablon beállításai`}
+          triggerTitle="Sablon beállításai (paletta)"
+          triggerClassName="shrink-0 px-1 text-gray-300 dark:text-gray-600 group-hover:text-gray-500 hover:!text-medical-primary rounded-r-md"
+          trigger={<MoreHorizontal className="w-3.5 h-3.5" />}
+        >
+          {(close) => (
+            <div>
+              <MenuHeading>{item.labelHu}</MenuHeading>
+              {isGeneric ? (
+                <>
+                  <form
+                    className="flex items-center gap-1 px-2 py-1"
+                    onSubmit={(e) => {
+                      e.preventDefault();
+                      const n = parseInt(durationDraft, 10);
+                      if (Number.isInteger(n) && n >= 5) {
+                        onUpdate({ defaultDurationMinutes: n });
+                        setDurationDraft('');
+                        close();
+                      }
+                    }}
+                  >
+                    <Clock3 className="w-3.5 h-3.5 text-gray-400 shrink-0" />
+                    <input
+                      type="number"
+                      min={5}
+                      step={5}
+                      value={durationDraft}
+                      onChange={(e) => setDurationDraft(e.target.value)}
+                      placeholder={String(item.defaultDurationMinutes ?? 30)}
+                      aria-label="Alap időtartam percben"
+                      className="w-16 text-xs border border-gray-300 dark:border-gray-700 rounded px-1.5 py-1 text-center bg-white dark:bg-gray-900"
+                    />
+                    <span className="text-xs text-gray-500 dark:text-gray-400">perc</span>
+                    <button type="submit" className="ml-auto inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-medical-primary hover:bg-medical-primary/10 rounded">
+                      <Check className="w-3 h-3" /> OK
+                    </button>
+                  </form>
+                  <MenuItem tone="danger" onClick={() => { onUpdate({ paletteOrder: null }); close(); }}>
+                    <StarOff className="w-3.5 h-3.5" /> Levétel a palettáról
+                  </MenuItem>
+                </>
+              ) : (
+                <MenuItem tone="primary" onClick={() => { onUpdate({ paletteOrder: nextPaletteOrder }); close(); }}>
+                  <Star className="w-3.5 h-3.5" /> Felvétel a palettára (sablon)
+                </MenuItem>
+              )}
+            </div>
+          )}
+        </Popover>
+      )}
     </div>
   );
 }
@@ -135,10 +202,16 @@ function ToothEntry({
 
 export function PhasePalette({
   catalog, toothTreatments, onAddCatalog, onAddFreeText, onAddTooth,
+  onUpdateCatalogItem, nextPaletteOrder,
   onApplyTemplate, templateBusy, targetHint, dragEnabled, disabled,
 }: PhasePaletteProps) {
   const [query, setQuery] = useState('');
   const [freeLabel, setFreeLabel] = useState('');
+  const [saveToPalette, setSaveToPalette] = useState(false);
+  const computedNextOrder = useMemo(
+    () => nextPaletteOrder ?? Math.max(0, ...catalog.map((c) => c.paletteOrder ?? 0)) + 10,
+    [catalog, nextPaletteOrder]
+  );
   const entries = useMemo(() => searchCatalog(catalog, query), [catalog, query]);
   const searching = query.trim().length > 0;
 
@@ -193,6 +266,8 @@ export function PhasePalette({
               }}
               dragEnabled={dragEnabled}
               disabled={disabled}
+              onUpdate={onUpdateCatalogItem ? (patch) => onUpdateCatalogItem(item.stepCode, patch) : undefined}
+              nextPaletteOrder={computedNextOrder}
             />
           ))
         )}
@@ -205,32 +280,45 @@ export function PhasePalette({
 
       <div className="border-t border-gray-200 dark:border-gray-800 px-3 py-2 space-y-2">
         <form
-          className="flex items-center gap-1"
+          className="space-y-1"
           onSubmit={(e) => {
             e.preventDefault();
             const label = freeLabel.trim();
             if (!label) return;
-            onAddFreeText(label);
+            onAddFreeText(label, { saveToPalette });
             setFreeLabel('');
           }}
         >
-          <input
-            type="text"
-            value={freeLabel}
-            onChange={(e) => setFreeLabel(e.target.value)}
-            placeholder="Egyedi fázis… (Enter)"
-            aria-label="Egyedi munkafázis megnevezése"
-            disabled={disabled}
-            className="flex-1 min-w-0 text-sm border border-gray-300 dark:border-gray-700 rounded-md px-2 py-1.5 bg-white dark:bg-gray-900"
-          />
-          <button
-            type="submit"
-            disabled={disabled || !freeLabel.trim()}
-            aria-label="Egyedi fázis hozzáadása"
-            className="p-1.5 rounded-md text-medical-primary hover:bg-medical-primary/10 disabled:opacity-40"
-          >
-            <Plus className="w-4 h-4" />
-          </button>
+          <div className="flex items-center gap-1">
+            <input
+              type="text"
+              value={freeLabel}
+              onChange={(e) => setFreeLabel(e.target.value)}
+              placeholder="Egyedi fázis… (Enter)"
+              aria-label="Egyedi munkafázis megnevezése"
+              disabled={disabled}
+              className="flex-1 min-w-0 text-sm border border-gray-300 dark:border-gray-700 rounded-md px-2 py-1.5 bg-white dark:bg-gray-900"
+            />
+            <button
+              type="submit"
+              disabled={disabled || !freeLabel.trim()}
+              aria-label="Egyedi fázis hozzáadása"
+              className="p-1.5 rounded-md text-medical-primary hover:bg-medical-primary/10 disabled:opacity-40"
+            >
+              <Plus className="w-4 h-4" />
+            </button>
+          </div>
+          {onUpdateCatalogItem && (
+            <label className="flex items-center gap-1.5 text-[11px] text-gray-500 dark:text-gray-400 cursor-pointer select-none">
+              <input
+                type="checkbox"
+                checked={saveToPalette}
+                onChange={(e) => setSaveToPalette(e.target.checked)}
+                className="w-3.5 h-3.5 accent-medical-primary"
+              />
+              Mentés a palettára is (sablon minden beteghez)
+            </label>
+          )}
         </form>
 
         {toothTreatments.length > 0 && (

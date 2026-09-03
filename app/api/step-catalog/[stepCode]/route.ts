@@ -5,6 +5,7 @@ import { stepCatalogPatchSchema } from '@/lib/admin-process-schemas';
 import { invalidateStepLabelCache } from '@/lib/step-labels';
 import { invalidateCachePrefix } from '@/lib/catalog-cache';
 import { invalidateUnmappedCache } from '@/lib/step-catalog-cache';
+import { probeColumnExists } from '@/lib/schema-probe';
 
 const STEP_CODE_REGEX = /^[a-z0-9_]+$/;
 
@@ -62,6 +63,32 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász'], async (req, { 
     idx++;
   }
 
+  // Paletta-mezők (091) — a 091 előtti sémán a mezők nem írhatók.
+  const paletteTouched =
+    data.paletteOrder !== undefined || data.defaultDurationMinutes !== undefined || data.defaultPool !== undefined;
+  const hasPalette = await probeColumnExists(pool, 'work_phase_catalog', 'palette_order');
+  if (paletteTouched && !hasPalette) {
+    return NextResponse.json(
+      { error: 'A paletta-mezőkhöz a 091-es migráció szükséges (npm run migrate)', code: 'MIGRATION_PENDING' },
+      { status: 503 }
+    );
+  }
+  if (data.paletteOrder !== undefined) {
+    updates.push(`palette_order = $${idx}`);
+    values.push(data.paletteOrder);
+    idx++;
+  }
+  if (data.defaultDurationMinutes !== undefined) {
+    updates.push(`default_duration_minutes = $${idx}`);
+    values.push(data.defaultDurationMinutes);
+    idx++;
+  }
+  if (data.defaultPool !== undefined) {
+    updates.push(`default_pool = $${idx}`);
+    values.push(data.defaultPool);
+    idx++;
+  }
+
   if (updates.length === 0) {
     return NextResponse.json({ error: 'Nincs módosítandó mező' }, { status: 400 });
   }
@@ -95,7 +122,11 @@ export const PATCH = roleHandler(['admin', 'fogpótlástanász'], async (req, { 
 
   const afterResult = await pool.query(
     `SELECT work_phase_code as "stepCode", label_hu as "labelHu", label_en as "labelEn",
-            is_active as "isActive", updated_at as "updatedAt"
+            is_active as "isActive", updated_at as "updatedAt"${
+              hasPalette
+                ? ', palette_order as "paletteOrder", default_duration_minutes as "defaultDurationMinutes", default_pool as "defaultPool"'
+                : ''
+            }
      FROM work_phase_catalog WHERE work_phase_code = $1`,
     [stepCode]
   );

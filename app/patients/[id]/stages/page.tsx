@@ -400,6 +400,7 @@ export default function PatientStagesPage() {
               assignedProviderName={activeEpisode.assignedProviderName ?? null}
               showProvider
               canEditProvider={canEditEpisodeSettings}
+              canEditPalette={canEditEpisodeSettings}
               onProviderChanged={() => {
                 // A felelős orvos váltása az epizód adata: a kártya-fejléc, a
                 // foglalási motor (worklist, intentek) és a stádium-javaslat is frissül.

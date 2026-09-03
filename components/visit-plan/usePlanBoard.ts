@@ -128,7 +128,12 @@ export interface PlanBoardApi {
   loadProjections: () => Promise<void>;
 
   addFromCatalog: (item: PaletteItem, target?: VisitTarget) => Promise<void>;
-  addFreeText: (label: string, target?: VisitTarget) => Promise<void>;
+  addFreeText: (label: string, target?: VisitTarget, opts?: { saveToPalette?: boolean }) => Promise<void>;
+  /** Paletta-karbantartás a felületről („sablonok"): felvétel / levétel / alap-időtartam. */
+  updateCatalogItem: (
+    stepCode: string,
+    patch: { paletteOrder?: number | null; defaultDurationMinutes?: number | null; defaultPool?: PaletteItem['defaultPool'] }
+  ) => Promise<void>;
   addToothTreatment: (tt: LinkedToothTreatment, target?: VisitTarget) => Promise<void>;
   moveStep: (stepId: string, target: VisitTarget) => Promise<void>;
   deleteStep: (stepId: string) => Promise<void>;
@@ -513,10 +518,64 @@ export function usePlanBoard({
     [episodeId]
   );
 
+  /** Katalógus-sor frissítése helyben + a modul-cache-ben (a paletta azonnal követi). */
+  const patchCatalogLocal = useCallback((stepCode: string, patch: Partial<PaletteItem>) => {
+    setCatalog((prev) => {
+      const next = prev.map((c) => (c.stepCode === stepCode ? { ...c, ...patch } : c));
+      catalogCache = { at: Date.now(), items: next };
+      return next;
+    });
+  }, []);
+
+  const updateCatalogItem = useCallback(
+    async (
+      stepCode: string,
+      patch: { paletteOrder?: number | null; defaultDurationMinutes?: number | null; defaultPool?: PaletteItem['defaultPool'] }
+    ) => {
+      const before = catalog.find((c) => c.stepCode === stepCode);
+      patchCatalogLocal(stepCode, patch as Partial<PaletteItem>);
+      const result = await apiJson<{ item?: Record<string, unknown> }>(
+        `/api/step-catalog/${encodeURIComponent(stepCode)}`,
+        { method: 'PATCH', json: patch }
+      );
+      if (!result.ok) {
+        if (before) patchCatalogLocal(stepCode, before);
+        showToast(errorMessage(result, 'Nem sikerült a paletta módosítása'), 'error');
+        return;
+      }
+      if (result.data.item) {
+        const mapped = mapCatalogResponse([result.data.item])[0];
+        if (mapped) patchCatalogLocal(stepCode, mapped);
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [catalog]
+  );
+
   const addFreeText = useCallback(
-    async (label: string, target?: VisitTarget) => {
+    async (label: string, target?: VisitTarget, opts?: { saveToPalette?: boolean }) => {
       const trimmed = label.trim();
       if (!trimmed) return;
+      if (opts?.saveToPalette) {
+        // „Mentés a palettára": előbb katalógus-elem (sablon), aztán a kocka —
+        // a paletta és a többi beteg is látja innentől.
+        const created = await apiJson<{ item?: Record<string, unknown> }>('/api/step-catalog', {
+          method: 'POST',
+          json: { labelHu: trimmed, addToPalette: true, defaultDurationMinutes: 30, defaultPool: 'work' },
+        });
+        if (!created.ok || !created.data.item) {
+          showToast(errorMessage(created, 'Nem sikerült a sablon mentése a palettára'), 'error');
+          return;
+        }
+        const item = mapCatalogResponse([created.data.item])[0];
+        setCatalog((prev) => {
+          const next = [...prev.filter((c) => c.stepCode !== item.stepCode), item];
+          catalogCache = { at: Date.now(), items: next };
+          return next;
+        });
+        await addFromCatalog(item, target);
+        return;
+      }
       await addStep(
         baseTempStep({ stepCode: 'adhoc', customLabel: trimmed, durationMinutes: 30, pool: 'work' }),
         target,
@@ -1122,6 +1181,7 @@ export function usePlanBoard({
     loadProjections,
     addFromCatalog,
     addFreeText,
+    updateCatalogItem,
     addToothTreatment,
     moveStep,
     deleteStep,

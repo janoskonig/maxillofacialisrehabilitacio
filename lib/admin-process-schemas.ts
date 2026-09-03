@@ -144,11 +144,32 @@ export const treatmentTypePatchSchema = z.object({
   expectedUpdatedAt: z.string().datetime().optional(),
 });
 
-/** Step catalog patch — labelHu, labelEn, isActive */
+/** Paletta-mezők (091): a kezelési terv bal hasábja. */
+const paletteFields = {
+  /** null = lekerül a palettáról (a katalógusban marad, keresésből elérhető). */
+  paletteOrder: z.number().int().min(0).max(100000).nullable().optional(),
+  defaultDurationMinutes: z.number().int().min(5).max(600).nullable().optional(),
+  defaultPool: z.enum(['consult', 'work', 'control']).nullable().optional(),
+};
+
+/** Step catalog patch — labelHu, labelEn, isActive + paletta-mezők */
 export const stepCatalogPatchSchema = z.object({
   labelHu: z.string().min(1).max(255).optional(),
   labelEn: z.string().max(255).nullable().optional(),
   isActive: z.boolean().optional(),
+  ...paletteFields,
+});
+
+/**
+ * Új generikus (sablon-független) katalógus-elem a felületről — „mentés a
+ * palettára". A kódot a szerver képzi a címkéből (gen_ előtag).
+ */
+export const stepCatalogCreateSchema = z.object({
+  labelHu: z.string().min(2).max(120),
+  labelEn: z.string().max(255).nullable().optional(),
+  addToPalette: z.boolean().optional().default(true),
+  defaultDurationMinutes: z.number().int().min(5).max(600).optional().default(30),
+  defaultPool: z.enum(['consult', 'work', 'control']).optional().default('work'),
 });
 
 /** Step catalog batch item — upsert (INSERT or UPDATE) */

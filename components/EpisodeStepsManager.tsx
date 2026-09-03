@@ -103,6 +103,8 @@ export interface EpisodeStepsManagerProps {
   showProvider?: boolean;
   /** admin / fogpótlástanász válthatja a felelős orvost. */
   canEditProvider?: boolean;
+  /** admin / fogpótlástanász szerkesztheti a palettát („sablonok"): felvétel / levétel / mentés. */
+  canEditPalette?: boolean;
   /** Felelős orvos váltása után (karton + foglalási motor frissítése). */
   onProviderChanged?: () => void;
   /** Kezelési terv sablon szerkesztő (EpisodePathwayEditor) — a kártya
@@ -153,6 +155,7 @@ export function EpisodeStepsManager({
   assignedProviderName = null,
   showProvider = false,
   canEditProvider = false,
+  canEditPalette = false,
   onProviderChanged,
   settingsPanel,
   refreshTrigger,
@@ -684,8 +687,11 @@ export function EpisodeStepsManager({
                       catalog={board.catalog}
                       toothTreatments={board.availableToothTreatments}
                       onAddCatalog={(item) => void board.addFromCatalog(item)}
-                      onAddFreeText={(label) => void board.addFreeText(label)}
+                      onAddFreeText={(label, opts) => void board.addFreeText(label, undefined, opts)}
                       onAddTooth={(tt) => void board.addToothTreatment(tt)}
+                      onUpdateCatalogItem={
+                        canEditPalette ? (code, patch) => void board.updateCatalogItem(code, patch) : undefined
+                      }
                       onApplyTemplate={hasPathways ? () => void board.applyTemplate() : undefined}
                       templateBusy={board.generating}
                       targetHint={paletteTargetHint}

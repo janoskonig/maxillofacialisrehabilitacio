@@ -133,6 +133,7 @@ function installFetchMock(opts: {
   const state = {
     visits: [...(opts.visits ?? [])] as MockVisit[],
     workPhases: [...(opts.workPhases ?? [])] as MockPhaseRow[],
+    catalog: CATALOG.map((c) => ({ ...c })) as Array<Record<string, unknown> & { stepCode: string }>,
     unattached: [...(opts.unattached ?? [])],
   };
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
@@ -174,8 +175,29 @@ function installFetchMock(opts: {
       state.workPhases.push(row);
       return jsonResponse({ workPhase: row, visit: createdVisit }, 201);
     }
-    if (url === '/api/step-catalog') {
-      return jsonResponse({ items: CATALOG });
+    if (url === '/api/step-catalog' && method === 'GET') {
+      return jsonResponse({ items: state.catalog });
+    }
+    if (url === '/api/step-catalog' && method === 'POST') {
+      // Sablon-mentés: a szerver gen_<slug> kódot képez, a paletta végére teszi.
+      const b = body ?? {};
+      const item = {
+        stepCode: `gen_${String(b.labelHu).toLowerCase().replace(/[^a-z0-9]+/g, '_')}`,
+        labelHu: String(b.labelHu),
+        isActive: true,
+        paletteOrder: b.addToPalette === false ? null : 180,
+        defaultDurationMinutes: (b.defaultDurationMinutes as number) ?? 30,
+        defaultPool: (b.defaultPool as string) ?? 'work',
+      };
+      state.catalog.push(item);
+      return jsonResponse({ item }, 201);
+    }
+    if (/^\/api\/step-catalog\/[^/]+$/.test(url) && method === 'PATCH') {
+      const code = decodeURIComponent(url.split('/').pop() as string);
+      const item = state.catalog.find((c) => c.stepCode === code);
+      if (!item) return jsonResponse({ error: 'nincs' }, 404);
+      Object.assign(item, body ?? {});
+      return jsonResponse({ item });
     }
     if (url === `/api/episodes/${EPISODE_ID}/linked-tooth-treatments`) {
       return jsonResponse({ treatments: [] });
@@ -259,10 +281,10 @@ function installFetchMock(opts: {
   return { fetchMock, calls };
 }
 
-function renderManager() {
+function renderManager(extra: { canEditPalette?: boolean } = {}) {
   return render(
     <ToastProvider>
-      <EpisodeStepsManager episodeId={EPISODE_ID} carePathwayId={null} episodePathways={[]} />
+      <EpisodeStepsManager episodeId={EPISODE_ID} carePathwayId={null} episodePathways={[]} {...extra} />
     </ToastProvider>
   );
 }
@@ -620,5 +642,63 @@ describe('Puzzle v2 — a váz: az alkalom időpontja', () => {
     expect(within(row1).getByTestId('visit-appointment-chip')).toBeTruthy();
     expect(within(row1).queryByTestId('phase-pill-w1')).toBeNull();
     expect(within(screen.getByTestId('visit-row-v2')).getByTestId('phase-pill-w1')).toBeTruthy();
+  });
+});
+
+describe('Puzzle v2 — sablonok a palettán (katalógus-karbantartás a tábláról)', () => {
+  it('a paletta-elem ⋯ menüjének „Levétel a palettáról" pontja PATCH paletteOrder:null-t hív, az elem eltűnik a listáról', async () => {
+    const { calls } = installFetchMock(TWO_VISITS);
+    renderManager({ canEditPalette: true });
+    await screen.findByText('Csonkpreparálás');
+    fireEvent.click(screen.getByRole('button', { name: 'Csonkpreparálás — sablon beállításai' }));
+    const menu = await screen.findByRole('menu');
+    fireEvent.click(within(menu).getByText('Levétel a palettáról'));
+    await waitFor(() => {
+      const patch = calls.find((c) => c.url === '/api/step-catalog/gen_csonkpreparalas' && c.method === 'PATCH');
+      expect(patch?.body).toEqual({ paletteOrder: null });
+    });
+    await waitFor(() => expect(within(palette()).queryByText('Csonkpreparálás')).toBeNull());
+  });
+
+  it('keresésből talált, palettán kívüli elem ⋯ menüje „Felvétel a palettára" → PATCH paletteOrder számmal', async () => {
+    const { calls } = installFetchMock(TWO_VISITS);
+    renderManager({ canEditPalette: true });
+    await screen.findByText('Csonkpreparálás');
+    fireEvent.change(screen.getByPlaceholderText(/Keresés/i), { target: { value: 'lenyomat' } });
+    await within(palette()).findByText('Lenyomatvétel');
+    fireEvent.click(screen.getByRole('button', { name: 'Lenyomatvétel — sablon beállításai' }));
+    const menu = await screen.findByRole('menu');
+    fireEvent.click(within(menu).getByText(/Felvétel a palettára/));
+    await waitFor(() => {
+      const patch = calls.find((c) => c.url === '/api/step-catalog/lenyomat' && c.method === 'PATCH');
+      expect(typeof patch?.body?.paletteOrder).toBe('number');
+      expect((patch?.body?.paletteOrder as number) > 170).toBe(true);
+    });
+  });
+
+  it('egyedi fázis „Mentés a palettára is" pipával: előbb POST /api/step-catalog (sablon), majd a kocka a gen_ kóddal', async () => {
+    const { calls } = installFetchMock(TWO_VISITS);
+    renderManager({ canEditPalette: true });
+    await screen.findByText('Csonkpreparálás');
+    fireEvent.click(screen.getByLabelText(/Mentés a palettára is/));
+    const input = screen.getByLabelText('Egyedi munkafázis megnevezése');
+    fireEvent.change(input, { target: { value: 'Ideiglenes korona' } });
+    fireEvent.submit(input.closest('form') as HTMLFormElement);
+    await waitFor(() => {
+      const create = calls.find((c) => c.url === '/api/step-catalog' && c.method === 'POST');
+      expect(create?.body).toMatchObject({ labelHu: 'Ideiglenes korona', addToPalette: true });
+      const wp = calls.find((c) => c.url === `/api/episodes/${EPISODE_ID}/work-phases` && c.method === 'POST');
+      expect(wp?.body).toMatchObject({ workPhaseCode: 'gen_ideiglenes_korona', visitId: 'v2' });
+    });
+    // A sablon a palettán marad a következő beteghez is (helyi katalógus frissült).
+    expect(within(palette()).getByText('Ideiglenes korona')).toBeTruthy();
+  });
+
+  it('jogosultság nélkül (canEditPalette=false) nincs ⋯ menü és nincs „Mentés a palettára" pipa', async () => {
+    installFetchMock(TWO_VISITS);
+    renderManager();
+    await screen.findByText('Csonkpreparálás');
+    expect(screen.queryByRole('button', { name: 'Csonkpreparálás — sablon beállításai' })).toBeNull();
+    expect(screen.queryByLabelText(/Mentés a palettára is/)).toBeNull();
   });
 });

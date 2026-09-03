@@ -43,6 +43,7 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 | WP-4.1b step_code→work_phase_id identitás | ✅ | [#78](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/78) | Minden identitás-út wp-elsődleges (legacy fallback); review: CRITICAL param-kötési hiba a prereq-ágon javítva; mellékjavítás: a worklist „korábbi próbák" lekérdezés eddig némán elhasalt (ats.end_time) |
 | WP-4.2 vizit API + forecast | ✅ | [#79](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/79) | Vizit CRUD + PATCH visitId/jaw/teeth + vizit-tudatos forecast (kompat-invariáns fuzz-igazolva) + wp-tudatos projektor; review: 4 major javítva (kombinált body, csoport-mozgatás, reorder=EWP-átszámozás, scoped backfill), 1 medium cáfolva (advisory lock) |
 | WP-4.3 vizit-kártyás UI | ✅ | [#80](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/80) | Alkalom-kártyák + kockák (hatókör-badge), drag-drop + teljes nem-drag alternatíva, „Feltöltés sablonból"; élőben ellenőrizve; review-major (visit-move seq-átszámozás) javítva. **Ezzel a FÁZIS 4 és a TELJES TERV kész.** |
+| WP-6.4 Sablonok a palettán — a katalógus a tábláról szerkeszthető (2026-09-03) | ✅ | main | 095: „Fogelőkészítés (csonkpreparálás)" + 3 hiányzó generikus (lenyomat gyári/egyéni kanállal, primerpróba és gyűjtőlenyomat) → 23 paletta-sablon. Paletta-elem ⋯ menü: alap-időtartam, „Levétel a palettáról"; keresésből talált elemnél „Felvétel a palettára"; egyedi fázisnál „Mentés a palettára is" pipa → `POST /api/step-catalog` (gen_<slug>, ütközésnél _2, legacy tükör) majd a kocka a kóddal. PATCH /step-catalog/:code `paletteOrder/defaultDurationMinutes/defaultPool` (probe-őr, 503 a 091 előtt). Csak admin/fogpótlástanász (`canEditPalette`). 4 komponens- + 5 integrációs teszt. |
 | WP-6.3b Éles hotfix: séma-őr a 094 előtti DB-re + opt-in migrate-on-start (2026-09-03) | ✅ | main | Az éles deploy a 094 nélkül ment ki → `column v.appointment_id does not exist` (42703) a fázis-áthelyezésen/törlésen. A vizit-időpont helperek és a route-ok probe-őrt kaptak (`hasVisitAppointmentColumn`): migráció előtt a blokk-rendezés marad, a vizit-időpont logika kimarad, attach/detach 503 `MIGRATION_PENDING`. Új: `AUTO_MIGRATE_ON_START=true` env → az `npm start` prestart hookja lefuttatja a tracked migrációkat (scripts/migrate-on-start.js); RENDER_DEPLOYMENT.md leírja. |
 | WP-6.3 „Az időpontfoglalás a váz" — alkalom-tulajdonú időpont, üres alkalom megmarad (2026-09-02) | ✅ | `c5192fd` (main) | 094: `episode_visits.appointment_id`; a tartalom mozgatása nem viszi az időpontot (a fázis várakozó lesz, a következő tag promótálódik); üres alkalom soha nem tűnik el automatikusan; alkalom nélküli foglalt időpontok sávja + hozzárendelés/leválasztás (attach/detach); foglalt alkalmak időrendben pinnelve; a tervezett alkalom a következő fix pont elé szorul (lánc + projektor plafon); a blokk hossza olvasáskor számolt. 5 új integrációs + 3 komponens + 3 lánc-teszt. |
 | WP-6.2 Felelős orvos az epizódon, a sablontól leválasztva (2026-09-02) | ✅ | `1ba6d99` (main) | Feltűnő chip a terv-kártya fejlécében (EpisodeProviderControl): orvos-választó, indok, lekapcsolás, váltás-történet; a sablon-szerkesztőből kikerült; PATCH /episodes/:id írja a `provider_assignment_events` naplót (092: lekapcsolás is), GET provider-history; a váltás előre hat (intentek lejárnak, új foglalás az új orvoshoz). 8 komponens- + 3 integrációs teszt. **Utójavítás (mobil élő ellenőrzés):** 093 — a napló-tábla és DEFAULT partíciója garantálva, a napló-sor SAVEPOINT-on belül (hiányzó tábla nem buktatja a váltást); a chip popovere viewport-őrrel; a toast a műveletet nevezi meg + correlationId. |
@@ -794,6 +795,36 @@ csússzon rá fluidan a már foglalt időpontokra** — az időpont a váz, a f�
 - **Blokk-hossz olvasáskor:** a worklist / projektor / slot-választó az alkalom nyitott
   tagjainak összpercét (vagy `planned_duration_minutes`) használja; a primary saját perce nem
   íródik át (a korábbi prepare-booking bump kivezetve).
+
+### 6.2d Sablonok a palettán — a katalógus a tábláról szerkeszthető (WP-6.4)
+
+**Kérés (2026-09-03):** „a kezeléseknél legyenek sablonok (pl. átadás, fogelőkészítés, stb.)".
+A 091 paletta élesben a 094-ig hiányzó migráció miatt üres volt — a sablonok a migráció
+után megjelentek; ezen felül a szókincs és a karbantartás került helyre.
+
+**Modell:** a sablon = a `work_phase_catalog` generikus (`gen_*`) sora `palette_order`-rel.
+Nincs külön tábla, nincs sablon-fogalom a UI-n túl: a paletta a katalógus rendezett részhalmaza.
+- **095**: a „Csonkpreparálás" címke → „Fogelőkészítés (csonkpreparálás)" (a praxis szava
+  a fogelőkészítés; a keresés mindkettőre talál); új generikusok: lenyomat gyári kanállal (72),
+  lenyomat egyéni kanállal (74), primerpróba és gyűjtőlenyomat (115). Idempotens, legacy tükör.
+- **Karbantartás a tábláról** (admin/fogpótlástanász, `canEditPalette`):
+  - paletta-elem ⋯ menü: alap-időtartam (perc), „Levétel a palettáról" (paletteOrder NULL —
+    a katalógusban marad, keresésből továbbra is elérhető, a meglévő fázisokat nem érinti);
+  - keresésből talált, palettán kívüli elem ⋯ menü: „Felvétel a palettára" (max+10 sorrend);
+  - egyedi fázis + „Mentés a palettára is" pipa: előbb `POST /api/step-catalog`
+    (`gen_<slug>` a magyar címkéből ékezet nélkül, ütközésnél `_2`, `_3`…; alap 30 perc,
+    work pool; legacy `step_catalog` tükör), majd a kocka a kóddal — a sablon minden
+    betegnél látszik.
+- **Szerver:** `PATCH /api/step-catalog/:code` bővült (`paletteOrder | null`,
+  `defaultDurationMinutes 5–600 | null`, `defaultPool consult/work/control | null`), a
+  paletta-mezők probe-őrrel (091 előtt 503 `MIGRATION_PENDING`); `POST /api/step-catalog` új.
+  Mindkettő érvényteleníti a katalógus-, címke- és unmapped-cache-t.
+- **Kliens:** `usePlanBoard.updateCatalogItem` (optimista, hibánál visszaáll) és
+  `addFreeText(label, target, { saveToPalette })`; a modul-szintű katalógus-cache is frissül,
+  így a következő beteg táblája már az új palettát kapja.
+- **Nem épült:** paletta-sorrend húzással (a sorrend a katalógus `palette_order`-e, az admin
+  folyamat-szerkesztőben marad), sablon-átnevezés a tábláról (a PATCH labelHu-t tud, de a
+  menü nem kínálja — a címke a meglévő fázisokat is átnevezné).
 
 ### 6.3 Nyitott / követés
 
