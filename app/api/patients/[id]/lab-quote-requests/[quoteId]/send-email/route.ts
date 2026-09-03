@@ -2,8 +2,9 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
 import { sendEmail } from '@/lib/email';
-import { resolveLabQuoteRecipients } from '@/lib/email/lab-quote-recipients';
+import { buildLabQuoteSendPlan, LabQuoteRecipientError } from '@/lib/email/lab-quote-recipients';
 import { generateLabQuoteRequestPDF } from '@/lib/pdf/lab-quote-request';
+import { HttpError } from '@/lib/auth-server';
 import { Patient, patientSchema } from '@/lib/types';
 
 /**
@@ -22,6 +23,19 @@ export const POST = authedHandler(async (req, { auth, params }) => {
   const pool = getDbPool();
   const patientId = params.id;
   const quoteId = params.quoteId;
+
+  // Címzettek: a kérés törzséből (recipients: string[] — első = To, többi = CC),
+  // üres lista esetén az env-ből / alapértékből. Hibás cím → 400, még a PDF előtt.
+  const body = await req.json().catch(() => ({}));
+  let plan;
+  try {
+    plan = buildLabQuoteSendPlan(body?.recipients);
+  } catch (error) {
+    if (error instanceof LabQuoteRecipientError) {
+      throw new HttpError(400, error.message, 'INVALID_RECIPIENTS');
+    }
+    throw error;
+  }
 
   // Beteg adatainak lekérdezése
   const patientResult = await pool.query(
@@ -133,13 +147,10 @@ export const POST = authedHandler(async (req, { auth, params }) => {
         </div>
       `;
 
-  // Labor címzettek: env-ből (LAB_QUOTE_EMAIL_TO / _CC / _REPLY_TO), különben a kódbeli alapérték
-  const recipients = resolveLabQuoteRecipients();
-
   await sendEmail({
-    to: recipients.to,
-    ...(recipients.cc.length > 0 && { cc: recipients.cc }),
-    replyTo: recipients.replyTo,
+    to: plan.to,
+    ...(plan.cc.length > 0 && { cc: plan.cc }),
+    replyTo: plan.replyTo,
     subject: safeSubject,
     html: htmlContent,
     text: `
@@ -176,6 +187,7 @@ Fogpótlástani Klinika
     metadata: {
       patientId,
       quoteId,
+      recipientSource: plan.source,
     },
   });
 
@@ -183,8 +195,9 @@ Fogpótlástani Klinika
     {
       success: true,
       message: 'Email sikeresen elküldve a laboratóriumnak',
-      recipient: recipients.to,
-      cc: recipients.cc,
+      recipient: plan.to,
+      cc: plan.cc,
+      recipients: [plan.to, ...plan.cc],
       emailLog: {
         status: 'sent' as const,
         sentAt: new Date().toISOString(),

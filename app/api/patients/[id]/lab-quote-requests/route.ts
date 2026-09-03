@@ -40,10 +40,12 @@ export const GET = authedHandler(async (req, { params }) => {
         el.status as "lastEmailStatus",
         el.created_at as "lastEmailSentAt",
         el.sent_by as "lastEmailSentBy",
-        el.error_message as "lastEmailError"
+        el.error_message as "lastEmailError",
+        el.recipient as "lastEmailRecipient",
+        el.metadata->>'cc' as "lastEmailCc"
       FROM lab_quote_requests lqr
       LEFT JOIN LATERAL (
-        SELECT status, created_at, sent_by, error_message
+        SELECT status, created_at, sent_by, error_message, recipient, metadata
         FROM outbound_email_log
         WHERE email_type = 'lab_quote'
           AND metadata->>'quoteId' = lqr.id::text

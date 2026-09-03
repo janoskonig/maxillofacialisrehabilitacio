@@ -165,6 +165,8 @@ export function PatientForm({
     lastEmailSentAt?: string | null;
     lastEmailSentBy?: string | null;
     lastEmailError?: string | null;
+    lastEmailRecipient?: string | null;
+    lastEmailCc?: string | null;
   }>>([]);
   const [newQuoteSzoveg, setNewQuoteSzoveg] = useState<string>('');
   const [newQuoteDatuma, setNewQuoteDatuma] = useState<Date | null>(null);

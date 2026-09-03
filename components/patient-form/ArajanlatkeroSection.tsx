@@ -1,9 +1,10 @@
 'use client';
 
-import { Dispatch, SetStateAction } from 'react';
+import { Dispatch, SetStateAction, useState } from 'react';
 import { formatDateForInput } from '@/lib/dateUtils';
 import { FileText, Download, Send, Trash2, Plus, CheckCircle, AlertCircle } from 'lucide-react';
 import { DatePicker } from '../DatePicker';
+import { LabQuoteSendModal } from './LabQuoteSendModal';
 
 interface LabQuoteRequestRow {
   id: string;
@@ -13,6 +14,8 @@ interface LabQuoteRequestRow {
   lastEmailSentAt?: string | null;
   lastEmailSentBy?: string | null;
   lastEmailError?: string | null;
+  lastEmailRecipient?: string | null;
+  lastEmailCc?: string | null;
 }
 
 interface ArajanlatkeroSectionProps {
@@ -44,6 +47,9 @@ export function ArajanlatkeroSection({
   confirmDialog,
   showToast,
 }: ArajanlatkeroSectionProps) {
+  // Melyik árajánlatkérőhöz van nyitva a címzettválasztós küldő-modal
+  const [sendTarget, setSendTarget] = useState<LabQuoteRequestRow | null>(null);
+
   return (
     <div className="card">
       <h4 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-4 flex items-center">
@@ -69,6 +75,7 @@ export function ArajanlatkeroSection({
                       <CheckCircle className="w-3 h-3 shrink-0" />
                       Email elküldve: {new Date(quote.lastEmailSentAt).toLocaleString('hu-HU')}
                       {quote.lastEmailSentBy ? ` (${quote.lastEmailSentBy})` : ''}
+                      {quote.lastEmailRecipient ? ` → ${quote.lastEmailRecipient}` : ''}
                     </p>
                   )}
                   {quote.lastEmailStatus === 'failed' && (
@@ -120,64 +127,12 @@ export function ArajanlatkeroSection({
                   </button>
                   <button
                     type="button"
-                    onClick={async () => {
-                      const confirmed = await confirmDialog(
-                        'Biztosan elküldi az árajánlatkérőt emailben a laboratóriumnak?',
-                        {
-                          title: 'Email küldése',
-                          confirmText: 'Igen, elküldöm',
-                          cancelText: 'Mégse',
-                          type: 'info'
-                        }
-                      );
-                      if (!confirmed) return;
-
-                      try {
-                        showToast('Email küldése folyamatban...', 'info');
-                        const response = await fetch(`/api/patients/${patientId}/lab-quote-requests/${quote.id}/send-email`, {
-                          method: 'POST',
-                          credentials: 'include',
-                        });
-
-                        if (!response.ok) {
-                          const errorData = await response.json();
-                          throw new Error(errorData.error || 'Email küldési hiba');
-                        }
-
-                        const data = await response.json();
-                        setLabQuoteRequests((prev) =>
-                          prev.map((q) =>
-                            q.id === quote.id
-                              ? {
-                                  ...q,
-                                  lastEmailStatus: 'sent' as const,
-                                  lastEmailSentAt: data.emailLog?.sentAt ?? new Date().toISOString(),
-                                  lastEmailSentBy: data.emailLog?.sentBy ?? null,
-                                  lastEmailError: null,
-                                }
-                              : q,
-                          ),
-                        );
-
-                        showToast(
-                          data.recipient
-                            ? `Email elküldve a laboratóriumnak: ${data.recipient}`
-                            : 'Email sikeresen elküldve a laboratóriumnak',
-                          'success'
-                        );
-                      } catch (error) {
-                        console.error('Email küldési hiba:', error);
-                        showToast(
-                          error instanceof Error ? error.message : 'Hiba történt az email küldése során',
-                          'error'
-                        );
-                      }
-                    }}
+                    onClick={() => setSendTarget(quote)}
                     className="btn-secondary text-xs px-3 py-1 flex items-center gap-1 bg-blue-600 hover:bg-blue-700 text-white"
-                    title="Email küldése a laboratóriumnak"
+                    title="Email küldése — a címzett választható"
                   >
                     <Send className="w-3 h-3" />
-                    Email
+                    {quote.lastEmailStatus === 'sent' ? 'Újraküldés' : 'Email'}
                   </button>
                   {!isViewOnly && (userRole === 'admin' || userRole === 'fogpótlástanász') && (
                     <button
@@ -328,6 +283,31 @@ export function ArajanlatkeroSection({
           </div>
         )}
       </div>
+      <LabQuoteSendModal
+        isOpen={sendTarget !== null}
+        onClose={() => setSendTarget(null)}
+        patientId={patientId}
+        patientName={currentPatientName}
+        quote={sendTarget}
+        showToast={showToast}
+        onSent={(quoteId, result) =>
+          setLabQuoteRequests((prev) =>
+            prev.map((q) =>
+              q.id === quoteId
+                ? {
+                    ...q,
+                    lastEmailStatus: 'sent' as const,
+                    lastEmailSentAt: result.sentAt,
+                    lastEmailSentBy: result.sentBy,
+                    lastEmailError: null,
+                    lastEmailRecipient: result.recipients[0] ?? null,
+                    lastEmailCc: result.recipients.slice(1).join(', ') || null,
+                  }
+                : q,
+            ),
+          )
+        }
+      />
     </div>
   );
 }
