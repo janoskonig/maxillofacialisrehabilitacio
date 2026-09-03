@@ -10,6 +10,10 @@ services:
         value: production
       - key: NODE_VERSION
         value: "20"
+      # Árajánlatkérő labor e-mail címzettje (lib/email/lab-quote-recipients.ts, .env.example).
+      # A Dashboardon kézzel beállított érték ugyanez legyen; a küldéskor választható címzett ezt csak alapértelmezésként használja.
+      - key: LAB_QUOTE_EMAIL_TO
+        value: idssote@gmail.com
       - key: DATABASE_URL
         fromDatabase:
           name: maxillofacial-rehab-db
