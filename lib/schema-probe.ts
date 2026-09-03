@@ -24,8 +24,32 @@ interface SchemaQueryable {
   query: (sql: string, params?: unknown[]) => Promise<{ rows: Array<Record<string, unknown>> }>;
 }
 
-const cache = new Map<string, boolean>();
+/**
+ * Pozitív eredmény (van oszlop) örökre cache-elt — a séma futás közben csak
+ * bővül. A NEGATÍV eredmény lejár: ha egy kézi `npm run migrate` a futó
+ * folyamat mellett hozza létre az oszlopot, a probe legfeljebb ennyi idő
+ * múlva újra megnézi, és a funkció restart nélkül életre kel (élesben ez
+ * hiányzott: a 094 utáni kézi migráció után a régi negatív találat ült volna
+ * a cache-ben a következő deployig).
+ */
+const NEGATIVE_TTL_MS = 60 * 1000;
+
+interface CacheEntry {
+  value: boolean;
+  at: number;
+}
+
+const cache = new Map<string, CacheEntry>();
 const inFlight = new Map<string, Promise<boolean>>();
+
+function cachedValue(key: string): boolean | undefined {
+  const entry = cache.get(key);
+  if (!entry) return undefined;
+  if (entry.value) return true;
+  if (Date.now() - entry.at < NEGATIVE_TTL_MS) return false;
+  cache.delete(key);
+  return undefined;
+}
 
 async function checkColumnExistsRaw(
   db: SchemaQueryable,
@@ -63,7 +87,7 @@ export async function probeColumnExists(
   column: string
 ): Promise<boolean> {
   const key = `${table}.${column}`;
-  const cached = cache.get(key);
+  const cached = cachedValue(key);
   if (cached !== undefined) return cached;
 
   const pending = inFlight.get(key);
@@ -71,7 +95,7 @@ export async function probeColumnExists(
 
   const probe = checkColumnExistsRaw(db as SchemaQueryable, table, column).then(
     (exists) => {
-      cache.set(key, exists);
+      cache.set(key, { value: exists, at: Date.now() });
       inFlight.delete(key);
       return exists;
     }

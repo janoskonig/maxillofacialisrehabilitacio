@@ -348,4 +348,7 @@ maguktól. Két lehetőség:
 
 Ha egy deploy a migráció előtt megy élesbe, a kód a séma-probe konvenció miatt nem
 500-azik, de az új funkciók (pl. vizit-időpont, 094) `MIGRATION_PENDING`-gel vagy
-kikapcsolva jelennek meg, amíg a migráció le nem fut.
+kikapcsolva jelennek meg, amíg a migráció le nem fut. A futó folyamat a hiányzó oszlopot
+legfeljebb 1 percig jegyzi meg (negatív probe-TTL), ezért a kézi `npm run migrate` után a
+funkciók restart nélkül, kb. egy percen belül életre kelnek; egy Restart / újradeploy
+azonnal érvényesíti.
