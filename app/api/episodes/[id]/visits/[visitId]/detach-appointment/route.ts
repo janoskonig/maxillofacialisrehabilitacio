@@ -5,7 +5,7 @@ import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 import { listEpisodeVisits } from '@/lib/episode-visits';
-import { normalizeVisitOrder } from '@/lib/visit-appointment-sync';
+import { normalizeVisitOrder, hasVisitAppointmentColumn } from '@/lib/visit-appointment-sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +23,14 @@ export const POST = roleHandler([...ROLES], async (_req, { auth, params }) => {
   const episodeId = params.id;
   const visitId = params.visitId;
   const pool = getDbPool();
+  // 094 előtti sémán a vizit-tulajdonú időpont nem elérhető — a migráció hiányát
+  // jelezzük (nem generikus 500).
+  if (!(await hasVisitAppointmentColumn(pool))) {
+    return NextResponse.json(
+      { error: 'A vizit-időpont funkcióhoz a 094-es migráció szükséges (npm run migrate)', code: 'MIGRATION_PENDING' },
+      { status: 503 }
+    );
+  }
   const client = await pool.connect();
   try {
     await client.query('BEGIN');

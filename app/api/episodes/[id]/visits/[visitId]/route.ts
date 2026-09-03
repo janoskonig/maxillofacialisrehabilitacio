@@ -5,6 +5,7 @@ import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 import { cancelAppointmentRelease } from '@/lib/work-phase-delete';
 import { projectRemainingSteps } from '@/lib/slot-intent-projector';
+import { hasVisitAppointmentColumn } from '@/lib/visit-appointment-sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -156,15 +157,25 @@ export const DELETE = roleHandler([...ROLES], async (req, { auth, params }) => {
   let cancelledAppointment = false;
   try {
     await client.query('BEGIN');
+    // 094 előtti sémán (deploy migráció előtt) nincs vizit-időpont oszlop.
+    const hasVisitAppt = await hasVisitAppointmentColumn(client);
     const row = await client.query(
-      `SELECT v.id, v.label, v.appointment_id, pe.status AS episode_status,
-              (SELECT COUNT(*)::int FROM episode_work_phases e WHERE e.visit_id = v.id) AS phase_count,
-              a.appointment_status, a.time_slot_id, a.slot_intent_id
-       FROM episode_visits v
-       JOIN patient_episodes pe ON pe.id = v.episode_id
-       LEFT JOIN appointments a ON a.id = v.appointment_id
-       WHERE v.id = $1 AND v.episode_id = $2
-       FOR UPDATE OF v FOR SHARE OF pe`,
+      hasVisitAppt
+        ? `SELECT v.id, v.label, v.appointment_id, pe.status AS episode_status,
+                  (SELECT COUNT(*)::int FROM episode_work_phases e WHERE e.visit_id = v.id) AS phase_count,
+                  a.appointment_status, a.time_slot_id, a.slot_intent_id
+           FROM episode_visits v
+           JOIN patient_episodes pe ON pe.id = v.episode_id
+           LEFT JOIN appointments a ON a.id = v.appointment_id
+           WHERE v.id = $1 AND v.episode_id = $2
+           FOR UPDATE OF v FOR SHARE OF pe`
+        : `SELECT v.id, v.label, NULL::uuid AS appointment_id, pe.status AS episode_status,
+                  (SELECT COUNT(*)::int FROM episode_work_phases e WHERE e.visit_id = v.id) AS phase_count,
+                  NULL::text AS appointment_status, NULL::uuid AS time_slot_id, NULL::uuid AS slot_intent_id
+           FROM episode_visits v
+           JOIN patient_episodes pe ON pe.id = v.episode_id
+           WHERE v.id = $1 AND v.episode_id = $2
+           FOR UPDATE OF v FOR SHARE OF pe`,
       [visitId, episodeId]
     );
     if (row.rows.length === 0) {

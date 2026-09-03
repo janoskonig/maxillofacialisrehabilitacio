@@ -12,6 +12,7 @@ import { SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT } from '@/lib/active-appointment
 import { insertWorkPhaseTombstones, releaseWorkPhasesForDelete } from '@/lib/work-phase-delete';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 import {
+  hasVisitAppointmentColumn,
   normalizeVisitOrder,
   releasePhaseFromVisit,
   renumberPhasesByVisitOrder,
@@ -40,9 +41,11 @@ export const DELETE = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász
   const client = await pool.connect();
   try {
     await client.query('BEGIN');
+    // 094 előtti sémán (deploy migráció előtt) nincs vizit-időpont oszlop.
+    const hasVisitAppt = await hasVisitAppointmentColumn(client);
     const row = await client.query(
       `SELECT ewp.id, ewp.episode_id, ewp.work_phase_code, ewp.status, ewp.visit_id,
-              ewp.appointment_id, v.appointment_id AS visit_appointment_id,
+              ewp.appointment_id, ${hasVisitAppt ? 'v.appointment_id' : 'NULL::uuid'} AS visit_appointment_id,
               pe.status as episode_status
        FROM episode_work_phases ewp
        JOIN patient_episodes pe ON ewp.episode_id = pe.id

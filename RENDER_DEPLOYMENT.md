@@ -332,3 +332,20 @@ A Next Memory guide említi az `experimental.webpackMemoryOptimizations` flaget 
 **Dátum**: 2024  
 **Verzió**: 1.0
 
+## Adatbázis-migrációk deploy után
+
+A deploy csak a kódot frissíti; a tracked migrációk (`database/migrations/`) NEM futnak
+maguktól. Két lehetőség:
+
+1. **Kézzel, deploy után** — Render Shell (vagy one-off job) a web service-en:
+   ```bash
+   npm run migrate
+   ```
+2. **Automatikusan induláskor** — a service env-jében `AUTO_MIGRATE_ON_START=true`.
+   Az `npm start` `prestart` hookja (`scripts/migrate-on-start.js`) ilyenkor az indulás
+   előtt lefuttatja a tracked migrációkat (idempotens, `node_migrations`-ben követett);
+   hibánál az indulás megszakad, a log megmondja, melyik migráció bukott.
+
+Ha egy deploy a migráció előtt megy élesbe, a kód a séma-probe konvenció miatt nem
+500-azik, de az új funkciók (pl. vizit-időpont, 094) `MIGRATION_PENDING`-gel vagy
+kikapcsolva jelennek meg, amíg a migráció le nem fut.

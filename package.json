@@ -10,7 +10,7 @@
     "build": "next build",
     "build:render": "SKIP_BUILD_CHECKS=true next build",
     "typecheck": "tsc --noEmit",
-    "prestart": "node scripts/verify-production-build.mjs",
+    "prestart": "node scripts/verify-production-build.mjs && node scripts/migrate-on-start.js",
     "build:analyze": "ANALYZE=true next build",
     "start": "NODE_ENV=production tsx server.ts",
     "lint": "next lint",

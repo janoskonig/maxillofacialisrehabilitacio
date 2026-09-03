@@ -16,8 +16,19 @@
  */
 import type { PoolClient } from 'pg';
 import { insertWorkPhaseAudit } from './work-phase-audit';
+import { probeColumnExists } from './schema-probe';
 
 type Queryable = Pick<PoolClient, 'query'>;
+
+/**
+ * Séma-őr: a 094-es migráció (episode_visits.appointment_id) előtti DB-n a
+ * vizit-tulajdonú időpont logikája kimarad (a blokk/primary rendezés marad),
+ * hogy a deploy migráció előtt se 500-azzon — a repo probe-konvenciója
+ * (lib/schema-probe.ts, folyamat-szinten cache-elt).
+ */
+export async function hasVisitAppointmentColumn(db: Queryable): Promise<boolean> {
+  return probeColumnExists(db as PoolClient, 'episode_visits', 'appointment_id');
+}
 
 /** Aktív = foglalásként él (nem lemondott / no-show / sikertelen) — lib/active-appointment.ts mintája. */
 const ACTIVE_STATUS_SQL = `(a.appointment_status IS NULL
@@ -74,8 +85,10 @@ export async function syncVisitAppointment(
   visitId: string,
   changedBy: string
 ): Promise<SyncVisitResult | null> {
+  const hasApptCol = await hasVisitAppointmentColumn(client);
   const visitRow = await client.query(
-    `SELECT id, appointment_id, planned_duration_minutes FROM episode_visits
+    `SELECT id, ${hasApptCol ? 'appointment_id' : 'NULL::uuid AS appointment_id'}, planned_duration_minutes
+     FROM episode_visits
      WHERE id = $1 AND episode_id = $2 FOR UPDATE`,
     [visitId, episodeId]
   );
@@ -100,14 +113,15 @@ export async function syncVisitAppointment(
   const memberIds = new Set(members.map((m) => m.id));
   const open = members.filter((m) => m.status === 'pending' || m.status === 'scheduled');
 
-  // 1) Az alkalom foglalása.
+  // 1) Az alkalom foglalása. (094 előtti sémán nincs vizit-időpont: a fázisok
+  //    saját linkjeit nem bántjuk, csak a blokkot rendezzük.)
   let appointmentId: string | null = null;
   let appointment: Awaited<ReturnType<typeof activeAppointment>> = null;
   if (visit.appointment_id) {
     appointment = await activeAppointment(client, visit.appointment_id);
     if (appointment) appointmentId = appointment.id;
   }
-  if (!appointmentId) {
+  if (!appointmentId && hasApptCol) {
     const candidateIds = members.map((m) => m.appointment_id).filter((x): x is string => !!x);
     if (candidateIds.length > 0) {
       const { rows } = await client.query(
@@ -124,7 +138,7 @@ export async function syncVisitAppointment(
       }
     }
   }
-  if ((appointmentId ?? null) !== (visit.appointment_id ?? null)) {
+  if (hasApptCol && (appointmentId ?? null) !== (visit.appointment_id ?? null)) {
     await client.query(`UPDATE episode_visits SET appointment_id = $1, updated_at = CURRENT_TIMESTAMP WHERE id = $2`, [
       appointmentId,
       visitId,
@@ -200,6 +214,7 @@ export async function syncVisitAppointment(
   };
 
   for (const m of open) {
+    if (!hasApptCol) break; // 094 előtt: a fázis-linkek maradnak, ahogy vannak
     if (primary && m.id === primary.id) continue;
     if (m.appointment_id) {
       await detachPhaseLink(
@@ -269,9 +284,10 @@ export async function releasePhaseFromVisit(
   phaseId: string,
   changedBy: string
 ): Promise<{ keptAppointmentId: string | null }> {
+  const hasApptCol = await hasVisitAppointmentColumn(client);
   const { rows } = await client.query(
     `SELECT e.id, e.status, e.appointment_id, e.visit_id, e.merged_into_episode_work_phase_id AS merged_into,
-            v.appointment_id AS visit_appointment_id
+            ${hasApptCol ? 'v.appointment_id' : 'NULL::uuid'} AS visit_appointment_id
      FROM episode_work_phases e
      LEFT JOIN episode_visits v ON v.id = e.visit_id
      WHERE e.id = $1 AND e.episode_id = $2
@@ -348,6 +364,7 @@ export async function adoptAppointmentForPhaseVisit(
   phaseId: string,
   appointmentId: string
 ): Promise<boolean> {
+  if (!(await hasVisitAppointmentColumn(client))) return false;
   const res = await client.query(
     `UPDATE episode_visits v
      SET appointment_id = $2, updated_at = CURRENT_TIMESTAMP
@@ -373,6 +390,7 @@ export async function adoptAppointmentForPhaseVisit(
  * Visszaadja, változott-e a sorrend.
  */
 export async function normalizeVisitOrder(client: Queryable, episodeId: string): Promise<boolean> {
+  if (!(await hasVisitAppointmentColumn(client))) return false;
   const { rows } = await client.query(
     `SELECT v.id, v.seq,
             CASE WHEN a.id IS NOT NULL AND ${ACTIVE_STATUS_SQL} THEN a.start_time END AS start_time
@@ -455,6 +473,7 @@ export async function listUnattachedAppointments(
   db: Queryable,
   episodeId: string
 ): Promise<UnattachedAppointmentRow[]> {
+  if (!(await hasVisitAppointmentColumn(db))) return [];
   const { rows } = await db.query(
     `SELECT a.id,
             COALESCE(a.start_time, ats.start_time) AS "startTime",
