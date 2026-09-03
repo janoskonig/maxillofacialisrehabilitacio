@@ -96,12 +96,15 @@ describe('Puzzle v2 — a váz: alkalom-tulajdonú időpont', () => {
     const { appt } = await futureAppointment(patient.id, episode.id, 3, doctor.id);
     const user = await authUser();
 
-    // GET: a foglalás alkalom nélkül listázódik.
+    // GET (WP-6.5): az epizód alkalom nélküli foglalása olvasáskor magától az
+    // üres tervezett alkalomra csúszik — a sáv üres, az alkalom foglalt.
     const getReq0 = await authedRequest(`http://test.local/api/episodes/${episode.id}/work-phases`, { user });
     const get0 = await (await workPhasesGet(getReq0, { params: { id: episode.id } })).json();
-    expect(get0.unattachedAppointments.map((a: { id: string }) => a.id)).toContain(appt.id);
-    expect(get0.visits[0].appointmentId).toBeNull();
+    expect(get0.planSlide).toEqual({ adopted: 1, spawned: 0 });
+    expect(get0.unattachedAppointments).toEqual([]);
+    expect(get0.visits[0].appointmentId).toBe(appt.id);
 
+    // A kézi hozzárendelés ugyanarra az alkalomra idempotens (200, nem 409).
     const attachReq = await authedRequest(
       `http://test.local/api/episodes/${episode.id}/visits/${v1}/attach-appointment`,
       { user, method: 'POST', body: { appointmentId: appt.id } }

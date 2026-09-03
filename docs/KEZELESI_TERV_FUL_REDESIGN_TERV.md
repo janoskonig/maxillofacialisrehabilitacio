@@ -43,6 +43,7 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 | WP-4.1b step_code→work_phase_id identitás | ✅ | [#78](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/78) | Minden identitás-út wp-elsődleges (legacy fallback); review: CRITICAL param-kötési hiba a prereq-ágon javítva; mellékjavítás: a worklist „korábbi próbák" lekérdezés eddig némán elhasalt (ats.end_time) |
 | WP-4.2 vizit API + forecast | ✅ | [#79](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/79) | Vizit CRUD + PATCH visitId/jaw/teeth + vizit-tudatos forecast (kompat-invariáns fuzz-igazolva) + wp-tudatos projektor; review: 4 major javítva (kombinált body, csoport-mozgatás, reorder=EWP-átszámozás, scoped backfill), 1 medium cáfolva (advisory lock) |
 | WP-4.3 vizit-kártyás UI | ✅ | [#80](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/80) | Alkalom-kártyák + kockák (hatókör-badge), drag-drop + teljes nem-drag alternatíva, „Feltöltés sablonból"; élőben ellenőrizve; review-major (visit-move seq-átszámozás) javítva. **Ezzel a FÁZIS 4 és a TELJES TERV kész.** |
+| WP-6.5 „A terv rácsúszik a foglalt időpontokra" — automatikus rácsúszás (2026-09-03) | ✅ | main | A Csanádi-eset: hat heti időpont a naptárból, fázis nélkül foglalva az epizódra → egyik alkalom sem vette át, a tábla becsült ablakot mutatott, a sáv csak kézi hozzárendelést kínált. Új: `slidePlanOntoAppointments` (lib/visit-appointment-sync.ts) — az epizód alkalom nélküli, nyitott, jövőbeli foglalásai időrendben a tervezett (időpont nélküli, nyitott tartalmú) alkalmakra csúsznak, a fázishoz kötött a saját fázisának alkalmára, a maradékból üres-foglalt alkalom lesz; fut a GET work-phases olvasásakor (idempotens, auditált, `planSlide` a válaszban) és a POST /api/appointments után. 097: `appointments.visit_detached_at` — a kézi leválasztás jelölője (a rácsúszás kihagyja, attach/adopt törli), a sávban „(leválasztva)". 6 integrációs teszt. |
 | WP-6.4 Sablonok a palettán — a katalógus a tábláról szerkeszthető (2026-09-03) | ✅ | main | 095: „Fogelőkészítés (csonkpreparálás)" + 3 hiányzó generikus (lenyomat gyári/egyéni kanállal, primerpróba és gyűjtőlenyomat) → 23 paletta-sablon; 096: cisztaszűkítős lenyomat → 24. Paletta-elem ⋯ menü: alap-időtartam, „Levétel a palettáról"; keresésből talált elemnél „Felvétel a palettára"; egyedi fázisnál „Mentés a palettára is" pipa → `POST /api/step-catalog` (gen_<slug>, ütközésnél _2, legacy tükör) majd a kocka a kóddal. PATCH /step-catalog/:code `paletteOrder/defaultDurationMinutes/defaultPool` (probe-őr, 503 a 091 előtt). Csak admin/fogpótlástanász (`canEditPalette`). 4 komponens- + 5 integrációs teszt. |
 | WP-6.3b Éles hotfix: séma-őr a 094 előtti DB-re + opt-in migrate-on-start (2026-09-03) | ✅ | main | Az éles deploy a 094 nélkül ment ki → `column v.appointment_id does not exist` (42703) a fázis-áthelyezésen/törlésen. A vizit-időpont helperek és a route-ok probe-őrt kaptak (`hasVisitAppointmentColumn`): migráció előtt a blokk-rendezés marad, a vizit-időpont logika kimarad, attach/detach 503 `MIGRATION_PENDING`. Új: `AUTO_MIGRATE_ON_START=true` env → az `npm start` prestart hookja lefuttatja a tracked migrációkat (scripts/migrate-on-start.js); RENDER_DEPLOYMENT.md leírja. |
 | WP-6.3 „Az időpontfoglalás a váz" — alkalom-tulajdonú időpont, üres alkalom megmarad (2026-09-02) | ✅ | `c5192fd` (main) | 094: `episode_visits.appointment_id`; a tartalom mozgatása nem viszi az időpontot (a fázis várakozó lesz, a következő tag promótálódik); üres alkalom soha nem tűnik el automatikusan; alkalom nélküli foglalt időpontok sávja + hozzárendelés/leválasztás (attach/detach); foglalt alkalmak időrendben pinnelve; a tervezett alkalom a következő fix pont elé szorul (lánc + projektor plafon); a blokk hossza olvasáskor számolt. 5 új integrációs + 3 komponens + 3 lánc-teszt. |
@@ -826,6 +827,46 @@ Nincs külön tábla, nincs sablon-fogalom a UI-n túl: a paletta a katalógus r
 - **Nem épült:** paletta-sorrend húzással (a sorrend a katalógus `palette_order`-e, az admin
   folyamat-szerkesztőben marad), sablon-átnevezés a tábláról (a PATCH labelHu-t tud, de a
   menü nem kínálja — a címke a meglévő fázisokat is átnevezné).
+
+### 6.2e „A terv rácsúszik a foglalt időpontokra" — automatikus rácsúszás (WP-6.5)
+
+**Eset (2026-09-03, Csanádi István):** a felhasználó a naptárból hat heti időpontot foglalt
+az epizódra (fázis nélkül: `episode_id` kitöltve, `work_phase_id`/`step_code` üres), majd
+átrendezte a tervet. A hat időpont „alkalom nélküli foglalt időpont" maradt: a 6.2c
+modellben csak a fázishoz kötött foglalást adta át a motor az alkalomnak
+(`adoptAppointmentForPhaseVisit`), a naptári foglalásra a sáv kézi hozzárendelést kínált.
+A felhasználó szabálya viszont az volt, hogy a terv **magától** csússzon rá.
+
+- **Rácsúszás (`slidePlanOntoAppointments`, lib/visit-appointment-sync.ts):** az epizód
+  nyitott (status NULL), nem leválasztott, jövőbeli (a sáv idő-ablakával azonos) és
+  egyetlen alkalomhoz sem tartozó foglalásai időrendben a **tervezett** alkalmakra
+  csúsznak — azokra, amelyeknek nincs nyitott időpontjuk (üres vagy lemondott / no-show /
+  sikertelen), és van nyitott (pending/scheduled) tartalmuk vagy még üresek —,
+  terv-sorrendben (a k-adik időpont a k-adik tervezett alkalomra). A fázishoz kötött
+  foglalás (`work_phase_id`) a saját fázisának alkalmát kapja, ha az tervezett. A tervezett
+  alkalmakon túli időpontból új, **üres-foglalt alkalom** lesz („időpont tartalom nélkül")
+  — az időpont a váz. Minden párosítás `syncVisitAppointment`-tel (primary scheduled +
+  fázis-link), a végén `normalizeVisitOrder`. Epizódonként `FOR UPDATE` az epizód-soron
+  (két párhuzamos olvasás nem párosít kétszer). Kimarad: a lezárt (completed) időpontú
+  alkalom (történet), a csupa kész / kihagyott tartalmú alkalom mint cél, az epizód nélküli
+  (portál) foglalás — az a sáv dolga.
+- **Hol fut:** a GET work-phases olvasásakor (a WP-1.2 auto-repair mintája: idempotens,
+  auditált `visit_change` sorok, ha nincs jelölt, nem ír; a válaszban
+  `planSlide: {adopted, spawned}`; változásnál projektor + `visit_updated` esemény), és a
+  `POST /api/appointments` sikeres foglalása után (az epizód-szintű naptári foglalás azonnal
+  a tervre csúszik, a worklist se lát fázis nélküli időpontot).
+- **097 `appointments.visit_detached_at`:** az „Időpont leválasztása (megmarad)" jelölője —
+  a rácsúszás ezt az időpontot kihagyja (különben a következő olvasás visszatenné), a kézi
+  hozzárendelés (attach) és a fázishoz kötött foglalás-átadás (adopt) törli. A sávban a
+  leválasztott időpont „(leválasztva)" jelzést kap. Probe-őr: a 097 előtt a rácsúszás
+  kimarad (a sáv és a kézi hozzárendelés marad), 500 nincs.
+- **Nem változott:** a fázis-szintű link-modell, a lánc-plafon, a sáv és a kézi
+  attach/detach. A `deleteEpisodeVisitsIfEmpty` továbbra sem hívódik.
+- **Tesztek:** `__tests__/integration/plan-slide.test.ts` — a Csanádi-eset (4 tervezett
+  alkalom + 6 időpont → 4 rácsúszik időrendben, 2 üres-foglalt alkalom, idempotens),
+  leválasztás kimarad / attach visszavesz, cél-szűrés (kész alkalom nem, lemondott
+  időpontú várakozó igen), fázishoz kötött foglalás a saját alkalmára, epizód nélküli
+  foglalás a sávban marad, a naptári POST azonnal rácsúszik.
 
 ### 6.3 Nyitott / követés
 

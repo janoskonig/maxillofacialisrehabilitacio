@@ -5,7 +5,11 @@ import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 import { listEpisodeVisits } from '@/lib/episode-visits';
-import { normalizeVisitOrder, hasVisitAppointmentColumn } from '@/lib/visit-appointment-sync';
+import {
+  normalizeVisitOrder,
+  hasVisitAppointmentColumn,
+  hasVisitDetachedColumn,
+} from '@/lib/visit-appointment-sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -89,6 +93,14 @@ export const POST = roleHandler([...ROLES], async (_req, { auth, params }) => {
       });
     }
     await client.query(`UPDATE appointments SET work_phase_id = NULL WHERE id = $1`, [appointmentId]);
+    // WP-6.5: a kézi leválasztás jelölője — az automatikus rácsúszás ezt az
+    // időpontot kihagyja (különben a következő olvasás visszatenné); a kézi
+    // hozzárendelés (attach) törli.
+    if (await hasVisitDetachedColumn(client)) {
+      await client.query(`UPDATE appointments SET visit_detached_at = CURRENT_TIMESTAMP WHERE id = $1`, [
+        appointmentId,
+      ]);
+    }
     await client.query(
       `UPDATE episode_visits SET appointment_id = NULL, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
       [visitId]

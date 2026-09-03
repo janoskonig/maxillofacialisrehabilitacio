@@ -71,6 +71,8 @@ export interface UnattachedAppointment {
   pool: string | null;
   stepCode: string | null;
   dentistEmail: string | null;
+  /** WP-6.5: kézzel leválasztva — a terv automatikus rácsúszása kihagyja. */
+  visitDetachedAt: string | null;
 }
 
 /** Nyitott (jövőbeli vagy még le nem zárt) foglalása van az alkalomnak. */
@@ -238,6 +240,7 @@ export function mapUnattachedAppointments(rows: unknown[] | undefined): Unattach
       pool: row.pool != null ? String(row.pool) : null,
       stepCode: row.stepCode != null ? String(row.stepCode) : null,
       dentistEmail: row.dentistEmail != null ? String(row.dentistEmail) : null,
+      visitDetachedAt: row.visitDetachedAt != null ? String(row.visitDetachedAt) : null,
     };
   });
 }

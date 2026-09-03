@@ -14,9 +14,13 @@ import { probeColumnExists } from '@/lib/schema-probe';
 import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 import {
   listUnattachedAppointments,
+  planSlideChanged,
   renumberPhasesByVisitOrder,
+  slidePlanOntoAppointmentsTx,
   syncVisitAppointment,
+  type PlanSlideResult,
 } from '@/lib/visit-appointment-sync';
+import { logger } from '@/lib/logger';
 
 export const dynamic = 'force-dynamic';
 
@@ -36,6 +40,13 @@ export const dynamic = 'force-dynamic';
  * hivatkozásokat takarítja, és ha nincs mit javítani, nem ír semmit.
  * A `lostAppointmentWorkPhaseIds` a karton sor-szintű, klinikai jelzéséhez
  * kell: „ehhez a lépéshez már nincs élő időpont — foglaljon újat".
+ *
+ * WP-6.5, a második kivétel: „a terv rácsúszik a foglalt időpontokra". Az
+ * epizód alkalom nélküli, nyitott foglalásai (a naptárból fázis nélkül foglalt
+ * időpontok) olvasáskor a tervezett alkalmakra csúsznak, a maradékból üres-
+ * foglalt alkalom lesz (lib/visit-appointment-sync.ts slidePlanOntoAppointments).
+ * Idempotens és auditált: ha nincs ilyen időpont, nem ír semmit; a kézzel
+ * leválasztott időpontot (097 visit_detached_at) nem veszi vissza.
  */
 export const GET = authedHandler(async (_req, { auth, params }) => {
   const episodeId = params.id;
@@ -50,6 +61,27 @@ export const GET = authedHandler(async (_req, { auth, params }) => {
     changedBy: `auto-repair (${auth.email ?? auth.userId ?? 'ismeretlen'})`,
     trigger: 'work-phases GET',
   });
+
+  let planSlide: PlanSlideResult | null = null;
+  try {
+    planSlide = await slidePlanOntoAppointmentsTx(pool, episodeId, auth.email ?? auth.userId ?? 'unknown');
+  } catch (err) {
+    // Nem blokkoló: a terv olvasható marad, a rácsúszás a következő olvasáskor újra próbálkozik.
+    logger.error('[work-phases GET] a terv rácsúsztatása sikertelen:', err);
+  }
+  if (planSlideChanged(planSlide)) {
+    // A fázis-linkek elmozdultak: az intentek és a lánc frissüljön (nem blokkoló).
+    try {
+      await projectRemainingSteps(episodeId);
+    } catch {
+      /* non-blocking */
+    }
+    try {
+      await emitSchedulingEvent('episode', episodeId, 'visit_updated');
+    } catch {
+      /* non-blocking */
+    }
+  }
 
   const allPhases = await getFullWorkPhaseQuery(pool, episodeId);
   const lostAppointmentWorkPhaseIds = await getLostAppointmentWorkPhaseIds(
@@ -69,6 +101,9 @@ export const GET = authedHandler(async (_req, { auth, params }) => {
     visits,
     unattachedAppointments,
     lostAppointmentWorkPhaseIds,
+    planSlide: planSlide
+      ? { adopted: planSlide.adopted.length, spawned: planSlide.spawned.length }
+      : null,
     autoRepair: autoRepair
       ? {
           danglingCleared: autoRepair.danglingCleared,

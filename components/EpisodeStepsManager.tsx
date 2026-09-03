@@ -715,10 +715,18 @@ export function EpisodeStepsManager({
                               align="left"
                               widthClass="w-64"
                               triggerAriaLabel={`Időpont ${a.startTime ? formatShortDateTime(a.startTime) : a.id} hozzárendelése alkalomhoz`}
+                              triggerTitle={
+                                a.visitDetachedAt
+                                  ? 'Kézzel leválasztott időpont — a terv magától nem csúszik rá, itt rendelhető vissza'
+                                  : undefined
+                              }
                               triggerClassName="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-white dark:bg-gray-900 border border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/40"
                               trigger={
                                 <>
                                   {a.startTime ? formatShortDateTime(a.startTime) : 'időpont'}
+                                  {a.visitDetachedAt && (
+                                    <span className="text-[10px] text-gray-500 dark:text-gray-400">(leválasztva)</span>
+                                  )}
                                   <Link2 className="w-3 h-3" />
                                 </>
                               }

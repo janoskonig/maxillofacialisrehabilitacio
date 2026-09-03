@@ -4,6 +4,8 @@ import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
 import { createAppointment, sendAppointmentNotifications } from '@/lib/appointment-service';
 import { recomputeKezeleoorvosSilent } from '@/lib/recompute-kezeleoorvos';
+import { planSlideChanged, slidePlanOntoAppointmentsTx } from '@/lib/visit-appointment-sync';
+import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 
 export const dynamic = 'force-dynamic';
 
@@ -182,6 +184,25 @@ export const POST = roleHandler(['beutalo_orvos', 'admin', 'fogpótlástanász']
   }
 
   const { appointment, timeSlot, updatedTimeSlot, durationMinutes } = outcome.result;
+
+  // WP-6.5: „a terv rácsúszik a foglalt időpontokra" — a naptárból fázis nélkül
+  // foglalt időpontot az epizód első tervezett (időpont nélküli) alkalma kapja;
+  // ha nincs ilyen, az időpont maga lesz egy üres, foglalt alkalom. Fázishoz
+  // kötött foglalásnál a motor már átadta az alkalomnak, a menet nem ír semmit.
+  if (episodeId) {
+    try {
+      const slide = await slidePlanOntoAppointmentsTx(db, episodeId, auth.email ?? auth.userId ?? 'unknown');
+      if (planSlideChanged(slide)) {
+        try {
+          await projectRemainingSteps(episodeId);
+        } catch {
+          /* non-blocking */
+        }
+      }
+    } catch (err) {
+      logger.error('[appointments POST] a terv rácsúsztatása sikertelen:', err);
+    }
+  }
 
   sendAppointmentNotifications(db, {
     appointment,
