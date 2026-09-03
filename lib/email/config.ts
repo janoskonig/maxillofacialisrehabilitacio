@@ -44,6 +44,8 @@ export interface SendEmailOptions {
   text?: string;
   attachments?: EmailAttachment[];
   replyTo?: string;
+  /** Látható másolat (pl. a küldő saját példánya). */
+  cc?: string | string[];
   bcc?: string | string[];
   /** Naplózáshoz: pl. consilium_invitation, ohip_reminder, lab_quote */
   emailType?: string;
@@ -200,10 +202,14 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
     
     const toAddress = toRecipients[0];
     const bccAddresses = bccRecipients || (toRecipients.length > 1 ? toRecipients.slice(1) : undefined);
-    
-    const allRecipients = bccRecipients 
-      ? [...toRecipients, ...bccRecipients]
-      : toRecipients;
+    const ccAddresses = options.cc
+      ? (Array.isArray(options.cc) ? options.cc : [options.cc]).filter(Boolean)
+      : [];
+
+    const allRecipients = [
+      ...(bccRecipients ? [...toRecipients, ...bccRecipients] : toRecipients),
+      ...ccAddresses,
+    ];
 
     const htmlWithMeta = wrapEmailHtml(options.html);
 
@@ -214,6 +220,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
       subject: options.subject,
       text: textVersion,
       html: htmlWithMeta,
+      ...(ccAddresses.length > 0 && { cc: ccAddresses }),
       ...(bccAddresses && bccAddresses.length > 0 && { bcc: bccAddresses }),
       attachments: options.attachments?.map(att => ({
         filename: att.filename,
@@ -248,6 +255,7 @@ export async function sendEmail(options: SendEmailOptions): Promise<void> {
       sentBy: options.sentBy ?? null,
       metadata: {
         ...(options.metadata ?? {}),
+        ...(ccAddresses.length > 0 ? { cc: ccAddresses.join(', ') } : {}),
         ...(bccAddresses && bccAddresses.length > 0 ? { bcc: bccAddresses.join(', ') } : {}),
       },
     });

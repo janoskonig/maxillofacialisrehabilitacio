@@ -2,12 +2,9 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
 import { sendEmail } from '@/lib/email';
+import { resolveLabQuoteRecipients } from '@/lib/email/lab-quote-recipients';
 import { generateLabQuoteRequestPDF } from '@/lib/pdf/lab-quote-request';
 import { Patient, patientSchema } from '@/lib/types';
-
-// Labor email címzett beállítások
-const LAB_EMAIL = 'konig.janos@semmelweis.hu';
-const REPLY_TO_EMAIL = 'konig.janos@semmelweis.hu';
 
 /**
  * Árajánlatkérő PDF email küldése a laboratóriumnak
@@ -136,9 +133,13 @@ export const POST = authedHandler(async (req, { auth, params }) => {
         </div>
       `;
 
+  // Labor címzettek: env-ből (LAB_QUOTE_EMAIL_TO / _CC / _REPLY_TO), különben a kódbeli alapérték
+  const recipients = resolveLabQuoteRecipients();
+
   await sendEmail({
-    to: LAB_EMAIL,
-    replyTo: REPLY_TO_EMAIL,
+    to: recipients.to,
+    ...(recipients.cc.length > 0 && { cc: recipients.cc }),
+    replyTo: recipients.replyTo,
     subject: safeSubject,
     html: htmlContent,
     text: `
@@ -182,6 +183,8 @@ Fogpótlástani Klinika
     {
       success: true,
       message: 'Email sikeresen elküldve a laboratóriumnak',
+      recipient: recipients.to,
+      cc: recipients.cc,
       emailLog: {
         status: 'sent' as const,
         sentAt: new Date().toISOString(),

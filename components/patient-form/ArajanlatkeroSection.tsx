@@ -159,7 +159,12 @@ export function ArajanlatkeroSection({
                           ),
                         );
 
-                        showToast('Email sikeresen elküldve a laboratóriumnak', 'success');
+                        showToast(
+                          data.recipient
+                            ? `Email elküldve a laboratóriumnak: ${data.recipient}`
+                            : 'Email sikeresen elküldve a laboratóriumnak',
+                          'success'
+                        );
                       } catch (error) {
                         console.error('Email küldési hiba:', error);
                         showToast(

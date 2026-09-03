@@ -413,7 +413,11 @@ export async function drawHeader(
 
   // Load and draw logo 1 (left)
   if (config.logo1Path) {
-    const logo1Path = resolveExistingPath(projectRootCandidates('public', config.logo1Path));
+    // PDF-re méretezett változat (public/pdf/), ha van — a nagy felbontású eredeti csak tartalék.
+    const logo1Path = resolveExistingPath([
+      ...projectRootCandidates('public', 'pdf', config.logo1Path),
+      ...projectRootCandidates('public', config.logo1Path),
+    ]);
     if (logo1Path) {
       try {
         const logoBytes = fs.readFileSync(logo1Path);
@@ -434,7 +438,10 @@ export async function drawHeader(
 
   // Load and draw logo 2 (right)
   if (config.logo2Path) {
-    const logo2Path = resolveExistingPath(projectRootCandidates('public', config.logo2Path));
+    const logo2Path = resolveExistingPath([
+      ...projectRootCandidates('public', 'pdf', config.logo2Path),
+      ...projectRootCandidates('public', config.logo2Path),
+    ]);
     if (logo2Path) {
       try {
         const logoBytes = fs.readFileSync(logo2Path);
@@ -581,4 +588,54 @@ export function addPageIfNeeded(
   
   state.page = pdfDoc.addPage([LAYOUT.pageWidth, LAYOUT.pageHeight]);
   state.y = LAYOUT.pageHeight - LAYOUT.margin;
+}
+
+/**
+ * Szöveg tördelése sorokra a megadott szélességre (szóhatáron; a túl hosszú
+ * szavakat karakterhatáron vágja, hogy semmi ne lógjon ki a margón).
+ * Tiszta függvény — a rajzolás a hívó dolga, így oldaltörés-tudatos is lehet.
+ */
+export function wrapTextLines(
+  text: string,
+  font: PDFFont,
+  fontSize: number,
+  maxWidth: number
+): string[] {
+  const words = String(text).split(/\s+/).filter(Boolean);
+  if (words.length === 0) return [''];
+
+  const fits = (s: string) => font.widthOfTextAtSize(s, fontSize) <= maxWidth;
+  const lines: string[] = [];
+  let current = '';
+
+  const pushWord = (word: string) => {
+    const candidate = current ? `${current} ${word}` : word;
+    if (fits(candidate)) {
+      current = candidate;
+      return;
+    }
+    if (current) {
+      lines.push(current);
+      current = '';
+    }
+    if (fits(word)) {
+      current = word;
+      return;
+    }
+    // Egyetlen, a sornál is szélesebb szó: karakterenként tördeljük.
+    let chunk = '';
+    for (const ch of word) {
+      if (fits(chunk + ch)) {
+        chunk += ch;
+      } else {
+        if (chunk) lines.push(chunk);
+        chunk = ch;
+      }
+    }
+    current = chunk;
+  };
+
+  for (const word of words) pushWord(word);
+  if (current) lines.push(current);
+  return lines;
 }

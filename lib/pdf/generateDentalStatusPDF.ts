@@ -1,5 +1,6 @@
 import { PDFDocument, rgb, PDFPage } from 'pdf-lib';
 import { getDejaVuFont, getDejaVuBoldFont } from './fonts';
+import { CLINIC_FOOTER } from './clinic-contact';
 import {
   LAYOUT,
   TYPOGRAPHY,
@@ -12,7 +13,6 @@ import {
   drawHorizontalLine,
   drawFooter,
   HeaderConfig,
-  FooterConfig,
   drawHeader,
 } from './layout';
 
@@ -400,14 +400,7 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
 
   // Footer
   const footerY = Math.max(state.y - 20, LAYOUT.margin + 40);
-  drawFooter(state.page, footerY, {
-    address: 'Cím: 1088 Budapest, Szentkirályi utca 47.',
-    postalAddress: 'Postacím: 1085 Budapest, Üllői út 26.; 1428 Budapest Pf. 2.',
-    email: 'E-mail: fogpotlastan@dent.semmelweis-univ.hu',
-    phone: 'Tel: 06-1 338-4380, 06-1 459-1500/59326',
-    fax: 'Fax: (06-1) 317-5270',
-    website: 'web: http://semmelweis-hu/fogpotlastan',
-  }, TYPOGRAPHY.scale.tiny, font);
+  drawFooter(state.page, footerY, CLINIC_FOOTER, TYPOGRAPHY.scale.tiny, font);
 
   const bytes = await pdf.save();
   return Buffer.from(bytes);

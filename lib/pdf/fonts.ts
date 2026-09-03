@@ -27,7 +27,9 @@ function loadFontBytes(candidates: string[], fontName: string): Uint8Array | nul
 
 /**
  * Loads and caches DejaVu Sans font for proper Hungarian character support (ő, ű, etc.)
- * Falls back to StandardFonts.Helvetica if DejaVu is not available
+ * Falls back to StandardFonts.Helvetica if DejaVu is not available.
+ * A betűkészletet részhalmazolva ágyazzuk be (subset): csak a ténylegesen használt
+ * glifák kerülnek a PDF-be, így egy oldal ~50 KB, nem ~1,2 MB.
  */
 export async function getDejaVuFont(pdfDoc: PDFDocument): Promise<PDFFont> {
   if (!dejaVuFontBytesCache) {
@@ -40,7 +42,7 @@ export async function getDejaVuFont(pdfDoc: PDFDocument): Promise<PDFFont> {
   if (dejaVuFontBytesCache) {
     try {
       pdfDoc.registerFontkit(fontkit);
-      return await pdfDoc.embedFont(dejaVuFontBytesCache);
+      return await pdfDoc.embedFont(dejaVuFontBytesCache, { subset: true });
     } catch (error) {
       console.warn('Failed to embed DejaVu Sans font, falling back to Helvetica:', error);
     }
@@ -66,7 +68,7 @@ export async function getDejaVuBoldFont(pdfDoc: PDFDocument): Promise<PDFFont> {
   if (dejaVuBoldFontBytesCache) {
     try {
       pdfDoc.registerFontkit(fontkit);
-      return await pdfDoc.embedFont(dejaVuBoldFontBytesCache);
+      return await pdfDoc.embedFont(dejaVuBoldFontBytesCache, { subset: true });
     } catch (error) {
       console.warn('Failed to embed DejaVu Sans Bold font, falling back to HelveticaBold:', error);
     }
