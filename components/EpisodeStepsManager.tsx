@@ -19,7 +19,7 @@
 import { Fragment, useCallback, useEffect, useMemo, useRef, useState } from 'react';
 import { useToast } from '@/contexts/ToastContext';
 import {
-  Loader2, ChevronDown, ChevronUp, ChevronRight, Plus, AlertTriangle, CalendarDays, Layers,
+  Loader2, ChevronDown, ChevronUp, ChevronRight, Plus, AlertTriangle, CalendarDays, Layers, CalendarCheck2, Link2,
 } from 'lucide-react';
 import {
   DndContext, closestCenter, pointerWithin, rectIntersection,
@@ -38,18 +38,21 @@ import { EpisodeProviderControl } from './EpisodeProviderControl';
 import {
   effectiveStatus,
   formatShortDate,
+  formatShortDateTime,
   formatWaitDays,
   isTempId,
-  summarizeVisitStatus,
-  visitDateInfo,
+  summarizeVisitStatusV2,
+  visitDateInfoV2,
   visitDisplayLabel,
   visitGapDays,
+  visitHasOpenAppointment,
   visitTotalMinutes,
   type EpisodeStep,
   type EpisodeVisit,
   type VisitGroup,
   type VisitTarget,
 } from './visit-plan/visit-plan-types';
+import { Popover as VisitPopover, MenuItem as VisitMenuItem, MenuHeading as VisitMenuHeading } from './visit-plan/Popover';
 import { usePlanBoard, type StepProjectionSummary } from './visit-plan/usePlanBoard';
 import { PhasePalette } from './visit-plan/PhasePalette';
 import { VisitRow } from './visit-plan/VisitRow';
@@ -260,6 +263,15 @@ export function EpisodeStepsManager({
   const activeIndex = board.visits.findIndex((v) => v.id === board.activeVisitId);
   const paletteTargetHint = activeIndex >= 0 ? `→ ${activeIndex + 1}. alkalom` : '→ új alkalom';
 
+  // ─── Puzzle v2: a váz — alkalom nélküli időpontok hozzárendelése ─────────
+  /** Melyik alkalomhoz nyílik az időpont-választó (null = zárva). */
+  const [attachForVisitId, setAttachForVisitId] = useState<string | null>(null);
+  const unattached = board.unattachedAppointments;
+  const visitOptionsForAppointment = useMemo(
+    () => board.groups.filter((g) => !visitHasOpenAppointment(g.visit) && !isTempId(g.visit.id)),
+    [board.groups]
+  );
+
   // ─── Vizit-szintű foglalás ──────────────────────────────────────────────
 
   const [pendingBookingAction, setPendingBookingAction] = useState<{
@@ -316,6 +328,13 @@ export function EpisodeStepsManager({
     if (!booking.enabled) return null;
     const open = openPrimariesOf(group);
     if (open.length === 0) return null;
+    // Foglalt alkalom: a váz chipje a fejlécben (VisitRow), a foglalási
+    // menü a primary worklist-sorából jön (áthelyezés / sikertelen / kész).
+    // Ha az időpont az alkalomé, de a primary linkje még nem ért ide
+    // (optimista állapot), a chip elég.
+    if (visitHasOpenAppointment(group.visit) && !open.some((p) => p.appointmentId === group.visit.appointmentId)) {
+      return null;
+    }
     const anchor = open.find((p) => p.status === 'scheduled') ?? open[0];
     if (isTempId(anchor.id)) return null;
     const item = booking.itemByWorkPhaseId.get(anchor.id);
@@ -482,7 +501,7 @@ export function EpisodeStepsManager({
           <div className="min-w-0">
             <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Kezelési terv</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-              Alkalmak és kezelések — bal oldalról pakolható, egy alkalom = egy időpont
+              Az időpontok a váz, a kezelések a tartalom — bal oldalról pakolható, egy alkalom = egy időpont
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -674,6 +693,64 @@ export function EpisodeStepsManager({
                     />
 
                     <div className="min-w-0 space-y-1" data-testid="visit-board">
+                      {/* ─── A váz: alkalom nélküli foglalt időpontok ───────────── */}
+                      {unattached.length > 0 && (
+                        <div
+                          className="rounded-xl border border-blue-200 dark:border-blue-800 bg-blue-50/60 dark:bg-blue-950/30 px-3 py-2 flex items-center gap-2 flex-wrap"
+                          data-testid="unattached-appointments"
+                        >
+                          <CalendarCheck2 className="w-4 h-4 text-blue-600 dark:text-blue-300 shrink-0" />
+                          <span className="text-xs font-medium text-blue-900 dark:text-blue-200">
+                            Foglalt időpont alkalom nélkül:
+                          </span>
+                          {unattached.map((a) => (
+                            <VisitPopover
+                              key={a.id}
+                              align="left"
+                              widthClass="w-64"
+                              triggerAriaLabel={`Időpont ${a.startTime ? formatShortDateTime(a.startTime) : a.id} hozzárendelése alkalomhoz`}
+                              triggerClassName="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-white dark:bg-gray-900 border border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                              trigger={
+                                <>
+                                  {a.startTime ? formatShortDateTime(a.startTime) : 'időpont'}
+                                  <Link2 className="w-3 h-3" />
+                                </>
+                              }
+                            >
+                              {(close) => (
+                                <div>
+                                  <VisitMenuHeading>Melyik alkalomhoz?</VisitMenuHeading>
+                                  {visitOptionsForAppointment.length === 0 && (
+                                    <p className="px-2 py-1 text-xs text-gray-500 dark:text-gray-400">
+                                      Minden alkalomnak van már időpontja.
+                                    </p>
+                                  )}
+                                  {visitOptionsForAppointment.map((g) => (
+                                    <VisitMenuItem
+                                      key={g.visit.id}
+                                      onClick={() => {
+                                        void board.attachAppointment(g.visit.id, a.id);
+                                        close();
+                                      }}
+                                    >
+                                      {visitTitle(g.visit, board.visits.findIndex((v) => v.id === g.visit.id))}
+                                    </VisitMenuItem>
+                                  ))}
+                                  <VisitMenuItem
+                                    tone="primary"
+                                    onClick={() => {
+                                      void board.attachAppointment('new', a.id);
+                                      close();
+                                    }}
+                                  >
+                                    <Plus className="w-3.5 h-3.5" /> Új alkalom ezzel az időponttal
+                                  </VisitMenuItem>
+                                </div>
+                              )}
+                            </VisitPopover>
+                          ))}
+                        </div>
+                      )}
                       {!hasAnyPlanContent && (
                         <p className="rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 p-3 text-sm text-gray-600 dark:text-gray-400">
                           A kezelési terv még üres. Kattintson egy kezelésre a bal oldali palettán
@@ -697,9 +774,9 @@ export function EpisodeStepsManager({
                                 index={index}
                                 visitCount={board.visits.length}
                                 title={visitDisplayLabel(group.visit, group.phases, getStepLabel)}
-                                statusSummary={summarizeVisitStatus(group.primaries)}
+                                statusSummary={summarizeVisitStatusV2(group.visit, group.primaries)}
                                 totalMinutes={visitTotalMinutes(group.visit, group.primaries)}
-                                dateInfo={visitDateInfo(group.primaries, board.projectionByPhaseId)}
+                                dateInfo={visitDateInfoV2(group.visit, group.primaries, board.projectionByPhaseId)}
                                 phaseCount={group.phases.length}
                                 isActive={board.activeVisitId === group.visit.id}
                                 pending={pending}
@@ -708,6 +785,9 @@ export function EpisodeStepsManager({
                                 onMoveDown={() => void board.moveVisit(group.visit.id, 1)}
                                 onDeleteEmpty={() => void board.deleteEmptyVisit(group.visit.id)}
                                 onRename={(label) => void board.updateVisit(group.visit.id, { label })}
+                                onAttachAppointment={() => setAttachForVisitId(group.visit.id)}
+                                unattachedCount={unattached.length}
+                                onDetachAppointment={() => void board.detachAppointment(group.visit.id)}
                                 bookingSlot={renderVisitBooking(group)}
                                 footer={renderDelegateFooter(group)}
                               >
@@ -726,6 +806,50 @@ export function EpisodeStepsManager({
                           </div>
                           <div className="flex flex-wrap gap-1.5 p-2">
                             {board.unassigned.map(renderPill)}
+                          </div>
+                        </div>
+                      )}
+
+                      {attachForVisitId && (
+                        <div
+                          className="rounded-xl border border-blue-200 dark:border-blue-800 bg-white dark:bg-gray-900 px-3 py-2"
+                          role="dialog"
+                          aria-label="Időpont hozzárendelése az alkalomhoz"
+                          data-testid="attach-appointment-picker"
+                        >
+                          <div className="flex items-center gap-2 flex-wrap">
+                            <span className="text-xs font-medium text-gray-700 dark:text-gray-300">
+                              Időpont a(z){' '}
+                              {visitTitle(
+                                board.visits.find((v) => v.id === attachForVisitId) as EpisodeVisit,
+                                board.visits.findIndex((v) => v.id === attachForVisitId)
+                              )}{' '}
+                              alkalomhoz:
+                            </span>
+                            {unattached.length === 0 && (
+                              <span className="text-xs text-gray-500 dark:text-gray-400">nincs szabad, alkalom nélküli időpont.</span>
+                            )}
+                            {unattached.map((a) => (
+                              <button
+                                key={a.id}
+                                type="button"
+                                onClick={() => {
+                                  void board.attachAppointment(attachForVisitId, a.id);
+                                  setAttachForVisitId(null);
+                                }}
+                                className="inline-flex items-center gap-1 px-2 py-0.5 rounded-full text-xs font-medium bg-blue-50 dark:bg-blue-950/40 border border-blue-300 dark:border-blue-700 text-blue-800 dark:text-blue-200 hover:bg-blue-100 dark:hover:bg-blue-900/40"
+                              >
+                                <CalendarCheck2 className="w-3 h-3" />
+                                {a.startTime ? formatShortDateTime(a.startTime) : 'időpont'}
+                              </button>
+                            ))}
+                            <button
+                              type="button"
+                              onClick={() => setAttachForVisitId(null)}
+                              className="ml-auto text-xs text-gray-500 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-200"
+                            >
+                              Mégse
+                            </button>
                           </div>
                         </div>
                       )}

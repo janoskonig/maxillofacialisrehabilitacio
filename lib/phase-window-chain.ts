@@ -96,8 +96,19 @@ export function computeVisitAwareWindowChain(
   let anchor = new Date(initialAnchor);
   let prevHardStart: Date | null = null;
 
-  for (const unit of units) {
-    const { windowStart, windowEnd, expectedDate } = computeStepWindow(anchor, unit.offset);
+  // Puzzle v2 („a terv rácsúszik a vázra"): a tervezett egység a KÖVETKEZŐ
+  // foglalt/teljesült egység elé szorul — az ablaka nem nyúlhat annak
+  // időpontján túl. Előre kiszámoljuk minden egységre a következő kemény pontot.
+  const nextHardAfter: Array<Date | null> = new Array(units.length).fill(null);
+  let upcoming: Date | null = null;
+  for (let i = units.length - 1; i >= 0; i--) {
+    nextHardAfter[i] = upcoming;
+    const hardI = units[i].completedAt ?? units[i].bookedStart ?? null;
+    if (hardI) upcoming = hardI;
+  }
+
+  units.forEach((unit, i) => {
+    let { windowStart, windowEnd, expectedDate } = computeStepWindow(anchor, unit.offset);
 
     let earliestAllowedStart = windowStart;
     if (prevHardStart) {
@@ -105,6 +116,18 @@ export function computeVisitAwareWindowChain(
       if (chainMin.getTime() > earliestAllowedStart.getTime()) {
         earliestAllowedStart = chainMin;
       }
+    }
+
+    const hard = unit.completedAt ?? unit.bookedStart ?? null;
+    const cap = nextHardAfter[i];
+    if (!hard && cap) {
+      // A következő fix pont előtti nap a plafon; ha a horgony már mögötte
+      // van (pl. jövőbeli teljesítés a láncban), a teljes ablak a plafonra ül.
+      const capEnd = new Date(cap.getTime() - MS_PER_DAY);
+      if (windowEnd.getTime() > capEnd.getTime()) windowEnd = capEnd;
+      if (expectedDate.getTime() > windowEnd.getTime()) expectedDate = windowEnd;
+      if (windowStart.getTime() > windowEnd.getTime()) windowStart = windowEnd;
+      if (earliestAllowedStart.getTime() > windowEnd.getTime()) earliestAllowedStart = windowEnd;
     }
 
     const result: PhaseWindowChainResult = {
@@ -115,14 +138,13 @@ export function computeVisitAwareWindowChain(
     };
     for (const key of unit.memberKeys) out.set(key, result);
 
-    const hard = unit.completedAt ?? unit.bookedStart ?? null;
     if (hard) {
       anchor = hard;
       prevHardStart = hard;
     } else {
       anchor = expectedDate;
     }
-  }
+  });
 
   return out;
 }
@@ -138,9 +160,21 @@ export function computePhaseWindowChain(
   let anchor = new Date(initialAnchor);
   let prevHardStart: Date | null = null;
 
-  for (const phase of phases) {
+  // Ugyanaz a plafon, mint a vizit-tudatos láncban: a tervezett lépés a
+  // következő fix pont elé szorul.
+  const hardOf = (p: PhaseWindowChainRow): Date | null =>
+    p.completedAt != null ? new Date(p.completedAt) : p.bookedStart != null ? new Date(p.bookedStart) : null;
+  const nextHardAfter: Array<Date | null> = new Array(phases.length).fill(null);
+  let upcoming: Date | null = null;
+  for (let i = phases.length - 1; i >= 0; i--) {
+    nextHardAfter[i] = upcoming;
+    const h = hardOf(phases[i]);
+    if (h) upcoming = h;
+  }
+
+  phases.forEach((phase, i) => {
     const offset = phase.defaultDaysOffset;
-    const { windowStart, windowEnd, expectedDate } = computeStepWindow(anchor, offset);
+    let { windowStart, windowEnd, expectedDate } = computeStepWindow(anchor, offset);
 
     let earliestAllowedStart = windowStart;
     if (prevHardStart) {
@@ -150,6 +184,16 @@ export function computePhaseWindowChain(
       }
     }
 
+    const hard = hardOf(phase);
+    const cap = nextHardAfter[i];
+    if (!hard && cap) {
+      const capEnd = new Date(cap.getTime() - MS_PER_DAY);
+      if (windowEnd.getTime() > capEnd.getTime()) windowEnd = capEnd;
+      if (expectedDate.getTime() > windowEnd.getTime()) expectedDate = windowEnd;
+      if (windowStart.getTime() > windowEnd.getTime()) windowStart = windowEnd;
+      if (earliestAllowedStart.getTime() > windowEnd.getTime()) earliestAllowedStart = windowEnd;
+    }
+
     out.set(phase.workPhaseCode, {
       windowStart,
       windowEnd,
@@ -157,20 +201,13 @@ export function computePhaseWindowChain(
       earliestAllowedStart,
     });
 
-    const hard =
-      phase.completedAt != null
-        ? new Date(phase.completedAt)
-        : phase.bookedStart != null
-          ? new Date(phase.bookedStart)
-          : null;
-
     if (hard) {
       anchor = hard;
       prevHardStart = hard;
     } else {
       anchor = expectedDate;
     }
-  }
+  });
 
   return out;
 }

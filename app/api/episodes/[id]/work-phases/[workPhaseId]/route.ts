@@ -11,7 +11,12 @@ import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 import { SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT } from '@/lib/active-appointment';
 import { insertWorkPhaseTombstones, releaseWorkPhasesForDelete } from '@/lib/work-phase-delete';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
-import { deleteEpisodeVisitsIfEmpty } from '@/lib/episode-visits';
+import {
+  normalizeVisitOrder,
+  releasePhaseFromVisit,
+  renumberPhasesByVisitOrder,
+  syncVisitAppointment,
+} from '@/lib/visit-appointment-sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -37,9 +42,11 @@ export const DELETE = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász
     await client.query('BEGIN');
     const row = await client.query(
       `SELECT ewp.id, ewp.episode_id, ewp.work_phase_code, ewp.status, ewp.visit_id,
+              ewp.appointment_id, v.appointment_id AS visit_appointment_id,
               pe.status as episode_status
        FROM episode_work_phases ewp
        JOIN patient_episodes pe ON ewp.episode_id = pe.id
+       LEFT JOIN episode_visits v ON v.id = ewp.visit_id
        WHERE ewp.id = $1 AND ewp.episode_id = $2
        FOR UPDATE OF ewp`,
       [workPhaseId, episodeId]
@@ -57,11 +64,21 @@ export const DELETE = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász
       return NextResponse.json({ error: 'Csak aktív epizód munkafázisai törölhetők' }, { status: 400 });
     }
 
+    // Puzzle v2 (094): „az időpontfoglalás a váz" — ha a fázis az alkalma
+    // foglalását hordozza, a foglalás az ALKALOMNÁL marad (üres, de foglalt
+    // alkalom); a fázis csak kilép belőle. A lemondás az alkalom törlésének
+    // dolga. Idegen (nem az alkalomé) foglalásnál a régi szabály: lemondás.
+    const changedBy = auth.email ?? auth.userId ?? 'unknown';
+    const { keptAppointmentId } = await releasePhaseFromVisit(client, episodeId, workPhaseId, changedBy);
+
     // Foglalt időpont / nyitott intent / párhuzamos plan item felszabadítása,
     // hogy bármely státuszú sor törölhető legyen.
-    const released = await releaseWorkPhasesForDelete(client, episodeId, [
-      { id: workPhaseId, workPhaseCode: phase.work_phase_code ?? null },
-    ]);
+    const released = await releaseWorkPhasesForDelete(
+      client,
+      episodeId,
+      [{ id: workPhaseId, workPhaseCode: phase.work_phase_code ?? null }],
+      { keepAppointmentIds: keptAppointmentId ? [keptAppointmentId] : [] }
+    );
 
     // Tombstone audit sor — a snapshot oszlopok miatt a DELETE ELŐTT kell
     // beszúrni; a 084-es migráció óta a sor a törlést túléli
@@ -76,7 +93,9 @@ export const DELETE = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász
       reason:
         released.cancelledAppointments > 0
           ? `Manuálisan törölve (${released.cancelledAppointments} foglalás lemondva)`
-          : 'Manuálisan törölve',
+          : keptAppointmentId
+            ? 'Manuálisan törölve (az időpont az alkalomnál maradt)'
+            : 'Manuálisan törölve',
     });
 
     // Törlés-tombstone (WP-0.7, kódaudit #01): a kulcs feljegyzése + a
@@ -87,22 +106,14 @@ export const DELETE = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász
 
     await client.query(`DELETE FROM episode_work_phases WHERE id = $1`, [workPhaseId]);
 
-    // WP-4.1a (review-javítás): a törölt sor kiürült (egyfős) vizitje nem
-    // maradhat árván a vizit-listában. Csak üres vizitet töröl — ha a vizitben
-    // más fázis is van (pl. merge-csoport gyereke), a vizit marad.
+    // Puzzle v2: az üres alkalom NEM tűnik el automatikusan — a kiürült alkalom
+    // (akár a foglalásával együtt) megmarad, kézzel törölhető. Az alkalom
+    // blokkját újrarendezzük (következő tag promótálása az időpontra).
     if (phase.visit_id) {
-      await deleteEpisodeVisitsIfEmpty(client, [phase.visit_id as string]);
+      await syncVisitAppointment(client, episodeId, phase.visit_id as string, changedBy);
     }
 
-    await client.query(
-      `WITH numbered AS (
-        SELECT id, ROW_NUMBER() OVER (ORDER BY COALESCE(seq, pathway_order_index)) - 1 as new_seq
-        FROM episode_work_phases WHERE episode_id = $1
-      )
-      UPDATE episode_work_phases SET seq = numbered.new_seq
-      FROM numbered WHERE episode_work_phases.id = numbered.id`,
-      [episodeId]
-    );
+    await renumberPhasesByVisitOrder(client, episodeId);
 
     await client.query('COMMIT');
 
@@ -122,6 +133,7 @@ export const DELETE = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász
       workPhaseId,
       cancelledAppointments: released.cancelledAppointments,
       expiredIntents: released.expiredIntents,
+      keptAppointmentId,
     });
   } catch (txError) {
     await client.query('ROLLBACK').catch(() => {});
@@ -200,7 +212,7 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
     const phaseRow = await client.query(
       `SELECT ewp.id, ewp.episode_id, ewp.work_phase_code, ewp.status, ewp.pathway_order_index,
               ewp.duration_minutes, ewp.default_days_offset, ewp.custom_label,
-              ewp.visit_id, ewp.jaw, ewp.merged_into_episode_work_phase_id,
+              ewp.visit_id, ewp.jaw, ewp.merged_into_episode_work_phase_id, ewp.appointment_id,
               pe.status as episode_status
        FROM episode_work_phases ewp
        JOIN patient_episodes pe ON ewp.episode_id = pe.id
@@ -269,7 +281,7 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
         });
       }
 
-      // ─── WP-4.2: áthelyezés másik alkalomba ─────────────────────────────
+      // ─── WP-4.2 / Puzzle v2: áthelyezés másik alkalomba ──────────────────
       if (typeof targetVisitId === 'string' && targetVisitId !== phase.visit_id) {
         const targetVisit = await client.query(
           `SELECT id FROM episode_visits WHERE id = $1 AND episode_id = $2 FOR UPDATE`,
@@ -282,80 +294,41 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
             { status: 404 }
           );
         }
-        // Puzzle v2: összevont GYEREK áthelyezése — a csoport nem hasadhat két
-        // vizitre, ezért a gyerek előbb kilép a csoportból (egysoros unmerge),
-        // és önálló fázisként költözik a cél-alkalomba.
-        let detachedFromGroup = false;
-        if (phase.merged_into_episode_work_phase_id) {
-          await client.query(
-            `UPDATE episode_work_phases SET merged_into_episode_work_phase_id = NULL WHERE id = $1`,
-            [workPhaseId]
-          );
-          detachedFromGroup = true;
-          await insertWorkPhaseAudit(client, {
-            episodeWorkPhaseId: workPhaseId,
-            episodeId,
-            oldStatus: phase.status,
-            newStatus: phase.status,
-            changedBy: auth.email ?? auth.userId ?? 'unknown',
-            changeType: 'unmerge',
-            reason: 'Kilépett az összevont csoportból (áthelyezés másik alkalomba)',
-          });
-        }
-        // Review-javítás: a merge-csoport "egy alkalom" — a primary
-        // áthelyezése a rejtett (merged) gyerekeit is viszi, különben a
-        // csoport némán kettéhasadna és zombi vizit maradna hátra.
-        const moved = await client.query(
-          `UPDATE episode_work_phases SET visit_id = $1
-           WHERE id = $2 OR merged_into_episode_work_phase_id = $2
-           RETURNING id`,
-          [targetVisitId, workPhaseId]
-        );
-        // A kiürült régi (egyfős/csoport-) alkalom nem maradhat árván.
+        const changedBy = auth.email ?? auth.userId ?? 'unknown';
+        // „Az időpontfoglalás a váz, a tartalom a kezelési terv": CSAK ez a
+        // fázis költözik. A forrás-alkalom időpontja a helyén marad (a fázis
+        // várakozóvá válik), az alá vont tagjai a forrásban maradnak és egy
+        // következő tag lép a primary helyére; a cél-alkalomban a fázis a
+        // blokk része lesz — ha a célnak van időpontja, a tartalom rácsúszik.
+        const { keptAppointmentId } = await releasePhaseFromVisit(client, episodeId, workPhaseId, changedBy);
+        await client.query(`UPDATE episode_work_phases SET visit_id = $1 WHERE id = $2`, [
+          targetVisitId,
+          workPhaseId,
+        ]);
+        // A sorrend igazsága az EWP COALESCE(seq, pathway_order_index): az
+        // áthelyezett sor a cél-alkalom VÉGÉRE kerül (az optimista kliens is
+        // ezt rajzolja).
+        await renumberPhasesByVisitOrder(client, episodeId, workPhaseId);
         if (phase.visit_id) {
-          await deleteEpisodeVisitsIfEmpty(client, [phase.visit_id as string]);
+          await syncVisitAppointment(client, episodeId, phase.visit_id as string, changedBy);
         }
-        const movedChildren = (moved.rowCount ?? 1) - 1;
-        // Review-javítás (WP-4.3, major): a sorrend igazsága az EWP
-        // COALESCE(seq, pathway_order_index) — az áthelyezés után a fázis-seq
-        // a vizit-sorrendet kövesse (vizit seq, azon belül a mai sorrend),
-        // különben a megjelenített alkalom-sorrend és a motor/becslés/lánc
-        // némán széttartana (a kollekció-reorder route pontosan így számoz át).
-        // Puzzle v2: az áthelyezett sor (+ csoportja) a cél-alkalom VÉGÉRE
-        // kerül — ez az, amit az optimista kliens is rajzol, így a
-        // visszatöltés nem ugráltatja a kockát.
-        await client.query(
-          `WITH ordered AS (
-             SELECT e.id,
-                    ROW_NUMBER() OVER (
-                      ORDER BY v.seq NULLS LAST,
-                               CASE WHEN e.id = $2 OR e.merged_into_episode_work_phase_id = $2
-                                    THEN 1 ELSE 0 END,
-                               COALESCE(e.seq, e.pathway_order_index),
-                               e.pathway_order_index, e.id
-                    ) - 1 AS new_seq
-             FROM episode_work_phases e
-             LEFT JOIN episode_visits v ON e.visit_id = v.id
-             WHERE e.episode_id = $1
-           )
-           UPDATE episode_work_phases SET seq = ordered.new_seq
-           FROM ordered WHERE episode_work_phases.id = ordered.id`,
-          [episodeId, workPhaseId]
-        );
+        const targetSync = await syncVisitAppointment(client, episodeId, targetVisitId, changedBy);
+        // A célalkalom örökölhette a fázis saját (nem alkalom-tulajdonú)
+        // foglalását → a foglalt alkalmak időrendje igazodik.
+        await normalizeVisitOrder(client, episodeId);
         visitMoved = true;
         await insertWorkPhaseAudit(client, {
           episodeWorkPhaseId: workPhaseId,
           episodeId,
           oldStatus: phase.status,
           newStatus: phase.status,
-          changedBy: auth.email ?? auth.userId ?? 'unknown',
+          changedBy,
           changeType: 'visit_change',
-          reason:
-            movedChildren > 0
-              ? `Áthelyezve másik alkalomba (+${movedChildren} összevont al-fázis)`
-              : detachedFromGroup
-                ? 'Áthelyezve másik alkalomba (önálló fázisként)'
-                : 'Áthelyezve másik alkalomba',
+          reason: keptAppointmentId
+            ? 'Áthelyezve másik alkalomba (az időpont az előző alkalomnál maradt)'
+            : targetSync?.appointmentId
+              ? 'Áthelyezve másik alkalomba (a cél-alkalom időpontjára)'
+              : 'Áthelyezve másik alkalomba',
         });
       }
 

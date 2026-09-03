@@ -6,6 +6,7 @@ import { createEpisodeVisit, listEpisodeVisits } from '@/lib/episode-visits';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 import { DEFAULT_VISIT_GAP_DAYS } from '@/lib/visit-plan-constants';
+import { normalizeVisitOrder } from '@/lib/visit-appointment-sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -190,6 +191,11 @@ export const PATCH = roleHandler([...ROLES], async (req, { auth, params }) => {
       [episodeId, orderedVisitIds]
     );
 
+    // Puzzle v2 („a terv rácsúszik a vázra"): a foglalt alkalmak időrendben
+    // pinnelve maradnak — a kért sorrendben a foglalt pozíciókat a foglalások
+    // időrendje tölti, a tervezett alkalmak a kért helyükön maradnak.
+    const pinned = await normalizeVisitOrder(client, episodeId);
+
     await insertWorkPhaseAudit(client, {
       episodeWorkPhaseId: null,
       episodeId,
@@ -197,7 +203,7 @@ export const PATCH = roleHandler([...ROLES], async (req, { auth, params }) => {
       newStatus: null,
       changedBy: auth.email ?? auth.userId ?? 'unknown',
       changeType: 'visit_change',
-      reason: `Alkalmak átrendezve (${orderedVisitIds.length} alkalom)`,
+      reason: `Alkalmak átrendezve (${orderedVisitIds.length} alkalom${pinned ? ', foglalt alkalmak időrendbe igazítva' : ''})`,
     });
 
     const visits = await listEpisodeVisits(client, episodeId);

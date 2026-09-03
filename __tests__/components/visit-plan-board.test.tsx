@@ -43,6 +43,10 @@ interface MockVisit {
   label: string | null;
   daysOffset: number | null;
   plannedDurationMinutes: number | null;
+  appointmentId?: string | null;
+  appointmentStart?: string | null;
+  appointmentEnd?: string | null;
+  appointmentStatus?: string | null;
 }
 
 interface MockPhaseRow {
@@ -119,10 +123,18 @@ interface FetchCall {
 function installFetchMock(opts: {
   visits?: MockVisit[];
   workPhases?: MockPhaseRow[];
+  unattached?: Array<{ id: string; startTime: string; endTime?: string | null; pool?: string; stepCode?: string | null; dentistEmail?: string | null }>;
   failWorkPhasePatch?: boolean;
 } = {}) {
   const calls: FetchCall[] = [];
   let counter = 0;
+  // Állapottartó mock: a mutációk a GET-ben is látszanak (a tábla csendes
+  // egyeztető újratöltése különben visszaállítaná a kiinduló adatot).
+  const state = {
+    visits: [...(opts.visits ?? [])] as MockVisit[],
+    workPhases: [...(opts.workPhases ?? [])] as MockPhaseRow[],
+    unattached: [...(opts.unattached ?? [])],
+  };
   const fetchMock = vi.fn((input: RequestInfo | URL, init?: RequestInit) => {
     const url = String(input);
     const method = init?.method ?? 'GET';
@@ -136,8 +148,9 @@ function installFetchMock(opts: {
 
     if (url === `/api/episodes/${EPISODE_ID}/work-phases` && method === 'GET') {
       return jsonResponse({
-        workPhases: opts.workPhases ?? [],
-        visits: opts.visits ?? [],
+        workPhases: state.workPhases,
+        visits: state.visits,
+        unattachedAppointments: state.unattached,
         lostAppointmentWorkPhaseIds: [],
         autoRepair: null,
       });
@@ -145,24 +158,21 @@ function installFetchMock(opts: {
     if (url === `/api/episodes/${EPISODE_ID}/work-phases` && method === 'POST') {
       counter += 1;
       const b = body ?? {};
-      const createdVisit = b.visitId
+      const createdVisit: MockVisit | null = b.visitId
         ? null
-        : { id: `v-new-${counter}`, seq: (opts.visits?.length ?? 0) + counter - 1, label: null, daysOffset: b.daysOffset ?? 7, plannedDurationMinutes: null };
+        : { id: `v-new-${counter}`, seq: state.visits.length, label: null, daysOffset: (b.daysOffset as number | undefined) ?? 7, plannedDurationMinutes: null };
+      if (createdVisit) state.visits.push(createdVisit);
       const code = typeof b.workPhaseCode === 'string' ? b.workPhaseCode : `adhoc_${counter}`;
-      return jsonResponse(
-        {
-          workPhase: makePhase({
-            id: `w-new-${counter}`,
-            workPhaseCode: code,
-            customLabel: typeof b.label === 'string' ? b.label : null,
-            durationMinutes: typeof b.durationMinutes === 'number' ? b.durationMinutes : code === 'gen_csonkpreparalas' ? 60 : 30,
-            visitId: (b.visitId as string | undefined) ?? createdVisit?.id ?? null,
-            seq: 99 + counter,
-          }),
-          visit: createdVisit,
-        },
-        201
-      );
+      const row = makePhase({
+        id: `w-new-${counter}`,
+        workPhaseCode: code,
+        customLabel: typeof b.label === 'string' ? b.label : null,
+        durationMinutes: typeof b.durationMinutes === 'number' ? b.durationMinutes : code === 'gen_csonkpreparalas' ? 60 : 30,
+        visitId: (b.visitId as string | undefined) ?? createdVisit?.id ?? null,
+        seq: 99 + counter,
+      });
+      state.workPhases.push(row);
+      return jsonResponse({ workPhase: row, visit: createdVisit }, 201);
     }
     if (url === '/api/step-catalog') {
       return jsonResponse({ items: CATALOG });
@@ -175,53 +185,72 @@ function installFetchMock(opts: {
     }
     if (url === `/api/episodes/${EPISODE_ID}/visits` && method === 'POST') {
       counter += 1;
-      return jsonResponse(
-        {
-          visit: {
-            id: `v-new-${counter}`,
-            seq: (opts.visits?.length ?? 0) + counter - 1,
-            label: null,
-            daysOffset: (body?.daysOffset as number | undefined) ?? 7,
-            plannedDurationMinutes: null,
-          },
-        },
-        201
-      );
+      const visit: MockVisit = {
+        id: `v-new-${counter}`,
+        seq: state.visits.length,
+        label: null,
+        daysOffset: (body?.daysOffset as number | undefined) ?? 7,
+        plannedDurationMinutes: null,
+      };
+      state.visits.push(visit);
+      return jsonResponse({ visit }, 201);
     }
     if (url === `/api/episodes/${EPISODE_ID}/visits` && method === 'PATCH') {
       const ids = (body?.orderedVisitIds as string[] | undefined) ?? [];
-      const reordered = ids.map((id, i) => ({ ...((opts.visits ?? []).find((x) => x.id === id) ?? makeVisit({ id })), seq: i }));
-      return jsonResponse({ visits: reordered });
+      state.visits = ids.map((id, i) => ({ ...(state.visits.find((x) => x.id === id) ?? makeVisit({ id })), seq: i }));
+      return jsonResponse({ visits: state.visits });
     }
     if (/\/visits\/[^/]+$/.test(url) && method === 'PATCH') {
       const visitId = url.split('/').pop() as string;
-      const v = (opts.visits ?? []).find((x) => x.id === visitId) ?? makeVisit({ id: visitId });
-      return jsonResponse({
-        visit: {
-          ...v,
-          label: body && 'label' in body ? (body.label as string | null) : v.label,
-          daysOffset: body && 'daysOffset' in body ? (body.daysOffset as number | null) : v.daysOffset,
-        },
-      });
+      const v = state.visits.find((x) => x.id === visitId) ?? makeVisit({ id: visitId });
+      const updated = {
+        ...v,
+        label: body && 'label' in body ? (body.label as string | null) : v.label,
+        daysOffset: body && 'daysOffset' in body ? (body.daysOffset as number | null) : v.daysOffset,
+      };
+      state.visits = state.visits.map((x) => (x.id === visitId ? updated : x));
+      return jsonResponse({ visit: updated });
     }
     if (/\/visits\/[^/]+$/.test(url) && method === 'DELETE') {
+      const visitId = url.split('/').pop() as string;
+      state.visits = state.visits.filter((x) => x.id !== visitId);
       return jsonResponse({ ok: true });
+    }
+    if (/\/visits\/[^/]+\/attach-appointment$/.test(url) && method === 'POST') {
+      const visitId = url.split('/')[url.split('/').length - 2];
+      const apptId = body?.appointmentId as string;
+      const appt = state.unattached.find((a) => a.id === apptId);
+      state.visits = state.visits.map((v) =>
+        v.id === visitId ? { ...v, appointmentId: apptId, appointmentStart: appt?.startTime ?? null, appointmentStatus: null } : v
+      );
+      state.unattached = state.unattached.filter((a) => a.id !== apptId);
+      return jsonResponse({ visits: state.visits, primaryWorkPhaseId: null });
+    }
+    if (/\/visits\/[^/]+\/detach-appointment$/.test(url) && method === 'POST') {
+      const visitId = url.split('/')[url.split('/').length - 2];
+      state.visits = state.visits.map((v) =>
+        v.id === visitId ? { ...v, appointmentId: null, appointmentStart: null, appointmentStatus: null } : v
+      );
+      return jsonResponse({ visits: state.visits });
     }
     if (/\/work-phases\/[^/]+$/.test(url) && method === 'PATCH') {
       if (opts.failWorkPhasePatch) {
         return jsonResponse({ error: 'Szimulált szerver-hiba' }, 500);
       }
       const wpId = url.split('/').pop() as string;
-      const row = (opts.workPhases ?? []).find((w) => w.id === wpId) ?? makePhase({ id: wpId });
-      return jsonResponse({
-        workPhase: {
-          ...row,
-          ...(body && typeof body.visitId === 'string' ? { visitId: body.visitId, mergedIntoWorkPhaseId: null } : {}),
-          ...(body && typeof body.status === 'string' ? { status: body.status } : {}),
-        },
-      });
+      const row = state.workPhases.find((w) => w.id === wpId) ?? makePhase({ id: wpId });
+      const updated = {
+        ...row,
+        ...(body && typeof body.visitId === 'string' ? { visitId: body.visitId, mergedIntoWorkPhaseId: null } : {}),
+        ...(body && typeof body.status === 'string' ? { status: body.status } : {}),
+      };
+      // A szerver a mozgatott sort a cél-alkalom végére teszi.
+      state.workPhases = [...state.workPhases.filter((w) => w.id !== wpId), updated];
+      return jsonResponse({ workPhase: updated });
     }
     if (/\/work-phases\/[^/]+$/.test(url) && method === 'DELETE') {
+      const wpId = url.split('/').pop() as string;
+      state.workPhases = state.workPhases.filter((w) => w.id !== wpId);
       return jsonResponse({ ok: true, cancelledAppointments: 0 });
     }
     return jsonResponse({});
@@ -318,11 +347,10 @@ describe('Puzzle v2 — kéthasábos vizit-tábla', () => {
       expect(post).toBeTruthy();
       expect(post?.body).toEqual({ workPhaseCode: 'gen_csonkpreparalas', visitId: 'v2' });
     });
-    // Nincs utólagos PATCH visitId (egy kérés), és nincs teljes újratöltés
+    // Nincs utólagos PATCH visitId (egy kérés); az egyeztető újratöltés a
+    // válasz UTÁN, a háttérben megy (a kocka már előtte látszott).
     const patches = calls.filter((c) => /\/work-phases\/[^/]+$/.test(c.url) && c.method === 'PATCH');
     expect(patches).toHaveLength(0);
-    const gets = calls.filter((c) => c.url === `/api/episodes/${EPISODE_ID}/work-phases` && c.method === 'GET');
-    expect(gets).toHaveLength(1);
     // A szerver-id átveszi a helyet
     await waitFor(() => expect(screen.getByTestId('phase-pill-w-new-1')).toBeTruthy());
   });
@@ -380,8 +408,9 @@ describe('Puzzle v2 — kéthasábos vizit-tábla', () => {
       );
       expect(patch?.body).toEqual({ visitId: 'v1' });
     });
-    // A kiürült 2. alkalom eltűnik (a szerver is törli)
-    expect(screen.queryByTestId('visit-row-v2')).toBeNull();
+    // Puzzle v2: a kiürült 2. alkalom MEGMARAD (üres alkalom nem tűnik el magától)
+    expect(screen.getByTestId('visit-row-v2')).toBeTruthy();
+    expect(within(screen.getByTestId('visit-row-v2')).queryByTestId('phase-pill-w3')).toBeNull();
   });
 
   it('a menü „Új alkalom" pontja POST /visits (daysOffset 7) után PATCH-eli a kockát az új alkalomba', async () => {
@@ -479,7 +508,7 @@ describe('Puzzle v2 — kéthasábos vizit-tábla', () => {
     expect(within(screen.getByTestId('visit-row-v1')).getByTestId('visit-total-minutes').textContent).toBe('30′');
   });
 
-  it('az összevont gyerek lánc-ikonos kocka a primary mellett, nem számít az összidőbe', async () => {
+  it('a blokk alá vont tagja is kocka a primary mellett, nem számít az összidőbe', async () => {
     installFetchMock({
       visits: [makeVisit({ id: 'v1', seq: 0 })],
       workPhases: [
@@ -490,7 +519,6 @@ describe('Puzzle v2 — kéthasábos vizit-tábla', () => {
     renderManager();
     const row = await screen.findByTestId('visit-row-v1');
     expect(within(row).getByTestId('phase-pill-w2')).toBeTruthy();
-    expect(within(row).getByLabelText('Egy időpontra vonva')).toBeTruthy();
     expect(within(row).getByTestId('visit-total-minutes').textContent).toBe('45′');
   });
 
@@ -528,5 +556,69 @@ describe('optimista hibaág', () => {
     const row2 = await screen.findByTestId('visit-row-v2');
     expect(within(row2).getByTestId('phase-pill-w3')).toBeTruthy();
     expect(within(screen.getByTestId('visit-row-v1')).queryByTestId('phase-pill-w3')).toBeNull();
+  });
+});
+
+
+describe('Puzzle v2 — a váz: az alkalom időpontja', () => {
+  it('foglalt, üres alkalom: a fejlécben az időpont chipje, a törzsben „tartalom nélkül" jelzés; a lista nem törli', async () => {
+    installFetchMock({
+      visits: [
+        makeVisit({ id: 'v1', seq: 0, appointmentId: 'a1', appointmentStart: '2026-09-03T08:00:00Z', appointmentStatus: null }),
+      ],
+      workPhases: [],
+    });
+    renderManager();
+    const row = await screen.findByTestId('visit-row-v1');
+    expect(within(row).getByTestId('visit-appointment-chip')).toBeTruthy();
+    expect(within(row).getByText(/Foglalt időpont tartalom nélkül/)).toBeTruthy();
+    expect(within(row).getByText('Foglalva')).toBeTruthy();
+  });
+
+  it('alkalom nélküli foglalt időpont sávja: hozzárendelés egy alkalomhoz POST attach-appointment-et hív', async () => {
+    const { calls } = installFetchMock({
+      visits: [makeVisit({ id: 'v1', seq: 0 })],
+      workPhases: [makePhase({ id: 'w1', visitId: 'v1' })],
+      unattached: [{ id: 'a9', startTime: '2026-09-03T08:00:00Z', pool: 'work' }],
+    });
+    renderManager();
+    await screen.findByTestId('visit-row-v1');
+    const strip = screen.getByTestId('unattached-appointments');
+    fireEvent.click(within(strip).getByRole('button', { name: /hozzárendelése alkalomhoz/ }));
+    const menu = await screen.findByRole('menu');
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /1\. alkalom/ }));
+    await waitFor(() => {
+      const post = calls.find(
+        (c) => c.url === `/api/episodes/${EPISODE_ID}/visits/v1/attach-appointment` && c.method === 'POST'
+      );
+      expect(post?.body).toEqual({ appointmentId: 'a9' });
+    });
+  });
+
+  it('a kocka áthelyezésekor a forrás-alkalom időpontja a helyén marad (a kocka várakozó lesz), az alkalom nem tűnik el', async () => {
+    const { calls } = installFetchMock({
+      visits: [
+        makeVisit({ id: 'v1', seq: 0, appointmentId: 'a1', appointmentStart: '2026-09-03T08:00:00Z', appointmentStatus: null }),
+        makeVisit({ id: 'v2', seq: 1 }),
+      ],
+      workPhases: [
+        makePhase({ id: 'w1', visitId: 'v1', status: 'scheduled', appointmentId: 'a1' }),
+        makePhase({ id: 'w2', visitId: 'v2', customLabel: 'Vázpróba', seq: 1 }),
+      ],
+    });
+    renderManager();
+    await screen.findByTestId('visit-row-v1');
+    const menu = await openPillMenu('Lenyomatvétel');
+    fireEvent.click(within(menu).getByRole('menuitem', { name: /Áthelyezés másik alkalomba/ }));
+    fireEvent.click(await within(menu).findByRole('menuitem', { name: /2\. alkalom/ }));
+    await waitFor(() => {
+      const patch = calls.find((c) => c.url === `/api/episodes/${EPISODE_ID}/work-phases/w1` && c.method === 'PATCH');
+      expect(patch?.body).toEqual({ visitId: 'v2' });
+    });
+    // A forrás-alkalom megmaradt, az időpont chipjével (a váz), tartalom nélkül.
+    const row1 = screen.getByTestId('visit-row-v1');
+    expect(within(row1).getByTestId('visit-appointment-chip')).toBeTruthy();
+    expect(within(row1).queryByTestId('phase-pill-w1')).toBeNull();
+    expect(within(screen.getByTestId('visit-row-v2')).getByTestId('phase-pill-w1')).toBeTruthy();
   });
 });

@@ -6,6 +6,7 @@
  */
 
 import { Pool, type PoolClient } from 'pg';
+import { adoptAppointmentForPhaseVisit } from './visit-appointment-sync';
 import {
   checkOneHardNext,
   computeAppointmentRiskSettings,
@@ -706,6 +707,8 @@ export async function convertIntentToAppointment(
            WHERE id = $2`,
           [appointmentId, resolvedWorkPhaseId]
         );
+        // Puzzle v2 (094): a fázis alkalma örökli a foglalást (a váz).
+        await adoptAppointmentForPhaseVisit(client, resolvedWorkPhaseId, appointmentId);
       }
 
       await client.query('COMMIT');

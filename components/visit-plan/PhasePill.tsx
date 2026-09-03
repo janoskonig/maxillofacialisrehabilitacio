@@ -8,7 +8,7 @@
  */
 import { useEffect, useRef, useState } from 'react';
 import {
-  Link2, CalendarX2, ArrowRightLeft, Plus, SkipForward, RotateCcw, Undo2,
+  CalendarX2, ArrowRightLeft, Plus, SkipForward, RotateCcw, Undo2,
   Trash2, SendHorizontal, Ruler, ChevronLeft, Check,
 } from 'lucide-react';
 import { useDraggable } from '@dnd-kit/core';
@@ -133,11 +133,7 @@ export function PhasePill({
         triggerProps={{ ...attributes, ...pointerListeners, role: undefined }}
         trigger={
           <span className="inline-flex items-center gap-1.5 min-w-0">
-            {isChild ? (
-              <Link2 className="w-3.5 h-3.5 shrink-0 text-violet-500 dark:text-violet-400" aria-label="Egy időpontra vonva" />
-            ) : (
-              <StatusIcon className={`w-3.5 h-3.5 shrink-0 ${config.color}`} aria-hidden />
-            )}
+            <StatusIcon className={`w-3.5 h-3.5 shrink-0 ${config.color}`} aria-hidden />
             <span className={`truncate ${displayStatus === 'skipped' ? 'line-through' : ''}`}>{label}</span>
             {scope && (
               <span className="text-[11px] text-teal-700 dark:text-teal-300 shrink-0">{scope}</span>
@@ -298,7 +294,7 @@ export function PhasePill({
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100 truncate">{label}</p>
                 <p className="text-[11px] text-gray-500 dark:text-gray-400">
                   {config.label}
-                  {isChild && primaryLabel ? ` · egy időpontra vonva: ${primaryLabel}` : ''}
+                  {isChild && primaryLabel ? ` · az alkalom blokkjában (${primaryLabel})` : ''}
                 </p>
               </div>
               <MenuItem onClick={() => setView('scope')}>

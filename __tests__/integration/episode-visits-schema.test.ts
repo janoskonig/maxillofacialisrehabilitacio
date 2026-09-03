@@ -192,7 +192,7 @@ describe('WP-4.1a vizit-séma', () => {
     expect(visits2[1].days_offset).toBe(21);
   });
 
-  it('(c) merge → közös vizit (a kiürült vizit törlődik), unmerge → új egyfős vizit', async () => {
+  it('(c) merge → közös vizit (a kiürült vizit MEGMARAD — puzzle v2), unmerge → új egyfős vizit', async () => {
     const doctor = await makeDoctor();
     const patient = await createTestPatient();
     const episode = await createTestEpisode(undefined, patient.id);
@@ -211,7 +211,8 @@ describe('WP-4.1a vizit-séma', () => {
     const b = await mk('Beolvasztott fázis', 3);
     expect(a.visitId).not.toBe(b.visitId);
 
-    // MERGE: a gyerek a primary vizitjébe kerül, a kiürült vizit törlődik.
+    // MERGE: a gyerek a primary vizitjébe kerül; a kiürült vizit MEGMARAD
+    // (puzzle v2: üres alkalom sosem tűnik el automatikusan).
     const mergeReq = await authedRequest(
       `http://test.local/api/episodes/${episode.id}/work-phases/merge`,
       { user: doctor, method: 'POST', body: { stepIds: [a.id, b.id] } }
@@ -225,8 +226,9 @@ describe('WP-4.1a vizit-séma', () => {
     expect(aAfterMerge?.visit_id).toBe(a.visitId);
 
     const visitsAfterMerge = await listWp41aVisits(undefined, episode.id);
-    expect(visitsAfterMerge).toHaveLength(1);
-    expect(visitsAfterMerge[0].id).toBe(a.visitId);
+    expect(visitsAfterMerge).toHaveLength(2);
+    expect(visitsAfterMerge.map((v) => v.id)).toContain(a.visitId);
+    expect(visitsAfterMerge.map((v) => v.id)).toContain(b.visitId);
 
     // A merged_into kompat-mező a régi módon íródik.
     const pool = getDbPool();
@@ -251,9 +253,9 @@ describe('WP-4.1a vizit-séma', () => {
     expect(bAfterUnmerge?.visit_id).not.toBe(a.visitId);
 
     const visitsAfterUnmerge = await listWp41aVisits(undefined, episode.id);
-    expect(visitsAfterUnmerge).toHaveLength(2);
+    expect(visitsAfterUnmerge).toHaveLength(3);
     const newVisit = visitsAfterUnmerge.find((v) => v.id === bAfterUnmerge?.visit_id);
-    expect(newVisit?.seq).toBe(1);
+    expect(newVisit?.seq).toBe(2);
     expect(newVisit?.days_offset).toBe(3);
   });
 
@@ -290,7 +292,7 @@ describe('WP-4.1a vizit-séma', () => {
     expect(visits[0].days_offset).toBe(9);
   });
 
-  it('(c3) láncolt merge a route-on át: egy vizit, lapos merged_into', async () => {
+  it('(c3) láncolt merge a route-on át: egy alkalomban, lapos merged_into (a kiürült alkalmak megmaradnak)', async () => {
     const doctor = await makeDoctor();
     const patient = await createTestPatient();
     const episode = await createTestEpisode(undefined, patient.id);
@@ -346,12 +348,13 @@ describe('WP-4.1a vizit-séma', () => {
     expect(aRow?.visit_id).toBe(c.visitId);
     expect(bRow?.visit_id).toBe(c.visitId);
 
+    // Puzzle v2: a kiürült alkalmak megmaradnak (3 alkalom), a csoport c alkalmában él.
     const visits = await listWp41aVisits(undefined, episode.id);
-    expect(visits).toHaveLength(1);
-    expect(visits[0].id).toBe(c.visitId);
+    expect(visits).toHaveLength(3);
+    expect(visits.map((v) => v.id)).toContain(c.visitId);
   });
 
-  it('(c4) fázis törlése után nem marad árva üres vizit', async () => {
+  it('(c4) fázis törlése után az üres vizit MEGMARAD (puzzle v2: nem tűnik el automatikusan)', async () => {
     const doctor = await makeDoctor();
     const patient = await createTestPatient();
     const episode = await createTestEpisode(undefined, patient.id);
@@ -376,9 +379,10 @@ describe('WP-4.1a vizit-séma', () => {
     });
     expect(delRes.status).toBe(200);
 
-    // A kiürült egyfős vizit a törléssel együtt tűnik el.
+    // Puzzle v2: az üres alkalom megmarad — kézzel törölhető.
     const visitsAfter = await listWp41aVisits(undefined, episode.id);
-    expect(visitsAfter).toHaveLength(0);
+    expect(visitsAfter).toHaveLength(1);
+    expect(visitsAfter[0].id).toBe(phase.visitId);
   });
 
   it('(d) GET visszaadja a visit_id/jaw/teeth mezőket és a visits[] metaadatot', async () => {

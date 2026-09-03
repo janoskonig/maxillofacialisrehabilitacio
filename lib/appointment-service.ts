@@ -12,6 +12,7 @@ import { logger } from '@/lib/logger';
 import { normalizePathwayWorkPhaseArray } from '@/lib/pathway-work-phases-for-episode';
 import { translateUniqueViolation } from '@/lib/appointment-constraint-errors';
 import { probeAppointmentsWorkPhaseIdColumn } from '@/lib/active-appointment';
+import { adoptAppointmentForPhaseVisit } from '@/lib/visit-appointment-sync';
 import { nextAttemptNumber, probeAttemptColumns } from '@/lib/appointment-attempts';
 import { lockPatientKeyShare } from '@/lib/patient-lock-token';
 import {
@@ -692,6 +693,8 @@ export async function createAppointment(
          WHERE id = $2`,
         [appointment.id, effectiveWorkPhaseId]
       );
+      // Puzzle v2 (094): a fázis alkalma örökli a foglalást (a váz).
+      await adoptAppointmentForPhaseVisit(client, effectiveWorkPhaseId, appointment.id);
     }
 
     if (effectiveRecallTaskId) {

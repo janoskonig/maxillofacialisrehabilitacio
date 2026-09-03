@@ -52,6 +52,34 @@ export interface EpisodeVisit {
   label: string | null;
   daysOffset: number | null;
   plannedDurationMinutes: number | null;
+  /**
+   * Puzzle v2 (094): az alkalom időpontja — „az időpontfoglalás a váz". NULL =
+   * tervezett (időpont nélküli) alkalom. A státusz NULL = nyitott foglalás,
+   * 'completed' = megtörtént.
+   */
+  appointmentId: string | null;
+  appointmentStart: string | null;
+  appointmentEnd: string | null;
+  appointmentStatus: string | null;
+}
+
+/** A vázhoz rendelhető, alkalom nélküli foglalt időpont (GET work-phases → unattachedAppointments[]). */
+export interface UnattachedAppointment {
+  id: string;
+  startTime: string | null;
+  endTime: string | null;
+  pool: string | null;
+  stepCode: string | null;
+  dentistEmail: string | null;
+}
+
+/** Nyitott (jövőbeli vagy még le nem zárt) foglalása van az alkalomnak. */
+export function visitHasOpenAppointment(visit: Pick<EpisodeVisit, 'appointmentId' | 'appointmentStatus'>): boolean {
+  return !!visit.appointmentId && visit.appointmentStatus == null;
+}
+
+export function visitAppointmentCompleted(visit: Pick<EpisodeVisit, 'appointmentId' | 'appointmentStatus'>): boolean {
+  return !!visit.appointmentId && visit.appointmentStatus === 'completed';
 }
 
 /** A GET /api/episodes/:id/step-projections sorainak itt használt szelete. */
@@ -191,8 +219,31 @@ export function mapVisitsResponse(rows: unknown[] | undefined): EpisodeVisit[] {
       daysOffset: row.daysOffset != null ? Number(row.daysOffset) : null,
       plannedDurationMinutes:
         row.plannedDurationMinutes != null ? Number(row.plannedDurationMinutes) : null,
+      appointmentId: row.appointmentId != null ? String(row.appointmentId) : null,
+      appointmentStart: row.appointmentStart != null ? String(row.appointmentStart) : null,
+      appointmentEnd: row.appointmentEnd != null ? String(row.appointmentEnd) : null,
+      appointmentStatus: row.appointmentStatus != null ? String(row.appointmentStatus) : null,
     };
   });
+}
+
+export function mapUnattachedAppointments(rows: unknown[] | undefined): UnattachedAppointment[] {
+  if (!rows?.length) return [];
+  return rows.map((r) => {
+    const row = r as Record<string, unknown>;
+    return {
+      id: String(row.id),
+      startTime: row.startTime != null ? String(row.startTime) : null,
+      endTime: row.endTime != null ? String(row.endTime) : null,
+      pool: row.pool != null ? String(row.pool) : null,
+      stepCode: row.stepCode != null ? String(row.stepCode) : null,
+      dentistEmail: row.dentistEmail != null ? String(row.dentistEmail) : null,
+    };
+  });
+}
+
+export function formatShortDateTime(iso: string): string {
+  return new Date(iso).toLocaleString('hu-HU', { month: 'short', day: 'numeric', hour: '2-digit', minute: '2-digit' });
 }
 
 export function mapCatalogResponse(rows: unknown[] | undefined): PaletteItem[] {
@@ -445,6 +496,44 @@ export function visitDateInfo(
     return { kind: 'window', text: start === end ? start : `${start} – ${end}` };
   }
   return null;
+}
+
+/**
+ * Puzzle v2: az alkalom státusz-chipje — a VÁZ (időpont) az elsődleges: nyitott
+ * időponttal „Foglalva" (üresen is), megtörtént időponttal „Teljesült";
+ * időpont nélkül a tagok állapotából (a régi szabály).
+ */
+export function summarizeVisitStatusV2(
+  visit: Pick<EpisodeVisit, 'appointmentId' | 'appointmentStatus'>,
+  primaries: EpisodeStep[]
+): VisitStatusSummary {
+  if (visitHasOpenAppointment(visit)) {
+    return { key: 'foglalva', ...VISIT_STATUS_CHIPS.foglalva };
+  }
+  if (visitAppointmentCompleted(visit)) {
+    return { key: 'teljesult', ...VISIT_STATUS_CHIPS.teljesult };
+  }
+  return summarizeVisitStatus(primaries);
+}
+
+/**
+ * Puzzle v2: az alkalom dátuma — a VÁZ (időpont) az elsődleges; tervezett
+ * alkalomnál a tagok vetítéséből becsült ablak (a régi szabály).
+ */
+export function visitDateInfoV2(
+  visit: Pick<EpisodeVisit, 'appointmentId' | 'appointmentStart' | 'appointmentStatus'>,
+  phases: EpisodeStep[],
+  projectionByPhaseId: Map<string, StepProjectionInfo>
+): VisitDateInfo | null {
+  if (visit.appointmentId && visit.appointmentStart) {
+    if (visit.appointmentStatus === 'completed') {
+      return { kind: 'done', text: formatShortDate(visit.appointmentStart) };
+    }
+    if (visit.appointmentStatus == null) {
+      return { kind: 'booked', text: formatShortDate(visit.appointmentStart) };
+    }
+  }
+  return visitDateInfo(phases, projectionByPhaseId);
 }
 
 /** A kocka hatókör-szövege: fogszámok, különben állcsont, különben legacy fog #N. */

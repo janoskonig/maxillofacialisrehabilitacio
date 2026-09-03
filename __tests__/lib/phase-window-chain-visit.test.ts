@@ -137,3 +137,56 @@ describe('computeVisitAwareWindowChain — vizit-viselkedés', () => {
     );
   });
 });
+
+describe('computeVisitAwareWindowChain — a terv rácsúszik a vázra (puzzle v2 plafon)', () => {
+  const DAY = 24 * 60 * 60 * 1000;
+  it('a foglalt egység ELŐTTI tervezett egység ablaka a foglalás előtti napra szorul', () => {
+    const anchor = new Date('2026-09-02T08:00:00Z');
+    const booked = new Date('2026-09-10T09:00:00Z');
+    const out = computeVisitAwareWindowChain(
+      [
+        { rowKey: 'a', workPhaseCode: 'a', defaultDaysOffset: 7, status: 'pending', completedAt: null, bookedStart: null, visitId: 'v1', visitDaysOffset: 7 },
+        { rowKey: 'b', workPhaseCode: 'b', defaultDaysOffset: 7, status: 'scheduled', completedAt: null, bookedStart: booked, visitId: 'v2', visitDaysOffset: 7 },
+      ],
+      anchor
+    );
+    const a = out.get('a')!;
+    expect(a.windowEnd.getTime()).toBe(booked.getTime() - DAY);
+    expect(a.expectedDate.getTime()).toBeLessThanOrEqual(a.windowEnd.getTime());
+    expect(a.windowStart.getTime()).toBeLessThanOrEqual(a.windowEnd.getTime());
+    // A foglalt egység ablakát a plafon nem érinti.
+    const b = out.get('b')!;
+    expect(b.windowStart.getTime()).toBeGreaterThan(0);
+  });
+
+  it('ha a horgony a következő fix pont mögött van, az egész ablak a plafonra ül (nem fordul meg)', () => {
+    const anchor = new Date('2027-03-24T08:00:00Z'); // pl. jövőbeli teljesítés a láncban
+    const booked = new Date('2026-09-03T09:00:00Z');
+    const out = computeVisitAwareWindowChain(
+      [
+        { rowKey: 'a', workPhaseCode: 'a', defaultDaysOffset: 7, status: 'pending', completedAt: null, bookedStart: null, visitId: 'v1', visitDaysOffset: 7 },
+        { rowKey: 'b', workPhaseCode: 'b', defaultDaysOffset: 7, status: 'scheduled', completedAt: null, bookedStart: booked, visitId: 'v2', visitDaysOffset: 7 },
+      ],
+      anchor
+    );
+    const a = out.get('a')!;
+    expect(a.windowEnd.getTime()).toBe(booked.getTime() - DAY);
+    expect(a.windowStart.getTime()).toBe(a.windowEnd.getTime());
+    expect(a.earliestAllowedStart.getTime()).toBeLessThanOrEqual(a.windowEnd.getTime());
+  });
+
+  it('a lánc végén álló tervezett egységre nincs plafon', () => {
+    const anchor = new Date('2026-09-02T08:00:00Z');
+    const out = computeVisitAwareWindowChain(
+      [
+        { rowKey: 'b', workPhaseCode: 'b', defaultDaysOffset: 7, status: 'scheduled', completedAt: null, bookedStart: new Date('2026-09-10T09:00:00Z'), visitId: 'v1', visitDaysOffset: 7 },
+        { rowKey: 'c', workPhaseCode: 'c', defaultDaysOffset: 7, status: 'pending', completedAt: null, bookedStart: null, visitId: 'v2', visitDaysOffset: 14 },
+      ],
+      anchor
+    );
+    const c = out.get('c')!;
+    // 14 nappal a foglalás után várható, ablak +14 nap
+    expect(c.expectedDate.getTime()).toBe(new Date('2026-09-24T09:00:00Z').getTime());
+    expect(c.windowEnd.getTime()).toBe(new Date('2026-10-08T09:00:00Z').getTime());
+  });
+});

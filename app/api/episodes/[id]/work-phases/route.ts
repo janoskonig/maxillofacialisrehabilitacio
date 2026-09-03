@@ -12,6 +12,11 @@ import { createEpisodeVisit, listEpisodeVisits } from '@/lib/episode-visits';
 import { DEFAULT_VISIT_GAP_DAYS } from '@/lib/visit-plan-constants';
 import { probeColumnExists } from '@/lib/schema-probe';
 import { projectRemainingSteps } from '@/lib/slot-intent-projector';
+import {
+  listUnattachedAppointments,
+  renumberPhasesByVisitOrder,
+  syncVisitAppointment,
+} from '@/lib/visit-appointment-sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,10 +58,16 @@ export const GET = authedHandler(async (_req, { auth, params }) => {
   );
   // WP-4.1a: vizit-metaadatok — a WP-4.3 alkalom-kártyás UI erre épül.
   const visits = await listEpisodeVisits(pool, episodeId);
+  // Puzzle v2 (094): a vázhoz rendelhető, alkalom nélküli foglalt időpontok.
+  const hasVisitAppointment = await probeColumnExists(pool, 'episode_visits', 'appointment_id');
+  const unattachedAppointments = hasVisitAppointment
+    ? await listUnattachedAppointments(pool, episodeId)
+    : [];
 
   return NextResponse.json({
     workPhases: allPhases.rows,
     visits,
+    unattachedAppointments,
     lostAppointmentWorkPhaseIds,
     autoRepair: autoRepair
       ? {
@@ -246,24 +257,12 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     if (targetVisitId) {
       // A sorrend igazsága az EWP COALESCE(seq, pathway_order_index) — meglévő
       // alkalomba szúrva a fázis-seq az alkalom-sorrendet kövesse (a friss sor
-      // a max seq-jével az alkalmán belül utolsó), különben a megjelenített
-      // alkalom-sorrend és a motor/becslés/lánc némán széttartana.
-      await client.query(
-        `WITH ordered AS (
-           SELECT e.id,
-                  ROW_NUMBER() OVER (
-                    ORDER BY v.seq NULLS LAST,
-                             COALESCE(e.seq, e.pathway_order_index),
-                             e.pathway_order_index, e.id
-                  ) - 1 AS new_seq
-           FROM episode_work_phases e
-           LEFT JOIN episode_visits v ON e.visit_id = v.id
-           WHERE e.episode_id = $1
-         )
-         UPDATE episode_work_phases SET seq = ordered.new_seq
-         FROM ordered WHERE episode_work_phases.id = ordered.id`,
-        [episodeId]
-      );
+      // az alkalmán belül utolsó), különben a megjelenített alkalom-sorrend és
+      // a motor/becslés/lánc némán széttartana.
+      await renumberPhasesByVisitOrder(client, episodeId, insertedId);
+      // Puzzle v2 (094): egy alkalom = egy időpont — a friss fázis a blokkba
+      // kerül; ha az alkalomnak már van időpontja, a tartalom rácsúszik.
+      await syncVisitAppointment(client, episodeId, targetVisitId, auth.email ?? auth.userId ?? 'unknown');
     }
     await insertWorkPhaseAudit(client, {
       episodeWorkPhaseId: insertedId,

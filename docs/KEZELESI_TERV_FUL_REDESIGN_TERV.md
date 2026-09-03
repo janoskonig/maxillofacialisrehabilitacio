@@ -43,6 +43,7 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 | WP-4.1b step_code→work_phase_id identitás | ✅ | [#78](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/78) | Minden identitás-út wp-elsődleges (legacy fallback); review: CRITICAL param-kötési hiba a prereq-ágon javítva; mellékjavítás: a worklist „korábbi próbák" lekérdezés eddig némán elhasalt (ats.end_time) |
 | WP-4.2 vizit API + forecast | ✅ | [#79](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/79) | Vizit CRUD + PATCH visitId/jaw/teeth + vizit-tudatos forecast (kompat-invariáns fuzz-igazolva) + wp-tudatos projektor; review: 4 major javítva (kombinált body, csoport-mozgatás, reorder=EWP-átszámozás, scoped backfill), 1 medium cáfolva (advisory lock) |
 | WP-4.3 vizit-kártyás UI | ✅ | [#80](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/80) | Alkalom-kártyák + kockák (hatókör-badge), drag-drop + teljes nem-drag alternatíva, „Feltöltés sablonból"; élőben ellenőrizve; review-major (visit-move seq-átszámozás) javítva. **Ezzel a FÁZIS 4 és a TELJES TERV kész.** |
+| WP-6.3 „Az időpontfoglalás a váz" — alkalom-tulajdonú időpont, üres alkalom megmarad (2026-09-02) | ✅ | (munkafán) | 094: `episode_visits.appointment_id`; a tartalom mozgatása nem viszi az időpontot (a fázis várakozó lesz, a következő tag promótálódik); üres alkalom soha nem tűnik el automatikusan; alkalom nélküli foglalt időpontok sávja + hozzárendelés/leválasztás (attach/detach); foglalt alkalmak időrendben pinnelve; a tervezett alkalom a következő fix pont elé szorul (lánc + projektor plafon); a blokk hossza olvasáskor számolt. 5 új integrációs + 3 komponens + 3 lánc-teszt. |
 | WP-6.2 Felelős orvos az epizódon, a sablontól leválasztva (2026-09-02) | ✅ | `1ba6d99` (main) | Feltűnő chip a terv-kártya fejlécében (EpisodeProviderControl): orvos-választó, indok, lekapcsolás, váltás-történet; a sablon-szerkesztőből kikerült; PATCH /episodes/:id írja a `provider_assignment_events` naplót (092: lekapcsolás is), GET provider-history; a váltás előre hat (intentek lejárnak, új foglalás az új orvoshoz). 8 komponens- + 3 integrációs teszt. **Utójavítás (mobil élő ellenőrzés):** 093 — a napló-tábla és DEFAULT partíciója garantálva, a napló-sor SAVEPOINT-on belül (hiányzó tábla nem buktatja a váltást); a chip popovere viewport-őrrel; a toast a műveletet nevezi meg + correlationId. |
 | WP-6.1 Puzzle v2 — kéthasábos tábla (2026-09-02) | ✅ | `fb52424` (main) | Bal paletta (091 generikus katalógus: csonkpreparálás, precíziós-szituációs lenyomatvétel, átadás, …) + jobb alkalom-sorok kockákkal; vizitköz alap 7 nap, egy kattintással állítható; fázis-szintű offset kivezetve a UI-ból; optimista mutációk, kaszkád-újratöltés csak státusz-változásnál; POST work-phases `visitId` (egy kérés); merged gyerek leválik áthelyezésnél; vizit-szintű foglalás `prepare-booking`-gal; vizit-tudatos projektor. 13 komponens-, 5+29 helper-, 8 integrációs teszt. |
 
@@ -756,6 +757,42 @@ kötődjön az epizódhoz, de az epizód folyamán váltható maradjon.
      eset (toast-szöveg), integráció: `migration-093-provider-assignment-events` (092/093
      hiányzó és meglévő táblán, partíció-routing, idempotencia), `episode-provider-history`
      (+1: hiányzó táblánál a váltás átmegy).
+
+### 6.2c „Az időpontfoglalás a váz, a tartalom a kezelési terv" (WP-6.3)
+
+A felhasználó 2026-09-02 este: a tartalom rendezgetése közben kiürült és eltűnt az első
+alkalom (a szept. 3-i időponttal), az új alkalmat nem tudta szept. 3-ra tenni, minden
+„elcsúszott". Két szabály: **üres alkalom ne szűnjön meg automatikusan**, és **a terv
+csússzon rá fluidan a már foglalt időpontokra** — az időpont a váz, a fázis a tartalom.
+
+- **Modell (094):** `episode_visits.appointment_id` — az alkalom birtokolja az időpontját.
+  A fázis-szintű link (`ewp.appointment_id` ↔ `appointments.work_phase_id`) megmarad a régi
+  motorok (worklist, státusz-átmenet, projektor) felé, de csak az alkalom nyitott blokkjának
+  **primary** fázisa hordozza; a többi nyitott tag alá van vonva (`merged_into`). Ezt az
+  invariánst minden kompozíciós mutáció után a `syncVisitAppointment`
+  (`lib/visit-appointment-sync.ts`) állítja helyre; a booking-motorok (appointment-service,
+  convert-slot-intent, link-appointment) `adoptAppointmentForPhaseVisit`-tel adják át az
+  alkalomnak az új foglalást. Backfill: az alkalom a tagjai legkorábbi aktív foglalását örökli.
+- **Mozgatás = tartalom mozog, időpont marad.** A primary áthelyezése: a fázis várakozó lesz
+  (link nélkül), a forrás-alkalom időpontja marad, a következő tag promótálódik rá; a célban
+  a fázis a blokk része (ha a célnak van időpontja, rácsúszik). Az alá vont tagok NEM mennek
+  a primary-val (korábban vitte őket). A fázis törlése sem mondja le az alkalom időpontját
+  (`releasePhaseFromVisit` + `keepAppointmentIds`); az üres-de-foglalt alkalom törlése igen.
+- **Üres alkalom megmarad** — minden `deleteEpisodeVisitsIfEmpty` hívás kikerült (move,
+  delete, merge). A kliens sem távolítja el.
+- **A váz felülete:** alkalom nélküli, jövőbeli foglalt időpontok sávja a tábla tetején
+  („Foglalt időpont alkalom nélkül") → alkalomhoz / új alkalomhoz rendelhető
+  (`POST /visits/:id/attach-appointment`); az alkalom menüjében „Meglévő időpont
+  hozzárendelése" és „Időpont leválasztása (megmarad)" (`detach-appointment`). Üres, de foglalt
+  alkalom: időpont-chip + „tartalom nélkül" jelzés.
+- **Rácsúszás:** a foglalt alkalmak időrendben pinnelve (`normalizeVisitOrder` — a foglalt
+  pozíciókat az időrend tölti, a tervezettek a helyükön maradnak); a tervezett alkalom ablaka
+  a következő fix pont (foglalt/teljesült) elé szorul — plafon a `computeVisitAwareWindowChain`
+  / `computePhaseWindowChain` láncban és a slot-intent projektorban. A „márc. 24." típusú
+  elcsúszás (jövőbeli horgony) ezzel a plafonra ül.
+- **Blokk-hossz olvasáskor:** a worklist / projektor / slot-választó az alkalom nyitott
+  tagjainak összpercét (vagy `planned_duration_minutes`) használja; a primary saját perce nem
+  íródik át (a korábbi prepare-booking bump kivezetve).
 
 ### 6.3 Nyitott / követés
 

@@ -21,15 +21,19 @@ import {
   DEFAULT_VISIT_GAP_DAYS,
   buildVisitGroups,
   isTempId,
+  formatShortDateTime,
   mapCatalogResponse,
+  mapUnattachedAppointments,
   mapVisitsResponse,
   mapWorkPhaseApiToEpisodeStep,
   mapWorkPhasesResponse,
+  visitHasOpenAppointment,
   type EpisodeStep,
   type EpisodeVisit,
   type LinkedToothTreatment,
   type PaletteItem,
   type StepProjectionInfo,
+  type UnattachedAppointment,
   type VisitTarget,
 } from './visit-plan-types';
 
@@ -62,6 +66,8 @@ export interface UsePlanBoardOptions {
 interface BoardState {
   steps: EpisodeStep[];
   visits: EpisodeVisit[];
+  /** Puzzle v2: a vázhoz rendelhető, alkalom nélküli foglalt időpontok. */
+  unattachedAppointments: UnattachedAppointment[];
 }
 
 interface ApiResult<T> {
@@ -101,6 +107,7 @@ export function _resetPlanBoardCachesForTests(): void {
 export interface PlanBoardApi {
   steps: EpisodeStep[];
   visits: EpisodeVisit[];
+  unattachedAppointments: UnattachedAppointment[];
   groups: ReturnType<typeof buildVisitGroups>['groups'];
   unassigned: EpisodeStep[];
   stepsById: Map<string, EpisodeStep>;
@@ -142,6 +149,10 @@ export interface PlanBoardApi {
   applyTemplate: () => Promise<void>;
   /** Alkalom egy foglalható blokkba vonása; a primary fázis id-ját adja (null = hiba). */
   prepareVisitBooking: (visitId: string) => Promise<string | null>;
+  /** Puzzle v2: meglévő nyitott időpont hozzárendelése az alkalomhoz (a váz). */
+  attachAppointment: (target: VisitTarget, appointmentId: string) => Promise<void>;
+  /** Puzzle v2: az alkalom időpontjának leválasztása lemondás nélkül. */
+  detachAppointment: (visitId: string) => Promise<void>;
 }
 
 export function usePlanBoard({
@@ -159,7 +170,7 @@ export function usePlanBoard({
   const onPlanChangedRef = useRef(onPlanChanged);
   onPlanChangedRef.current = onPlanChanged;
 
-  const [board, setBoardState] = useState<BoardState>({ steps: [], visits: [] });
+  const [board, setBoardState] = useState<BoardState>({ steps: [], visits: [], unattachedAppointments: [] });
   const boardRef = useRef<BoardState>(board);
   /** Szinkron ref + state: az async műveletek mindig a legfrissebb állapotból indulnak. */
   const setBoard = useCallback((updater: (prev: BoardState) => BoardState) => {
@@ -204,6 +215,7 @@ export function usePlanBoard({
       workPhases?: unknown[];
       steps?: unknown[];
       visits?: unknown[];
+      unattachedAppointments?: unknown[];
       lostAppointmentWorkPhaseIds?: unknown[];
     }>(`/api/episodes/${episodeId}/work-phases`);
     if (!result.ok) return false;
@@ -213,6 +225,7 @@ export function usePlanBoard({
         result.data.lostAppointmentWorkPhaseIds
       ),
       visits: mapVisitsResponse(result.data.visits),
+      unattachedAppointments: mapUnattachedAppointments(result.data.unattachedAppointments),
     }));
     return true;
   }, [episodeId, setBoard]);
@@ -368,6 +381,10 @@ export function usePlanBoard({
       label: null,
       daysOffset: DEFAULT_VISIT_GAP_DAYS,
       plannedDurationMinutes: null,
+      appointmentId: null,
+      appointmentStart: null,
+      appointmentEnd: null,
+      appointmentStatus: null,
     };
     setBoard((prev) => ({ ...prev, visits: [...prev.visits, created] }));
     return { visitId: created.id, created };
@@ -376,6 +393,7 @@ export function usePlanBoard({
   /** Az ideiglenes alkalom lecserélése a szerver által adott sorra (sorokban is). */
   const replaceVisit = (tempId: string, real: EpisodeVisit) => {
     setBoard((prev) => ({
+      ...prev,
       steps: prev.steps.map((s) => (s.visitId === tempId ? { ...s, visitId: real.id } : s)),
       visits: prev.visits.map((v) => (v.id === tempId ? real : v)),
     }));
@@ -433,6 +451,9 @@ export function usePlanBoard({
           ...prev,
           steps: prev.steps.map((s) => (s.id === tId ? { ...row, visitId: row.visitId ?? s.visitId } : s)),
         }));
+        // Meglévő (esetleg foglalt) alkalomba szúrva a szerver a blokkot és a
+        // fázis-linket is rendezi — csendes egyeztetés a háttérben.
+        if (!created) void reload();
         return { id: row.id };
       }
       await reload();
@@ -548,29 +569,38 @@ export function usePlanBoard({
       if (!step || isTempId(stepId)) return;
       if (target !== 'new' && target === step.visitId) return;
       const snapshot = b0;
-      // Primary → a rejtett összevont gyerekei is mennek; gyerek → kilép a
-      // csoportból és önállóan költözik (a szerver ugyanígy).
-      const groupIds = new Set<string>([
-        stepId,
-        ...b0.steps.filter((s) => s.mergedIntoStepId === stepId).map((s) => s.id),
-      ]);
+      // „Az időpontfoglalás a váz, a tartalom a kezelési terv": CSAK ez a
+      // kocka költözik; az alá vont tagjai a forrásban maradnak, a forrás
+      // időpontja a helyén marad (a kocka várakozóvá válik, a cél időpontjára
+      // csúszik, ha a célnak van). Az üres alkalom NEM tűnik el.
+      const groupIds = new Set<string>([stepId]);
       const { visitId: targetId, created } = resolveTarget(target);
-      const sourceVisitId = step.visitId;
+      const targetVisit = boardRef.current.visits.find((v) => v.id === targetId) ?? null;
+      const sourceVisit = step.visitId ? boardRef.current.visits.find((v) => v.id === step.visitId) ?? null : null;
+      const leavesOwnedAppointment =
+        !!step.appointmentId && !!sourceVisit && sourceVisit.appointmentId === step.appointmentId;
+      const targetOpen = targetVisit ? visitHasOpenAppointment(targetVisit) : false;
       setBoard((prev) => {
         const moved = prev.steps
-          .filter((s) => groupIds.has(s.id))
+          .filter((s) => s.id === stepId)
           .map((s) => ({
             ...s,
             visitId: targetId,
-            mergedIntoStepId: s.id === stepId ? null : s.mergedIntoStepId,
+            mergedIntoStepId: null,
+            appointmentId: targetOpen ? targetVisit?.appointmentId ?? null : leavesOwnedAppointment ? null : s.appointmentId,
+            status:
+              s.status === 'pending' || s.status === 'scheduled'
+                ? targetOpen
+                  ? ('scheduled' as const)
+                  : leavesOwnedAppointment
+                    ? ('pending' as const)
+                    : s.status
+                : s.status,
           }));
-        const rest = prev.steps.filter((s) => !groupIds.has(s.id));
-        const steps = [...rest, ...moved];
-        const sourceStillUsed = sourceVisitId ? steps.some((s) => s.visitId === sourceVisitId) : true;
-        return {
-          steps,
-          visits: sourceStillUsed ? prev.visits : prev.visits.filter((v) => v.id !== sourceVisitId),
-        };
+        const rest = prev.steps.map((s) =>
+          s.id === stepId ? s : s.mergedIntoStepId === stepId ? { ...s, mergedIntoStepId: null } : s
+        ).filter((s) => s.id !== stepId);
+        return { ...prev, steps: [...rest, ...moved] };
       });
       markPending([...Array.from(groupIds), ...(created ? [created.id] : [])], true);
       let createdRealId: string | null = null;
@@ -599,6 +629,9 @@ export function usePlanBoard({
           throw new Error(errorMessage(pr, 'Hiba az áthelyezésnél'));
         }
         setActiveVisitId(realTargetId);
+        // A szerver rendezi a blokkokat (primary-promóció, egy időpont = egy
+        // alkalom, időrend) — csendes egyeztetés a háttérben.
+        void reload();
       } catch (e) {
         restore(snapshot);
         showToast(e instanceof Error ? e.message : 'Hiba az áthelyezésnél', 'error');
@@ -619,9 +652,11 @@ export function usePlanBoard({
       const step = b0.steps.find((s) => s.id === stepId);
       if (!step || isTempId(stepId)) return;
       const label = step.customLabel ?? catalogLabelByCode.get(step.stepCode) ?? step.stepCode;
-      if (step.status === 'scheduled') {
+      const visit = step.visitId ? b0.visits.find((v) => v.id === step.visitId) ?? null : null;
+      const ownedByVisit = !!step.appointmentId && !!visit && visit.appointmentId === step.appointmentId;
+      if (step.status === 'scheduled' && !ownedByVisit) {
         const ok = await confirm(
-          `A(z) „${label}" fázishoz foglalt időpont tartozik — az elhagyással a jövőbeli időpont is lemondásra kerül.`,
+          `A(z) „${label}" fázishoz saját foglalt időpont tartozik — az elhagyással a jövőbeli időpont is lemondásra kerül.`,
           { type: 'danger', confirmText: 'Elhagyom', cancelText: 'Mégse', title: 'Fázis elhagyása' }
         );
         if (!ok) return;
@@ -633,15 +668,14 @@ export function usePlanBoard({
         if (!ok) return;
       }
       const snapshot = b0;
-      setBoard((prev) => {
-        const steps = prev.steps
+      // Az üres alkalom NEM tűnik el; az alkalom időpontja (ha volt) a helyén marad.
+      setBoard((prev) => ({
+        ...prev,
+        steps: prev.steps
           .filter((s) => s.id !== stepId)
-          // Összevont csoport szülőjének törlésekor a gyerekek önálló sorrá válnak (FK SET NULL).
-          .map((s) => (s.mergedIntoStepId === stepId ? { ...s, mergedIntoStepId: null } : s));
-        // A kiürült alkalmat a szerver is törli (deleteEpisodeVisitsIfEmpty).
-        const stillUsed = step.visitId ? steps.some((s) => s.visitId === step.visitId) : true;
-        return { steps, visits: stillUsed ? prev.visits : prev.visits.filter((v) => v.id !== step.visitId) };
-      });
+          // Blokk szülőjének törlésekor a gyerekek önálló sorrá válnak (a szerver promótál).
+          .map((s) => (s.mergedIntoStepId === stepId ? { ...s, mergedIntoStepId: null } : s)),
+      }));
       const result = await apiJson<{ cancelledAppointments?: number }>(
         `/api/episodes/${episodeId}/work-phases/${stepId}`,
         { method: 'DELETE' }
@@ -654,6 +688,8 @@ export function usePlanBoard({
       const cancelled = result.data.cancelledAppointments ?? 0;
       if (cancelled > 0) showToast(`${cancelled} foglalt időpont lemondva`, 'info');
       if (step.status === 'scheduled' || step.status === 'completed') onStatusChangedRef.current?.();
+      // A szerver promótálja a következő tagot az alkalom időpontjára — csendes egyeztetés.
+      void reload();
       scheduleProjections();
       onPlanChangedRef.current?.();
     },
@@ -886,6 +922,14 @@ export function usePlanBoard({
   const deleteEmptyVisit = useCallback(
     async (visitId: string) => {
       if (isTempId(visitId)) return;
+      const visit = boardRef.current.visits.find((v) => v.id === visitId);
+      if (visit && visitHasOpenAppointment(visit)) {
+        const ok = await confirm(
+          `Az alkalomhoz foglalt időpont tartozik (${visit.appointmentStart ? formatShortDateTime(visit.appointmentStart) : 'időpont'}) — a törléssel az időpontot lemondjuk. Ha csak a tartalmat rendezné, válassza le az időpontot, az megmarad.`,
+          { type: 'danger', confirmText: 'Törlés és lemondás', cancelText: 'Mégse', title: 'Alkalom törlése' }
+        );
+        if (!ok) return;
+      }
       const snapshot = boardRef.current;
       setBoard((prev) => ({ ...prev, visits: prev.visits.filter((v) => v.id !== visitId) }));
       const result = await apiJson(`/api/episodes/${episodeId}/visits/${visitId}`, { method: 'DELETE' });
@@ -896,6 +940,110 @@ export function usePlanBoard({
         return;
       }
       onPlanChangedRef.current?.();
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [episodeId]
+  );
+
+  // ─── Puzzle v2: a váz — időpont hozzárendelése / leválasztása ───────────
+
+  const attachAppointment = useCallback(
+    async (target: VisitTarget, appointmentId: string) => {
+      const snapshot = boardRef.current;
+      const appt = snapshot.unattachedAppointments.find((a) => a.id === appointmentId) ?? null;
+      const { visitId, created } = resolveTarget(target);
+      // Optimista: az alkalom megkapja az időpontot, a szabad időpont eltűnik a listából.
+      setBoard((prev) => ({
+        ...prev,
+        visits: prev.visits.map((v) =>
+          v.id === visitId
+            ? {
+                ...v,
+                appointmentId,
+                appointmentStart: appt?.startTime ?? v.appointmentStart,
+                appointmentEnd: appt?.endTime ?? v.appointmentEnd,
+                appointmentStatus: null,
+              }
+            : v
+        ),
+        unattachedAppointments: prev.unattachedAppointments.filter((a) => a.id !== appointmentId),
+      }));
+      markPending([visitId], true);
+      try {
+        let realVisitId = visitId;
+        if (created) {
+          const vr = await apiJson<{ visit?: unknown }>(`/api/episodes/${episodeId}/visits`, {
+            method: 'POST',
+            json: { daysOffset: DEFAULT_VISIT_GAP_DAYS },
+          });
+          if (!vr.ok || !vr.data.visit) throw new Error(errorMessage(vr, 'Nem sikerült új alkalmat létrehozni'));
+          const real = mapVisitsResponse([vr.data.visit])[0];
+          realVisitId = real.id;
+          replaceVisit(created.id, { ...real, appointmentId, appointmentStart: appt?.startTime ?? null, appointmentStatus: null });
+        }
+        const result = await apiJson<{ visits?: unknown[] }>(
+          `/api/episodes/${episodeId}/visits/${realVisitId}/attach-appointment`,
+          { method: 'POST', json: { appointmentId } }
+        );
+        if (!result.ok) throw new Error(errorMessage(result, 'Nem sikerült az időpont hozzárendelése'));
+        setActiveVisitId(realVisitId);
+        // A szerver a foglalt alkalmakat időrendbe igazítja és a tartalmat a
+        // foglalásra csúsztatja — teljes egyeztetés.
+        await reload();
+      } catch (e) {
+        restore(snapshot);
+        showToast(e instanceof Error ? e.message : 'Nem sikerült az időpont hozzárendelése', 'error');
+        void reload();
+      } finally {
+        markPending([visitId], false);
+        scheduleProjections(0);
+        onStatusChangedRef.current?.();
+        onPlanChangedRef.current?.();
+      }
+    },
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+    [episodeId]
+  );
+
+  const detachAppointment = useCallback(
+    async (visitId: string) => {
+      if (isTempId(visitId)) return;
+      const snapshot = boardRef.current;
+      const visit = snapshot.visits.find((v) => v.id === visitId);
+      if (!visit || !visit.appointmentId) return;
+      const ok = await confirm(
+        `Az időpont (${visit.appointmentStart ? formatShortDateTime(visit.appointmentStart) : ''}) leválik az alkalomról, de a foglalás megmarad — később bármelyik alkalomhoz hozzárendelhető. Az alkalom tartalma várakozó lesz.`,
+        { type: 'warning', confirmText: 'Leválasztás', cancelText: 'Mégse', title: 'Időpont leválasztása' }
+      );
+      if (!ok) return;
+      setBoard((prev) => ({
+        ...prev,
+        visits: prev.visits.map((v) =>
+          v.id === visitId ? { ...v, appointmentId: null, appointmentStart: null, appointmentEnd: null, appointmentStatus: null } : v
+        ),
+        steps: prev.steps.map((s) =>
+          s.visitId === visitId && s.appointmentId === visit.appointmentId
+            ? { ...s, appointmentId: null, status: s.status === 'scheduled' ? ('pending' as const) : s.status }
+            : s
+        ),
+      }));
+      markPending([visitId], true);
+      try {
+        const result = await apiJson(`/api/episodes/${episodeId}/visits/${visitId}/detach-appointment`, {
+          method: 'POST',
+        });
+        if (!result.ok) throw new Error(errorMessage(result, 'Nem sikerült az időpont leválasztása'));
+        await reload();
+      } catch (e) {
+        restore(snapshot);
+        showToast(e instanceof Error ? e.message : 'Nem sikerült az időpont leválasztása', 'error');
+        void reload();
+      } finally {
+        markPending([visitId], false);
+        scheduleProjections(0);
+        onStatusChangedRef.current?.();
+        onPlanChangedRef.current?.();
+      }
     },
     // eslint-disable-next-line react-hooks/exhaustive-deps
     [episodeId]
@@ -954,6 +1102,7 @@ export function usePlanBoard({
   return {
     steps: board.steps,
     visits: board.visits,
+    unattachedAppointments: board.unattachedAppointments,
     groups,
     unassigned,
     stepsById,
@@ -987,5 +1136,7 @@ export function usePlanBoard({
     deleteEmptyVisit,
     applyTemplate,
     prepareVisitBooking,
+    attachAppointment,
+    detachAppointment,
   };
 }

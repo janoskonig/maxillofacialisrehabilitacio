@@ -31,6 +31,51 @@ export interface ReleaseWorkPhasesResult {
   expiredIntents: number;
 }
 
+export interface ReleaseWorkPhasesOptions {
+  /**
+   * Puzzle v2 (094): az alkalom birtokolja a foglalást — a fázis törlésekor az
+   * alkalom időpontja MARAD (üres, de foglalt alkalom). Az itt felsorolt
+   * foglalásokat a lemondó scan kihagyja (a legacy step_code-egyezés se
+   * kapja el őket).
+   */
+  keepAppointmentIds?: string[];
+}
+
+/**
+ * Egy foglalás lemondása a felszabadítási szabályok szerint: status
+ * cancelled_by_doctor, a slot szabad, a konvertált intent lejár, a
+ * slot_intent link elengedve. A hívó tranzakcióján belül fut.
+ */
+export async function cancelAppointmentRelease(
+  client: PoolClient,
+  ap: { id: string; time_slot_id: string | null; slot_intent_id: string | null }
+): Promise<void> {
+  // WP-0.4 (kódaudit #03): a lemondott sor a slot_intent linket is elengedi,
+  // hogy a halott appointment ne birtokolja tovább az intentet
+  // (idx_appointments_unique_slot_intent).
+  await client.query(
+    `UPDATE appointments SET appointment_status = 'cancelled_by_doctor', slot_intent_id = NULL WHERE id = $1`,
+    [ap.id]
+  );
+  if (ap.time_slot_id) {
+    await client.query(
+      `UPDATE available_time_slots SET state = 'free', status = 'available' WHERE id = $1`,
+      [ap.time_slot_id]
+    );
+  }
+  // A lemondott foglaláshoz tartozó konvertált intent lejáratása — ugyanaz,
+  // mint a skip ágon (work-phases/[workPhaseId] route) és a lemondási
+  // ágakon; e nélkül a 'converted' intent egy lemondott appointmentre
+  // (mostantól: a semmire) mutatna tovább.
+  if (ap.slot_intent_id) {
+    await client.query(
+      `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP
+       WHERE id = $1 AND state = 'converted'`,
+      [ap.slot_intent_id]
+    );
+  }
+}
+
 /**
  * Felszabadítja a megadott munkafázisokat, hogy törölhetők legyenek.
  * Ugyanabban a tranzakcióban kell futnia, mint a tényleges DELETE.
@@ -38,11 +83,13 @@ export interface ReleaseWorkPhasesResult {
 export async function releaseWorkPhasesForDelete(
   client: PoolClient,
   episodeId: string,
-  phases: WorkPhaseRefForDelete[]
+  phases: WorkPhaseRefForDelete[],
+  options: ReleaseWorkPhasesOptions = {}
 ): Promise<ReleaseWorkPhasesResult> {
   if (phases.length === 0) return { cancelledAppointments: 0, expiredIntents: 0 };
 
   const phaseIds = phases.map((p) => p.id);
+  const keepAppointmentIds = options.keepAppointmentIds ?? [];
   const stepCodes = Array.from(
     new Set(phases.map((p) => p.workPhaseCode).filter((c): c is string => !!c))
   );
@@ -75,6 +122,7 @@ export async function releaseWorkPhasesForDelete(
        FROM appointments a
       WHERE a.episode_id = $1
         AND ${SQL_APPOINTMENT_ACTIVE_STATUS_FRAGMENT}
+        AND NOT (a.id = ANY($4::uuid[]))
         AND (
           a.work_phase_id = ANY($2::uuid[])
           OR (
@@ -83,7 +131,7 @@ export async function releaseWorkPhasesForDelete(
             AND a.start_time > CURRENT_TIMESTAMP
           )
         )`,
-    [episodeId, phaseIds, stepCodes]
+    [episodeId, phaseIds, stepCodes, keepAppointmentIds]
   );
 
   for (const ap of appts.rows as Array<{
@@ -91,30 +139,7 @@ export async function releaseWorkPhasesForDelete(
     time_slot_id: string | null;
     slot_intent_id: string | null;
   }>) {
-    // WP-0.4 (kódaudit #03): a lemondott sor a slot_intent linket is elengedi,
-    // hogy a halott appointment ne birtokolja tovább az intentet
-    // (idx_appointments_unique_slot_intent).
-    await client.query(
-      `UPDATE appointments SET appointment_status = 'cancelled_by_doctor', slot_intent_id = NULL WHERE id = $1`,
-      [ap.id]
-    );
-    if (ap.time_slot_id) {
-      await client.query(
-        `UPDATE available_time_slots SET state = 'free', status = 'available' WHERE id = $1`,
-        [ap.time_slot_id]
-      );
-    }
-    // A lemondott foglaláshoz tartozó konvertált intent lejáratása — ugyanaz,
-    // mint a skip ágon (work-phases/[workPhaseId] route) és a lemondási
-    // ágakon; e nélkül a 'converted' intent egy lemondott appointmentre
-    // (mostantól: a semmire) mutatna tovább.
-    if (ap.slot_intent_id) {
-      await client.query(
-        `UPDATE slot_intents SET state = 'expired', updated_at = CURRENT_TIMESTAMP
-         WHERE id = $1 AND state = 'converted'`,
-        [ap.slot_intent_id]
-      );
-    }
+    await cancelAppointmentRelease(client, ap);
   }
 
   // 3) Párhuzamos (episode_plan_items) modell: archiválás + a legacy FK bontása.

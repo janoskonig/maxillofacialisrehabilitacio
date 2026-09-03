@@ -9,13 +9,19 @@
 import { useEffect, useRef, useState, type ReactNode } from 'react';
 import {
   GripVertical, ChevronUp, ChevronDown, Trash2, Pencil, MoreHorizontal,
-  CalendarDays, Clock3, Plus, Loader2,
+  CalendarDays, Clock3, Plus, Loader2, Link2, Unlink, CalendarCheck2,
 } from 'lucide-react';
 import { useDroppable } from '@dnd-kit/core';
 import { useSortable } from '@dnd-kit/sortable';
 import { CSS } from '@dnd-kit/utilities';
 import { Popover, MenuItem } from './Popover';
-import type { EpisodeVisit, VisitDateInfo, VisitStatusSummary } from './visit-plan-types';
+import {
+  formatShortDateTime,
+  visitHasOpenAppointment,
+  type EpisodeVisit,
+  type VisitDateInfo,
+  type VisitStatusSummary,
+} from './visit-plan-types';
 
 export interface VisitRowProps {
   visit: EpisodeVisit;
@@ -33,6 +39,11 @@ export interface VisitRowProps {
   onMoveDown: () => void;
   onDeleteEmpty: () => void;
   onRename: (label: string | null) => void;
+  /** Puzzle v2: meglévő időpont hozzárendelése (a váz) — nincs, ha nincs szabad időpont. */
+  onAttachAppointment?: () => void;
+  unattachedCount?: number;
+  /** Puzzle v2: az alkalom időpontjának leválasztása lemondás nélkül. */
+  onDetachAppointment?: () => void;
   /** Vizit-szintű foglalási vezérlő (a konténer rendereli a worklist-állapotból). */
   bookingSlot?: ReactNode;
   /** Kockák. */
@@ -44,8 +55,11 @@ export interface VisitRowProps {
 export function VisitRow({
   visit, index, visitCount, title, statusSummary, totalMinutes, dateInfo, phaseCount,
   isActive, pending, onActivate, onMoveUp, onMoveDown, onDeleteEmpty, onRename,
+  onAttachAppointment, unattachedCount = 0, onDetachAppointment,
   bookingSlot, children, footer,
 }: VisitRowProps) {
+  const bookedOpen = visitHasOpenAppointment(visit);
+  const emptyBooked = bookedOpen && phaseCount === 0;
   const { attributes, listeners, setNodeRef, setActivatorNodeRef, transform, transition, isDragging } =
     useSortable({ id: `visit:${visit.id}`, data: { type: 'visit', visitId: visit.id }, disabled: pending });
   const { setNodeRef: setDropRef, isOver } = useDroppable({
@@ -169,7 +183,17 @@ export function VisitRow({
             </span>
           )}
           <div className="ml-auto flex items-center gap-1 shrink-0" onClick={(e) => e.stopPropagation()} role="presentation">
-            {bookingSlot}
+            {bookingSlot ??
+              (bookedOpen && visit.appointmentStart ? (
+                <span
+                  className="inline-flex items-center gap-1 px-2 py-1 text-xs font-medium text-blue-700 dark:text-blue-300 bg-blue-50 dark:bg-blue-950/40 rounded"
+                  title="Az alkalom időpontja (a váz) — a tartalom ide pakolható"
+                  data-testid="visit-appointment-chip"
+                >
+                  <CalendarCheck2 className="w-3 h-3" />
+                  {formatShortDateTime(visit.appointmentStart)}
+                </span>
+              ) : null)}
             <Popover
               align="right"
               widthClass="w-56"
@@ -190,13 +214,33 @@ export function VisitRow({
                   <MenuItem disabled={index >= visitCount - 1} onClick={() => { onMoveDown(); close(); }}>
                     <ChevronDown className="w-3.5 h-3.5" /> Hátrébb
                   </MenuItem>
+                  {!bookedOpen && onAttachAppointment && (
+                    <MenuItem
+                      disabled={unattachedCount === 0}
+                      onClick={() => { onAttachAppointment(); close(); }}
+                    >
+                      <Link2 className="w-3.5 h-3.5" />
+                      {unattachedCount > 0
+                        ? `Meglévő időpont hozzárendelése (${unattachedCount})`
+                        : 'Meglévő időpont hozzárendelése — nincs szabad'}
+                    </MenuItem>
+                  )}
+                  {bookedOpen && onDetachAppointment && (
+                    <MenuItem onClick={() => { onDetachAppointment(); close(); }}>
+                      <Unlink className="w-3.5 h-3.5" /> Időpont leválasztása (megmarad)
+                    </MenuItem>
+                  )}
                   <MenuItem
                     tone="danger"
                     disabled={phaseCount > 0}
                     onClick={() => { onDeleteEmpty(); close(); }}
                   >
                     <Trash2 className="w-3.5 h-3.5" />
-                    {phaseCount > 0 ? 'Törlés (előbb ürítse ki)' : 'Üres alkalom törlése'}
+                    {phaseCount > 0
+                      ? 'Törlés (előbb ürítse ki)'
+                      : bookedOpen
+                        ? 'Üres alkalom törlése (időpont lemondása)'
+                        : 'Üres alkalom törlése'}
                   </MenuItem>
                 </div>
               )}
@@ -208,8 +252,10 @@ export function VisitRow({
         <div ref={setDropRef} className="flex flex-wrap items-center gap-1.5 px-2 pb-2 min-h-[36px]">
           {children}
           {phaseCount === 0 && (
-            <span className="text-xs text-gray-400 dark:text-gray-500 px-1">
-              Üres alkalom — válasszon a bal oldali palettáról, vagy húzzon ide kezelést.
+            <span className={`text-xs px-1 ${emptyBooked ? 'text-blue-700 dark:text-blue-300' : 'text-gray-400 dark:text-gray-500'}`}>
+              {emptyBooked
+                ? 'Foglalt időpont tartalom nélkül — válasszon a palettáról, vagy húzzon ide kezelést.'
+                : 'Üres alkalom — válasszon a bal oldali palettáról, vagy húzzon ide kezelést.'}
             </span>
           )}
           {!isActive && phaseCount > 0 && (

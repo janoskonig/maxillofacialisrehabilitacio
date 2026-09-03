@@ -159,7 +159,7 @@ describe('WP-4.2 — vizit CRUD', () => {
 });
 
 describe('WP-4.2 — fázis-áthelyezés és hatókör a work-phase PATCH-en', () => {
-  it('visitId: a fázis átköltözik, a kiürült alkalom törlődik, audit visit_change', async () => {
+  it('visitId: a fázis átköltözik, a kiürült alkalom MEGMARAD, audit visit_change', async () => {
     const { pool, episode, p1, visits } = await seedEpisodeWithVisits();
     const user = await authUser();
     const targetVisit = visits[1];
@@ -176,9 +176,9 @@ describe('WP-4.2 — fázis-áthelyezés és hatókör a work-phase PATCH-en', (
 
     const phase = await pool.query(`SELECT visit_id FROM episode_work_phases WHERE id = $1`, [p1.id]);
     expect(phase.rows[0].visit_id).toBe(targetVisit.id);
-    // A kiürült forrás-alkalom nem maradt árván.
+    // Puzzle v2: a kiürült forrás-alkalom MEGMARAD (üres alkalom nem tűnik el magától).
     const orphan = await pool.query(`SELECT 1 FROM episode_visits WHERE id = $1`, [sourceVisit.id]);
-    expect(orphan.rows).toHaveLength(0);
+    expect(orphan.rows).toHaveLength(1);
 
     const audit = await pool.query(
       `SELECT 1 FROM episode_work_phase_audit
@@ -256,7 +256,7 @@ describe('WP-4.2 — review-javítások', () => {
     expect(res.status).toBe(400);
   });
 
-  it('merge-csoport primary-jének áthelyezése a rejtett gyerekeket is viszi', async () => {
+  it('a blokk primary-jének áthelyezése CSAK őt viszi — a tag a forrásban marad és primary lesz (puzzle v2)', async () => {
     const pool = getDbPool();
     const patient = await createTestPatient();
     const episode = await createTestEpisode(undefined, patient.id);
@@ -270,6 +270,8 @@ describe('WP-4.2 — review-javítások', () => {
       mergedInto: primary.id,
     });
     await backfillEpisodeVisits(pool, episode.id as string);
+    const sourceVisitId = (await pool.query(`SELECT visit_id FROM episode_work_phases WHERE id = $1`, [primary.id]))
+      .rows[0].visit_id as string;
     const user = await authUser();
 
     const createReq = await authedRequest(`http://test.local/api/episodes/${episode.id}/visits`, {
@@ -290,17 +292,19 @@ describe('WP-4.2 — review-javítások', () => {
     expect(moveRes.status).toBe(200);
 
     const rows = await pool.query(
-      `SELECT id, visit_id FROM episode_work_phases WHERE id = ANY($1::uuid[])`,
+      `SELECT id, visit_id, merged_into_episode_work_phase_id AS merged_into
+       FROM episode_work_phases WHERE id = ANY($1::uuid[])`,
       [[primary.id, child.id]]
     );
-    for (const r of rows.rows) expect(r.visit_id).toBe(target.id);
-    // A régi (kiürült) csoport-vizit nem maradt árván.
-    const visits = await pool.query(
-      `SELECT id FROM episode_visits WHERE episode_id = $1`,
-      [episode.id]
-    );
-    expect(visits.rows).toHaveLength(1);
-    expect(visits.rows[0].id).toBe(target.id);
+    const byId = new Map(rows.rows.map((r: { id: string; visit_id: string; merged_into: string | null }) => [r.id, r]));
+    // „A tartalom mozog, a váz marad": csak a primary költözött.
+    expect(byId.get(primary.id)?.visit_id).toBe(target.id);
+    expect(byId.get(child.id)?.visit_id).toBe(sourceVisitId);
+    // A forrásban maradt tag önállósodott (ő a forrás új primary-ja).
+    expect(byId.get(child.id)?.merged_into).toBeNull();
+    // Egyik alkalom sem tűnt el.
+    const visits = await pool.query(`SELECT id FROM episode_visits WHERE episode_id = $1`, [episode.id]);
+    expect(visits.rows).toHaveLength(2);
   });
 
   it('a vizit-átrendezés az EWP fázis-sorrendet is átszámozza (forecast-konzisztencia)', async () => {

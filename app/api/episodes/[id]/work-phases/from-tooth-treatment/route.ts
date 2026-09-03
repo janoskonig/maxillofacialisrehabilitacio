@@ -7,6 +7,7 @@ import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 import { createEpisodeVisit } from '@/lib/episode-visits';
 import { DEFAULT_VISIT_GAP_DAYS } from '@/lib/visit-plan-constants';
 import { projectRemainingSteps } from '@/lib/slot-intent-projector';
+import { renumberPhasesByVisitOrder, syncVisitAppointment } from '@/lib/visit-appointment-sync';
 
 export const dynamic = 'force-dynamic';
 
@@ -145,23 +146,10 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     );
     insertedId = String(inserted.rows[0].id);
     if (targetVisitId) {
-      // Fázis-seq az alkalom-sorrend szerint (a friss sor az alkalmán belül utolsó).
-      await client.query(
-        `WITH ordered AS (
-           SELECT e.id,
-                  ROW_NUMBER() OVER (
-                    ORDER BY v.seq NULLS LAST,
-                             COALESCE(e.seq, e.pathway_order_index),
-                             e.pathway_order_index, e.id
-                  ) - 1 AS new_seq
-           FROM episode_work_phases e
-           LEFT JOIN episode_visits v ON e.visit_id = v.id
-           WHERE e.episode_id = $1
-         )
-         UPDATE episode_work_phases SET seq = ordered.new_seq
-         FROM ordered WHERE episode_work_phases.id = ordered.id`,
-        [episodeId]
-      );
+      // Fázis-seq az alkalom-sorrend szerint (a friss sor az alkalmán belül utolsó),
+      // majd a blokk/időpont-invariánsok (egy alkalom = egy időpont).
+      await renumberPhasesByVisitOrder(client, episodeId, insertedId);
+      await syncVisitAppointment(client, episodeId, targetVisitId, auth.email ?? auth.userId ?? 'unknown');
     }
 
     // WP-2.1: a fogkezelésből létrehozott fázis is naplózódik.

@@ -3,6 +3,8 @@ import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
+import { cancelAppointmentRelease } from '@/lib/work-phase-delete';
+import { projectRemainingSteps } from '@/lib/slot-intent-projector';
 
 export const dynamic = 'force-dynamic';
 
@@ -141,19 +143,26 @@ export const PATCH = roleHandler([...ROLES], async (req, { auth, params }) => {
  * DELETE /api/episodes/:id/visits/:visitId — csak ÜRES alkalom törölhető.
  * Nem-üresre 409: a fázisok előbb áthelyezhetők másik alkalomba (ajánlat,
  * nem tiltás — a művelet a fázisok mozgatása után megismételhető).
+ *
+ * Puzzle v2 (094): az alkalom birtokolja az időpontját — üres, de foglalt
+ * alkalom törlésekor a nyitott foglalást LEMONDJUK (slot szabad, intent
+ * lejár). Lezárt (completed) foglalás a történetben marad, csak leválik.
  */
 export const DELETE = roleHandler([...ROLES], async (req, { auth, params }) => {
   const episodeId = params.id;
   const visitId = params.visitId;
   const pool = getDbPool();
   const client = await pool.connect();
+  let cancelledAppointment = false;
   try {
     await client.query('BEGIN');
     const row = await client.query(
-      `SELECT v.id, v.label, pe.status AS episode_status,
-              (SELECT COUNT(*)::int FROM episode_work_phases e WHERE e.visit_id = v.id) AS phase_count
+      `SELECT v.id, v.label, v.appointment_id, pe.status AS episode_status,
+              (SELECT COUNT(*)::int FROM episode_work_phases e WHERE e.visit_id = v.id) AS phase_count,
+              a.appointment_status, a.time_slot_id, a.slot_intent_id
        FROM episode_visits v
        JOIN patient_episodes pe ON pe.id = v.episode_id
+       LEFT JOIN appointments a ON a.id = v.appointment_id
        WHERE v.id = $1 AND v.episode_id = $2
        FOR UPDATE OF v FOR SHARE OF pe`,
       [visitId, episodeId]
@@ -181,6 +190,22 @@ export const DELETE = roleHandler([...ROLES], async (req, { auth, params }) => {
       );
     }
 
+    // Az alkalom nyitott foglalása vele megy (lemondás); a lezárt marad a történetben.
+    const visit = row.rows[0] as {
+      appointment_id: string | null;
+      appointment_status: string | null;
+      time_slot_id: string | null;
+      slot_intent_id: string | null;
+    };
+    if (visit.appointment_id && visit.appointment_status == null) {
+      await cancelAppointmentRelease(client, {
+        id: visit.appointment_id,
+        time_slot_id: visit.time_slot_id,
+        slot_intent_id: visit.slot_intent_id,
+      });
+      cancelledAppointment = true;
+    }
+
     // Az atomi, feltételes DELETE zárja a TOCTOU-ablakot (a FOR UPDATE mellett
     // párhuzamos fázis-áthelyezés ide már nem tud beékelődni, de olcsó őr).
     const deleted = await client.query(
@@ -205,18 +230,27 @@ export const DELETE = roleHandler([...ROLES], async (req, { auth, params }) => {
       newStatus: null,
       changedBy: auth.email ?? auth.userId ?? 'unknown',
       changeType: 'visit_change',
-      reason: `Üres alkalom törölve${row.rows[0].label ? ` („${row.rows[0].label}”)` : ''}`,
+      reason: `Üres alkalom törölve${row.rows[0].label ? ` („${row.rows[0].label}”)` : ''}${
+        cancelledAppointment ? ' (az időpontja lemondva)' : ''
+      }`,
     });
 
     await client.query('COMMIT');
 
+    if (cancelledAppointment) {
+      try {
+        await projectRemainingSteps(episodeId);
+      } catch {
+        /* non-blocking */
+      }
+    }
     try {
       await emitSchedulingEvent('episode', episodeId, 'visit_deleted');
     } catch {
       /* non-blocking */
     }
 
-    return NextResponse.json({ ok: true });
+    return NextResponse.json({ ok: true, cancelledAppointment });
   } catch (e) {
     await client.query('ROLLBACK').catch(() => {});
     throw e;

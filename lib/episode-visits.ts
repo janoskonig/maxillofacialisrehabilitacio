@@ -100,23 +100,59 @@ export interface EpisodeVisitRow {
   label: string | null;
   daysOffset: number | null;
   plannedDurationMinutes: number | null;
+  /** 094: az alkalom időpontja (a váz) — NULL, ha még nincs foglalás. */
+  appointmentId: string | null;
+  appointmentStart: string | null;
+  appointmentEnd: string | null;
+  /** NULL = nyitott foglalás; 'completed' = megtörtént; egyéb státusz = nem aktív. */
+  appointmentStatus: string | null;
 }
 
-/** Az epizód vizit-metaadatai seq-sorrendben — a GET work-phases válaszához (a WP-4.3 UI erre épül). */
+/** Az epizód vizit-metaadatai seq-sorrendben — a GET work-phases válaszához (a UI erre épül). */
 export async function listEpisodeVisits(
   db: EpisodeVisitQueryable,
   episodeId: string
 ): Promise<EpisodeVisitRow[]> {
+  const probe = await db.query(
+    `SELECT 1 FROM information_schema.columns
+     WHERE table_name = 'episode_visits' AND column_name = 'appointment_id' LIMIT 1`
+  );
+  const hasAppointment = probe.rows.length > 0;
+  const apptCols = hasAppointment
+    ? `, v.appointment_id AS "appointmentId",
+         COALESCE(a.start_time, ats.start_time) AS "appointmentStart",
+         COALESCE(a.end_time, ats.start_time + (COALESCE(ats.duration_minutes, 30) || ' minutes')::interval) AS "appointmentEnd",
+         a.appointment_status AS "appointmentStatus"`
+    : `, NULL::uuid AS "appointmentId", NULL::timestamptz AS "appointmentStart",
+         NULL::timestamptz AS "appointmentEnd", NULL::text AS "appointmentStatus"`;
+  const apptJoin = hasAppointment
+    ? ` LEFT JOIN appointments a ON a.id = v.appointment_id
+        LEFT JOIN available_time_slots ats ON ats.id = a.time_slot_id`
+    : '';
   const { rows } = await db.query(
-    `SELECT id, seq, label,
-            days_offset as "daysOffset",
-            planned_duration_minutes as "plannedDurationMinutes"
-     FROM episode_visits
-     WHERE episode_id = $1
-     ORDER BY seq, created_at`,
+    `SELECT v.id, v.seq, v.label,
+            v.days_offset as "daysOffset",
+            v.planned_duration_minutes as "plannedDurationMinutes"${apptCols}
+     FROM episode_visits v${apptJoin}
+     WHERE v.episode_id = $1
+     ORDER BY v.seq, v.created_at`,
     [episodeId]
   );
-  return rows as unknown as EpisodeVisitRow[];
+  return rows.map((r) => {
+    const row = r as Record<string, unknown>;
+    const toIso = (v: unknown) => (v instanceof Date ? v.toISOString() : v != null ? String(v) : null);
+    return {
+      id: String(row.id),
+      seq: Number(row.seq),
+      label: row.label != null ? String(row.label) : null,
+      daysOffset: row.daysOffset != null ? Number(row.daysOffset) : null,
+      plannedDurationMinutes: row.plannedDurationMinutes != null ? Number(row.plannedDurationMinutes) : null,
+      appointmentId: row.appointmentId != null ? String(row.appointmentId) : null,
+      appointmentStart: toIso(row.appointmentStart),
+      appointmentEnd: toIso(row.appointmentEnd),
+      appointmentStatus: row.appointmentStatus != null ? String(row.appointmentStatus) : null,
+    };
+  });
 }
 
 /**

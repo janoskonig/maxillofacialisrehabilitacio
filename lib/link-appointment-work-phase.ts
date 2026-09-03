@@ -6,6 +6,7 @@
 import type { PoolClient } from 'pg';
 import { isAppointmentActive } from './active-appointment';
 import { insertWorkPhaseAudit } from './work-phase-audit';
+import { adoptAppointmentForPhaseVisit } from './visit-appointment-sync';
 
 export interface LinkAppointmentWorkPhaseParams {
   appointmentId: string;
@@ -266,6 +267,9 @@ export async function linkAppointmentToWorkPhase(
       appointmentId,
     ]
   );
+
+  // Puzzle v2 (094): a cél fázis alkalma örökli a foglalást (a váz).
+  await adoptAppointmentForPhaseVisit(client, target.id, appointmentId);
 
   return {
     ok: true,

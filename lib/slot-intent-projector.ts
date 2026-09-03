@@ -208,6 +208,9 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       visit_id?: string | null;
       /** Puzzle v2: a vizit days_offset-je; NULL → a fázis offsetje a fallback. */
       visit_days_offset?: number | null;
+      /** Puzzle v2: az alkalom foglalható blokkja (nyitott tagok összperce) / tervezett hossza. */
+      visit_block_minutes?: number | null;
+      visit_planned_minutes?: number | null;
     }
     let episodeWorkPhaseRows: EwpRow[] | null = null;
     await client.query('SAVEPOINT sp_ewp');
@@ -242,7 +245,10 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
         null,
       );
       if (visitCol && visitCol.rows.length > 0) {
-        visitCols = ', e.visit_id, v.days_offset AS visit_days_offset';
+        visitCols =
+          ', e.visit_id, v.days_offset AS visit_days_offset, v.planned_duration_minutes AS visit_planned_minutes' +
+          ', (SELECT SUM(x.duration_minutes) FROM episode_work_phases x' +
+          "   WHERE x.visit_id = e.visit_id AND x.status IN ('pending', 'scheduled')) AS visit_block_minutes";
         visitJoin = ' LEFT JOIN episode_visits v ON e.visit_id = v.id';
       }
       const esResult = await client.query(
@@ -320,13 +326,23 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
         if (bookedStepCodes.has(es.work_phase_code)) continue;
         const pw = pathwayByCode.get(es.work_phase_code);
         const ewpDur = es.duration_minutes != null ? Number(es.duration_minutes) : null;
+        // Puzzle v2: az alkalom a foglalható egység — a blokk hossza a nyitott
+        // tagok összperce (vagy az alkalom tervezett hossza).
+        const plannedBlock = Number(es.visit_planned_minutes ?? 0);
+        const summedBlock = Number(es.visit_block_minutes ?? 0);
         stepsToProject.push({
           stepCode: es.work_phase_code,
           stepSeq: es.step_seq,
           workPhaseId: es.id,
           offset: (es.default_days_offset ?? pw?.default_days_offset) ?? 14,
           durationMinutes:
-            ewpDur != null && ewpDur > 0 ? ewpDur : (pw?.duration_minutes ?? 30),
+            plannedBlock > 0
+              ? plannedBlock
+              : summedBlock > 0
+                ? summedBlock
+                : ewpDur != null && ewpDur > 0
+                  ? ewpDur
+                  : (pw?.duration_minutes ?? 30),
           pool: pw ? slotPoolForStep(pw) : 'work',
           visitId: es.visit_id ?? null,
           visitDaysOffset: es.visit_days_offset ?? null,
@@ -357,16 +373,51 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     // ablak és javasolt kezdés, a horgony csak az egység után lép; a vizitek
     // között a vizit days_offset-je a lépésköz (fallback: az első tag fázis-
     // offsetje). Vizit nélküli sor egyfős egység — a korábbi működés.
+    // Puzzle v2 („a terv rácsúszik a vázra"): a tervezett egység a KÖVETKEZŐ
+    // foglalt (jövőbeli aktív) fázis elé szorul — a javasolt kezdés nem
+    // csúszhat a következő fix időpont mögé. A foglalt fázisok kezdését a
+    // fázis-sorrend (seq) szerint nézzük.
+    const bookedStartsBySeq: Array<{ seq: number; start: Date }> = [];
+    if (episodeWorkPhaseRows) {
+      const bookedByWp = new Map<string, Date>();
+      for (const a of apptsRow.rows) {
+        if (a.appointment_status === null && a.work_phase_id && a.start_time) {
+          const t = new Date(a.start_time);
+          const prev = bookedByWp.get(a.work_phase_id);
+          if (!prev || t < prev) bookedByWp.set(a.work_phase_id, t);
+        }
+      }
+      for (const es of episodeWorkPhaseRows) {
+        const t = bookedByWp.get(es.id);
+        if (t) bookedStartsBySeq.push({ seq: es.step_seq, start: t });
+      }
+    }
+    const nextBookedAfter = (maxSeq: number): Date | null => {
+      let best: Date | null = null;
+      for (const b of bookedStartsBySeq) {
+        if (b.seq > maxSeq && (!best || b.start < best)) best = b.start;
+      }
+      return best;
+    };
+
     let anchor = lastHardAnchor;
     for (const unit of groupProjectionUnits(stepsToProject)) {
-      const { windowStart, windowEnd } = computeStepWindow(anchor, unit.offset);
-      const expiresAt = new Date(windowEnd);
-      expiresAt.setDate(expiresAt.getDate() + 30);
+      let { windowStart, windowEnd } = computeStepWindow(anchor, unit.offset);
 
       // Compute target date (anchor + offset days), then place at the same Budapest local time
       const rawDate = new Date(anchor);
       rawDate.setDate(rawDate.getDate() + unit.offset);
-      const dateISO = rawDate.toISOString().slice(0, 10);
+      let dateISO = rawDate.toISOString().slice(0, 10);
+
+      const cap = nextBookedAfter(Math.max(...unit.members.map((m) => m.stepSeq)));
+      if (cap) {
+        const capEnd = new Date(cap.getTime() - 24 * 60 * 60 * 1000);
+        if (windowEnd > capEnd) windowEnd = capEnd;
+        if (windowStart > windowEnd) windowStart = windowEnd;
+        if (rawDate > windowEnd) dateISO = windowEnd.toISOString().slice(0, 10);
+      }
+      const expiresAt = new Date(windowEnd);
+      expiresAt.setDate(expiresAt.getDate() + 30);
       const suggestedStart = budapestLocalToUTC(dateISO, anchorLocal.hour, anchorLocal.minute);
 
       for (const sp of unit.members) {

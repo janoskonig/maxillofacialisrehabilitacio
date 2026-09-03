@@ -187,9 +187,10 @@ function mkStep(id: string, visitId: string | null, extra: Partial<Parameters<ty
 }
 
 describe('buildVisitGroups', () => {
+  const base = { label: null, plannedDurationMinutes: null, appointmentId: null, appointmentStart: null, appointmentEnd: null, appointmentStatus: null };
   const visits = [
-    { id: 'v1', seq: 0, label: null, daysOffset: 7, plannedDurationMinutes: null },
-    { id: 'v2', seq: 1, label: null, daysOffset: 14, plannedDurationMinutes: null },
+    { id: 'v1', seq: 0, daysOffset: 7, ...base },
+    { id: 'v2', seq: 1, daysOffset: 14, ...base },
   ];
   it('a sorokat a tömb sorrendjében rendezi alkalmakba; az összevont gyerek a primary-ja után áll', () => {
     const steps = [

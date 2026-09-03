@@ -164,7 +164,7 @@ describe('Puzzle v2 — POST /visits alapértelmezett vizitköz', () => {
 });
 
 describe('Puzzle v2 — összevont gyerek áthelyezése', () => {
-  it('a gyerek kilép a csoportból és önállóan költözik; a primary marad', async () => {
+  it('a gyerek kilép a csoportból és a cél-alkalom blokkjába lép; a primary marad', async () => {
     const pool = getDbPool();
     const patient = await createTestPatient();
     const episode = await createTestEpisode(undefined, patient.id);
@@ -187,8 +187,11 @@ describe('Puzzle v2 — összevont gyerek áthelyezése', () => {
     const rows = await phaseRows(episode.id);
     const byCode = new Map(rows.map((r) => [r.work_phase_code, r]));
     expect(byCode.get('c')?.visit_id).toBe(v2);
-    expect(byCode.get('c')?.merged_into).toBeNull();
+    // Puzzle v2: egy alkalom = egy blokk — a célban már ott lévő x alá kerül.
+    expect(byCode.get('c')?.merged_into).toBe(byCode.get('x')?.id);
+    expect(byCode.get('x')?.merged_into).toBeNull();
     expect(byCode.get('p')?.visit_id).toBe(v1);
+    expect(byCode.get('p')?.merged_into).toBeNull();
     // Az áthelyezett sor a cél-alkalom VÉGÉRE kerül: p (v1) → x, c (v2)
     expect(rows.map((r) => r.work_phase_code)).toEqual(['p', 'x', 'c']);
 
@@ -204,7 +207,7 @@ describe('Puzzle v2 — összevont gyerek áthelyezése', () => {
 });
 
 describe('Puzzle v2 — prepare-booking (egy alkalom = egy időpont)', () => {
-  it('a nyitott fázisokat a sorrendben első alá vonja, a perc összeadódik; második hívás no-op', async () => {
+  it('a nyitott fázisokat a sorrendben első alá vonja; a blokk hossza olvasáskor számolt (a percek nem íródnak át); második hívás no-op', async () => {
     const pool = getDbPool();
     const patient = await createTestPatient();
     const episode = await createTestEpisode(undefined, patient.id);
@@ -229,7 +232,8 @@ describe('Puzzle v2 — prepare-booking (egy alkalom = egy időpont)', () => {
     const rows = await phaseRows(episode.id);
     const byId = new Map(rows.map((r) => [r.id, r]));
     expect(byId.get(a.id)?.merged_into).toBeNull();
-    expect(byId.get(a.id)?.duration_minutes).toBe(90);
+    // Puzzle v2: a primary saját perce marad, a blokk (90) olvasáskor számolt.
+    expect(byId.get(a.id)?.duration_minutes).toBe(30);
     expect(byId.get(b.id)?.merged_into).toBe(a.id);
     expect(byId.get(c.id)?.merged_into).toBe(a.id);
 
@@ -251,7 +255,7 @@ describe('Puzzle v2 — prepare-booking (egy alkalom = egy időpont)', () => {
     );
     const counts = new Map(audit.rows.map((r: { change_type: string; c: number }) => [r.change_type, r.c]));
     expect(counts.get('merge')).toBe(2);
-    expect(counts.get('timing_change')).toBe(1);
+    expect(counts.get('timing_change')).toBeUndefined();
   });
 
   it('csak lezárt fázisú alkalom → 409 VISIT_NOT_BOOKABLE', async () => {

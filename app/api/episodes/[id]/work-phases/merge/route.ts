@@ -4,7 +4,7 @@ import { roleHandler } from '@/lib/api/route-handler';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
 import { getFullWorkPhaseQuery } from '@/lib/episode-work-phase-select';
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
-import { createEpisodeVisit, deleteEpisodeVisitsIfEmpty } from '@/lib/episode-visits';
+import { createEpisodeVisit } from '@/lib/episode-visits';
 
 export const dynamic = 'force-dynamic';
 
@@ -115,11 +115,9 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
       `UPDATE episode_work_phases SET visit_id = $1 WHERE id = ANY($2) AND episode_id = $3`,
       [primaryVisitId, movedIds, episodeId]
     );
-    // A gyerekek kiürült (egyfős) vizitjei nem maradnak árván a listában.
-    await deleteEpisodeVisitsIfEmpty(
-      client,
-      (oldVisitRows.rows as Array<{ visit_id: string }>).map((r) => r.visit_id)
-    );
+    // Puzzle v2: az üres alkalom NEM tűnik el automatikusan (a felhasználó
+    // kérése) — a kiürült alkalmak megmaradnak, kézzel törölhetők.
+    void oldVisitRows;
 
     // WP-2.1: az összevonás naplózása — soronként a másodlagos (beolvasztott)
     // fázisokon; a reason az elsődleges fázis kódját hordozza.

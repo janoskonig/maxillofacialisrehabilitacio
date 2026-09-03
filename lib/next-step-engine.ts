@@ -146,6 +146,10 @@ export interface EpisodeWorkPhaseRow {
   visit_id?: string | null;
   /** WP-4.2: a vizit days_offset-je; NULL → a fázis default_days_offset-je a fallback. */
   visit_days_offset?: number | null;
+  /** Puzzle v2: az alkalom nyitott tagjainak összperce (a foglalható blokk); NULL a 089 előtti sémán. */
+  visit_block_minutes?: number | null;
+  /** Puzzle v2: az alkalom tervezett hossza (felülírás), ha van. */
+  visit_planned_minutes?: number | null;
 }
 
 /** Get episode_work_phases if they've been generated. Returns null when no rows exist.
@@ -172,7 +176,13 @@ async function getEpisodeWorkPhases(
   // egyfős egységként viselkednek, a mai működés szerint.
   let visitJoin = '';
   if (hasVisitId) {
-    optionalCols += ', ewp.visit_id, v.days_offset AS visit_days_offset';
+    // Puzzle v2: egy alkalom = egy időpont — a foglalható blokk hossza az
+    // alkalom nyitott tagjainak összperce (az alá vont tagokkal együtt), vagy
+    // az alkalom tervezett hossza.
+    optionalCols +=
+      ', ewp.visit_id, v.days_offset AS visit_days_offset, v.planned_duration_minutes AS visit_planned_minutes' +
+      ', (SELECT SUM(x.duration_minutes) FROM episode_work_phases x' +
+      "   WHERE x.visit_id = ewp.visit_id AND x.status IN ('pending', 'scheduled')) AS visit_block_minutes";
     visitJoin = ' LEFT JOIN episode_visits v ON ewp.visit_id = v.id';
   }
 
@@ -309,9 +319,19 @@ function buildVisitAwareChainRows(
 
 /** Prefer per-episode duration (user-edited, incl. merged-slot total on primary row) over pathway template. */
 function durationMinutesForEpisodeStep(
-  episodeRow: { duration_minutes?: number | null },
+  episodeRow: {
+    duration_minutes?: number | null;
+    visit_block_minutes?: number | null;
+    visit_planned_minutes?: number | null;
+  },
   pathwayTemplate: PathwayWorkPhaseTemplate
 ): number {
+  // Puzzle v2: az alkalom a foglalható egység — a primary sor a teljes blokkot
+  // (nyitott tagok összperce, vagy az alkalom tervezett hossza) foglalja.
+  const planned = Number(episodeRow.visit_planned_minutes ?? 0);
+  if (planned > 0) return planned;
+  const block = Number(episodeRow.visit_block_minutes ?? 0);
+  if (block > 0) return block;
   const fromEpisode = episodeRow.duration_minutes;
   if (typeof fromEpisode === 'number' && fromEpisode > 0) return fromEpisode;
   return pathwayTemplate.duration_minutes ?? 30;
