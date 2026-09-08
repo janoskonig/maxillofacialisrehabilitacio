@@ -1615,7 +1615,7 @@ export function PatientForm({
     { id: 'anamnezis', label: 'Anamnézis', icon: <Calendar className="w-4 h-4" /> },
     { id: 'betegvizsgalat', label: 'Betegvizsgálat', icon: <Calendar className="w-4 h-4" /> },
     { id: 'ohip14', label: 'OHIP-14', icon: <ClipboardList className="w-4 h-4" /> },
-    { id: 'adminisztracio', label: 'Adminisztráció', icon: <FileText className="w-4 h-4" /> },
+    { id: 'adminisztracio', label: 'Dokumentumok és adminisztráció', icon: <FileText className="w-4 h-4" /> },
     { id: 'idopont', label: 'Időpont', icon: <Calendar className="w-4 h-4" /> },
     { id: 'stadium', label: 'Stádium', icon: <Calendar className="w-4 h-4" /> },
   ];
