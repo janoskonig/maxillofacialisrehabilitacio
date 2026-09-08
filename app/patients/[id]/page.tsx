@@ -39,11 +39,11 @@ export default function PatientDetailPage() {
 
           if (!response.ok) {
             if (response.status === 403) {
-              router.push('/');
+              router.push('/patients');
               return;
             }
             if (response.status === 404) {
-              router.push('/');
+              router.push('/patients');
               return;
             }
             throw new Error('Failed to fetch patient');
@@ -55,7 +55,7 @@ export default function PatientDetailPage() {
           setAuthorized(true);
         } catch (error) {
           console.error('Error fetching patient:', error);
-          router.push('/');
+          router.push('/patients');
           return;
         }
       } catch (error) {
@@ -113,7 +113,7 @@ export default function PatientDetailPage() {
   return (
     <AppShell
       title={patientName || 'Beteg részletek'}
-      backTo="/"
+      backTo="/patients"
       maxWidth="xl"
       actions={
         userRole === 'admin' && patientId ? (

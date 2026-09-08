@@ -1,14 +1,20 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useCallback } from 'react';
-import Link from 'next/link';
-import { TodaysAppointmentsWidget } from './widgets/TodaysAppointmentsWidget';
-import { PendingApprovalsWidget } from './widgets/PendingApprovalsWidget';
-import { ClipboardList, MessageCircle, CheckCircle2, ChevronRight } from 'lucide-react';
-import { Patient } from '@/lib/types';
-import { EmptyState } from './ui/EmptyState';
-import { useStaffTaskSummary } from '@/hooks/useStaffTaskSummary';
-import { useStaffInboxSummary } from '@/hooks/useStaffInboxSummary';
+import { useState, useEffect, useCallback } from "react";
+import { RemoteDataState } from "./ui/RemoteDataState";
+import Link from "next/link";
+import { TodaysAppointmentsWidget } from "./widgets/TodaysAppointmentsWidget";
+import { PendingApprovalsWidget } from "./widgets/PendingApprovalsWidget";
+import {
+  ClipboardList,
+  MessageCircle,
+  CheckCircle2,
+  ChevronRight,
+} from "lucide-react";
+import { Patient } from "@/lib/types";
+import { EmptyState } from "./ui/EmptyState";
+import { useStaffTaskSummary } from "@/hooks/useStaffTaskSummary";
+import { useStaffInboxSummary } from "@/hooks/useStaffInboxSummary";
 
 interface DashboardData {
   nextAppointments: any[];
@@ -17,7 +23,8 @@ interface DashboardData {
 }
 
 interface DashboardProps {
-  userRole: string;
+  userRole?: string;
+  showAppointments?: boolean;
   onViewPatient?: (patient: Patient) => void;
   onEditPatient?: (patient: Patient) => void;
   onViewOP?: (patient: Patient) => void;
@@ -30,89 +37,95 @@ interface DashboardProps {
  * nyitott feladatokhoz és olvasatlan üzenetekhez. A korábbi tabos „Dashboard"
  * (GANTT / terhelés / pipeline) kikerült a saját oldalaira.
  */
-export function Dashboard(_props: DashboardProps) {
+export function Dashboard({ showAppointments = true }: DashboardProps) {
   const [data, setData] = useState<DashboardData | null>(null);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState<string | null>(null);
 
-  const { summary: taskSummary } = useStaffTaskSummary(true);
-  const { summary: inboxSummary } = useStaffInboxSummary(true);
+  const {
+    summary: taskSummary,
+    loading: tasksLoading,
+    refetch: retryTasks,
+  } = useStaffTaskSummary(true);
+  const {
+    summary: inboxSummary,
+    loading: inboxLoading,
+    refetch: retryInbox,
+  } = useStaffInboxSummary(true);
 
   const refreshData = useCallback(async () => {
+    setLoading(true);
+    setError(null);
     try {
-      const response = await fetch('/api/dashboard', { credentials: 'include' });
-      if (response.ok) {
-        setData(await response.json());
-      }
-    } catch (err) {
-      console.error('Error refreshing dashboard data:', err);
+      const response = await fetch("/api/dashboard", {
+        credentials: "include",
+      });
+      if (!response.ok) throw new Error("Teendők nem tölthetők be.");
+      setData(await response.json());
+    } catch {
+      setError("Teendők nem tölthetők be.");
+    } finally {
+      setLoading(false);
     }
   }, []);
 
   useEffect(() => {
-    const fetchDashboardData = async () => {
-      try {
-        setLoading(true);
-        const response = await fetch('/api/dashboard', { credentials: 'include' });
-        if (!response.ok) {
-          throw new Error('Hiba történt a dashboard adatok betöltésekor');
-        }
-        setData(await response.json());
-        setError(null);
-      } catch (err) {
-        console.error('Error fetching dashboard data:', err);
-        setError(err instanceof Error ? err.message : 'Ismeretlen hiba');
-      } finally {
-        setLoading(false);
-      }
-    };
-    fetchDashboardData();
-  }, []);
+    void refreshData();
+  }, [refreshData]);
 
-  if (loading) {
+  if (loading || error || !data) {
     return (
-      <div className="card">
-        <div className="flex items-center justify-center py-8">
-          <div className="animate-spin rounded-full h-8 w-8 border-2 border-medical-primary/20 border-t-medical-primary"></div>
-          <span className="ml-3 text-body-sm">Teendők betöltése...</span>
-        </div>
-      </div>
+      <RemoteDataState
+        status={loading ? "loading" : "error"}
+        label="A teendők"
+        onRetry={refreshData}
+      >
+        {null}
+      </RemoteDataState>
     );
-  }
-
-  if (error) {
-    return (
-      <div className="card border-medical-error/20 bg-medical-error/5">
-        <div className="text-center py-4">
-          <p className="text-medical-error font-medium">Hiba: {error}</p>
-        </div>
-      </div>
-    );
-  }
-
-  if (!data) {
-    return null;
   }
 
   const openTasks = taskSummary?.totalOpen ?? 0;
-  const unviewedTasks = taskSummary?.unviewed ?? 0;
-  const unreadMessages = (inboxSummary?.patientUnread ?? 0) + (inboxSummary?.doctorUnread ?? 0);
-  const urgentMessages = (inboxSummary?.patientUnread ?? 0) > 0;
+  const unreadMessages =
+    (inboxSummary?.patientUnread ?? 0) + (inboxSummary?.doctorUnread ?? 0);
 
   const hasPending = data.pendingAppointments.length > 0;
-  const hasToday = data.nextAppointments.length > 0;
+  const hasToday = showAppointments && data.nextAppointments.length > 0;
   const hasChips = openTasks > 0 || unreadMessages > 0;
-  const nothingToDo = !hasPending && !hasToday && !hasChips;
+  const nothingToDo =
+    !tasksLoading &&
+    !inboxLoading &&
+    taskSummary !== null &&
+    inboxSummary !== null &&
+    !hasPending &&
+    !hasToday &&
+    !hasChips;
 
   return (
     <section className="space-y-3 md:space-y-4" aria-label="Teendőim">
       <h2 className="text-heading-3">Teendőim</h2>
 
+      <div className="grid gap-3 sm:grid-cols-2">
+        <RemoteDataState
+          status={tasksLoading ? "loading" : taskSummary ? "success" : "error"}
+          label="A feladatösszesítő"
+          onRetry={retryTasks}
+        >
+          {null}
+        </RemoteDataState>
+        <RemoteDataState
+          status={inboxLoading ? "loading" : inboxSummary ? "success" : "error"}
+          label="Az üzenetösszesítő"
+          onRetry={retryInbox}
+        >
+          {null}
+        </RemoteDataState>
+      </div>
       {nothingToDo ? (
         <EmptyState
           icon={CheckCircle2}
-          title="Nincs sürgős teendőd."
-          description="Nincs jóváhagyásra váró kérés, mai időpont, nyitott feladat vagy olvasatlan üzenet."
+          title="Nincs nyitott teendő."
+          description="Nincs jóváhagyásra váró kérés, nyitott feladat vagy olvasatlan üzenet."
         />
       ) : (
         <>
@@ -121,11 +134,7 @@ export function Dashboard(_props: DashboardProps) {
               {openTasks > 0 && (
                 <Link
                   href="/tasks"
-                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                    unviewedTasks > 0
-                      ? 'border-medical-error/30 bg-medical-error/5 text-medical-error hover:bg-medical-error/10'
-                      : 'border-gray-200 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800'
-                  }`}
+                  className="inline-flex items-center gap-2 rounded-lg border border-gray-200 bg-white px-3 py-2 text-sm text-gray-700 transition-colors hover:bg-gray-50 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200 dark:hover:bg-gray-800"
                 >
                   <ClipboardList className="w-4 h-4" />
                   <span className="font-medium">{openTasks}</span>
@@ -136,11 +145,7 @@ export function Dashboard(_props: DashboardProps) {
               {unreadMessages > 0 && (
                 <Link
                   href="/messages"
-                  className={`inline-flex items-center gap-2 rounded-lg border px-3 py-2 text-sm transition-colors ${
-                    urgentMessages
-                      ? 'border-medical-error/30 bg-medical-error/5 text-medical-error hover:bg-medical-error/10'
-                      : 'border-medical-warning/30 bg-medical-warning/5 text-medical-warning hover:bg-medical-warning/10'
-                  }`}
+                  className="inline-flex items-center gap-2 rounded-lg border border-blue-200 bg-blue-50 px-3 py-2 text-sm text-blue-800 transition-colors hover:bg-blue-100 dark:border-blue-900 dark:bg-blue-950/40 dark:text-blue-200 dark:hover:bg-blue-900/40"
                 >
                   <MessageCircle className="w-4 h-4" />
                   <span className="font-medium">{unreadMessages}</span>
@@ -152,10 +157,17 @@ export function Dashboard(_props: DashboardProps) {
           )}
 
           {(hasPending || hasToday) && (
-            <div className={`grid gap-4 ${hasPending && hasToday ? 'grid-cols-1 lg:grid-cols-2' : 'grid-cols-1'}`}>
-              {hasPending && <PendingApprovalsWidget approvals={data.pendingAppointments} />}
+            <div
+              className={`grid gap-4 ${hasPending && hasToday ? "grid-cols-1 lg:grid-cols-2" : "grid-cols-1"}`}
+            >
+              {hasPending && (
+                <PendingApprovalsWidget approvals={data.pendingAppointments} />
+              )}
               {hasToday && (
-                <TodaysAppointmentsWidget appointments={data.nextAppointments} onUpdate={refreshData} />
+                <TodaysAppointmentsWidget
+                  appointments={data.nextAppointments}
+                  onUpdate={refreshData}
+                />
               )}
             </div>
           )}

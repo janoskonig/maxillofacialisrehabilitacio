@@ -25,7 +25,7 @@ export function PendingApprovalsWidget({ approvals }: PendingApprovalsWidgetProp
   const router = useRouter();
 
   const handleAppointmentClick = (patientId: string) => {
-    router.push(`/?patientId=${patientId}`);
+    router.push(`/patients/${patientId}/stages`);
   };
 
   return (

@@ -5,12 +5,12 @@
 import type { LucideIcon } from 'lucide-react';
 import {
   Home,
+  UserRound,
   ClipboardList,
   MessageCircle,
   Activity,
   Layers,
   CalendarDays,
-  CalendarCheck,
   CalendarClock,
   Hourglass,
   Gauge,
@@ -51,14 +51,14 @@ export const NAV_GROUPS: NavGroup[] = [
     id: 'attekintes',
     label: 'Áttekintés',
     items: [
-      { id: 'home', label: 'Főoldal', path: '/', icon: Home, roles: 'all', match: (p) => p === '/', mobilePrimary: true },
-      { id: 'today', label: 'Mai időpontok', path: '/today', icon: CalendarCheck, roles: 'all', match: startsWith('/today') },
+      { id: 'home', label: 'Mai nap', path: '/today', icon: Home, roles: 'all', match: (p) => p === '/' || startsWith('/today')(p), mobilePrimary: true },
     ],
   },
   {
     id: 'betegellatas',
     label: 'Betegellátás',
     items: [
+      { id: 'patients', label: 'Betegek', path: '/patients', icon: UserRound, roles: 'all', match: (p) => startsWith('/patients')(p) && !startsWith('/patients/pipeline')(p) && !startsWith('/patients/stages')(p) },
       { id: 'tasks', label: 'Feladataim', path: '/tasks', icon: ClipboardList, roles: 'all', match: startsWith('/tasks') },
       { id: 'messages', label: 'Üzenetek', path: '/messages', icon: MessageCircle, roles: 'all', match: startsWith('/messages'), mobilePrimary: true },
       { id: 'pipeline', label: 'Beteg előkészítés', path: '/patients/pipeline', icon: Layers, roles: 'all', match: startsWith('/patients/pipeline') },

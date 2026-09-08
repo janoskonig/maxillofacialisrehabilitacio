@@ -75,10 +75,10 @@ html.portal-scale-extra {
   
   /* Buttons */
   .btn-primary {
-    @apply bg-gradient-to-r from-medical-primary to-medical-primary-light text-white px-5 py-2.5 rounded-lg;
+    @apply bg-medical-primary text-white px-5 py-2.5 rounded-lg;
     @apply font-medium text-sm shadow-soft-md;
     @apply transition-all duration-200 ease-smooth;
-    @apply hover:from-medical-primary-dark hover:to-medical-primary hover:shadow-soft-lg hover:-translate-y-0.5;
+    @apply hover:bg-medical-primary-dark;
     @apply focus:outline-none focus:ring-2 focus:ring-medical-primary focus:ring-offset-2;
     @apply active:translate-y-0 active:shadow-soft;
     @apply disabled:opacity-50 disabled:cursor-not-allowed disabled:hover:translate-y-0;
@@ -89,7 +89,7 @@ html.portal-scale-extra {
     @apply dark:bg-gray-800 dark:text-gray-200 dark:border-gray-700;
     @apply font-medium text-sm shadow-soft;
     @apply transition-all duration-200 ease-smooth;
-    @apply hover:bg-gray-50 hover:border-gray-400 hover:shadow-soft-md hover:-translate-y-0.5;
+    @apply hover:bg-gray-50 hover:border-gray-400;
     @apply dark:hover:bg-gray-700 dark:hover:border-gray-600;
     @apply focus:outline-none focus:ring-2 focus:ring-gray-400 focus:ring-offset-2 dark:focus:ring-offset-gray-900;
     @apply active:translate-y-0 active:shadow-soft;
@@ -97,19 +97,19 @@ html.portal-scale-extra {
   }
   
   .btn-danger {
-    @apply bg-gradient-to-r from-medical-error to-medical-error-light text-white px-5 py-2.5 rounded-lg;
+    @apply bg-medical-error-dark text-white px-5 py-2.5 rounded-lg;
     @apply font-medium text-sm shadow-soft-md;
     @apply transition-all duration-200 ease-smooth;
-    @apply hover:from-medical-error-dark hover:to-medical-error hover:shadow-soft-lg hover:-translate-y-0.5;
+    @apply hover:bg-red-700;
     @apply focus:outline-none focus:ring-2 focus:ring-medical-error focus:ring-offset-2;
     @apply active:translate-y-0 active:shadow-soft;
   }
   
   .btn-success {
-    @apply bg-gradient-to-r from-medical-success to-medical-success-light text-white px-5 py-2.5 rounded-lg;
+    @apply bg-emerald-700 text-white px-5 py-2.5 rounded-lg;
     @apply font-medium text-sm shadow-soft-md;
     @apply transition-all duration-200 ease-smooth;
-    @apply hover:from-medical-success-dark hover:to-medical-success hover:shadow-soft-lg hover:-translate-y-0.5;
+    @apply hover:bg-emerald-800;
     @apply focus:outline-none focus:ring-2 focus:ring-medical-success focus:ring-offset-2;
     @apply active:translate-y-0 active:shadow-soft;
   }

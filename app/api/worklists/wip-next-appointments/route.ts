@@ -22,6 +22,7 @@ import { chainBookingRequiredFromCounts } from '@/lib/chain-booking-status';
 import { enrichWorklistBookableWindows } from '@/lib/worklist-bookable-windows';
 import { enrichWorklistPriorAttempts } from '@/lib/worklist-prior-attempts';
 import { probeColumnExists } from '@/lib/schema-probe';
+import { z } from 'zod';
 
 export const dynamic = 'force-dynamic';
 
@@ -46,16 +47,26 @@ export const GET = authedHandler(async (req, { auth }) => {
 
   const { searchParams } = new URL(req.url);
   const patientId = searchParams.get('patientId');
+  const patientIdsParam = searchParams.get('patientIds');
+  const patientIds = patientIdsParam === null ? null : z.array(z.string().uuid()).min(1).max(25).safeParse(patientIdsParam.split(','));
+  if (patientIds && !patientIds.success) {
+    return NextResponse.json({ error: 'Legfeljebb 25 érvényes betegazonosító adható meg.' }, { status: 400 });
+  }
 
   const serverNow = new Date();
   const serverNowISO = serverNow.toISOString();
 
-  const queryParams: string[] = [];
+  const queryParams: (string | string[])[] = [];
   let paramIndex = 1;
   const extraConditions: string[] = [];
   if (patientId) {
     extraConditions.push(`pe.patient_id = $${paramIndex}`);
     queryParams.push(patientId);
+    paramIndex++;
+  }
+  if (patientIds?.success) {
+    extraConditions.push(`pe.patient_id = ANY($${paramIndex}::uuid[])`);
+    queryParams.push(patientIds.data);
     paramIndex++;
   }
   // All authenticated users can see all worklist items

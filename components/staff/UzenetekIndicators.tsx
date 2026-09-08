@@ -11,8 +11,8 @@ function formatCount(n: number): string {
 }
 
 /**
- * Staff üzenetek: piros = olvasatlan betegüzenet (badge: beteg + kolléga összesen);
- * borostyán = csak kollégai olvasatlan.
+ * Staff üzenetek: kék = olvasatlan betegüzenet (badge: beteg + kolléga összesen);
+ * kék = kollégai olvasatlan is; az olvasatlanság nem sürgősség.
  */
 export function UzenetekIndicators({ patientUnread, doctorUnread, variant = 'corner' }: UzenetekIndicatorsProps) {
   const isInline = variant === 'inline';
@@ -26,7 +26,7 @@ export function UzenetekIndicators({ patientUnread, doctorUnread, variant = 'cor
     const count = formatCount(total);
     return (
       <span
-        className={isInline ? `${baseInline} bg-red-500 text-white` : `${baseCorner} bg-red-500 text-white`}
+        className={isInline ? `${baseInline} bg-blue-600 text-white` : `${baseCorner} bg-blue-600 text-white`}
         aria-hidden
       >
         {count}
@@ -40,8 +40,8 @@ export function UzenetekIndicators({ patientUnread, doctorUnread, variant = 'cor
       <span
         className={
           isInline
-            ? `${baseInline} bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 font-semibold border border-amber-300 dark:border-amber-700`
-            : `${baseCorner} bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 font-semibold border border-amber-300 dark:border-amber-700`
+            ? `${baseInline} bg-blue-600 text-white`
+            : `${baseCorner} bg-blue-600 text-white`
         }
         aria-hidden
       >

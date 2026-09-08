@@ -1,29 +1,52 @@
-'use client';
+"use client";
 
-import { memo } from 'react';
-import { Patient, patientStageOptions } from '@/lib/types';
-import { Phone, Mail, Calendar, Eye, Pencil, Trash2, Image, Camera, CheckCircle2, XCircle, Clock, Clock as ClockIcon, History, User } from 'lucide-react';
-import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
-import { useRouter } from 'next/navigation';
-import { PatientListAvatar } from './PatientListAvatar';
+import { memo, type ReactNode } from "react";
+import { Patient, patientStageOptions } from "@/lib/types";
+import {
+  Calendar,
+  Pencil,
+  Trash2,
+  Image as ImageIcon,
+  Camera,
+  CheckCircle2,
+  XCircle,
+  Clock,
+  Clock as ClockIcon,
+  History,
+  User,
+} from "lucide-react";
+import { formatDateForDisplay } from "@/lib/dateUtils";
+import { useRouter } from "next/navigation";
+import { PatientListAvatar } from "./PatientListAvatar";
 
 interface AppointmentInfo {
   id: string;
   startTime: string;
   dentistEmail: string | null;
   dentistName?: string | null;
-  appointmentStatus?: 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show' | null;
+  appointmentStatus?:
+    | "cancelled_by_doctor"
+    | "cancelled_by_patient"
+    | "completed"
+    | "no_show"
+    | null;
   isLate?: boolean;
 }
 
 interface PatientCardProps {
   patient: Patient;
+  nextAction?: ReactNode;
   appointment?: AppointmentInfo;
   opDocumentCount?: number;
   fotoDocumentCount?: number;
   /** Legfrissebb portré / önarckép dokumentum (fotodokumentáció címke) — a lista avatárja */
   portraitDocumentId?: string | null;
-  stage?: { stage: string; stageDate?: string; notes?: string; stageLabel?: string };
+  stage?: {
+    stage: string;
+    stageDate?: string;
+    notes?: string;
+    stageLabel?: string;
+  };
   onView: (patient: Patient) => void;
   onEdit?: (patient: Patient) => void;
   onDelete?: (patient: Patient) => void;
@@ -31,11 +54,12 @@ interface PatientCardProps {
   onViewFoto?: (patient: Patient) => void;
   canEdit?: boolean;
   canDelete?: boolean;
-  userRole?: 'admin' | 'fogpótlástanász' | 'technikus' | 'beutalo_orvos';
+  userRole?: "admin" | "fogpótlástanász" | "technikus" | "beutalo_orvos";
 }
 
 function PatientCardComponent({
   patient,
+  nextAction,
   appointment,
   opDocumentCount = 0,
   fotoDocumentCount = 0,
@@ -60,260 +84,270 @@ function PatientCardComponent({
   const handleImpersonate = async (e: React.MouseEvent) => {
     e.stopPropagation();
     if (!patient.id) return;
-    
+
     try {
-      const response = await fetch('/api/patient-portal/auth/impersonate', {
-        method: 'POST',
+      const response = await fetch("/api/patient-portal/auth/impersonate", {
+        method: "POST",
         headers: {
-          'Content-Type': 'application/json',
+          "Content-Type": "application/json",
         },
-        credentials: 'include',
+        credentials: "include",
         body: JSON.stringify({ patientId: patient.id }),
       });
 
       if (response.ok) {
         const data = await response.json();
         // Redirect to patient portal
-        window.location.href = data.redirectUrl || '/patient-portal/dashboard';
+        window.location.href = data.redirectUrl || "/patient-portal/dashboard";
       } else {
         const data = await response.json();
-        alert(data.error || 'Hiba történt a bejelentkezéskor');
+        alert(data.error || "Hiba történt a bejelentkezéskor");
       }
     } catch (error) {
-      console.error('Error impersonating patient:', error);
-      alert('Hiba történt a bejelentkezéskor');
+      console.error("Error impersonating patient:", error);
+      alert("Hiba történt a bejelentkezéskor");
     }
   };
 
-  const getStatusInfo = (status?: AppointmentInfo['appointmentStatus'], isLate?: boolean) => {
+  const getStatusInfo = (
+    status?: AppointmentInfo["appointmentStatus"],
+    isLate?: boolean,
+  ) => {
     if (isLate) {
-      return { label: 'Késett', color: 'text-orange-600 dark:text-orange-400', bgColor: 'bg-orange-50 dark:bg-orange-950/40', icon: ClockIcon };
+      return {
+        label: "Késett",
+        color: "text-orange-600 dark:text-orange-400",
+        bgColor: "bg-orange-50 dark:bg-orange-950/40",
+        icon: ClockIcon,
+      };
     }
     switch (status) {
-      case 'cancelled_by_doctor':
-        return { label: 'Lemondva (orvos)', color: 'text-red-600 dark:text-red-400', bgColor: 'bg-red-50 dark:bg-red-950/40', icon: XCircle };
-      case 'cancelled_by_patient':
-        return { label: 'Lemondva (beteg)', color: 'text-orange-600 dark:text-orange-400', bgColor: 'bg-orange-50 dark:bg-orange-950/40', icon: XCircle };
-      case 'completed':
-        return { label: 'Teljesült', color: 'text-green-600 dark:text-green-400', bgColor: 'bg-green-50 dark:bg-green-950/40', icon: CheckCircle2 };
-      case 'no_show':
-        return { label: 'Nem jelent meg', color: 'text-red-700 dark:text-red-400', bgColor: 'bg-red-100 dark:bg-red-900', icon: XCircle };
+      case "cancelled_by_doctor":
+        return {
+          label: "Lemondva (orvos)",
+          color: "text-red-600 dark:text-red-400",
+          bgColor: "bg-red-50 dark:bg-red-950/40",
+          icon: XCircle,
+        };
+      case "cancelled_by_patient":
+        return {
+          label: "Lemondva (beteg)",
+          color: "text-orange-600 dark:text-orange-400",
+          bgColor: "bg-orange-50 dark:bg-orange-950/40",
+          icon: XCircle,
+        };
+      case "completed":
+        return {
+          label: "Teljesült",
+          color: "text-green-600 dark:text-green-400",
+          bgColor: "bg-green-50 dark:bg-green-950/40",
+          icon: CheckCircle2,
+        };
+      case "no_show":
+        return {
+          label: "Nem jelent meg",
+          color: "text-red-700 dark:text-red-400",
+          bgColor: "bg-red-100 dark:bg-red-900",
+          icon: XCircle,
+        };
       default:
         return null;
     }
   };
 
-  const statusInfo = appointment ? getStatusInfo(appointment.appointmentStatus, appointment.isLate) : null;
-  const StatusIcon = statusInfo?.icon;
+  const statusInfo = appointment
+    ? getStatusInfo(appointment.appointmentStatus, appointment.isLate)
+    : null;
 
   const getStageLabel = (s: { stage: string; stageLabel?: string }) => {
-    return s.stageLabel ?? patientStageOptions.find(opt => opt.value === s.stage)?.label ?? s.stage;
-  };
-
-  const getStageColor = (stageValue: string) => {
-    const legacy: Record<string, string> = {
-      uj_beteg: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-      onkologiai_kezeles_kesz: 'bg-purple-100 text-purple-800 dark:bg-purple-900 dark:text-purple-300',
-      arajanlatra_var: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
-      implantacios_sebeszi_tervezesre_var: 'bg-orange-100 text-orange-800 dark:bg-orange-900 dark:text-orange-300',
-      fogpotlasra_var: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300',
-      fogpotlas_keszul: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
-      fogpotlas_kesz: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-      gondozas_alatt: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
-    };
-    const byCode: Record<string, string> = {
-      STAGE_0: 'bg-blue-100 text-blue-800 dark:bg-blue-900 dark:text-blue-300',
-      STAGE_1: 'bg-blue-200 text-blue-900 dark:bg-blue-900 dark:text-blue-300',
-      STAGE_2: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-900 dark:text-yellow-300',
-      STAGE_3: 'bg-violet-100 text-violet-800 dark:bg-violet-900 dark:text-violet-300',
-      STAGE_4: 'bg-amber-100 text-amber-800 dark:bg-amber-900 dark:text-amber-300',
-      STAGE_5: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-900 dark:text-indigo-300',
-      STAGE_6: 'bg-green-100 text-green-800 dark:bg-green-900 dark:text-green-300',
-      STAGE_7: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
-    };
-    return legacy[stageValue] ?? byCode[stageValue] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
+    return (
+      s.stageLabel ??
+      patientStageOptions.find((opt) => opt.value === s.stage)?.label ??
+      s.stage
+    );
   };
 
   return (
-    <div className="card card-interactive space-y-3 animate-fade-in">
-      {/* Header */}
-      <div className="flex items-start justify-between gap-2">
-        <div className="flex-1 min-w-0 flex items-start gap-2">
-          {patient.id && (
-            <PatientListAvatar
-              patientId={patient.id}
-              patientName={patient.nev}
-              portraitDocumentId={portraitDocumentId}
-            />
-          )}
-          <div className="flex-1 min-w-0">
-          <div className="flex items-center gap-2 flex-wrap">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100 truncate">
-              {patient.nev || 'Név nélküli beteg'}
-            </h3>
-            {patient.halalDatum && (
-              <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300 flex-shrink-0" title={`Halál dátuma: ${formatDateForDisplay(patient.halalDatum)}`}>
-                ✝
-              </span>
-            )}
-            {stage && (
-              <span
-                className={`px-2 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${getStageColor(stage.stage)}`}
-                title={stage.notes || getStageLabel(stage)}
-              >
-                {getStageLabel(stage)}
-              </span>
-            )}
-          </div>
-          {userRole !== 'technikus' && patient.taj && (
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">TAJ: {patient.taj}</p>
-          )}
-          {userRole !== 'technikus' && patient.halalDatum && (
-            <p className="text-sm text-gray-600 dark:text-gray-400 mt-0.5">Halál dátuma: {formatDateForDisplay(patient.halalDatum)}</p>
-          )}
-          </div>
-        </div>
-        <div className="flex items-center gap-1 flex-shrink-0">
-          {patient.id && (
+    <article className="card space-y-3" aria-label={patient.nev || "Beteg"}>
+      <div className="flex items-start gap-3">
+        {patient.id && (
+          <PatientListAvatar
+            patientId={patient.id}
+            patientName={patient.nev}
+            portraitDocumentId={portraitDocumentId}
+          />
+        )}
+        <div className="min-w-0 flex-1">
+          <h3 className="text-base font-semibold">
             <button
-              onClick={handleHistoryClick}
-              className="p-1.5 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40 rounded"
-              title="Életút megtekintése"
+              type="button"
+              onClick={() => onView(patient)}
+              className="min-h-9 text-left text-blue-700 hover:underline dark:text-blue-300"
             >
-              <History className="w-4 h-4" />
+              {patient.nev || "Név nélküli beteg"}
             </button>
+          </h3>
+          {userRole !== "technikus" && patient.szuletesiDatum && (
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Szül.: {formatDateForDisplay(patient.szuletesiDatum)}
+            </p>
           )}
-          {opDocumentCount > 0 && (
-            <button
-              onClick={() => onViewOP?.(patient)}
-              className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded"
-              title={`${opDocumentCount} OP dokumentum`}
-            >
-              <Image className="w-4 h-4" />
-            </button>
-          )}
-          {fotoDocumentCount > 0 && (
-            <button
-              onClick={() => onViewFoto?.(patient)}
-              className="p-1.5 text-blue-600 dark:text-blue-400 hover:bg-blue-50 dark:hover:bg-blue-950/40 rounded"
-              title={`${fotoDocumentCount} Foto dokumentum`}
-            >
-              <Camera className="w-4 h-4" />
-            </button>
+          {patient.halalDatum && (
+            <p className="text-xs text-gray-600 dark:text-gray-400">
+              Elhunyt · {formatDateForDisplay(patient.halalDatum)}
+            </p>
           )}
         </div>
       </div>
-
-      {userRole !== 'technikus' && (
-      <div className="space-y-1.5">
-        {patient.telefonszam && (
-          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-            <Phone className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">{patient.telefonszam}</span>
-          </div>
-        )}
-        {patient.email && (
-          <div className="flex items-center gap-2 text-sm text-gray-600 dark:text-gray-400">
-            <Mail className="w-4 h-4 flex-shrink-0" />
-            <span className="truncate">{patient.email}</span>
-          </div>
-        )}
-      </div>
-      )}
-
-      {/* Appointment Info */}
-      {appointment && (
-        <div className={`${statusInfo?.bgColor || 'bg-gray-50 dark:bg-gray-800'} rounded-lg p-3 border border-gray-200/50 dark:border-gray-800`}>
-          <div className="flex items-center gap-2">
-            <Calendar className="w-4 h-4 text-gray-600 dark:text-gray-400" />
-            <div className="flex-1 min-w-0">
-              <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                {new Date(appointment.startTime).toLocaleString('hu-HU', {
-                  year: 'numeric',
-                  month: 'long',
-                  day: 'numeric',
-                  hour: '2-digit',
-                  minute: '2-digit',
-                })}
-              </p>
-              {appointment.dentistName && (
-                <p className="text-xs text-gray-600 dark:text-gray-400 mt-0.5">{appointment.dentistName}</p>
-              )}
-              {statusInfo && (
-                <div className="flex items-center gap-1 mt-1">
-                  {StatusIcon && <StatusIcon className={`w-3.5 h-3.5 ${statusInfo.color}`} />}
-                  <span className={`text-xs ${statusInfo.color} font-medium`}>
-                    {statusInfo.label}
-                  </span>
-                </div>
-              )}
-            </div>
-          </div>
-        </div>
-      )}
-
-      {/* Additional Info */}
-      <div className="grid grid-cols-2 gap-2 text-xs text-gray-600 dark:text-gray-400">
-        {patient.kezeleoorvos && (
-          <div>
-            <span className="font-medium">Orvos: </span>
-            <span className="truncate block">{patient.kezeleoorvos}</span>
-          </div>
-        )}
-        {patient.createdAt && (
-          <div>
-            <span className="font-medium">Létrehozva: </span>
-            <span>{formatDateForDisplay(patient.createdAt)}</span>
-            {patient.createdBy ? (
-              <span className="text-gray-500 dark:text-gray-400 ml-1">({patient.createdBy.split('@')[0]})</span>
-            ) : (
-              <span className="text-gray-500 dark:text-gray-400 ml-1">(A beteg regisztrált)</span>
-            )}
-          </div>
-        )}
-      </div>
-
-      {/* Actions */}
-      <div className="flex items-center gap-2 pt-3 border-t border-gray-100 dark:border-gray-800">
-        {userRole === 'admin' && patient.id && (
-          <button
-            onClick={handleImpersonate}
-            className="p-2 text-purple-600 dark:text-purple-400 hover:bg-purple-50 dark:hover:bg-purple-950/40 rounded-lg transition-all duration-200"
-            title="Belépés betegként"
-          >
-            <User className="w-4 h-4" />
-          </button>
-        )}
-        <button
-          onClick={() => onView(patient)}
-          className="flex-1 btn-secondary flex items-center justify-center gap-2 text-sm py-2"
+      {stage && (
+        <span
+          className="inline-block rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-200"
+          title={stage.notes}
         >
-          <Eye className="w-4 h-4" />
-          <span>Megtekintés</span>
-        </button>
-        {canEdit && (
-          <button
-            onClick={() => onEdit?.(patient)}
-            className="flex-1 btn-secondary flex items-center justify-center gap-2 text-sm py-2"
-          >
-            <Pencil className="w-4 h-4" />
-            <span>Szerkesztés</span>
-          </button>
+          {getStageLabel(stage)}
+        </span>
+      )}
+
+      {nextAction && (
+        <div className="rounded-lg bg-blue-50 p-3 dark:bg-blue-950/40">
+          <p className="mb-1 text-xs font-medium text-blue-800 dark:text-blue-200">
+            Következő teendő
+          </p>
+          {nextAction}
+        </div>
+      )}
+
+      {userRole !== "technikus" && appointment && (
+        <div className="flex items-start gap-2 text-sm">
+          <Calendar
+            className="mt-0.5 h-4 w-4 shrink-0 text-gray-500 dark:text-gray-400"
+            aria-hidden="true"
+          />
+          <div>
+            <time dateTime={appointment.startTime}>
+              {new Date(appointment.startTime).toLocaleString("hu-HU", {
+                month: "short",
+                day: "numeric",
+                hour: "2-digit",
+                minute: "2-digit",
+              })}
+            </time>
+            {statusInfo && (
+              <span className={`ml-2 text-xs ${statusInfo.color}`}>
+                {statusInfo.label}
+              </span>
+            )}
+          </div>
+        </div>
+      )}
+      <p className="text-sm text-gray-600 dark:text-gray-300">
+        Kezelőorvos:{" "}
+        {patient.kezeleoorvos || (
+          <span className="text-amber-800 dark:text-amber-200">
+            Nincs kijelölve
+          </span>
         )}
-        {canDelete && (
+      </p>
+
+      <details className="border-t border-gray-200 pt-1 dark:border-gray-700">
+        <summary className="cursor-pointer py-3 text-sm text-gray-700 dark:text-gray-200">
+          Részletek és dokumentumok
+        </summary>
+        <div className="space-y-3 pb-3 text-sm text-gray-600 dark:text-gray-300">
+          {userRole !== "technikus" && (
+            <>
+              <p>TAJ: {patient.taj || "Nincs megadva"}</p>
+              <p className="break-all">
+                {patient.telefonszam || "Nincs telefonszám"}
+                {patient.email && (
+                  <span className="block">{patient.email}</span>
+                )}
+              </p>
+              <div className="flex flex-wrap gap-2">
+                {opDocumentCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => (onViewOP ?? onView)(patient)}
+                    className="btn-secondary inline-flex items-center gap-2"
+                  >
+                    <ImageIcon className="h-4 w-4" aria-hidden="true" />
+                    OP ({opDocumentCount})
+                  </button>
+                )}
+                {fotoDocumentCount > 0 && (
+                  <button
+                    type="button"
+                    onClick={() => (onViewFoto ?? onView)(patient)}
+                    className="btn-secondary inline-flex items-center gap-2"
+                  >
+                    <Camera className="h-4 w-4" aria-hidden="true" />
+                    Fotók ({fotoDocumentCount})
+                  </button>
+                )}
+              </div>
+              {patient.createdAt && (
+                <p className="text-xs">
+                  Létrehozva: {formatDateForDisplay(patient.createdAt)}
+                  {patient.createdBy ? ` · ${patient.createdBy}` : ""}
+                </p>
+              )}
+            </>
+          )}
+          <div className="flex flex-wrap gap-2">
+            {patient.id && (
+              <button
+                type="button"
+                onClick={handleHistoryClick}
+                className="btn-secondary inline-flex items-center gap-2"
+              >
+                <History className="h-4 w-4" aria-hidden="true" />
+                Életút
+              </button>
+            )}
+            {userRole === "admin" && patient.id && (
+              <button
+                type="button"
+                onClick={handleImpersonate}
+                className="btn-secondary inline-flex items-center gap-2"
+              >
+                <User className="h-4 w-4" aria-hidden="true" />
+                Belépés betegként
+              </button>
+            )}
+            {canDelete && onDelete && (
+              <button
+                type="button"
+                onClick={() => onDelete(patient)}
+                className="inline-flex items-center gap-2 rounded-lg px-3 py-3 text-red-700 hover:bg-red-50 dark:text-red-300 dark:hover:bg-red-950"
+              >
+                <Trash2 className="h-4 w-4" aria-hidden="true" />
+                Beteg törlése
+              </button>
+            )}
+          </div>
+        </div>
+      </details>
+      <div className="flex flex-wrap gap-2">
+        <button
+          type="button"
+          onClick={() => onView(patient)}
+          className="btn-secondary flex-1"
+        >
+          Megtekintés
+        </button>
+        {canEdit && onEdit && (
           <button
-            onClick={() => onDelete?.(patient)}
-            className="p-2 text-medical-error hover:bg-medical-error/10 rounded-lg transition-all duration-200"
-            title="Törlés"
+            type="button"
+            onClick={() => onEdit(patient)}
+            className="btn-secondary inline-flex flex-1 items-center justify-center gap-2"
           >
-            <Trash2 className="w-4 h-4" />
+            <Pencil className="h-4 w-4" aria-hidden="true" />
+            Szerkesztés
           </button>
         )}
       </div>
-    </div>
+    </article>
   );
 }
 
-// Memoize to prevent unnecessary re-renders
 export const PatientCard = memo(PatientCardComponent);
-
