@@ -7,6 +7,7 @@ import { sendAppointmentTimeSlotFreedNotification } from '@/lib/email';
 import { deleteGoogleCalendarEvent, createGoogleCalendarEvent } from '@/lib/google-calendar';
 import { logActivity, logActivityWithAuth } from '@/lib/activity';
 import { reconcileMissingDataTasksSilent } from '@/lib/missing-data-reminders';
+import { normalizeDefectRaster } from '@/lib/defect-raster';
 import { recomputeReferrerUserIdSilent } from '@/lib/recompute-referrer';
 import { recomputeDerivedNumericsSilent } from '@/lib/derived-numerics';
 import { syncAutoCreatedIntakeEpisodeSilent } from '@/lib/patient-intake-episode';
@@ -280,10 +281,10 @@ async function executePatientUpdate(
         [patientId, patient.beutaloOrvos||null, patient.beutaloIntezmeny||null, patient.beutaloIndokolas||null, patient.primerMutetLeirasa||null, patient.mutetIdeje||null, patient.szovettaniDiagnozis||null, patient.nyakiBlokkdisszekcio||null]
       ),
       client.query(
-        `INSERT INTO patient_anamnesis (patient_id, kezelesre_erkezes_indoka, alkoholfogyasztas, dohanyzas_szam, maxilladefektus_van, brown_fuggoleges_osztaly, brown_vizszintes_komponens, mandibuladefektus_van, kovacs_dobak_osztaly, nyelvmozgasok_akadalyozottak, gombocos_beszed, nyalmirigy_allapot, fabian_fejerdy_protetikai_osztaly, fabian_fejerdy_protetikai_osztaly_felso, fabian_fejerdy_protetikai_osztaly_also, radioterapia, radioterapia_dozis, radioterapia_datum_intervallum, chemoterapia, chemoterapia_leiras, tnm_staging, bno, diagnozis, baleset_idopont, baleset_etiologiaja, baleset_egyeb, veleszuletett_rendellenessegek, veleszuletett_mutetek_leirasa)
-         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27::jsonb,$28)
-         ON CONFLICT (patient_id) DO UPDATE SET kezelesre_erkezes_indoka=EXCLUDED.kezelesre_erkezes_indoka, alkoholfogyasztas=EXCLUDED.alkoholfogyasztas, dohanyzas_szam=EXCLUDED.dohanyzas_szam, maxilladefektus_van=EXCLUDED.maxilladefektus_van, brown_fuggoleges_osztaly=EXCLUDED.brown_fuggoleges_osztaly, brown_vizszintes_komponens=EXCLUDED.brown_vizszintes_komponens, mandibuladefektus_van=EXCLUDED.mandibuladefektus_van, kovacs_dobak_osztaly=EXCLUDED.kovacs_dobak_osztaly, nyelvmozgasok_akadalyozottak=EXCLUDED.nyelvmozgasok_akadalyozottak, gombocos_beszed=EXCLUDED.gombocos_beszed, nyalmirigy_allapot=EXCLUDED.nyalmirigy_allapot, fabian_fejerdy_protetikai_osztaly=EXCLUDED.fabian_fejerdy_protetikai_osztaly, fabian_fejerdy_protetikai_osztaly_felso=EXCLUDED.fabian_fejerdy_protetikai_osztaly_felso, fabian_fejerdy_protetikai_osztaly_also=EXCLUDED.fabian_fejerdy_protetikai_osztaly_also, radioterapia=EXCLUDED.radioterapia, radioterapia_dozis=EXCLUDED.radioterapia_dozis, radioterapia_datum_intervallum=EXCLUDED.radioterapia_datum_intervallum, chemoterapia=EXCLUDED.chemoterapia, chemoterapia_leiras=EXCLUDED.chemoterapia_leiras, tnm_staging=EXCLUDED.tnm_staging, bno=EXCLUDED.bno, diagnozis=EXCLUDED.diagnozis, baleset_idopont=EXCLUDED.baleset_idopont, baleset_etiologiaja=EXCLUDED.baleset_etiologiaja, baleset_egyeb=EXCLUDED.baleset_egyeb, veleszuletett_rendellenessegek=EXCLUDED.veleszuletett_rendellenessegek, veleszuletett_mutetek_leirasa=EXCLUDED.veleszuletett_mutetek_leirasa`,
-        [patientId, patient.kezelesreErkezesIndoka||null, patient.alkoholfogyasztas||null, patient.dohanyzasSzam||null, patient.maxilladefektusVan??null, patient.brownFuggolegesOsztaly||null, patient.brownVizszintesKomponens||null, patient.mandibuladefektusVan??null, patient.kovacsDobakOsztaly||null, patient.nyelvmozgásokAkadályozottak??null, patient.gombocosBeszed??null, patient.nyalmirigyAllapot||null, patient.fabianFejerdyProtetikaiOsztaly||null, patient.fabianFejerdyProtetikaiOsztalyFelso||null, patient.fabianFejerdyProtetikaiOsztalyAlso||null, patient.radioterapia||false, patient.radioterapiaDozis||null, patient.radioterapiaDatumIntervallum||null, patient.chemoterapia||false, patient.chemoterapiaLeiras||null, patient.tnmStaging||null, patient.bno||null, patient.diagnozis||null, patient.balesetIdopont||null, patient.balesetEtiologiaja||null, patient.balesetEgyeb||null, Array.isArray(patient.veleszuletettRendellenessegek) ? JSON.stringify(patient.veleszuletettRendellenessegek) : '[]', patient.veleszuletettMutetekLeirasa||null]
+        `INSERT INTO patient_anamnesis (patient_id, kezelesre_erkezes_indoka, alkoholfogyasztas, dohanyzas_szam, maxilladefektus_van, brown_fuggoleges_osztaly, brown_vizszintes_komponens, mandibuladefektus_van, kovacs_dobak_osztaly, nyelvmozgasok_akadalyozottak, gombocos_beszed, nyalmirigy_allapot, fabian_fejerdy_protetikai_osztaly, fabian_fejerdy_protetikai_osztaly_felso, fabian_fejerdy_protetikai_osztaly_also, radioterapia, radioterapia_dozis, radioterapia_datum_intervallum, chemoterapia, chemoterapia_leiras, tnm_staging, bno, diagnozis, baleset_idopont, baleset_etiologiaja, baleset_egyeb, veleszuletett_rendellenessegek, veleszuletett_mutetek_leirasa, maxilla_defektus_raszter, mandibula_defektus_raszter)
+         VALUES ($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20,$21,$22,$23,$24,$25,$26,$27::jsonb,$28,$29::jsonb,$30::jsonb)
+         ON CONFLICT (patient_id) DO UPDATE SET kezelesre_erkezes_indoka=EXCLUDED.kezelesre_erkezes_indoka, alkoholfogyasztas=EXCLUDED.alkoholfogyasztas, dohanyzas_szam=EXCLUDED.dohanyzas_szam, maxilladefektus_van=EXCLUDED.maxilladefektus_van, brown_fuggoleges_osztaly=EXCLUDED.brown_fuggoleges_osztaly, brown_vizszintes_komponens=EXCLUDED.brown_vizszintes_komponens, mandibuladefektus_van=EXCLUDED.mandibuladefektus_van, kovacs_dobak_osztaly=EXCLUDED.kovacs_dobak_osztaly, nyelvmozgasok_akadalyozottak=EXCLUDED.nyelvmozgasok_akadalyozottak, gombocos_beszed=EXCLUDED.gombocos_beszed, nyalmirigy_allapot=EXCLUDED.nyalmirigy_allapot, fabian_fejerdy_protetikai_osztaly=EXCLUDED.fabian_fejerdy_protetikai_osztaly, fabian_fejerdy_protetikai_osztaly_felso=EXCLUDED.fabian_fejerdy_protetikai_osztaly_felso, fabian_fejerdy_protetikai_osztaly_also=EXCLUDED.fabian_fejerdy_protetikai_osztaly_also, radioterapia=EXCLUDED.radioterapia, radioterapia_dozis=EXCLUDED.radioterapia_dozis, radioterapia_datum_intervallum=EXCLUDED.radioterapia_datum_intervallum, chemoterapia=EXCLUDED.chemoterapia, chemoterapia_leiras=EXCLUDED.chemoterapia_leiras, tnm_staging=EXCLUDED.tnm_staging, bno=EXCLUDED.bno, diagnozis=EXCLUDED.diagnozis, baleset_idopont=EXCLUDED.baleset_idopont, baleset_etiologiaja=EXCLUDED.baleset_etiologiaja, baleset_egyeb=EXCLUDED.baleset_egyeb, veleszuletett_rendellenessegek=EXCLUDED.veleszuletett_rendellenessegek, veleszuletett_mutetek_leirasa=EXCLUDED.veleszuletett_mutetek_leirasa, maxilla_defektus_raszter=EXCLUDED.maxilla_defektus_raszter, mandibula_defektus_raszter=EXCLUDED.mandibula_defektus_raszter`,
+        [patientId, patient.kezelesreErkezesIndoka||null, patient.alkoholfogyasztas||null, patient.dohanyzasSzam||null, patient.maxilladefektusVan??null, patient.brownFuggolegesOsztaly||null, patient.brownVizszintesKomponens||null, patient.mandibuladefektusVan??null, patient.kovacsDobakOsztaly||null, patient.nyelvmozgásokAkadályozottak??null, patient.gombocosBeszed??null, patient.nyalmirigyAllapot||null, patient.fabianFejerdyProtetikaiOsztaly||null, patient.fabianFejerdyProtetikaiOsztalyFelso||null, patient.fabianFejerdyProtetikaiOsztalyAlso||null, patient.radioterapia||false, patient.radioterapiaDozis||null, patient.radioterapiaDatumIntervallum||null, patient.chemoterapia||false, patient.chemoterapiaLeiras||null, patient.tnmStaging||null, patient.bno||null, patient.diagnozis||null, patient.balesetIdopont||null, patient.balesetEtiologiaja||null, patient.balesetEgyeb||null, Array.isArray(patient.veleszuletettRendellenessegek) ? JSON.stringify(patient.veleszuletettRendellenessegek) : '[]', patient.veleszuletettMutetekLeirasa||null, JSON.stringify(normalizeDefectRaster('maxilla', patient.maxillaDefektusRaszter)), JSON.stringify(normalizeDefectRaster('mandibula', patient.mandibulaDefektusRaszter))]
       ),
       client.query(
         `INSERT INTO patient_dental_status (patient_id, meglevo_fogak, meglevo_implantatumok, nem_ismert_poziciokban_implantatum, nem_ismert_poziciokban_implantatum_reszletek, felso_fogpotlas_van, felso_fogpotlas_mikor, felso_fogpotlas_keszito, felso_fogpotlas_elegedett, felso_fogpotlas_problema, felso_fogpotlas_tipus, also_fogpotlas_van, also_fogpotlas_mikor, also_fogpotlas_keszito, also_fogpotlas_elegedett, also_fogpotlas_problema, also_fogpotlas_tipus)
@@ -629,6 +630,29 @@ async function trackPatientChanges(
     const newJson = (validatedPatient as Record<string, unknown>)[patient]
       ? normalizeJSON((validatedPatient as Record<string, unknown>)[patient])
       : '{}';
+    if (oldJson !== newJson) {
+      changes.push(`${name}: módosítva`);
+      structuredChanges.push({
+        fieldName: db,
+        fieldDisplayName: name,
+        oldValue: oldJson,
+        newValue: newJson,
+      });
+    }
+  }
+
+  // Defektus-raszter (098): normalizált kulcslistát hasonlítunk, hogy a sorrend /
+  // érvénytelen kulcs ne számítson változásnak.
+  const rasterFields = [
+    { db: 'maxilla_defektus_raszter', jaw: 'maxilla', patient: 'maxillaDefektusRaszter', name: 'Maxilladefektus kiterjedése (raszter)' },
+    { db: 'mandibula_defektus_raszter', jaw: 'mandibula', patient: 'mandibulaDefektusRaszter', name: 'Mandibuladefektus kiterjedése (raszter)' },
+  ] as const;
+
+  for (const { db, jaw, patient, name } of rasterFields) {
+    const oldJson = JSON.stringify(normalizeDefectRaster(jaw, oldPatient[db]));
+    const newJson = JSON.stringify(
+      normalizeDefectRaster(jaw, (validatedPatient as Record<string, unknown>)[patient])
+    );
     if (oldJson !== newJson) {
       changes.push(`${name}: módosítva`);
       structuredChanges.push({

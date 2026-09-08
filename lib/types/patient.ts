@@ -87,6 +87,13 @@ export const patientSchema = z.object({
   brownVizszintesKomponens: z.enum(['a', 'b', 'c']).optional().nullable().or(z.literal('')),
   mandibuladefektusVan: patientTriStateBoolean,
   kovacsDobakOsztaly: z.enum(['1', '2', '3', '4', '5']).optional().nullable().or(z.literal('')),
+  /**
+   * Raszterezett defektus-kiterjedés: a 6×8-as állcsont-rács bejelölt mezőinek
+   * kulcsai (pl. ["r2c1"], lib/defect-raster.ts). A Brown / Kovács–Dobák
+   * osztályok utódja; a régi mezők archívként maradnak.
+   */
+  maxillaDefektusRaszter: z.array(z.string()).optional().nullable(),
+  mandibulaDefektusRaszter: z.array(z.string()).optional().nullable(),
   nyelvmozgásokAkadályozottak: patientTriStateBoolean,
   gombocosBeszed: patientTriStateBoolean,
   nyalmirigyAllapot: z.enum(['hiposzaliváció', 'hiperszaliváció', 'Nem számol be eltérésről']).optional().nullable().or(z.literal('')),
@@ -286,6 +293,8 @@ export interface PatientAnamnesis {
   brownVizszintesKomponens: string | null;
   mandibuladefektusVan: boolean | null;
   kovacsDobakOsztaly: string | null;
+  maxillaDefektusRaszter: string[] | null;
+  mandibulaDefektusRaszter: string[] | null;
   nyelvmozgásokAkadályozottak: boolean | null;
   gombocosBeszed: boolean | null;
   nyalmirigyAllapot: string | null;

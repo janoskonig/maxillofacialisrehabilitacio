@@ -193,13 +193,13 @@ describe('splitByResponsible — beutaló-routing', () => {
       item('szovettan'),
       item('bno'),
       item('tnmStaging'),
-      item('brownFuggoleges'),
+      item('maxillaDefektusRaszter'),
       { key: 'taj', label: 'TAJ', group: 'clinical' },
     ]);
     expect(referrerItems.map(i => i.key)).toEqual([
       'beutaloIndokolas', 'mutetLeiras', 'mutetIdeje', 'szovettan', 'bno', 'tnmStaging',
     ]);
-    expect(kezeloItems.map(i => i.key)).toEqual(['brownFuggoleges', 'taj']);
+    expect(kezeloItems.map(i => i.key)).toEqual(['maxillaDefektusRaszter', 'taj']);
   });
 
   it('üres listára üres felosztás', () => {

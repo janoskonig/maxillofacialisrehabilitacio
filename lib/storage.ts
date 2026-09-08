@@ -36,6 +36,8 @@ const CSV_HEADERS = [
   'brownVizszintesKomponens',
   'mandibuladefektusVan',
   'kovacsDobakOsztaly',
+  'maxillaDefektusRaszter',
+  'mandibulaDefektusRaszter',
   'nyelvmozgásokAkadályozottak',
   'gombocosBeszed',
   'nyalmirigyAllapot',
@@ -503,8 +505,12 @@ const convertPatientsToCSV = (patients: Patient[]): string => {
     const row = CSV_HEADERS.map(header => {
       let value = patient[header as keyof Patient];
       
-      // Handle object values (like meglevoImplantatumok)
-      if (header === 'meglevoImplantatumok' && value && typeof value === 'object') {
+      // Handle object values (like meglevoImplantatumok, defektus-raszter)
+      if (
+        (header === 'meglevoImplantatumok' || header === 'maxillaDefektusRaszter' || header === 'mandibulaDefektusRaszter') &&
+        value &&
+        typeof value === 'object'
+      ) {
         value = JSON.stringify(value);
       }
       
@@ -549,6 +555,15 @@ const parseCSVToPatients = (csvContent: string): Patient[] => {
             value = JSON.parse(value);
           } catch (e) {
             value = {};
+          }
+        }
+        // Defektus-raszter: JSON tömb (bejelölt mezők kulcsai)
+        if ((header === 'maxillaDefektusRaszter' || header === 'mandibulaDefektusRaszter') && value) {
+          try {
+            const parsed = JSON.parse(value);
+            value = Array.isArray(parsed) ? parsed : [];
+          } catch (e) {
+            value = [];
           }
         }
         

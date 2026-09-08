@@ -77,7 +77,7 @@ describe('completenessItemWeight', () => {
 
 describe('N/A field eligibility', () => {
   it('allows the conditional research fields to be marked N/A', () => {
-    for (const key of ['ohipT0', 'tnmStaging', 'brownFuggoleges', 'kovacsDobak', 'radioterapiaDozis']) {
+    for (const key of ['ohipT0', 'tnmStaging', 'maxillaDefektusRaszter', 'mandibulaDefektusRaszter', 'radioterapiaDozis']) {
       expect(NA_ELIGIBLE_KEYS.has(key)).toBe(true);
     }
   });

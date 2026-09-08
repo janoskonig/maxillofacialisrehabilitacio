@@ -10,6 +10,7 @@ import {
 } from '@/lib/clinical-rules';
 import type { Patient } from '@/lib/types';
 import { getPlausibilityWarnings, type PlausibilityWarning } from '@/lib/data-plausibility';
+import { isDefectRasterEmpty } from '@/lib/defect-raster';
 
 /** Mindig értelmezhető klinikai tételek száma: kötelező mezők + kötelező dokumentumok. */
 const CLINICAL_APPLICABLE = REQUIRED_FIELDS.length + REQUIRED_DOC_RULES.length;
@@ -173,23 +174,19 @@ const RESEARCH_RULES: ResearchRule[] = [
     applicable: (r) => r.kezelesre_erkezes_indoka === ONKO,
     missing: (r) => isBlank(r.tnm_staging),
   },
+  // Defektus-kiterjedés a raszteren (a Brown / Kovács–Dobák osztályok helyett):
+  // ha van defektus, legalább egy bejelölt mező kell.
   {
-    key: 'brownFuggoleges',
-    label: 'Brown-osztály (függőleges)',
+    key: 'maxillaDefektusRaszter',
+    label: 'Maxilladefektus kiterjedése (raszter)',
     applicable: (r) => r.maxilladefektus_van === true,
-    missing: (r) => isBlank(r.brown_fuggoleges_osztaly),
+    missing: (r) => isDefectRasterEmpty('maxilla', r.maxilla_defektus_raszter),
   },
   {
-    key: 'brownVizszintes',
-    label: 'Brown vízszintes komponens',
-    applicable: (r) => r.maxilladefektus_van === true,
-    missing: (r) => isBlank(r.brown_vizszintes_komponens),
-  },
-  {
-    key: 'kovacsDobak',
-    label: 'Kovács-Dobák-osztály',
+    key: 'mandibulaDefektusRaszter',
+    label: 'Mandibuladefektus kiterjedése (raszter)',
     applicable: (r) => r.mandibuladefektus_van === true,
-    missing: (r) => isBlank(r.kovacs_dobak_osztaly),
+    missing: (r) => isDefectRasterEmpty('mandibula', r.mandibula_defektus_raszter),
   },
   {
     key: 'radioterapiaDozis',
@@ -302,9 +299,8 @@ export async function getPatientDataCompleteness(
         d.felso_fogpotlas_elegedett,
         d.also_fogpotlas_van,
         d.also_fogpotlas_elegedett,
-        a.brown_fuggoleges_osztaly,
-        a.brown_vizszintes_komponens,
-        a.kovacs_dobak_osztaly,
+        a.maxilla_defektus_raszter,
+        a.mandibula_defektus_raszter,
         a.maxilladefektus_van,
         a.mandibuladefektus_van,
         a.radioterapia,

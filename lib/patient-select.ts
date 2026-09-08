@@ -32,6 +32,8 @@ export const patientSelectColumns = (): readonly string[] =>
     'brown_vizszintes_komponens as "brownVizszintesKomponens"',
     'mandibuladefektus_van as "mandibuladefektusVan"',
     'kovacs_dobak_osztaly as "kovacsDobakOsztaly"',
+    'maxilla_defektus_raszter as "maxillaDefektusRaszter"',
+    'mandibula_defektus_raszter as "mandibulaDefektusRaszter"',
     'nyelvmozgasok_akadalyozottak as "nyelvmozgásokAkadályozottak"',
     'gombocos_beszed as "gombocosBeszed"',
     'nyalmirigy_allapot as "nyalmirigyAllapot"',
