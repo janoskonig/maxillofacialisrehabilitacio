@@ -60,12 +60,13 @@ const MISSING_REQUIRED_DOCUMENT_SQL = `NOT EXISTS (
 
 // A főoldali operatív „Hiányzó adat” a klinikai minimumot jelenti. A teljes,
 // feltételes kutatási teljesség továbbra is az admin adatminőségi riport feladata.
+// Csak a szigorúan kötelező (severity 'error') mezők — lib/clinical-rules.ts
+// REQUIRED_FIELDS. Az email ajánlott (warning), ezért nem szerepel itt.
 const MISSING_CLINICAL_DATA_SQL = `(
   NULLIF(BTRIM(p.nev), '') IS NULL
   OR NULLIF(BTRIM(p.nem), '') IS NULL
   OR p.szuletesi_datum IS NULL
   OR NULLIF(BTRIM(p.taj), '') IS NULL
-  OR NULLIF(BTRIM(p.email), '') IS NULL
   OR NOT EXISTS (
     SELECT 1 FROM patient_anamnesis pa
     WHERE pa.patient_id = p.id

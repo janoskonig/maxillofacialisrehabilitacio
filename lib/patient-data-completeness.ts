@@ -4,7 +4,9 @@ import {
   REQUIRED_DOC_RULES,
   RESEARCH_FIELD_WEIGHT,
   getMissingRequiredFields,
+  requiredFieldSeverity,
   type RequiredField,
+  type RequiredFieldSeverity,
 } from '@/lib/clinical-rules';
 import type { Patient } from '@/lib/types';
 import { getPlausibilityWarnings, type PlausibilityWarning } from '@/lib/data-plausibility';
@@ -60,17 +62,34 @@ export type MissingItem = {
   key: string;
   label: string;
   group: MissingItemGroup;
+  /**
+   * Klinikai tételnél a szigorúság: 'error' = kötelező (alapértelmezés, blokkol),
+   * 'warning' = ajánlott (pl. email — jelzés, nem blokkol). Kutatási tételnél nincs.
+   */
+  severity?: RequiredFieldSeverity;
   /** N/A-jelölt tételnél a hiányzás okkódja (lib/field-na-reasons). */
   reasonCode?: string;
 };
+
+/** Ajánlott (nem blokkoló) hiányzó tétel? Csak a `severity: 'warning'` jelölésűek. */
+export function isRecommendedMissingItem(item: Pick<MissingItem, 'severity'>): boolean {
+  return item.severity === 'warning';
+}
+
+/** Csak a szigorúan kötelező (blokkoló) tételek — a klinikai minimum kapujához. */
+export function blockingClinicalMissing<T extends Pick<MissingItem, 'severity'>>(items: T[]): T[] {
+  return items.filter((i) => !isRecommendedMissingItem(i));
+}
 
 export type PatientCompletenessRow = {
   patientId: string;
   patientName: string | null;
   kezeleoorvos: string | null;
   etiologia: string | null;
+  /** Hiányzó klinikai tételek — a `severity` különíti el a kötelezőt az ajánlottól. */
   clinicalMissing: MissingItem[];
   researchMissing: MissingItem[];
+  /** Klinikai minimum teljesül: nincs KÖTELEZŐ (error) klinikai hiány; az ajánlott nem számít. */
   clinicalComplete: boolean;
   researchComplete: boolean;
   /** Explicit N/A-ként ("nem értelmezhető / nem ismert") megjelölt mezők. */
@@ -91,6 +110,8 @@ export type FieldGapSummary = {
   key: string;
   label: string;
   group: MissingItemGroup;
+  /** Klinikai tételnél: kötelező ('error') vagy ajánlott ('warning'). */
+  severity?: RequiredFieldSeverity;
   count: number;
 };
 
@@ -326,7 +347,14 @@ export async function getPatientDataCompleteness(
   const bump = (item: MissingItem) => {
     const existing = fieldGapMap.get(item.key);
     if (existing) existing.count += 1;
-    else fieldGapMap.set(item.key, { key: item.key, label: item.label, group: item.group, count: 1 });
+    else
+      fieldGapMap.set(item.key, {
+        key: item.key,
+        label: item.label,
+        group: item.group,
+        severity: item.severity,
+        count: 1,
+      });
   };
 
   let clinicalComplete = 0;
@@ -351,13 +379,18 @@ export async function getPatientDataCompleteness(
     } as unknown as Patient;
 
     const clinicalMissing: MissingItem[] = getMissingRequiredFields(patientLike).map(
-      (f: RequiredField) => ({ key: String(f.key), label: f.label, group: 'clinical' as const }),
+      (f: RequiredField) => ({
+        key: String(f.key),
+        label: f.label,
+        group: 'clinical' as const,
+        severity: requiredFieldSeverity(f),
+      }),
     );
 
     // Kötelező dokumentum: OP röntgen (min. 1)
     const opRule = REQUIRED_DOC_RULES.find((r) => r.tag === 'op');
     if (opRule && (row.op_count ?? 0) < opRule.minCount) {
-      clinicalMissing.push({ key: 'doc:op', label: opRule.label, group: 'clinical' });
+      clinicalMissing.push({ key: 'doc:op', label: opRule.label, group: 'clinical', severity: 'error' });
     }
 
     // --- Kutatási mezők (feltételes) ---
@@ -390,7 +423,9 @@ export async function getPatientDataCompleteness(
     clinicalMissing.forEach(bump);
     researchMissing.forEach(bump);
 
-    const isClinicalComplete = clinicalMissing.length === 0;
+    // A klinikai minimum kapuja csak a KÖTELEZŐ tételeken múlik — az ajánlott
+    // (pl. email) hiánya a pontszámban látszik, de nem teszi hiányossá a beteget.
+    const isClinicalComplete = blockingClinicalMissing(clinicalMissing).length === 0;
     const isResearchComplete = researchMissing.length === 0;
     const isResearchReady = isClinicalComplete && isResearchComplete;
     const applicableCount = CLINICAL_APPLICABLE + researchApplicable;

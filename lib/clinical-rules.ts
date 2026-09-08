@@ -11,7 +11,9 @@ import { PatientDocument } from './types';
 
 // Protocol version (for tracking changes)
 // 2026-07-03: tétel-súlyok bevezetése (a completeness score súlyozott).
-export const PROTOCOL_VERSION = '2026-07-03';
+// 2026-09-08: az email „ajánlott" (severity: 'warning') — nem kötelező, nem
+//             blokkol, az emlékeztetőkben legfeljebb egyszer szerepel.
+export const PROTOCOL_VERSION = '2026-09-08';
 
 /**
  * Tétel-súlyok a completeness score-hoz. Nem minden hiány egyenértékű:
@@ -26,28 +28,67 @@ export const WEIGHT_SUPPLEMENTARY = 1;
 /** A feltételes kutatási mezők egységes súlya a score-ban. */
 export const RESEARCH_FIELD_WEIGHT = WEIGHT_SUPPLEMENTARY;
 
+/** A kötelező mező szigorúsága. */
+export type RequiredFieldSeverity = 'error' | 'warning';
+
 // Required field definitions for clinical protocol
 // Each field has: key (Patient object key), label (display name), severity (error/warning)
 export interface RequiredField {
   key: keyof Patient;
   label: string;
-  severity?: 'error' | 'warning';
+  /**
+   * 'error'   → szigorúan kötelező (alapértelmezés): a klinikai minimum kapuja.
+   * 'warning' → ajánlott: hiánya csak jelzés, nem blokkol, nem nyaggatunk miatta.
+   */
+  severity?: RequiredFieldSeverity;
   /** Súly a completeness score-ban (WEIGHT_* konstansok). */
   weight: number;
 }
 
-// NEAK/Klinikai minimum protokoll - kötelező mezők
-// These are hard-required (severity: "error") - everything else is optional
+// NEAK/Klinikai minimum protokoll - kötelező és ajánlott mezők
+//  - severity 'error'   → szigorúan kötelező: piros jelölés az űrlapon, operatív
+//                          „Hiányzó adat" szűrő, heti emlékeztető + eszkaláció.
+//  - severity 'warning' → ajánlott (pl. email): borostyán jelölés, nem blokkolja a
+//                          klinikai minimumot, az emlékeztetőben LEGFELJEBB EGYSZER
+//                          szerepel, utána nem nyaggatjuk miatta az orvost.
+// Minden más mező opcionális.
 export const REQUIRED_FIELDS: RequiredField[] = [
   { key: 'nev', label: 'Név', severity: 'error', weight: WEIGHT_IDENTITY },
   { key: 'nem', label: 'Nem', severity: 'error', weight: WEIGHT_CLINICAL },
   { key: 'szuletesiDatum', label: 'Születési idő', severity: 'error', weight: WEIGHT_IDENTITY },
   { key: 'taj', label: 'TAJ', severity: 'error', weight: WEIGHT_IDENTITY },
-  { key: 'email', label: 'Email', severity: 'error', weight: WEIGHT_SUPPLEMENTARY },
+  // Email: ajánlott, nem kötelező — sok (idős) betegnek nincs. Egyszer jelezzük,
+  // de nem kényszerítjük ki.
+  { key: 'email', label: 'Email', severity: 'warning', weight: WEIGHT_SUPPLEMENTARY },
   { key: 'kezelesreErkezesIndoka', label: 'Kezelésre érkezés indoka', severity: 'error', weight: WEIGHT_IDENTITY },
   { key: 'diagnozis', label: 'Diagnózis', severity: 'error', weight: WEIGHT_IDENTITY },
   { key: 'meglevoFogak', label: 'Fogazati státusz', severity: 'error', weight: WEIGHT_CLINICAL },
 ] as const;
+
+/** A mező szigorúsága (ha nincs megadva: 'error', azaz szigorúan kötelező). */
+export function requiredFieldSeverity(field: Pick<RequiredField, 'severity'>): RequiredFieldSeverity {
+  return field.severity ?? 'error';
+}
+
+/** Szigorúan kötelező (error) mezők — a klinikai minimum kapuja. */
+export const HARD_REQUIRED_FIELDS: RequiredField[] = REQUIRED_FIELDS.filter(
+  (f) => requiredFieldSeverity(f) === 'error'
+);
+
+/** Ajánlott (warning) mezők — hiányuk jelzés, nem blokkoló. */
+export const RECOMMENDED_FIELDS: RequiredField[] = REQUIRED_FIELDS.filter(
+  (f) => requiredFieldSeverity(f) === 'warning'
+);
+
+/** Szigorúan kötelező-e a mező? (Az űrlap piros „kötelező" jelölése ehhez igazodik.) */
+export function isHardRequiredField(key: keyof Patient): boolean {
+  return HARD_REQUIRED_FIELDS.some((f) => f.key === key);
+}
+
+/** Ajánlott (nem kötelező) mező-e? */
+export function isRecommendedField(key: keyof Patient): boolean {
+  return RECOMMENDED_FIELDS.some((f) => f.key === key);
+}
 
 // Required document rules (tag-based with minimum count)
 export interface RequiredDocRule {
@@ -71,6 +112,8 @@ export const REQUIRED_DOC_TAGS = REQUIRED_DOC_RULES.map((rule) => rule.tag) as r
 
 /**
  * Get missing required fields for a patient
+ * A kötelező ÉS az ajánlott mezőket is visszaadja — a `severity` alapján
+ * különíthető el a kettő (requiredFieldSeverity).
  * @param patient - Patient object to check
  * @returns Array of missing required fields
  */

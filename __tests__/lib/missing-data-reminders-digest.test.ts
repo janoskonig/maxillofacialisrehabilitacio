@@ -30,7 +30,10 @@ const { sendMissingDataDigestEmail, getPatientDataCompleteness, query } = mocks;
 
 vi.mock('@/lib/db', () => ({ getDbPool: () => ({ query: mocks.query }) }));
 vi.mock('@/lib/email', () => ({ sendMissingDataDigestEmail: mocks.sendMissingDataDigestEmail }));
-vi.mock('@/lib/patient-data-completeness', () => ({
+vi.mock('@/lib/patient-data-completeness', async (importOriginal) => ({
+  // A tiszta segédek (pl. isRecommendedMissingItem) az eredetiből jönnek,
+  // csak a DB-t olvasó riportot cseréljük le.
+  ...(await importOriginal<typeof import('@/lib/patient-data-completeness')>()),
   getPatientDataCompleteness: mocks.getPatientDataCompleteness,
 }));
 vi.mock('@/lib/user-tasks', () => ({ insertUserTask: mocks.insertUserTask }));
@@ -45,6 +48,13 @@ const KEZELO = { id: 'doc1', email: 'kezelo@example.com', doktor_neve: 'Dr. Keze
 const REFERRER = { id: 'ref1', email: 'ref@example.com', doktor_neve: 'Dr. Beutaló' };
 
 const clinical = (key: string): MissingItem => ({ key, label: key.toUpperCase(), group: 'clinical' });
+/** Ajánlott (nem kötelező) klinikai tétel — pl. email. */
+const recommended = (key: string): MissingItem => ({
+  key,
+  label: key.toUpperCase(),
+  group: 'clinical',
+  severity: 'warning',
+});
 const referrerItem = (key: string): MissingItem => ({ key, label: key, group: 'research' });
 
 /** Egy hiányos beteg sora a teljességi riportból. */
@@ -200,5 +210,105 @@ describe('sendMissingDataReminders — összesített (digest) küldés', () => {
 
     const entries = sendMissingDataDigestEmail.mock.calls[0]?.[0].entries ?? [];
     expect(entries[0]?.isFollowUp).toBe(true);
+  });
+});
+
+describe('sendMissingDataReminders — ajánlott tétel (email): egy figyelmeztetés, aztán csend', () => {
+  /** Az adott betegre nyitott feladatokat lezáró tömeges UPDATE hívása (a betegek listájával). */
+  const bulkCloseCall = () =>
+    query.mock.calls.find(
+      ([sql]) => String(sql).includes("task_type = 'missing_data'") && String(sql).includes('ANY($1::uuid[])')
+    );
+
+  it('csak email hiányánál az első futás EGY levelet küld — feladat, eszkaláció és no-owner nélkül', async () => {
+    getPatientDataCompleteness.mockResolvedValue({
+      patients: [patientRow('p1', 'Beteg', [recommended('email')])],
+    });
+    installDb({ kezeloFor: ['p1'] });
+
+    const result = await sendMissingDataReminders();
+
+    expect(sendMissingDataDigestEmail).toHaveBeenCalledTimes(1);
+    const entry = sendMissingDataDigestEmail.mock.calls[0][0].entries[0];
+    expect(entry.patientId).toBe('p1');
+    expect(entry.missingItems.map((i) => i.key)).toEqual(['email']);
+    expect(entry.isFollowUp).toBe(false);
+    expect(mocks.insertUserTask).not.toHaveBeenCalled();
+    expect(result.emailsSent).toBe(1);
+    expect(result.tasksCreated).toBe(0);
+    expect(result.escalations).toBe(0);
+    expect(result.noOwner).toBe(0);
+  });
+
+  it('ha már ment egy figyelmeztetés, az email hiányáról többé nem megy levél', async () => {
+    getPatientDataCompleteness.mockResolvedValue({
+      patients: [patientRow('p1', 'Beteg', [recommended('email')])],
+    });
+    installDb({ kezeloFor: ['p1'], reminderCounts: { [`p1|${KEZELO.id}`]: 1 } });
+
+    const result = await sendMissingDataReminders();
+
+    expect(sendMissingDataDigestEmail).not.toHaveBeenCalled();
+    expect(mocks.insertUserTask).not.toHaveBeenCalled();
+    expect(result.emailsSent).toBe(0);
+    expect(result.escalations).toBe(0);
+  });
+
+  it('a csak-email hiányú beteg nyitott „hiányzó adat" feladatait lezárja', async () => {
+    getPatientDataCompleteness.mockResolvedValue({
+      patients: [patientRow('p1', 'Beteg', [recommended('email')])],
+    });
+    installDb({ kezeloFor: ['p1'] });
+
+    await sendMissingDataReminders();
+
+    const call = bulkCloseCall();
+    expect(call).toBeDefined();
+    expect(call?.[1]).toEqual([['p1']]);
+  });
+
+  it('kötelező + email hiánynál az email csak az első levélben szerepel', async () => {
+    getPatientDataCompleteness.mockResolvedValue({
+      patients: [patientRow('p1', 'Beteg', [clinical('taj'), recommended('email')])],
+    });
+
+    installDb({ kezeloFor: ['p1'] });
+    await sendMissingDataReminders();
+    let entry = sendMissingDataDigestEmail.mock.calls[0][0].entries[0];
+    expect(entry.missingItems.map((i) => i.key)).toEqual(['taj', 'email']);
+
+    sendMissingDataDigestEmail.mockClear();
+    installDb({ kezeloFor: ['p1'], reminderCounts: { [`p1|${KEZELO.id}`]: 1 } });
+    await sendMissingDataReminders();
+    entry = sendMissingDataDigestEmail.mock.calls[0][0].entries[0];
+    expect(entry.missingItems.map((i) => i.key)).toEqual(['taj']);
+    expect(entry.isFollowUp).toBe(true);
+  });
+
+  it('a kötelező hiány miatti feladat leírásában az email nem szerepel', async () => {
+    getPatientDataCompleteness.mockResolvedValue({
+      patients: [patientRow('p1', 'Beteg', [clinical('taj'), recommended('email')])],
+    });
+    installDb({ kezeloFor: ['p1'] });
+
+    await sendMissingDataReminders();
+
+    expect(mocks.insertUserTask).toHaveBeenCalledTimes(1);
+    const task = (mocks.insertUserTask.mock.calls[0] as unknown[])[0] as { description: string | null };
+    expect(task.description).toBe('Hiányzó adatok: TAJ');
+  });
+
+  it('kezelőorvos nélküli, csak-email hiányú beteg nem kerül az admin elé', async () => {
+    getPatientDataCompleteness.mockResolvedValue({
+      patients: [patientRow('p1', 'Beteg', [recommended('email')])],
+    });
+    installDb({});
+
+    const result = await sendMissingDataReminders();
+
+    expect(sendMissingDataDigestEmail).not.toHaveBeenCalled();
+    expect(mocks.insertUserTask).not.toHaveBeenCalled();
+    expect(mocks.queueAdminNotification).not.toHaveBeenCalled();
+    expect(result.noOwner).toBe(0);
   });
 });

@@ -2,6 +2,8 @@ import { describe, it, expect } from 'vitest';
 import {
   computeCompletenessScore,
   completenessItemWeight,
+  blockingClinicalMissing,
+  isRecommendedMissingItem,
   NA_ELIGIBLE_KEYS,
   naFieldLabel,
 } from '@/lib/patient-data-completeness';
@@ -89,5 +91,27 @@ describe('N/A field eligibility', () => {
   it('resolves a human-readable label for eligible keys, null otherwise', () => {
     expect(naFieldLabel('tnmStaging')).toBe('TNM-staging');
     expect(naFieldLabel('nev')).toBeNull();
+  });
+});
+
+describe('ajánlott (nem blokkoló) klinikai tételek', () => {
+  it('a warning szigorúságú tétel ajánlott, a többi (régi, szigorúság nélküli is) blokkoló', () => {
+    expect(isRecommendedMissingItem({ severity: 'warning' })).toBe(true);
+    expect(isRecommendedMissingItem({ severity: 'error' })).toBe(false);
+    expect(isRecommendedMissingItem({})).toBe(false);
+  });
+
+  it('blockingClinicalMissing kiszűri az ajánlott tételeket', () => {
+    const items = [
+      { key: 'taj', label: 'TAJ', group: 'clinical' as const, severity: 'error' as const },
+      { key: 'email', label: 'Email', group: 'clinical' as const, severity: 'warning' as const },
+      { key: 'doc:op', label: 'OP röntgenfelvétel', group: 'clinical' as const },
+    ];
+    expect(blockingClinicalMissing(items).map((i) => i.key)).toEqual(['taj', 'doc:op']);
+  });
+
+  it('az email hiánya a pontszámban látszik (1× súly), de nem kapu', () => {
+    expect(completenessItemWeight('email')).toBe(WEIGHT_SUPPLEMENTARY);
+    expect(blockingClinicalMissing([{ severity: 'warning' as const }])).toHaveLength(0);
   });
 });

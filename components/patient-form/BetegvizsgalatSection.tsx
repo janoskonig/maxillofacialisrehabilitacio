@@ -3,7 +3,7 @@
 import { Dispatch, SetStateAction, useState } from 'react';
 import { UseFormRegister, UseFormWatch, UseFormSetValue, FieldErrors, UseFormRegisterReturn } from 'react-hook-form';
 import { Patient, kezelesiTervOptions, fabianFejerdyProtetikaiOsztalyOptions } from '@/lib/types';
-import { REQUIRED_FIELDS } from '@/lib/clinical-rules';
+import { isHardRequiredField } from '@/lib/clinical-rules';
 import { type ToothStatus } from '@/hooks/usePatientAutoSave';
 import { Calendar, Download, Check, CircleDashed, AlertTriangle, AlertCircle, Activity, Layers, type LucideIcon } from 'lucide-react';
 import {
@@ -286,7 +286,7 @@ export function BetegvizsgalatSection({
         <div className="border-t pt-4 mt-4">
           <div className="flex items-center gap-2 mb-3">
             <h5 className="text-base sm:text-md font-semibold text-gray-900 dark:text-gray-100">Felvételi státusz</h5>
-            {REQUIRED_FIELDS.some(f => f.key === 'meglevoFogak') && (
+            {isHardRequiredField('meglevoFogak') && (
               <span className="text-medical-error text-sm">*</span>
             )}
           </div>
