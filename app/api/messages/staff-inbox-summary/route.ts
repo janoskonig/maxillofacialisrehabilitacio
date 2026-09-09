@@ -5,6 +5,6 @@ import { getStaffInboxSummary } from '@/lib/staff-inbox-summary';
 export const dynamic = 'force-dynamic';
 
 export const GET = authedHandler(async (_req, { auth }) => {
-  const summary = await getStaffInboxSummary(auth.userId);
+  const summary = await getStaffInboxSummary(auth);
   return NextResponse.json({ success: true, ...summary });
 });

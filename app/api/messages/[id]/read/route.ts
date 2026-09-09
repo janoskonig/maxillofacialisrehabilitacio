@@ -7,6 +7,7 @@ import { validateUUID } from '@/lib/validation';
 import { apiHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
 import { emitMessageRead } from '@/lib/socket-server';
+import { hasEverTreatedPatient } from '@/lib/patient-doctor-access';
 import {
   buildPatientChannelReadDeliveryUpdate,
   notifyDeliveryStatusUpdates,
@@ -129,12 +130,7 @@ export const PUT = apiHandler(async (req, { params }) => {
 
       const patient = patientResult.rows[0];
       
-      const userResult = await pool.query(
-        `SELECT doktor_neve FROM users WHERE id = $1`,
-        [auth.userId]
-      );
-      const userName = userResult.rows.length > 0 ? userResult.rows[0].doktor_neve : null;
-      const isTreatingDoctor = patient.kezeleoorvos === auth.email || patient.kezeleoorvos === userName;
+      const isTreatingDoctor = await hasEverTreatedPatient(auth.userId, message.patient_id);
       
       let hasAccess = false;
       
@@ -157,7 +153,6 @@ export const PUT = apiHandler(async (req, { params }) => {
           messageId: validatedMessageId,
           doctorId: auth.userId,
           doctorEmail: auth.email,
-          doctorName: userName,
           senderType: message.sender_type,
           senderId: message.sender_id,
           recipientDoctorId: message.recipient_doctor_id,

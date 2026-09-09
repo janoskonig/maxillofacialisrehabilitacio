@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
+import { getStaffPatientMessageScope } from '@/lib/messaging/patient-message-scope';
 
 export const dynamic = 'force-dynamic';
 
@@ -9,33 +10,14 @@ export const GET = authedHandler(async (req, { auth }) => {
 
   const isAdmin = auth.role === 'admin';
 
-  let doctorName: string | null = null;
-  if (!isAdmin) {
-    const userRow = await pool.query(
-      `SELECT doktor_neve FROM users WHERE id = $1`,
-      [auth.userId]
-    );
-    doctorName = userRow.rows[0]?.doktor_neve ?? null;
-  }
-
-  // Single query: get all patient_ids that have messages visible to this user
-  let patientIdsQuery: string;
-  const patientIdsParams: any[] = [];
-
-  if (isAdmin) {
-    patientIdsQuery = `SELECT DISTINCT m.patient_id FROM messages m`;
-  } else {
-    patientIdsQuery = `
-      SELECT DISTINCT m.patient_id
-      FROM messages m
-      JOIN patients p ON p.id = m.patient_id
-      WHERE (
-        p.kezeleoorvos = $1 OR p.kezeleoorvos = $2
-      )`;
-    patientIdsParams.push(auth.email, doctorName);
-  }
-
-  const patientIdsResult = await pool.query(patientIdsQuery, patientIdsParams);
+  // Use the same visibility as the unread count and individual message threads.
+  const scope = getStaffPatientMessageScope(auth);
+  const patientIdsResult = await pool.query(
+    `SELECT DISTINCT m.patient_id FROM messages m
+     JOIN patients p ON p.id = m.patient_id
+     WHERE ${scope.where}`,
+    scope.params,
+  );
   const patientIds = patientIdsResult.rows.map((r: any) => r.patient_id);
 
   if (patientIds.length === 0) {

@@ -7,6 +7,7 @@
 
 import { getDbPool } from '@/lib/db';
 import { validateUUID } from '@/lib/validation';
+import { sqlPatientEverTreated, sqlPatientLaneForDoctor } from './patient-message-scope';
 import type { MessageContextEntityType, MessageSearchHit, MessageSearchResult } from '@/lib/types/messaging';
 import {
   parseContextEntityType,
@@ -18,42 +19,6 @@ const MIN_QUERY_LEN = 2;
 const MAX_QUERY_LEN = 200;
 const DEFAULT_LIMIT = 20;
 const MAX_LIMIT = 100;
-
-/** SQL fragment: user valaha kezelte a messages.patient_id beteget. */
-function sqlPatientEverTreated(userParam: string): string {
-  return `EXISTS (
-    SELECT 1 FROM patients p
-     WHERE p.id = m.patient_id
-       AND (
-         p.kezeleoorvos_user_id = ${userParam}
-         OR EXISTS (
-           SELECT 1 FROM patient_episodes pe
-            WHERE pe.patient_id = p.id AND pe.assigned_provider_id = ${userParam}
-         )
-         OR EXISTS (
-           SELECT 1 FROM appointments a
-            JOIN users u ON u.email = a.dentist_email
-           WHERE a.patient_id = p.id AND u.id = ${userParam}
-         )
-         OR (
-           p.kezeleoorvos IS NOT NULL AND p.kezeleoorvos <> ''
-           AND EXISTS (
-             SELECT 1 FROM users u
-              WHERE u.id = ${userParam}
-                AND (p.kezeleoorvos = u.email OR p.kezeleoorvos = u.doktor_neve)
-           )
-         )
-       )
-  )`;
-}
-
-/** Staff orvos lane-szűrés (getPatientMessages treating-orvos ága). */
-function sqlPatientLaneForDoctor(doctorParam: string): string {
-  return `(
-    (m.sender_type = 'patient' AND (m.recipient_doctor_id = ${doctorParam} OR m.recipient_doctor_id IS NULL))
-    OR (m.sender_type = 'doctor' AND m.sender_id = ${doctorParam})
-  )`;
-}
 
 /** Beteg portál lane (doctorId megadva). */
 function sqlPatientLaneForPortal(doctorParam: string): string {

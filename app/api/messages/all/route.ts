@@ -1,6 +1,7 @@
-import { NextRequest, NextResponse } from 'next/server';
+import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
+import { getStaffPatientMessageScope } from '@/lib/messaging/patient-message-scope';
 
 export const dynamic = 'force-dynamic';
 
@@ -28,12 +29,9 @@ export const GET = authedHandler(async (req, { auth }) => {
     INNER JOIN patients p ON p.id = m.patient_id
   `;
 
-  const params: any[] = [];
-  let paramIndex = 1;
-
-  query += ` WHERE m.sender_type = 'patient'`;
-
-  // All authenticated users can see all messages
+  const scope = getStaffPatientMessageScope(auth);
+  const params: (string | number)[] = [...scope.params];
+  query += ` WHERE m.sender_type = 'patient' AND ${scope.where}`;
 
   if (unreadOnly) {
     query += ` AND m.read_at IS NULL`;
@@ -42,7 +40,7 @@ export const GET = authedHandler(async (req, { auth }) => {
   query += ` ORDER BY m.created_at DESC`;
 
   if (limit) {
-    query += ` LIMIT $${paramIndex}`;
+    query += ` LIMIT $${params.length + 1}`;
     params.push(limit);
   }
 

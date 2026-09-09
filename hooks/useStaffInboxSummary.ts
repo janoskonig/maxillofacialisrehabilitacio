@@ -44,9 +44,17 @@ export function useStaffInboxSummary(enabled: boolean) {
 
   useEffect(() => {
     if (!enabled) return;
-    const onFocus = () => refetch();
-    window.addEventListener('focus', onFocus);
-    return () => window.removeEventListener('focus', onFocus);
+    const refresh = () => { void refetch(); };
+    window.addEventListener('focus', refresh);
+    window.addEventListener('staff-inbox-changed', refresh);
+    const interval = window.setInterval(() => {
+      if (!document.hidden) refresh();
+    }, 30_000);
+    return () => {
+      window.removeEventListener('focus', refresh);
+      window.removeEventListener('staff-inbox-changed', refresh);
+      window.clearInterval(interval);
+    };
   }, [enabled, refetch]);
 
   return { summary, loading, refetch };

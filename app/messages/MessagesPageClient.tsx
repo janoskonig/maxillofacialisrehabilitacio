@@ -9,6 +9,7 @@ import { MessageCircle, Users } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { MessageSearchProvider } from '@/contexts/MessageSearchContext';
 import { MessageSearchButton } from '@/components/messaging/MessageSearchButton';
+import { useStaffInboxSummary } from '@/hooks/useStaffInboxSummary';
 
 export default function MessagesPageClient() {
   const router = useRouter();
@@ -16,8 +17,9 @@ export default function MessagesPageClient() {
   const [authorized, setAuthorized] = useState(false);
   const [loading, setLoading] = useState(true);
   const [activeTab, setActiveTab] = useState<'doctor-doctor' | 'doctor-patient'>('doctor-doctor');
-  const [doctorDoctorUnreadCount, setDoctorDoctorUnreadCount] = useState(0);
-  const [doctorPatientUnreadCount, setDoctorPatientUnreadCount] = useState(0);
+  const { summary } = useStaffInboxSummary(authorized);
+  const doctorDoctorUnreadCount = summary?.doctorUnread ?? 0;
+  const doctorPatientUnreadCount = summary?.patientUnread ?? 0;
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -46,38 +48,6 @@ export default function MessagesPageClient() {
       setActiveTab(tab);
     }
   }, [searchParams]);
-
-  useEffect(() => {
-    if (!authorized) return;
-
-    const fetchUnreadCounts = async () => {
-      try {
-        const doctorResponse = await fetch('/api/doctor-messages/unread-count', {
-          credentials: 'include',
-        });
-        if (doctorResponse.ok) {
-          const doctorData = await doctorResponse.json();
-          setDoctorDoctorUnreadCount(doctorData.count || 0);
-        }
-
-        const patientResponse = await fetch('/api/messages/all?unreadOnly=true', {
-          credentials: 'include',
-        });
-        if (patientResponse.ok) {
-          const patientData = await patientResponse.json();
-          const messages = patientData.messages || [];
-          const unread = messages.filter((m: { senderType?: string; readAt?: unknown }) => m.senderType === 'patient' && !m.readAt).length;
-          setDoctorPatientUnreadCount(unread);
-        }
-      } catch (error) {
-        console.error('Hiba az olvasatlan üzenetek számának lekérdezésekor:', error);
-      }
-    };
-
-    fetchUnreadCounts();
-    const interval = setInterval(fetchUnreadCounts, 30_000);
-    return () => clearInterval(interval);
-  }, [authorized]);
 
   if (loading) {
     return (

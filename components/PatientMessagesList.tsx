@@ -432,6 +432,7 @@ export function PatientMessagesList() {
             })
           ).then(() => {
             fetchConversations(); // Refresh conversations after marking as read
+            window.dispatchEvent(new Event('staff-inbox-changed'));
           });
         }
       }, 300);
@@ -599,6 +600,7 @@ export function PatientMessagesList() {
           })
         ).then(() => {
           fetchConversations(); // Refresh conversations after marking as read
+          window.dispatchEvent(new Event('staff-inbox-changed'));
         });
       }
     }, 500); // 500ms delay, hogy biztosan renderelődtek az üzenetek
