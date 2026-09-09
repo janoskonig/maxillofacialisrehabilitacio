@@ -20,6 +20,7 @@ import type { ReactNode } from 'react';
 import type { MessageContextLink, QuotedMessagePreview } from '@/lib/types/messaging';
 import { MessageQuoteBlock } from './MessageQuoteBlock';
 import { MessageContextLinksStrip } from './MessageContextLinksStrip';
+import { hideDocumentLinksRenderedInline } from '@/lib/messaging/strip-duplicate-document-marker';
 import { replyThreadToggleLabel } from './reply-thread-label';
 
 export type DeliveryStatus = 'pending' | 'sent' | 'delivered' | 'read' | 'failed';
@@ -144,6 +145,8 @@ export function ChatMessageBubble({
   className,
 }: Props) {
   const isFromMe = message.isFromMe;
+  // Képdokumentum-linket a szöveg markere inline képként rendereli → a chip ne duplázzon.
+  const visibleContextLinks = hideDocumentLinksRenderedInline(message.message, message.contextLinks);
   const visualStatus = resolveDeliveryVisual(message);
   const isPending = visualStatus === 'pending';
   const isFailed = visualStatus === 'failed';
@@ -220,9 +223,9 @@ export function ChatMessageBubble({
             </div>
           )}
 
-          {message.contextLinks && message.contextLinks.length > 0 && (
+          {visibleContextLinks.length > 0 && (
             <MessageContextLinksStrip
-              links={message.contextLinks}
+              links={visibleContextLinks}
               variant={stripVariant}
               canRemove={canRemoveContextLinks}
               onRemoveLink={

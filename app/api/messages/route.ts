@@ -16,6 +16,7 @@ import { hasEverTreatedPatient } from '@/lib/patient-doctor-access';
 import { parseReplyToMessageId, ReplyTargetNotFoundError, type PatientReplySender } from '@/lib/message-reply';
 import { checkRateLimitAsync, buildRateLimitedResponse } from '@/lib/api/rate-limit';
 import { resolveContextLinkViewer } from '@/lib/messaging/context-link-viewer';
+import { humanizeMessagePreview } from '@/lib/messaging/message-preview-text';
 
 export const dynamic = 'force-dynamic';
 
@@ -246,6 +247,8 @@ export const POST = apiHandler(async (req) => {
   try {
     const baseUrl = process.env.NEXT_PUBLIC_BASE_URL || 
       (req.headers.get('origin') || 'http://localhost:3000');
+    // Értesítésekben a markerek helyett olvasható címke (📷 Kép / 📎 Dokumentum).
+    const previewText = humanizeMessagePreview(finalMessage);
 
     if (senderType === 'doctor') {
       const patient = await getPatientForNotification(finalPatientId);
@@ -257,7 +260,7 @@ export const POST = apiHandler(async (req) => {
           senderName,
           'doctor',
           finalSubject,
-          finalMessage,
+          previewText,
           baseUrl,
           finalPatientId,
         );
@@ -273,7 +276,7 @@ export const POST = apiHandler(async (req) => {
             const patientUserId = patientUserResult.rows[0].id;
             await sendPushNotification(patientUserId, {
               title: "Új üzenet",
-              body: `${senderName || 'Orvos'}: ${finalSubject || finalMessage.substring(0, 50)}${finalMessage.length > 50 ? '...' : ''}`,
+              body: `${senderName || 'Orvos'}: ${finalSubject || previewText.substring(0, 50)}${previewText.length > 50 ? '...' : ''}`,
               icon: "/icon-192x192.png",
               tag: `message-${newMessage.id}`,
               data: {
@@ -316,7 +319,7 @@ export const POST = apiHandler(async (req) => {
           patient?.nev || senderName,
           'patient',
           finalSubject,
-          finalMessage,
+          previewText,
           baseUrl
         );
         logger.info(`[Messages] Email értesítés sikeresen elküldve orvosnak: ${doctor.email}`);
@@ -325,7 +328,7 @@ export const POST = apiHandler(async (req) => {
           if (recipientDoctorIdFinal) {
             await sendPushNotification(recipientDoctorIdFinal, {
               title: "Új üzenet",
-              body: `${patient?.nev || senderName || 'Beteg'}: ${finalSubject || finalMessage.substring(0, 50)}${finalMessage.length > 50 ? '...' : ''}`,
+              body: `${patient?.nev || senderName || 'Beteg'}: ${finalSubject || previewText.substring(0, 50)}${previewText.length > 50 ? '...' : ''}`,
               icon: "/icon-192x192.png",
               tag: `message-${newMessage.id}`,
               data: {
@@ -354,7 +357,7 @@ export const POST = apiHandler(async (req) => {
             patient?.nev || senderName,
             'patient',
             finalSubject,
-            finalMessage,
+            previewText,
             baseUrl
           );
           logger.info(`[Messages] Email értesítés sikeresen elküldve adminnak: ${admin.email}`);

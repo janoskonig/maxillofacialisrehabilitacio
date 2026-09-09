@@ -36,6 +36,13 @@ import { MessageSearchButton } from './messaging/MessageSearchButton';
 import { useRegisterMessageSearch } from '@/hooks/useRegisterMessageSearch';
 import type { MessageSearchHandler } from '@/contexts/MessageSearchContext';
 import type { MessageSearchHit } from '@/lib/types/messaging';
+import { humanizeMessagePreview } from '@/lib/messaging/message-preview-text';
+import { getCurrentUser } from '@/lib/auth';
+import { usePendingChatImages } from '@/hooks/usePendingChatImages';
+import { sendPendingChatImages, type ChatImageTarget } from '@/lib/messaging/chat-image-upload';
+import { ImageAttachComposerButton } from './messaging/ImageAttachComposerButton';
+import { PendingChatImagesBar } from './messaging/PendingChatImagesBar';
+import { ChatImageSaveTargetDialog } from './messaging/ChatImageSaveTargetDialog';
 
 export function DoctorMessages() {
   const { showToast } = useToast();
@@ -85,6 +92,30 @@ export function DoctorMessages() {
   const [pendingContextLinks, setPendingContextLinks] = useState<PendingContextLink[]>([]);
   const { attachLink, removeLink } = useMessageContextActions('doctor');
 
+  // Chat-képek: küldés előtt megkérdezzük, hogy a kép egy beteg dokumentumai
+  // közé is kerüljön-e (címke: chat), vagy csak az üzenetben legyen elérhető.
+  const pendingImages = usePendingChatImages();
+  const { clear: clearPendingImages } = pendingImages;
+  const [imageDialog, setImageDialog] = useState<{ files: File[] } | { retarget: true } | null>(null);
+  const [imagesSending, setImagesSending] = useState(false);
+  const [currentUserRole, setCurrentUserRole] = useState<string | null>(null);
+  useEffect(() => {
+    let cancelled = false;
+    getCurrentUser()
+      .then((user) => {
+        if (!cancelled) setCurrentUserRole(user?.role ?? null);
+      })
+      .catch(() => undefined);
+    return () => {
+      cancelled = true;
+    };
+  }, []);
+  // Beteg-dokumentum feltöltésre jogosult szerepkörök (lásd /api/patients/[id]/documents POST).
+  const canSaveImagesToPatient =
+    currentUserRole === 'admin' ||
+    currentUserRole === 'fogpótlástanász' ||
+    currentUserRole === 'beutalo_orvos';
+
   // ── Refs ────────────────────────────────────────────────────────────
   const messagesContainerRef = useRef<HTMLDivElement>(null);
   const textareaRef = useRef<HTMLTextAreaElement>(null);
@@ -98,6 +129,12 @@ export function DoctorMessages() {
     if (selectedDoctorId) return `doc:${selectedDoctorId}`;
     return null;
   }, [selectedGroupId, selectedDoctorId]);
+
+  // Beszélgetésváltáskor a küldésre váró képek nem vihetők át.
+  useEffect(() => {
+    clearPendingImages();
+    setImageDialog(null);
+  }, [conversationKey, clearPendingImages]);
 
   // Idézet / keresés kattintásra: az eredeti `data-message-id` targethez ugrunk.
   const scrollToMessage = useCallback((messageId: string): boolean => {
@@ -232,7 +269,30 @@ export function DoctorMessages() {
 
   // ── Event handlers ──────────────────────────────────────────────────
 
+  const attachPendingLinksTo = async (messageId: string, snapshot: PendingContextLink[]) => {
+    const attached: MessageContextLink[] = [];
+    for (const p of snapshot) {
+      const link = await attachLink(messageId, p.entityType, p.entityId);
+      if (link) attached.push(link);
+    }
+    if (attached.length > 0) {
+      setMessages((prev) =>
+        prev.map((m) =>
+          m.id === messageId
+            ? { ...m, contextLinks: [...(m.contextLinks ?? []), ...attached] }
+            : m,
+        ),
+      );
+    }
+  };
+
   const handleSendMessage = async (messageText?: string) => {
+    // Képek várnak küldésre: képenként megy egy üzenet (az első a képaláírással).
+    if (!messageText && pendingImages.hasImages) {
+      await handleSendPendingImages();
+      return;
+    }
+
     const textToSend = messageText || newMessage.trim();
     if (!textToSend || (!selectedDoctorId && !selectedGroupId)) {
       if (!messageText) {
@@ -248,20 +308,7 @@ export function DoctorMessages() {
     const messageId = await sendMessage(textToSend, confirmedForSend);
     if (messageId) {
       if (pendingSnapshot.length > 0) {
-        const attached: MessageContextLink[] = [];
-        for (const p of pendingSnapshot) {
-          const link = await attachLink(messageId, p.entityType, p.entityId);
-          if (link) attached.push(link);
-        }
-        if (attached.length > 0) {
-          setMessages((prev) =>
-            prev.map((m) =>
-              m.id === messageId
-                ? { ...m, contextLinks: [...(m.contextLinks ?? []), ...attached] }
-                : m,
-            ),
-          );
-        }
+        await attachPendingLinksTo(messageId, pendingSnapshot);
         setPendingContextLinks([]);
       }
       if (!messageText) {
@@ -271,6 +318,75 @@ export function DoctorMessages() {
       replyState.clearReply();
     }
   };
+
+  /**
+   * Képek küldése: képenként feltöltés a választott célhelyre (beteg
+   * dokumentum vagy beteg nélküli melléklet), majd üzenet a markerrel. Az első
+   * kép viszi a képaláírást, a megerősített betegeket és a függő linkeket.
+   */
+  const handleSendPendingImages = async () => {
+    if (!selectedDoctorId && !selectedGroupId) {
+      showToast('Kérjük, válasszon beszélgetést', 'error');
+      return;
+    }
+    const caption = newMessage.trim();
+    const confirmedForSend = confirmedPatients.map((p) => p.id);
+    const pendingLinksSnapshot = [...pendingContextLinks];
+
+    setImagesSending(true);
+    try {
+      const allSent = await sendPendingChatImages({
+        images: pendingImages.images,
+        caption,
+        chatType: 'doctor-doctor',
+        defaultTarget: { kind: 'doctor-attachment' },
+        update: pendingImages.update,
+        remove: pendingImages.remove,
+        onError: (message) => showToast(message, 'error'),
+        sendText: async (text, index) => {
+          const messageId = await sendMessage(text, index === 0 ? confirmedForSend : undefined);
+          if (!messageId) return false;
+          if (index === 0 && pendingLinksSnapshot.length > 0) {
+            await attachPendingLinksTo(messageId, pendingLinksSnapshot);
+            setPendingContextLinks([]);
+          }
+          return true;
+        },
+      });
+      if (allSent) {
+        setNewMessage('');
+        setConfirmedPatients([]);
+        replyState.clearReply();
+      }
+    } finally {
+      setImagesSending(false);
+    }
+  };
+
+  const handleImagesSelected = (files: File[]) => {
+    if (!selectedDoctorId && !selectedGroupId) return;
+    setImageDialog({ files });
+  };
+
+  const handleImageTargetChosen = (target: ChatImageTarget) => {
+    if (imageDialog && 'files' in imageDialog) {
+      const added = pendingImages.add(imageDialog.files, target);
+      if (added === 0) showToast('Csak képfájl csatolható az üzenethez', 'error');
+    } else {
+      pendingImages.setTargetForAll(target);
+    }
+    setImageDialog(null);
+    textareaRef.current?.focus();
+  };
+
+  const pendingImagesNote = (() => {
+    const target = pendingImages.images[0]?.target;
+    if (!target) return null;
+    if (target.kind === 'patient-document') {
+      return `Mentés a beteg dokumentumai közé: ${target.patientName || 'kiválasztott beteg'}`;
+    }
+    return 'Csak az üzenetben lesz elérhető (nem kerül beteghez)';
+  })();
 
   const handleRemoveContextLink = async (messageId: string, linkId: string) => {
     const ok = await removeLink(messageId, linkId);
@@ -445,7 +561,7 @@ export function DoctorMessages() {
         id: `group:${conv.groupId}`,
         title: conv.groupName || `Csoport (${conv.participantCount || 0} résztvevő)`,
         subtitle: conv.participantCount ? `${conv.participantCount} résztvevő` : null,
-        preview: conv.lastMessage?.message ?? null,
+        preview: conv.lastMessage?.message ? humanizeMessagePreview(conv.lastMessage.message) : null,
         timestamp: conv.lastMessage?.createdAt ?? null,
         unreadCount: conv.unreadCount,
         avatar: { group: true, name: conv.groupName },
@@ -454,7 +570,7 @@ export function DoctorMessages() {
     return {
       id: `doc:${conv.doctorId}`,
       title: conv.doctorName,
-      preview: conv.lastMessage?.message ?? null,
+      preview: conv.lastMessage?.message ? humanizeMessagePreview(conv.lastMessage.message) : null,
       timestamp: conv.lastMessage?.createdAt ?? null,
       unreadCount: conv.unreadCount,
       avatar: {
@@ -623,14 +739,20 @@ export function DoctorMessages() {
         value={newMessage}
         onChange={setNewMessage}
         onSend={() => handleSendMessage()}
-        sending={sending}
+        sending={sending || imagesSending}
+        hasAttachments={pendingImages.hasImages}
+        onPasteFiles={handleImagesSelected}
         sendOnEnter={!isMobile}
         autoFocusKey={conversationKey}
         textareaRef={textareaRef}
         onCursorChange={setCursorPosition}
         onTyping={notifyTyping}
         onEscape={replyState.isReplying ? replyState.clearReply : undefined}
-        placeholder="Írja be üzenetét... (a beteg nevét automatikusan felismerjük)"
+        placeholder={
+          pendingImages.hasImages
+            ? 'Képaláírás (opcionális)…'
+            : 'Írja be üzenetét... (a beteg nevét automatikusan felismerjük)'
+        }
         replyBar={
           replyState.isReplying && replyState.replyTarget ? (
             <ReplyComposerBar
@@ -646,6 +768,13 @@ export function DoctorMessages() {
         }
         pendingBar={
           <>
+            <PendingChatImagesBar
+              images={pendingImages.images}
+              onRemove={pendingImages.remove}
+              note={pendingImagesNote}
+              onChangeTarget={() => setImageDialog({ retarget: true })}
+              disabled={imagesSending}
+            />
             <PatientRecognitionBar
               text={newMessage}
               confirmed={confirmedPatients}
@@ -668,10 +797,14 @@ export function DoctorMessages() {
         }
         attachSlot={
           <>
+            <ImageAttachComposerButton
+              disabled={sending || imagesSending}
+              onFilesSelected={handleImagesSelected}
+            />
             <DocumentLinkComposerButton
               chatType="doctor-doctor"
               messageText={newMessage}
-              disabled={sending}
+              disabled={sending || imagesSending}
               onInsert={setNewMessage}
             />
             <ContextLinkComposerButton
@@ -774,6 +907,17 @@ export function DoctorMessages() {
           setShowCreateGroupModal(false);
         }}
         existingGroupId={selectedGroupId}
+      />
+
+      <ChatImageSaveTargetDialog
+        isOpen={imageDialog !== null}
+        imageCount={
+          imageDialog && 'files' in imageDialog ? imageDialog.files.length : pendingImages.images.length
+        }
+        suggestedPatients={confirmedPatients}
+        canSaveToPatient={canSaveImagesToPatient}
+        onCancel={() => setImageDialog(null)}
+        onChoose={handleImageTargetChosen}
       />
     </>
   );

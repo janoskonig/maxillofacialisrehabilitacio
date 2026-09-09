@@ -36,6 +36,11 @@ import { incrementParentReplyCount } from '@/components/messaging/reply-count-so
 import { useReplyThreadCollapse } from '@/components/messaging/useReplyThreadCollapse';
 import { filterMessagesByThreadCollapse } from '@/lib/messaging/reply-thread-visibility';
 import { DocumentLinkComposerButton } from '@/components/messaging/DocumentLinkComposerButton';
+import { humanizeMessagePreview } from '@/lib/messaging/message-preview-text';
+import { usePendingChatImages } from '@/hooks/usePendingChatImages';
+import { sendPendingChatImages } from '@/lib/messaging/chat-image-upload';
+import { ImageAttachComposerButton } from '@/components/messaging/ImageAttachComposerButton';
+import { PendingChatImagesBar } from '@/components/messaging/PendingChatImagesBar';
 
 interface Message {
   id: string;
@@ -103,9 +108,15 @@ export function PatientMessages() {
   // Slice 0.6: reply state — beteg portál (saját zöld bubble stílus megmarad).
   const replyState = useReplyState();
 
-  // Lane-váltáskor (másik orvos kiválasztva) töröljük a reply targetet.
+  // Chat-képek: a beteg saját dokumentumai közé kerülnek (címke: chat), az
+  // üzenet a dokumentum-markert hordozza.
+  const pendingImages = usePendingChatImages();
+  const { clear: clearPendingImages } = pendingImages;
+
+  // Lane-váltáskor (másik orvos kiválasztva) töröljük a reply targetet és a függő képeket.
   useEffect(() => {
     replyState.clearReply();
+    clearPendingImages();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [selectedDoctorId]);
 
@@ -578,12 +589,12 @@ export function PatientMessages() {
     [patientId, selectedDoctorId, router, showToast],
   );
 
-  const handleSendMessage = async () => {
-    const textToSend = newMessage.trim();
-    if (!patientId || !textToSend || !selectedDoctorId) {
-      showToast('Kérjük, írjon üzenetet', 'error');
-      return;
-    }
+  /**
+   * Egy szöveges üzenet küldése optimista buborékkal. `false` = a POST
+   * elutasította (429 → a buborék „sikertelen” marad); más hibánál dob.
+   */
+  const sendTextMessage = async (textToSend: string): Promise<boolean> => {
+    if (!patientId || !selectedDoctorId) return false;
 
     const replyTargetSnapshot = replyState.replyTarget;
     const replyToMessageId = replyTargetSnapshot?.id ?? null;
@@ -594,30 +605,47 @@ export function PatientMessages() {
         : `${Date.now()}-${Math.random().toString(36).slice(2)}`;
     const tempId = `pending-${randomPart}`;
 
+    const pendingMessage: Message = {
+      id: tempId,
+      patientId,
+      senderType: 'patient',
+      senderId: patientId,
+      senderEmail: '',
+      subject: null,
+      message: textToSend,
+      readAt: null,
+      createdAt: new Date(),
+      pending: true,
+      replyToMessageId,
+      quotedMessage: replyTargetSnapshot ?? null,
+    };
+    setMessages((prev) => [...prev, pendingMessage]);
+
+    const ok = await postPatientMessage(tempId, textToSend, replyToMessageId);
+    if (!ok) return false;
+    replyState.clearReply();
+    return true;
+  };
+
+  const handleSendMessage = async () => {
+    // Képek várnak küldésre: képenként megy egy üzenet (az első a képaláírással).
+    if (pendingImages.hasImages) {
+      await handleSendPendingImages();
+      return;
+    }
+
+    const textToSend = newMessage.trim();
+    if (!patientId || !textToSend || !selectedDoctorId) {
+      showToast('Kérjük, írjon üzenetet', 'error');
+      return;
+    }
+
     try {
       setSending(true);
-
-      const pendingMessage: Message = {
-        id: tempId,
-        patientId,
-        senderType: 'patient',
-        senderId: patientId,
-        senderEmail: '',
-        subject: null,
-        message: textToSend,
-        readAt: null,
-        createdAt: new Date(),
-        pending: true,
-        replyToMessageId,
-        quotedMessage: replyTargetSnapshot ?? null,
-      };
-      setMessages((prev) => [...prev, pendingMessage]);
-
-      const ok = await postPatientMessage(tempId, textToSend, replyToMessageId);
+      const ok = await sendTextMessage(textToSend);
       if (!ok) return;
 
       setNewMessage('');
-      replyState.clearReply();
       showToast('Üzenet sikeresen elküldve', 'success');
       setTimeout(() => fetchConversations(), 500);
     } catch (error: unknown) {
@@ -627,6 +655,52 @@ export function PatientMessages() {
     } finally {
       setSending(false);
     }
+  };
+
+  /**
+   * Képek küldése az orvosnak: a kép a beteg saját dokumentumai közé kerül
+   * (címke: chat), majd az üzenet a dokumentum-markerrel megy el.
+   */
+  const handleSendPendingImages = async () => {
+    if (!patientId || !selectedDoctorId) {
+      showToast('Kérjük, válasszon orvost', 'error');
+      return;
+    }
+    const caption = newMessage.trim();
+
+    setSending(true);
+    try {
+      const allSent = await sendPendingChatImages({
+        images: pendingImages.images,
+        caption,
+        chatType: 'patient-doctor',
+        defaultTarget: { kind: 'portal-document' },
+        update: pendingImages.update,
+        remove: pendingImages.remove,
+        onError: (message) => showToast(message, 'error'),
+        sendText: async (text) => {
+          try {
+            return await sendTextMessage(text);
+          } catch (error: unknown) {
+            console.error('Hiba a kép üzenet küldésekor:', error);
+            return false;
+          }
+        },
+      });
+      if (allSent) {
+        setNewMessage('');
+        showToast('Kép elküldve és a dokumentumaid közé mentve', 'success');
+        setTimeout(() => fetchConversations(), 500);
+      }
+    } finally {
+      setSending(false);
+    }
+  };
+
+  const handleImagesSelected = (files: File[]) => {
+    if (!selectedDoctorId) return;
+    const added = pendingImages.add(files, { kind: 'portal-document' });
+    if (added === 0) showToast('Csak képfájl csatolható az üzenethez', 'error');
   };
 
   const retryFailedMessage = useCallback(
@@ -706,7 +780,7 @@ export function PatientMessages() {
     id: conv.doctorId,
     title: conv.doctorName,
     subtitle: recipientTypeLabel(conv.doctorId),
-    preview: conv.lastMessage?.message ?? null,
+    preview: conv.lastMessage?.message ? humanizeMessagePreview(conv.lastMessage.message) : null,
     previewPrefix: conv.lastMessage?.senderType === 'patient' ? 'Ön:' : null,
     timestamp: conv.lastMessage?.createdAt ?? null,
     unreadCount: conv.unreadCount,
@@ -810,12 +884,14 @@ export function PatientMessages() {
         onSend={handleSendMessage}
         sending={sending}
         disabled={!selectedDoctorId}
+        hasAttachments={pendingImages.hasImages}
+        onPasteFiles={handleImagesSelected}
         sendOnEnter={!isMobile}
         autoFocusKey={selectedDoctorId}
         textareaRef={textareaRef}
         onTyping={notifyTyping}
         onEscape={replyState.isReplying ? replyState.clearReply : undefined}
-        placeholder="Írja meg üzenetét…"
+        placeholder={pendingImages.hasImages ? 'Képaláírás (opcionális)…' : 'Írja meg üzenetét…'}
         replyBar={
           replyState.isReplying && replyState.replyTarget ? (
             <ReplyComposerBar
@@ -829,14 +905,28 @@ export function PatientMessages() {
             />
           ) : undefined
         }
-        attachSlot={
-          <DocumentLinkComposerButton
-            chatType="patient-doctor"
-            portalMode
-            messageText={newMessage}
+        pendingBar={
+          <PendingChatImagesBar
+            images={pendingImages.images}
+            onRemove={pendingImages.remove}
+            note="A kép a dokumentumaid közé is bekerül, az orvos ott is megtalálja."
             disabled={sending}
-            onInsert={setNewMessage}
           />
+        }
+        attachSlot={
+          <>
+            <ImageAttachComposerButton
+              disabled={sending || !selectedDoctorId}
+              onFilesSelected={handleImagesSelected}
+            />
+            <DocumentLinkComposerButton
+              chatType="patient-doctor"
+              portalMode
+              messageText={newMessage}
+              disabled={sending}
+              onInsert={setNewMessage}
+            />
+          </>
         }
       />
     </>

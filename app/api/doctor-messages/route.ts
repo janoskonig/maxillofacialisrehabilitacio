@@ -9,6 +9,7 @@ import { sendPushNotification } from '@/lib/push-notifications';
 import { logger } from '@/lib/logger';
 import { emitNewDoctorMessage } from '@/lib/socket-server';
 import { checkRateLimitAsync, buildRateLimitedResponse } from '@/lib/api/rate-limit';
+import { humanizeMessagePreview } from '@/lib/messaging/message-preview-text';
 
 export const dynamic = 'force-dynamic';
 
@@ -53,6 +54,8 @@ export const POST = authedHandler(async (req, { auth }) => {
     [auth.userId]
   );
   const senderName = senderResult.rows.length > 0 ? senderResult.rows[0].doktor_neve : null;
+  // Értesítésekben a markerek helyett olvasható címke (📷 Kép / 📎 Dokumentum).
+  const previewText = humanizeMessagePreview(message);
 
   if (groupId) {
     const participantResult = await pool.query(
@@ -105,14 +108,14 @@ export const POST = authedHandler(async (req, { auth }) => {
               participant.userName,
               senderName || auth.email,
               subject || null,
-              message.trim(),
+              previewText,
               baseUrl
             );
             
             try {
               await sendPushNotification(participant.userId, {
                 title: "Új üzenet (csoport)",
-                body: `${senderName || auth.email}: ${subject || message.trim().substring(0, 50)}${message.trim().length > 50 ? '...' : ''}`,
+                body: `${senderName || auth.email}: ${subject || previewText.substring(0, 50)}${previewText.length > 50 ? '...' : ''}`,
                 icon: "/icon-192x192.png",
                 tag: `doctor-message-group-${groupId}-${newMessage.id}`,
                 data: {
@@ -219,14 +222,14 @@ export const POST = authedHandler(async (req, { auth }) => {
       recipient.doktor_neve || recipient.email,
       senderName || auth.email,
       subject || null,
-      message.trim(),
+      previewText,
       baseUrl
     );
     
     try {
       await sendPushNotification(recipientId, {
         title: "Új üzenet",
-        body: `${senderName || auth.email}: ${subject || message.trim().substring(0, 50)}${message.trim().length > 50 ? '...' : ''}`,
+        body: `${senderName || auth.email}: ${subject || previewText.substring(0, 50)}${previewText.length > 50 ? '...' : ''}`,
         icon: "/icon-192x192.png",
         tag: `doctor-message-${newMessage.id}`,
         data: {

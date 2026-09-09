@@ -8,6 +8,8 @@ import { DocumentRequestInfoCard } from './DocumentRequestInfoCard';
 import { ConsiliumPrepMessageCard } from './ConsiliumPrepMessageCard';
 import { detectDocumentRequest } from '@/lib/document-request-detector';
 import { parseDocumentLinkMarker } from '@/lib/messaging/document-link-marker';
+import { parseChatImageMarker } from '@/lib/messaging/chat-image-marker';
+import { ChatImageAttachmentCard } from './messaging/ChatImageAttachmentCard';
 import { stripDocumentMarkerIfContextLinked } from '@/lib/messaging/strip-duplicate-document-marker';
 import { buildMentionSegments, type PatientRosterEntry } from '@/lib/patient-name-recognition';
 import type { MessageContextLink } from '@/lib/types/messaging';
@@ -34,6 +36,7 @@ interface MessageTextRendererProps {
  * Render message text with @mention support, document request cards, and upload buttons
  * Mentions are in format: @vezeteknev+keresztnev
  * Document uploads are in format: [DOCUMENT_UPLOADED:tag:patientId?:documentId]
+ * Chat images without a patient (doctor-doctor) are in format: [CHAT_IMAGE:attachmentId]
  * Consilium prep links are in format: [CONSILIUM_PREP:<token>]
  * Document requests are detected from text and show upload button for recipients
  */
@@ -66,6 +69,24 @@ export function MessageTextRenderer({
           <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm">{before}</p>
         ) : null}
         <ConsiliumPrepMessageCard token={token} />
+        {after ? (
+          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm mt-1 opacity-90">{after}</p>
+        ) : null}
+      </>
+    );
+  }
+
+  // Beteghez nem rendelt chat-kép: [CHAT_IMAGE:<attachmentId>]
+  const chatImage = parseChatImageMarker(displayText || '');
+  if (chatImage) {
+    const before = (displayText || '').slice(0, chatImage.start).trim();
+    const after = (displayText || '').slice(chatImage.end).trim();
+    return (
+      <>
+        {before ? (
+          <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm mb-1">{before}</p>
+        ) : null}
+        <ChatImageAttachmentCard attachmentId={chatImage.attachmentId} />
         {after ? (
           <p className="whitespace-pre-wrap break-words [overflow-wrap:anywhere] text-sm mt-1 opacity-90">{after}</p>
         ) : null}

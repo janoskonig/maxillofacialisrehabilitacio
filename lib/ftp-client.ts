@@ -571,3 +571,24 @@ export function getMaxFileSize(): number {
   return FTP_MAX_FILE_SIZE;
 }
 
+
+// ---------------------------------------------------------------------------
+// Chat képmellékletek (orvos–orvos chat, beteghez NEM rendelt képek)
+// ---------------------------------------------------------------------------
+
+/**
+ * Az FTP_BASE_PATH alatti mappa, ahová a beteghez nem rendelt chat-képek
+ * kerülnek. Az aláhúzás megkülönbözteti a beteg-UUID mappáktól. A fájlok
+ * metaadata a `doctor_message_attachments` táblában van (098 migráció).
+ */
+export const CHAT_ATTACHMENTS_DIR = '_chat-attachments';
+
+/** Chat képmelléklet feltöltése; a DB-be mentendő file_path-t adja vissza. */
+export async function uploadChatAttachment(fileBuffer: Buffer, filename: string): Promise<string> {
+  return uploadFile(CHAT_ATTACHMENTS_DIR, fileBuffer, filename);
+}
+
+/** Chat képmelléklet letöltése a DB-ben tárolt file_path alapján. */
+export async function downloadChatAttachment(filePath: string): Promise<Buffer> {
+  return downloadFile(filePath, CHAT_ATTACHMENTS_DIR);
+}

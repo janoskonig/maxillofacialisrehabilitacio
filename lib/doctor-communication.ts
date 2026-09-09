@@ -18,6 +18,7 @@ import type {
 } from './types/messaging';
 import { enrichMessagesWithContextLinks } from './messaging/attach-context-links';
 import { syncDocumentContextLinkFromMarker } from './messaging/sync-context-link-from-marker';
+import { bindChatImageAttachmentsToMessage } from './messaging/doctor-message-attachments';
 import type { StaffViewer } from './messaging/context-links';
 import {
   batchDoctorMessageReplyCounts,
@@ -583,6 +584,14 @@ export async function sendDoctorMessage(input: CreateDoctorMessageInput): Promis
     messageText: input.message,
     patientId: mentionedPatientIds[0] ?? '',
     actor: { kind: 'staff', userId: input.senderId, role },
+  });
+
+  // Beteghez nem rendelt chat-képek ([CHAT_IMAGE:<id>]) hozzákötése az üzenethez,
+  // hogy a címzett(ek) jogosultak legyenek a fájl letöltésére.
+  await bindChatImageAttachmentsToMessage({
+    messageId: message.id,
+    senderId: input.senderId,
+    messageText: input.message,
   });
 
   return message;

@@ -327,13 +327,15 @@ async function buildLinkPreview(
     }
     case 'document': {
       const r = await pool.query(
-        `SELECT filename, patient_id FROM patient_documents WHERE id = $1`,
+        `SELECT filename, patient_id, mime_type FROM patient_documents WHERE id = $1`,
         [entity.entityId],
       );
       if (!r.rows.length) return null;
       return {
         label: r.rows[0].filename,
         href: `/patients/${r.rows[0].patient_id}/view?tab=adminisztracio&documentId=${entity.entityId}`,
+        mimeType: r.rows[0].mime_type ?? null,
+        patientId: r.rows[0].patient_id ?? null,
       };
     }
     case 'appointment': {
