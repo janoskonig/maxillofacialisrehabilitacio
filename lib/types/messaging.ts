@@ -152,6 +152,10 @@ export interface MessageContextLinkPreview {
   label: string;
   subtitle?: string | null;
   href?: string | null;
+  /** Dokumentum-linknél: MIME típus — a buborék ez alapján rendereli inline képként. */
+  mimeType?: string | null;
+  /** Dokumentum-linknél: a dokumentum betege (inline kép URL-hez). */
+  patientId?: string | null;
 }
 
 export interface MessageContextLink {

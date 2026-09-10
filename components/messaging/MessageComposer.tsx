@@ -50,6 +50,13 @@ interface MessageComposerProps {
   onTyping?: () => void;
   /** Overlay a beviteli mező fölött (pl. `<PatientMention/>` dropdown). */
   overlay?: ReactNode;
+  /**
+   * Van küldésre váró csatolmány (pl. kép) — ilyenkor üres szöveggel is
+   * engedélyezett a küldés.
+   */
+  hasAttachments?: boolean;
+  /** Vágólapról beillesztett fájlok (pl. kép Ctrl+V-vel). */
+  onPasteFiles?: (files: File[]) => void;
 }
 
 const MAX_TEXTAREA_PX = 140;
@@ -71,6 +78,8 @@ export function MessageComposer({
   onCursorChange,
   onTyping,
   overlay,
+  hasAttachments = false,
+  onPasteFiles,
 }: MessageComposerProps) {
   const internalRef = useRef<HTMLTextAreaElement>(null);
   const textareaRef = externalRef ?? internalRef;
@@ -91,7 +100,15 @@ export function MessageComposer({
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoFocusKey]);
 
-  const canSend = value.trim().length > 0 && !sending && !disabled;
+  const canSend = (value.trim().length > 0 || hasAttachments) && !sending && !disabled;
+
+  const handlePaste = (e: React.ClipboardEvent<HTMLTextAreaElement>) => {
+    if (!onPasteFiles) return;
+    const files = Array.from(e.clipboardData?.files ?? []).filter((f) => f.type.startsWith('image/'));
+    if (files.length === 0) return;
+    e.preventDefault();
+    onPasteFiles(files);
+  };
 
   const handleKeyDown = (e: React.KeyboardEvent<HTMLTextAreaElement>) => {
     if (e.key === 'Escape') {
@@ -128,6 +145,7 @@ export function MessageComposer({
                 if (e.target.value.trim()) onTyping?.();
               }}
               onKeyDown={handleKeyDown}
+              onPaste={handlePaste}
               onSelect={(e) => onCursorChange?.((e.target as HTMLTextAreaElement).selectionStart)}
               rows={1}
               disabled={disabled}

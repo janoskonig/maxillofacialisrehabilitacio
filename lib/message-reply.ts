@@ -13,6 +13,7 @@
 
 import { isValidUUID, validateUUID } from './validation';
 import type { MessageChannel, QuotedMessagePreview } from './types/messaging';
+import { humanizeMessagePreview } from './messaging/message-preview-text';
 
 /**
  * A preview szöveg maximális hossza karakterben. A buborékban általában
@@ -70,7 +71,8 @@ export function buildQuotedMessagePreviewText(
 ): string {
   if (raw === null || raw === undefined) return '';
   const asString = typeof raw === 'string' ? raw : String(raw);
-  const normalized = asString.replace(/\s+/g, ' ').trim();
+  // Gépi markerek (kép / dokumentum) helyett olvasható címke az idézetben.
+  const normalized = humanizeMessagePreview(asString);
   if (normalized.length <= max) return normalized;
   return normalized.slice(0, Math.max(0, max - 1)).trimEnd() + '…';
 }

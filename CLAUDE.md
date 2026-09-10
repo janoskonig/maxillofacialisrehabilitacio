@@ -68,6 +68,7 @@ Many `package.json` `migrate:*` / `episode-plan:*` / `backfill:*` / `registry:*`
 - **Messaging**: doctor↔doctor, doctor groups, and patient↔doctor threads over Socket.io. Rooms are `patient:{id}`, `user:{id}` (auto-joined), `doctor-group:{id}`; ACL is enforced on `join-room` (`lib/socket-server.ts`, `lib/socket-auth.ts`, `lib/messaging/`, `contexts/SocketContext.tsx`).
 - **Tasks** (`Feladataim` / todos): personal + delegated, with push and per-task email reminders driven by a cron endpoint.
 - **Documents**: upload (optional FTP storage), tagging, annotations, and document-request wizards. Clinical doc requirements in `lib/clinical-rules.ts` (`REQUIRED_DOC_TAGS`).
+- **Chat images**: the composer's image button (`components/messaging/ImageAttachComposerButton.tsx`, `hooks/usePendingChatImages.ts`) uploads on send. Doctor↔patient images always become `patient_documents` rows (tag `chat`) and travel as `[DOCUMENT_UPLOADED:chat:…]` markers; doctor↔doctor images go through `ChatImageSaveTargetDialog` — either into a chosen patient's documents or into `doctor_message_attachments` (migration 098, FTP dir `_chat-attachments`) as `[CHAT_IMAGE:<id>]` (`lib/messaging/chat-image-marker.ts`). Marker → preview label mapping lives in `lib/messaging/message-preview-text.ts`.
 - **OHIP-14**: oral-health quality-of-life questionnaire with timepoint staging and reminders (`lib/ohip14-*.ts`).
 - **Research registry** (`lib/research-registry/`, `data/research-registry/`): consented research data export with quality/governance workers, behind feature flags.
 

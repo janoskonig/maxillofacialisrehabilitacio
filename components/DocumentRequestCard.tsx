@@ -3,6 +3,8 @@
 import { useState, useEffect } from 'react';
 import Link from 'next/link';
 import { FileText, Image as ImageIcon, Download, ExternalLink } from 'lucide-react';
+import { ChatImageFigure } from './messaging/ChatImageFigure';
+import { getPatientDocumentInlineUrl, getPortalDocumentInlineUrl } from '@/lib/document-inline-url';
 
 interface Document {
   id: string;
@@ -27,6 +29,7 @@ const DOCUMENT_TYPE_LABELS: Record<string, string> = {
   'foto': 'Önarckép / portré (foto)',
   'zarojelentes': 'Zárójelentés',
   'ambulans lap': 'Ambuláns lap',
+  'chat': 'Üzenetben küldött kép',
   '': 'Általános dokumentum',
 };
 
@@ -123,6 +126,42 @@ export function DocumentRequestCard({
   const documentTypeLabel = DOCUMENT_TYPE_LABELS[tag || ''] || 'Dokumentum';
   const isImage = document.mimeType?.startsWith('image/');
   const Icon = isImage ? ImageIcon : FileText;
+
+  // Képdokumentum → inline kép a buborékban (kattintásra teljes nézet). A
+  // `patient-doctor` chatType a beteg portál nézete (saját dokumentum URL).
+  const viewerIsPortal = chatType === 'patient-doctor';
+  const inlineUrl = isImage
+    ? viewerIsPortal
+      ? getPortalDocumentInlineUrl(documentId)
+      : patientId
+        ? getPatientDocumentInlineUrl(documentId, patientId)
+        : null
+    : null;
+  if (inlineUrl) {
+    const downloadHref = viewerIsPortal
+      ? `/api/patient-portal/documents/${documentId}/download`
+      : `/api/patients/${patientId}/documents/${documentId}`;
+    return (
+      <div className="my-1">
+        <ChatImageFigure
+          src={inlineUrl}
+          alt={document.filename}
+          filename={document.filename}
+          downloadHref={downloadHref}
+        />
+        <div className="mt-1 flex flex-wrap items-center gap-x-2 gap-y-0.5 text-[11px] opacity-80">
+          {chatType === 'doctor-doctor' && patientName ? <span>Beteg: {patientName}</span> : null}
+          <Link
+            href={getDocumentLink()}
+            className="inline-flex items-center gap-1 underline-offset-2 hover:underline"
+          >
+            <ExternalLink className="w-3 h-3" />
+            {viewerIsPortal ? 'Dokumentumaim' : 'Dokumentumok'}
+          </Link>
+        </div>
+      </div>
+    );
+  }
 
   return (
     <div className="bg-blue-50 dark:bg-blue-950/40 border-2 border-blue-200 dark:border-blue-800 rounded-lg p-4 my-2 hover:bg-blue-100 dark:hover:bg-blue-900/40 transition-colors">

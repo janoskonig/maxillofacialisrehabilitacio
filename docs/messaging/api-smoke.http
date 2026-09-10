@@ -389,3 +389,50 @@ Cookie: {{authCookie}}
 ###
 
 ###
+
+###############################################################################
+# [Képek] Orvos–orvos chat: beteghez NEM rendelt kép feltöltése (multipart).
+# A beteghez rendelt chat-képek a meglévő /api/patients/:id/documents (staff)
+# ill. /api/patient-portal/documents (portál) végpontra mennek, címke: ["chat"],
+# és az üzenet a [DOCUMENT_UPLOADED:chat:…] markert hordozza.
+###############################################################################
+
+POST {{host}}/api/doctor-messages/attachments
+Cookie: {{authCookie}}
+Content-Type: multipart/form-data; boundary=----chatimg
+
+------chatimg
+Content-Disposition: form-data; name="file"; filename="kep.jpg"
+Content-Type: image/jpeg
+
+< ./kep.jpg
+------chatimg--
+
+###
+# [Képek] Üzenet a markerrel (a fenti válasz attachment.id-jával) — a szerver
+# a küldéskor az üzenethez köti a mellékletet (doctor_message_attachments.message_id).
+###
+
+POST {{host}}/api/doctor-messages
+Cookie: {{authCookie}}
+Content-Type: application/json
+
+{
+  "recipientId": "{{recipientDoctorId}}",
+  "message": "Nézd meg ezt\n[CHAT_IMAGE:REPLACE_WITH_ATTACHMENT_ID]"
+}
+
+###
+# [Képek] Melléklet metaadat / fájl — csak a feltöltő, admin, vagy a
+# beszélgetés résztvevői (1:1 küldő/címzett, csoporttag); másnak 404.
+###
+
+GET {{host}}/api/doctor-messages/attachments/REPLACE_WITH_ATTACHMENT_ID
+Cookie: {{authCookie}}
+
+###
+
+GET {{host}}/api/doctor-messages/attachments/REPLACE_WITH_ATTACHMENT_ID/file?download=true
+Cookie: {{authCookie}}
+
+###
