@@ -1,4 +1,4 @@
--- 098: Orvos–orvos chat képmellékletek, amelyeket a küldő NEM rendelt beteghez.
+-- 099: Orvos–orvos chat képmellékletek, amelyeket a küldő NEM rendelt beteghez.
 --
 -- A beteghez rendelt chat-képek a patient_documents táblába kerülnek (címke:
 -- "chat"), és a meglévő [DOCUMENT_UPLOADED:…] markert használják. Ez a tábla

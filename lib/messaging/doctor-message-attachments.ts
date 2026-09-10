@@ -1,7 +1,7 @@
 /**
  * Orvos–orvos chat képmellékletek (beteghez NEM rendelt képek) — DB réteg.
  *
- * Tábla: doctor_message_attachments (098 migráció). A fájl az FTP
+ * Tábla: doctor_message_attachments (099 migráció). A fájl az FTP
  * `_chat-attachments` mappájában van (lásd lib/ftp-client uploadChatAttachment).
  * Az üzenet a `[CHAT_IMAGE:<id>]` markert hordozza (lib/messaging/chat-image-marker).
  */
