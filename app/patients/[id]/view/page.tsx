@@ -87,7 +87,7 @@ export default function PatientViewPage() {
 
           if (!response.ok) {
             if (response.status === 403 || response.status === 404) {
-              router.push('/');
+              router.push('/patients');
               return;
             }
             throw new Error('Failed to fetch patient');
@@ -111,7 +111,7 @@ export default function PatientViewPage() {
           }
         } catch (error) {
           console.error('Error fetching patient:', error);
-          router.push('/');
+          router.push('/patients');
           return;
         }
       } catch (error) {
@@ -218,7 +218,7 @@ export default function PatientViewPage() {
   return (
     <AppShell
       title="Beteg profil"
-      backTo="/"
+      backTo="/patients"
       maxWidth="xl"
       actions={
         userRole === 'admin' && patientId ? (

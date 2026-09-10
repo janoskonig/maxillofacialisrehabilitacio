@@ -1,15 +1,32 @@
-'use client';
+"use client";
 
-import { useState, useEffect, useMemo, memo } from 'react';
-import { Patient, patientStageOptions } from '@/lib/types';
-import { Phone, Mail, Calendar, FileText, Eye, Pencil, CheckCircle2, XCircle, Clock, Trash2, ArrowUp, ArrowDown, Image, Camera, AlertCircle, Clock as ClockIcon, MessageCircle } from 'lucide-react';
-import { useRouter } from 'next/navigation';
-import { formatDateForDisplay, calculateAge } from '@/lib/dateUtils';
-import { PatientCard } from './PatientCard';
-import { useIsMobile } from '@/hooks/useMediaQuery';
-import { MobileTable } from './mobile/MobileTable';
-import { PatientListAvatar } from './PatientListAvatar';
+import { useState, useEffect, useMemo, memo } from "react";
+import Link from "next/link";
+import { Patient, patientStageOptions } from "@/lib/types";
+import {
+  FileText,
+  Pencil,
+  Trash2,
+  ArrowUp,
+  ArrowDown,
+  Camera,
+  Image as ImageIcon,
+  Columns,
+} from "lucide-react";
+import { formatDateForDisplay } from "@/lib/dateUtils";
+import { PatientCard } from "./PatientCard";
+import { MobileTable } from "./mobile/MobileTable";
+import { PatientListAvatar } from "./PatientListAvatar";
+import { useRemoteData } from "@/hooks/useRemoteData";
+import { RemoteDataState } from "./ui/RemoteDataState";
+import {
+  selectPatientNextStep,
+  patientNextStepAction,
+  patientNextStepLabel,
+} from "@/lib/patient-next-step";
+import type { WorklistItemBackend } from "@/lib/worklist-types";
 
+type SortField = "nev" | "idopont" | "createdAt" | "kezeleoorvos";
 interface PatientListProps {
   patients: Patient[];
   onView: (patient: Patient) => void;
@@ -19,10 +36,10 @@ interface PatientListProps {
   onViewFoto?: (patient: Patient) => void;
   canEdit?: boolean;
   canDelete?: boolean;
-  userRole?: 'admin' | 'fogpótlástanász' | 'technikus' | 'beutalo_orvos';
-  sortField?: 'nev' | 'idopont' | 'createdAt' | 'kezeleoorvos' | null;
-  sortDirection?: 'asc' | 'desc';
-  onSort?: (field: 'nev' | 'idopont' | 'createdAt' | 'kezeleoorvos') => void;
+  userRole?: "admin" | "fogpótlástanász" | "technikus" | "beutalo_orvos";
+  sortField?: SortField | null;
+  sortDirection?: "asc" | "desc";
+  onSort?: (field: SortField) => void;
   searchQuery?: string;
   isFiltered?: boolean;
 }
@@ -32,543 +49,500 @@ interface AppointmentInfo {
   startTime: string;
   dentistEmail: string | null;
   dentistName?: string | null;
-  appointmentStatus?: 'cancelled_by_doctor' | 'cancelled_by_patient' | 'completed' | 'no_show' | null;
+  appointmentStatus?:
+    | "cancelled_by_doctor"
+    | "cancelled_by_patient"
+    | "completed"
+    | "no_show"
+    | null;
   completionNotes?: string | null;
   isLate?: boolean;
 }
+interface ListEnrichment {
+  appointments: Record<string, AppointmentInfo>;
+  opDocuments: Record<string, number>;
+  fotoDocuments: Record<string, number>;
+  portraitDocumentIds: Record<string, string>;
+  stages: Record<
+    string,
+    { stage: string; stageDate?: string; notes?: string; stageLabel?: string }
+  >;
+}
 
-function PatientListComponent({ patients, onView, onEdit, onDelete, onViewOP, onViewFoto, canEdit = false, canDelete = false, userRole, sortField, sortDirection = 'asc', onSort, searchQuery = '', isFiltered = false }: PatientListProps) {
-  const [appointments, setAppointments] = useState<Record<string, AppointmentInfo>>({});
-  const [loadingAppointments, setLoadingAppointments] = useState(false);
-  const [opDocuments, setOpDocuments] = useState<Record<string, number>>({});
-  const [fotoDocuments, setFotoDocuments] = useState<Record<string, number>>({});
-  const [portraitDocumentIds, setPortraitDocumentIds] = useState<Record<string, string>>({});
-  const [stages, setStages] = useState<Record<string, { stage: string; stageDate?: string; notes?: string; stageLabel?: string }>>({});
-  const isMobile = useIsMobile();
-  const router = useRouter();
+const EXTRA_COLUMNS = [
+  { id: "foto", label: "Fotók" },
+  { id: "op", label: "OP" },
+  { id: "taj", label: "TAJ szám" },
+  { id: "contact", label: "Kapcsolat" },
+  { id: "created", label: "Létrehozva" },
+] as const;
+type ExtraColumn = (typeof EXTRA_COLUMNS)[number]["id"];
+const COLUMN_KEY = "patient-list-columns-v1";
+const cell = "px-3 py-4 text-sm text-gray-900 dark:text-gray-100 align-top";
+const secondary = "text-xs text-gray-600 dark:text-gray-400";
 
-  const patientIdsString = useMemo(() => patients.map(p => p.id).filter(Boolean).join(','), [patients]);
-
+function PatientListComponent({
+  patients,
+  onView,
+  onEdit,
+  onDelete,
+  onViewOP,
+  onViewFoto,
+  canEdit = false,
+  canDelete = false,
+  userRole,
+  sortField,
+  sortDirection = "asc",
+  onSort,
+  searchQuery = "",
+  isFiltered = false,
+}: PatientListProps) {
+  const clinical = userRole !== "technikus";
+  const patientIds = useMemo(
+    () => patients.flatMap((p) => (p.id ? [p.id] : [])),
+    [patients],
+  );
+  const enrichment = useRemoteData<ListEnrichment>(
+    patientIds.length ? "/api/patients/list-enrichment" : null,
+    JSON.stringify({ patientIds }),
+  );
+  const nextSteps = useRemoteData<{ items: WorklistItemBackend[] }>(
+    clinical && patientIds.length
+      ? `/api/worklists/wip-next-appointments?patientIds=${encodeURIComponent(patientIds.join(","))}`
+      : null,
+  );
+  const appointments = enrichment.data?.appointments;
+  const [columns, setColumns] = useState<ExtraColumn[]>([]);
   useEffect(() => {
-    if (!patientIdsString) return;
-    const patientIds = patientIdsString.split(',');
-    let cancelled = false;
-
-    const loadEnrichment = async () => {
-      setLoadingAppointments(true);
-      try {
-        const response = await fetch('/api/patients/list-enrichment', {
-          method: 'POST',
-          headers: { 'Content-Type': 'application/json' },
-          credentials: 'include',
-          body: JSON.stringify({ patientIds }),
-        });
-        if (!cancelled && response.ok) {
-          const data = await response.json();
-          setAppointments(data.appointments || {});
-          setOpDocuments(data.opDocuments || {});
-          setFotoDocuments(data.fotoDocuments || {});
-          setPortraitDocumentIds(data.portraitDocumentIds || {});
-          setStages(data.stages || {});
-        }
-      } catch (error) {
-        console.error('Error loading list enrichment:', error);
-      } finally {
-        if (!cancelled) setLoadingAppointments(false);
-      }
-    };
-
-    loadEnrichment();
-    return () => { cancelled = true; };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [patientIdsString]);
-
-  // Sort patients by appointment if needed
-  const sortedPatients = useMemo(() => {
-    if (sortField === 'idopont') {
-      // Sort by appointment proximity (closest first)
-      return [...patients].sort((a, b) => {
-        const aptA = appointments[a.id || ''];
-        const aptB = appointments[b.id || ''];
-        
-        // Patients without appointments go to the end
-        if (!aptA && !aptB) return 0;
-        if (!aptA) return 1;
-        if (!aptB) return -1;
-        
-        const dateA = new Date(aptA.startTime).getTime();
-        const dateB = new Date(aptB.startTime).getTime();
-        const now = Date.now();
-        // 4 órás késleltetés: az időpontok rendezésekor is figyelembe vesszük a 4 órás késleltetést
-        const fourHoursFromNow = now - 4 * 60 * 60 * 1000;
-        
-        // Calculate distance from 4 hours ago (to account for the delay)
-        const distA = Math.abs(dateA - fourHoursFromNow);
-        const distB = Math.abs(dateB - fourHoursFromNow);
-        
-        const comparison = distA - distB;
-        return sortDirection === 'asc' ? comparison : -comparison;
-      });
+    try {
+      const saved: unknown = JSON.parse(
+        localStorage.getItem(COLUMN_KEY) ?? "[]",
+      );
+      if (Array.isArray(saved))
+        setColumns(
+          EXTRA_COLUMNS.filter((c) => saved.includes(c.id)).map((c) => c.id),
+        );
+    } catch {
+      /* Use the compact default when browser storage is unavailable. */
     }
-    return patients;
+  }, []);
+  const toggleColumn = (id: ExtraColumn) => {
+    const next = columns.includes(id)
+      ? columns.filter((c) => c !== id)
+      : [...columns, id];
+    setColumns(next);
+    try {
+      localStorage.setItem(COLUMN_KEY, JSON.stringify(next));
+    } catch {
+      /* Optional preference. */
+    }
+  };
+
+  const sortedPatients = useMemo(() => {
+    if (sortField !== "idopont") return patients;
+    return [...patients].sort((a, b) => {
+      const first = appointments?.[a.id ?? ""];
+      const second = appointments?.[b.id ?? ""];
+      if (!first && !second) return 0;
+      if (!first) return 1;
+      if (!second) return -1;
+      return (
+        (new Date(first.startTime).getTime() -
+          new Date(second.startTime).getTime()) *
+        (sortDirection === "asc" ? 1 : -1)
+      );
+    });
   }, [patients, appointments, sortField, sortDirection]);
 
-  // Helper function to render sortable header
-  const renderSortableHeader = (label: string, field: 'nev' | 'idopont' | 'createdAt' | 'kezeleoorvos', className?: string) => {
-    const isActive = sortField === field;
-    const SortIcon = isActive 
-      ? (sortDirection === 'asc' ? ArrowUp : ArrowDown)
-      : null;
-    
+  const header = (label: string, field?: SortField) => (
+    <th
+      scope="col"
+      className="px-3 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300"
+      aria-sort={
+        field && sortField === field
+          ? sortDirection === "asc"
+            ? "ascending"
+            : "descending"
+          : undefined
+      }
+    >
+      {field && onSort ? (
+        <button
+          type="button"
+          onClick={() => onSort(field)}
+          className="inline-flex items-center gap-1.5 py-1 text-left hover:text-blue-700 dark:hover:text-blue-300"
+        >
+          {label}
+          {sortField === field &&
+            (sortDirection === "asc" ? (
+              <ArrowUp className="h-3.5 w-3.5" aria-hidden="true" />
+            ) : (
+              <ArrowDown className="h-3.5 w-3.5" aria-hidden="true" />
+            ))}
+        </button>
+      ) : (
+        label
+      )}
+    </th>
+  );
+  const pendingText =
+    enrichment.status === "loading" ? "Betöltés…" : "Nem tölthető be";
+  const renderNextStep = (patient: Patient) => {
+    if (nextSteps.status !== "success")
+      return (
+        <span className={secondary}>
+          {nextSteps.status === "loading" ? "Betöltés…" : "Nem tölthető be"}
+        </span>
+      );
+    const step = selectPatientNextStep(
+      nextSteps.data?.items ?? [],
+      patient.id ?? "",
+    );
+    if (!step)
+      return <span className={secondary}>Nincs következő munkafázis.</span>;
     return (
-      <th 
-        className={`px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider cursor-pointer hover:bg-gray-200/50 dark:hover:bg-gray-800 select-none transition-colors duration-150 ${
-          isActive ? 'bg-medical-primary/10 text-medical-primary' : ''
-        } ${className || ''}`}
-        onClick={() => onSort?.(field)}
-      >
-        <div className="flex items-center gap-1.5">
-          <span>{label}</span>
-          {SortIcon && (
-            <SortIcon className={`w-3.5 h-3.5 ${isActive ? 'text-medical-primary' : 'text-gray-400 dark:text-gray-500'}`} />
+      <div className="min-w-[140px] max-w-xs space-y-1">
+        <span className="block text-sm font-medium">
+          {patientNextStepLabel(step)}
+        </span>
+        <Link
+          href={`/patients/${patient.id}/stages`}
+          className="inline-flex min-h-11 items-center text-xs text-blue-700 md:min-h-0 md:py-1 hover:underline dark:text-blue-300"
+        >
+          {patientNextStepAction(step)}
+        </Link>
+        {step.status === "blocked" && !step.bookedAppointmentId && (
+          <span className="block text-xs text-amber-800 dark:text-amber-200">
+            {step.blockedReason || "A folytatáshoz egyeztetés szükséges."}
+          </span>
+        )}
+        {step.overdueByDays > 0 && !step.bookedAppointmentId && (
+          <span className="block text-xs text-red-700 dark:text-red-300">
+            {step.overdueByDays} napja lejárt
+          </span>
+        )}
+      </div>
+    );
+  };
+  const renderAppointment = (patient: Patient) => {
+    if (enrichment.status !== "success")
+      return <span className={secondary}>{pendingText}</span>;
+    const appointment = appointments?.[patient.id ?? ""];
+    if (!appointment)
+      return <span className={secondary}>Nincs foglalt időpont</span>;
+    const labels = {
+      cancelled_by_doctor: "Lemondva (orvos)",
+      cancelled_by_patient: "Lemondva (beteg)",
+      completed: "Teljesült",
+      no_show: "Nem jelent meg",
+    };
+    return (
+      <div className="space-y-1">
+        <time dateTime={appointment.startTime} className="block tabular-nums">
+          {new Date(appointment.startTime).toLocaleString("hu-HU", {
+            month: "short",
+            day: "numeric",
+            hour: "2-digit",
+            minute: "2-digit",
+          })}
+        </time>
+        {appointment.dentistName && (
+          <span className={`block ${secondary}`}>
+            {appointment.dentistName}
+          </span>
+        )}
+        {appointment.appointmentStatus && (
+          <span
+            className={`block ${secondary}`}
+            title={appointment.completionNotes ?? undefined}
+          >
+            {labels[appointment.appointmentStatus]}
+          </span>
+        )}
+        {appointment.isLate && (
+          <span className="block text-xs text-amber-800 dark:text-amber-200">
+            Késett
+          </span>
+        )}
+      </div>
+    );
+  };
+  const renderExtraCell = (patient: Patient, column: ExtraColumn) => {
+    const id = patient.id ?? "";
+    if (column === "taj") return patient.taj || "Nincs megadva";
+    if (column === "created") return formatDateForDisplay(patient.createdAt);
+    if (column === "contact")
+      return (
+        <div className="space-y-1">
+          <span className="block">
+            {patient.telefonszam || "Nincs telefonszám"}
+          </span>
+          {patient.email && (
+            <span className={`block break-all ${secondary}`}>
+              {patient.email}
+            </span>
           )}
         </div>
-      </th>
-    );
-  };
-
-  // Empty state
-  const emptyState = (
-    <div className="card text-center py-6">
-      <FileText className="w-8 h-8 text-gray-400 dark:text-gray-500 mx-auto mb-2" />
-      <h3 className="text-base font-medium text-gray-900 dark:text-gray-100 mb-1">Nincs találat</h3>
-      <p className="text-sm text-gray-500 dark:text-gray-400">
-        {isFiltered || searchQuery.trim()
-          ? 'Próbálja módosítani a keresési feltételeket.'
-          : 'Kezdje az első betegadat hozzáadásával.'}
-      </p>
-    </div>
-  );
-
-  // Desktop table header
-  const renderTableHeader = () => (
-    <>
-      {renderSortableHeader(searchQuery.trim() ? 'Keresési eredmény' : 'Beteg', 'nev')}
-      {renderSortableHeader('Kezelőorvos', 'kezeleoorvos', 'w-40')}
-      {userRole !== 'technikus' && (
-      <>
-      <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider w-20">
-        Foto
-      </th>
-      <th className="px-3 py-3 text-center text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider w-20">
-        OP
-      </th>
-      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-        Stádium
-      </th>
-      <th className="px-3 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-        TAJ szám
-      </th>
-      <th className="px-2 py-3 text-left text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider w-32">
-        Kapcsolat
-      </th>
-      </>
-      )}
-      {userRole !== 'technikus' && renderSortableHeader('Következő időpont', 'idopont', 'w-32')}
-      {userRole !== 'technikus' && renderSortableHeader('Létrehozva', 'createdAt')}
-      <th className="px-3 py-3 text-right text-xs font-semibold text-gray-600 dark:text-gray-400 uppercase tracking-wider">
-        Műveletek
-      </th>
-    </>
-  );
-
-  // Desktop table row className
-  const getRowClassName = (patient: Patient, index: number) => {
-    const hasNoDoctor = !patient.kezeleoorvos;
-    const isEven = index % 2 === 0;
-    return `transition-all duration-150 ${
-      hasNoDoctor
-        ? "bg-red-50/50 dark:bg-red-950/40 hover:bg-red-100/70 dark:hover:bg-red-950/60 border-l-2 border-l-medical-error"
-        : isEven
-          ? "bg-white dark:bg-gray-900 hover:bg-gray-50/80 dark:hover:bg-gray-800"
-          : "bg-gray-50/30 dark:bg-gray-800/30 hover:bg-gray-100/60 dark:hover:bg-gray-800/60"
-    }`;
-  };
-
-  // Desktop table row
-  const renderTableRow = (patient: Patient, index: number) => {
+      );
+    if (enrichment.status !== "success")
+      return <span className={secondary}>{pendingText}</span>;
+    const count =
+      (column === "foto"
+        ? enrichment.data?.fotoDocuments[id]
+        : enrichment.data?.opDocuments[id]) ?? 0;
+    const Icon = column === "foto" ? Camera : ImageIcon;
+    if (!count) return <span className={secondary}>Nincs</span>;
     return (
-      <>
-                <td className="px-3 py-3 whitespace-nowrap">
-                  <div className="flex items-center">
-                    {patient.id ? (
-                      <PatientListAvatar
-                        patientId={patient.id}
-                        patientName={patient.nev}
-                        portraitDocumentId={portraitDocumentIds[patient.id] ?? null}
-                      />
-                    ) : (
-                      <div className="flex-shrink-0 h-9 w-9 rounded-full bg-gradient-to-br from-medical-primary to-medical-primary-light flex items-center justify-center shadow-soft">
-                        <span className="text-xs font-semibold text-white">
-                          {patient.nev ? patient.nev.split(' ').map((n) => n.charAt(0)).join('').substring(0, 2) : '??'}
-                        </span>
-                      </div>
-                    )}
-                    <div className="ml-3">
-                      <div className="flex items-center gap-2">
-                        <div
-                          className="text-sm font-semibold text-gray-900 dark:text-gray-100 cursor-pointer text-medical-primary hover:text-medical-primary-dark hover:underline transition-colors"
-                          onClick={() => {
-                            // Ha van szerkesztési jogosultság, akkor szerkesztés, különben csak megtekintés
-                            if (canEdit && onEdit) {
-                              onEdit(patient);
-                            } else {
-                              onView(patient);
-                            }
-                          }}
-                          title={canEdit && onEdit ? "Beteg szerkesztése" : "Beteg megtekintése"}
-                        >
-                          {patient.nev}
-                        </div>
-                        {patient.halalDatum && (
-                          <span className="inline-flex items-center px-2 py-0.5 rounded text-xs font-medium bg-gray-200 dark:bg-gray-800 text-gray-700 dark:text-gray-300" title={`Halál dátuma: ${formatDateForDisplay(patient.halalDatum)}`}>
-                            ✝
-                          </span>
-                        )}
-                      </div>
-                      <div className="text-xs text-gray-500 dark:text-gray-400 mt-0.5">
-                        {userRole !== 'technikus' && (
-                          <>
-                            {patient.nem === 'ferfi' ? 'Férfi' : patient.nem === 'no' ? 'Nő' : ''} 
-                            {patient.nem && (() => {
-                              const age = calculateAge(patient.szuletesiDatum, patient.halalDatum);
-                              return age !== null ? ` • ${age} éves` : '';
-                            })()}
-                            {patient.halalDatum && (
-                              <span className="text-gray-600 dark:text-gray-400 ml-1">• Halál: {formatDateForDisplay(patient.halalDatum)}</span>
-                            )}
-                          </>
-                        )}
-                      </div>
-                    </div>
-                  </div>
-                </td>
-                <td className="px-3 py-2 whitespace-nowrap w-40">
-                  {patient.kezeleoorvos ? (
-                    <div className="flex items-center text-xs text-gray-900 dark:text-gray-100 truncate" title={patient.kezeleoorvos}>
-                      <span className="truncate">{patient.kezeleoorvos}</span>
-                    </div>
-                  ) : (
-                    <span className="inline-flex items-center gap-1 text-xs font-medium text-medical-error" title="Nincs kezelőorvos kijelölve – ő felel az adatteljességért">
-                      <AlertCircle className="w-3 h-3 flex-shrink-0" />
-                      Nincs kijelölve
-                    </span>
-                  )}
-                </td>
-                {userRole !== 'technikus' && (
-                <>
-                <td className="px-3 py-2 text-center">
-                  {fotoDocuments[patient.id || ''] > 0 ? (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (onViewFoto) {
-                          onViewFoto(patient);
-                        } else {
-                          onView(patient);
-                        }
-                      }}
-                      className="inline-flex items-center justify-center p-1.5 rounded-full bg-medical-success/10 text-medical-success border border-medical-success/20 hover:bg-medical-success/20 transition-all duration-200"
-                      title={`${fotoDocuments[patient.id || '']} foto dokumentum`}
-                    >
-                      <Camera className="w-4 h-4" />
-                      <span className="ml-1 text-xs font-medium">{fotoDocuments[patient.id || '']}</span>
-                    </button>
-                  ) : (
-                    <span className="text-xs text-gray-300 dark:text-gray-600">-</span>
-                  )}
-                </td>
-                <td className="px-3 py-2 text-center">
-                  {opDocuments[patient.id || ''] > 0 ? (
-                    <button
-                      onClick={(e) => {
-                        e.stopPropagation();
-                        if (onViewOP) {
-                          onViewOP(patient);
-                        } else {
-                          onView(patient);
-                        }
-                      }}
-                      className="inline-flex items-center justify-center p-1.5 rounded-full bg-medical-primary/10 text-medical-primary border border-medical-primary/20 hover:bg-medical-primary/20 transition-all duration-200"
-                      title={`${opDocuments[patient.id || '']} OP dokumentum`}
-                    >
-                      <Image className="w-4 h-4" />
-                      <span className="ml-1 text-xs font-medium">{opDocuments[patient.id || '']}</span>
-                    </button>
-                  ) : (
-                    <span className="text-xs text-gray-300 dark:text-gray-600">-</span>
-                  )}
-                </td>
-                <td className="px-3 py-2 whitespace-nowrap">
-                  {(() => {
-                    const patientStage = stages[patient.id || ''];
-                    if (!patientStage) {
-                      return <span className="text-xs text-gray-400 dark:text-gray-500">-</span>;
-                    }
-                    const label = patientStage.stageLabel ?? patientStageOptions.find(opt => opt.value === patientStage.stage)?.label ?? patientStage.stage;
-                    const getStageColor = (stage: string) => {
-                      const legacy: Record<string, string> = {
-                        uj_beteg: 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300',
-                        onkologiai_kezeles_kesz: 'bg-purple-100 text-purple-800 dark:bg-purple-950/40 dark:text-purple-300',
-                        arajanlatra_var: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-300',
-                        implantacios_sebeszi_tervezesre_var: 'bg-orange-100 text-orange-800 dark:bg-orange-950/40 dark:text-orange-300',
-                        fogpotlasra_var: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
-                        fogpotlas_keszul: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300',
-                        fogpotlas_kesz: 'bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300',
-                        gondozas_alatt: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
-                      };
-                      const byCode: Record<string, string> = {
-                        STAGE_0: 'bg-blue-100 text-blue-800 dark:bg-blue-950/40 dark:text-blue-300',
-                        STAGE_1: 'bg-blue-200 text-blue-900 dark:bg-blue-900 dark:text-blue-200',
-                        STAGE_2: 'bg-yellow-100 text-yellow-800 dark:bg-yellow-950/40 dark:text-yellow-300',
-                        STAGE_3: 'bg-violet-100 text-violet-800 dark:bg-violet-950/40 dark:text-violet-300',
-                        STAGE_4: 'bg-amber-100 text-amber-800 dark:bg-amber-950/40 dark:text-amber-300',
-                        STAGE_5: 'bg-indigo-100 text-indigo-800 dark:bg-indigo-950/40 dark:text-indigo-300',
-                        STAGE_6: 'bg-green-100 text-green-800 dark:bg-green-950/40 dark:text-green-300',
-                        STAGE_7: 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300',
-                      };
-                      return legacy[stage] ?? byCode[stage] ?? 'bg-gray-100 text-gray-800 dark:bg-gray-800 dark:text-gray-300';
-                    };
-                    return (
-                      <span
-                        className={`px-2 py-0.5 rounded-full text-xs font-medium ${getStageColor(patientStage.stage)}`}
-                        title={patientStage.notes || label}
-                      >
-                        {label}
-                      </span>
-                    );
-                  })()}
-                </td>
-                <td className="px-3 py-2 whitespace-nowrap">
-                  <div className="text-xs text-gray-900 dark:text-gray-100">{patient.taj || '-'}</div>
-                </td>
-                <td className="px-2 py-2 whitespace-nowrap w-32">
-                  <div 
-                    className="flex items-center text-xs text-gray-900 dark:text-gray-100 truncate"
-                    title={patient.email ? `Telefon: ${patient.telefonszam || '-'}\nEmail: ${patient.email}` : `Telefon: ${patient.telefonszam || '-'}`}
-                  >
-                    <Phone className="w-3 h-3 mr-0.5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                    <span className="truncate">{patient.telefonszam || '-'}</span>
-                  </div>
-                  {patient.email && (
-                    <div 
-                      className="flex items-center text-xs text-gray-500 dark:text-gray-400 truncate"
-                      title={patient.email}
-                    >
-                      <Mail className="w-2.5 h-2.5 mr-0.5 text-gray-400 dark:text-gray-500 flex-shrink-0" />
-                      <span className="truncate">{patient.email}</span>
-                    </div>
-                  )}
-                </td>
-                </>
-                )}
-                {userRole !== 'technikus' && (
-                <td className="px-2 py-2 w-32">
-                  {loadingAppointments ? (
-                    <div className="text-xs text-gray-500 dark:text-gray-400">...</div>
-                  ) : appointments[patient.id || ''] ? (
-                    <div className="text-xs">
-                      <div className="flex items-center text-gray-900 dark:text-gray-100 mb-0.5">
-                        <Clock className="w-3 h-3 mr-0.5 text-medical-primary flex-shrink-0" />
-                        <span className="font-medium">
-                          {(() => {
-                            const dateStr = appointments[patient.id || ''].startTime;
-                            if (!dateStr) return formatDateForDisplay(dateStr);
-                            try {
-                              const date = new Date(dateStr);
-                              if (isNaN(date.getTime())) return formatDateForDisplay(dateStr);
-                              const year = date.getFullYear();
-                              const month = String(date.getMonth() + 1).padStart(2, '0');
-                              const day = String(date.getDate()).padStart(2, '0');
-                              const hours = String(date.getHours()).padStart(2, '0');
-                              const minutes = String(date.getMinutes()).padStart(2, '0');
-                              return `${year}-${month}-${day} ${hours}:${minutes}`;
-                            } catch {
-                              return formatDateForDisplay(dateStr);
-                            }
-                          })()}
-                        </span>
-                      </div>
-                      {appointments[patient.id || ''].dentistEmail && (
-                        <div className="text-xs text-gray-600 dark:text-gray-400 truncate" title={appointments[patient.id || ''].dentistEmail || undefined}>
-                          {appointments[patient.id || ''].dentistName || appointments[patient.id || ''].dentistEmail}
-                        </div>
-                      )}
-                      {(() => {
-                        const apt = appointments[patient.id || ''];
-                        if (apt.isLate) {
-                          return (
-                            <div className="flex items-center gap-0.5 mt-0.5 text-orange-600 dark:text-orange-400" title="Késett a beteg">
-                              <ClockIcon className="w-2.5 h-2.5" />
-                              <span className="text-xs">Késett</span>
-                            </div>
-                          );
-                        }
-                        if (apt.appointmentStatus === 'cancelled_by_doctor') {
-                          return (
-                            <div className="flex items-center gap-0.5 mt-0.5 text-red-600 dark:text-red-400" title="Lemondta az orvos">
-                              <XCircle className="w-2.5 h-2.5" />
-                              <span className="text-xs">Lemondta az orvos</span>
-                            </div>
-                          );
-                        }
-                        if (apt.appointmentStatus === 'cancelled_by_patient') {
-                          return (
-                            <div className="flex items-center gap-0.5 mt-0.5 text-red-600 dark:text-red-400" title="Lemondta a beteg">
-                              <XCircle className="w-2.5 h-2.5" />
-                              <span className="text-xs">Lemondta a beteg</span>
-                            </div>
-                          );
-                        }
-                        if (apt.appointmentStatus === 'completed') {
-                          return (
-                            <div className="flex items-center gap-0.5 mt-0.5 text-green-600 dark:text-green-400" title={apt.completionNotes || 'Sikeresen teljesült'}>
-                              <CheckCircle2 className="w-2.5 h-2.5" />
-                              <span className="text-xs">Teljesült</span>
-                            </div>
-                          );
-                        }
-                        if (apt.appointmentStatus === 'no_show') {
-                          return (
-                            <div className="flex items-center gap-0.5 mt-0.5 text-red-600 dark:text-red-400" title="Nem jelent meg">
-                              <AlertCircle className="w-2.5 h-2.5" />
-                              <span className="text-xs">Nem jelent meg</span>
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </div>
-                  ) : (
-                    <div className="text-xs text-gray-400 dark:text-gray-500">-</div>
-                  )}
-                </td>
-                )}
-                {userRole !== 'technikus' && (
-                <td className="px-3 py-2 whitespace-nowrap">
-                  <div className="text-xs text-gray-500 dark:text-gray-400">
-                    {patient.createdAt && (
-                      <div className="flex items-center mb-0.5">
-                        <Calendar className="w-3 h-3 mr-1 text-gray-400 dark:text-gray-500" />
-                        {formatDateForDisplay(patient.createdAt)}
-                      </div>
-                    )}
-                    {patient.createdBy ? (
-                      <div className="text-xs text-gray-600 dark:text-gray-400 truncate" title={patient.createdBy}>
-                        {patient.createdBy.split('@')[0]}
-                      </div>
-                    ) : (
-                      <div className="text-xs text-gray-600 dark:text-gray-400">
-                        A beteg regisztrált
-                      </div>
-                    )}
-                  </div>
-                </td>
-                )}
-                <td className="px-3 py-2 whitespace-nowrap text-right text-xs font-medium">
-                  <div className="flex justify-end space-x-1.5">
-                    <button
-                      onClick={() => router.push(`/patients/${patient.id}`)}
-                      className="text-blue-600 dark:text-blue-400 hover:text-blue-800 dark:hover:text-blue-300"
-                      title={patient.email ? "Kapcsolattartás (chat és érintkezési napló)" : "Kapcsolattartás (érintkezési napló - nincs email-cím)"}
-                    >
-                      <MessageCircle className="w-3.5 h-3.5" />
-                    </button>
-                    <button
-                      onClick={() => onView(patient)}
-                      className="text-medical-primary hover:text-blue-700 dark:hover:text-blue-400"
-                      title="Beteg megtekintése"
-                    >
-                      <Eye className="w-3.5 h-3.5" />
-                    </button>
-                    {canEdit && onEdit && (
-                      <button
-                        onClick={() => onEdit(patient)}
-                        className="text-medical-accent hover:text-amber-600 dark:hover:text-amber-400"
-                        title="Beteg szerkesztése"
-                      >
-                        <Pencil className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                    {canDelete && onDelete && (
-                      <button
-                        onClick={() => onDelete(patient)}
-                        className="text-red-600 dark:text-red-400 hover:text-red-800 dark:hover:text-red-300"
-                        title="Beteg törlése"
-                      >
-                        <Trash2 className="w-3.5 h-3.5" />
-                      </button>
-                    )}
-                  </div>
-                </td>
-              </>
-    );
-  };
-
-  // Mobile card
-  const renderMobileCard = (patient: Patient) => {
-    const appointment = appointments[patient.id || ''];
-    const patientStage = stages[patient.id || ''];
-    return (
-      <PatientCard
-        patient={patient}
-        appointment={appointment}
-        opDocumentCount={opDocuments[patient.id || ''] || 0}
-        fotoDocumentCount={fotoDocuments[patient.id || ''] || 0}
-        portraitDocumentId={patient.id ? portraitDocumentIds[patient.id] ?? null : null}
-        stage={patientStage}
-        onView={onView}
-        onEdit={canEdit ? onEdit : undefined}
-        onDelete={canDelete ? onDelete : undefined}
-        onViewOP={onViewOP}
-        onViewFoto={onViewFoto}
-        canEdit={canEdit}
-        canDelete={canDelete}
-        userRole={userRole}
-      />
+      <button
+        type="button"
+        onClick={() =>
+          (column === "foto" ? (onViewFoto ?? onView) : (onViewOP ?? onView))(
+            patient,
+          )
+        }
+        className="inline-flex items-center gap-1.5 rounded-md px-2 py-2 text-blue-700 hover:bg-blue-50 dark:text-blue-300 dark:hover:bg-blue-950"
+        aria-label={`${column === "foto" ? "Fotók" : "OP felvételek"}: ${patient.nev}, ${count} dokumentum`}
+      >
+        <Icon className="h-4 w-4" aria-hidden="true" />
+        {count}
+      </button>
     );
   };
 
   return (
-    <MobileTable
-      items={sortedPatients}
-      renderRow={renderTableRow}
-      renderCard={renderMobileCard}
-      keyExtractor={(patient) => patient.id || ''}
-      emptyState={emptyState}
-      renderHeader={renderTableHeader}
-      rowClassName={getRowClassName}
-    />
+    <div className="space-y-3">
+      {clinical && (
+        <details className="hidden md:block">
+          <summary className="inline-flex cursor-pointer list-none items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
+            <Columns className="h-4 w-4" aria-hidden="true" />
+            Oszlopok{columns.length > 0 ? ` (+${columns.length})` : ""}
+          </summary>
+          <fieldset className="mt-2 flex flex-wrap gap-4 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
+            <legend className="sr-only">További oszlopok</legend>
+            {EXTRA_COLUMNS.map((column) => (
+              <label
+                key={column.id}
+                className="flex items-center gap-2 text-sm"
+              >
+                <input
+                  type="checkbox"
+                  checked={columns.includes(column.id)}
+                  onChange={() => toggleColumn(column.id)}
+                />
+                {column.label}
+              </label>
+            ))}
+          </fieldset>
+        </details>
+      )}
+      {patients.length > 0 && enrichment.status === "error" && (
+        <RemoteDataState
+          status="error"
+          label="Az időpontok és dokumentumok"
+          onRetry={enrichment.retry}
+        >
+          {null}
+        </RemoteDataState>
+      )}
+      {patients.length > 0 && clinical && nextSteps.status === "error" && (
+        <RemoteDataState
+          status="error"
+          label="A következő teendők"
+          onRetry={nextSteps.retry}
+        >
+          {null}
+        </RemoteDataState>
+      )}
+      <MobileTable
+        items={sortedPatients}
+        keyExtractor={(patient) => patient.id ?? ""}
+        emptyState={
+          <div className="card py-8 text-center">
+            <FileText
+              className="mx-auto mb-2 h-8 w-8 text-gray-400"
+              aria-hidden="true"
+            />
+            <h3 className="font-medium">Nincs találat</h3>
+            <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">
+              {isFiltered || searchQuery.trim()
+                ? "Próbálja módosítani a keresési feltételeket."
+                : "Kezdje az első beteg hozzáadásával."}
+            </p>
+          </div>
+        }
+        renderHeader={() => (
+          <>
+            {header("Beteg", "nev")}
+            {clinical && header("Következő teendő")}
+            {clinical && header("Kezelési szakasz")}
+            {header("Kezelőorvos", "kezeleoorvos")}
+            {clinical && header("Következő időpont", "idopont")}
+            {clinical &&
+              EXTRA_COLUMNS.filter((c) => columns.includes(c.id)).map((c) => (
+                <th
+                  key={c.id}
+                  scope="col"
+                  className="px-3 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300"
+                >
+                  {c.id === "created" && onSort ? (
+                    <button type="button" onClick={() => onSort("createdAt")}>
+                      {c.label}
+                    </button>
+                  ) : (
+                    c.label
+                  )}
+                </th>
+              ))}
+            {header("Műveletek")}
+          </>
+        )}
+        renderRow={(patient) => {
+          const id = patient.id ?? "";
+          const stage = enrichment.data?.stages[id];
+          return (
+            <>
+              <td className={cell}>
+                <div className="flex items-start gap-2.5">
+                  {patient.id && (
+                    <PatientListAvatar
+                      patientId={patient.id}
+                      patientName={patient.nev}
+                      portraitDocumentId={
+                        enrichment.data?.portraitDocumentIds[id] ?? null
+                      }
+                    />
+                  )}
+                  <div className="min-w-[110px]">
+                    <button
+                      type="button"
+                      onClick={() => onView(patient)}
+                      className="py-1 text-left font-semibold text-blue-700 hover:underline dark:text-blue-300"
+                    >
+                      {patient.nev || "Név nélküli beteg"}
+                    </button>
+                    {clinical && patient.szuletesiDatum && (
+                      <span className={`block ${secondary}`}>
+                        Szül.: {formatDateForDisplay(patient.szuletesiDatum)}
+                      </span>
+                    )}
+                    {patient.halalDatum && (
+                      <span className={`block ${secondary}`}>
+                        Elhunyt · {formatDateForDisplay(patient.halalDatum)}
+                      </span>
+                    )}
+                  </div>
+                </div>
+              </td>
+              {clinical && <td className={cell}>{renderNextStep(patient)}</td>}
+              {clinical && (
+                <td className={cell}>
+                  {enrichment.status !== "success" ? (
+                    <span className={secondary}>{pendingText}</span>
+                  ) : stage ? (
+                    <span
+                      className="inline-block rounded-md bg-gray-100 px-2 py-1 text-xs text-gray-700 dark:bg-gray-800 dark:text-gray-200"
+                      title={stage.notes}
+                    >
+                      {stage.stageLabel ??
+                        patientStageOptions.find((s) => s.value === stage.stage)
+                          ?.label ??
+                        stage.stage}
+                    </span>
+                  ) : (
+                    <span className={secondary}>Nincs megadva</span>
+                  )}
+                </td>
+              )}
+              <td className={cell}>
+                {patient.kezeleoorvos || (
+                  <span className="text-xs text-amber-800 dark:text-amber-200">
+                    Nincs kijelölve
+                  </span>
+                )}
+              </td>
+              {clinical && (
+                <td className={cell}>{renderAppointment(patient)}</td>
+              )}
+              {clinical &&
+                EXTRA_COLUMNS.filter((c) => columns.includes(c.id)).map((c) => (
+                  <td key={c.id} className={cell}>
+                    {renderExtraCell(patient, c.id)}
+                  </td>
+                ))}
+              <td className={cell}>
+                <div className="space-y-2">
+                  {canEdit && onEdit && (
+                    <button
+                      type="button"
+                      onClick={() => onEdit(patient)}
+                      className="inline-flex items-center gap-1.5 py-1 text-sm text-gray-700 hover:text-blue-700 dark:text-gray-200 dark:hover:text-blue-300"
+                    >
+                      <Pencil className="h-3.5 w-3.5" aria-hidden="true" />
+                      Szerkesztés
+                    </button>
+                  )}
+                  <details>
+                    <summary className="cursor-pointer py-1 text-xs text-gray-600 dark:text-gray-300">
+                      Továbbiak
+                    </summary>
+                    <div className="mt-1 flex flex-col items-start gap-2">
+                      <Link
+                        href={`/patients/${id}/view?tab=kommunikacio`}
+                        className="py-1 text-xs text-blue-700 hover:underline dark:text-blue-300"
+                      >
+                        Kommunikáció
+                      </Link>
+                      <Link
+                        href={`/patients/${id}/history`}
+                        className="py-1 text-xs text-blue-700 hover:underline dark:text-blue-300"
+                      >
+                        Életút
+                      </Link>
+                      {canDelete && onDelete && (
+                        <button
+                          type="button"
+                          onClick={() => onDelete(patient)}
+                          className="inline-flex items-center gap-1 py-2 text-xs text-red-700 dark:text-red-300"
+                        >
+                          <Trash2 className="h-3.5 w-3.5" aria-hidden="true" />
+                          Beteg törlése
+                        </button>
+                      )}
+                    </div>
+                  </details>
+                </div>
+              </td>
+            </>
+          );
+        }}
+        renderCard={(patient) => (
+          <PatientCard
+            patient={patient}
+            appointment={appointments?.[patient.id ?? ""]}
+            opDocumentCount={
+              enrichment.data?.opDocuments[patient.id ?? ""] ?? 0
+            }
+            fotoDocumentCount={
+              enrichment.data?.fotoDocuments[patient.id ?? ""] ?? 0
+            }
+            portraitDocumentId={
+              enrichment.data?.portraitDocumentIds[patient.id ?? ""] ?? null
+            }
+            stage={enrichment.data?.stages[patient.id ?? ""]}
+            nextAction={clinical ? renderNextStep(patient) : undefined}
+            onView={onView}
+            onEdit={onEdit}
+            onDelete={onDelete}
+            onViewOP={onViewOP}
+            onViewFoto={onViewFoto}
+            canEdit={canEdit}
+            canDelete={canDelete}
+            userRole={userRole}
+          />
+        )}
+      />
+    </div>
   );
 }
 
-// Memoizálás a teljesítmény javításához
-export const PatientList = memo(PatientListComponent, (prevProps, nextProps) => {
-  // Egyedi összehasonlítás a props-okhoz
-  return (
-    prevProps.patients === nextProps.patients &&
-    prevProps.canEdit === nextProps.canEdit &&
-    prevProps.canDelete === nextProps.canDelete &&
-    prevProps.userRole === nextProps.userRole &&
-    prevProps.sortField === nextProps.sortField &&
-    prevProps.sortDirection === nextProps.sortDirection &&
-    prevProps.searchQuery === nextProps.searchQuery &&
-    prevProps.isFiltered === nextProps.isFiltered &&
-    prevProps.onView === nextProps.onView &&
-    prevProps.onEdit === nextProps.onEdit &&
-    prevProps.onDelete === nextProps.onDelete &&
-    prevProps.onViewOP === nextProps.onViewOP &&
-    prevProps.onViewFoto === nextProps.onViewFoto &&
-    prevProps.onSort === nextProps.onSort
-  );
-});
+export const PatientList = memo(PatientListComponent);

@@ -65,7 +65,7 @@ export default function Login() {
           {/* Orvosos bejelentkezés - Bal oldal */}
           <div className="card py-8 px-4 sm:px-10 shadow-soft-lg">
             <div className="bg-medical-primary/10 border border-medical-primary/20 rounded-lg p-4 mb-6">
-              <p className="text-sm text-medical-primary-dark font-medium mb-2">
+              <p className="text-sm text-blue-800 dark:text-blue-200 font-medium mb-2">
                 Ha Ön beküldő orvos, kérem regisztráljon vagy lépjen be.
               </p>
             </div>
@@ -109,8 +109,10 @@ export default function Login() {
                   <Lock className="absolute left-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 w-4 h-4" />
                   <button
                     type="button"
-                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors"
+                    className="absolute right-3 top-1/2 transform -translate-y-1/2 text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300 transition-colors"
                     onClick={() => setShowPassword(!showPassword)}
+                    aria-label={showPassword ? 'Jelszó elrejtése' : 'Jelszó megjelenítése'}
+                    aria-pressed={showPassword}
                   >
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
@@ -118,7 +120,7 @@ export default function Login() {
                 <div className="mt-2 text-right">
                   <Link
                     href="/forgot-password"
-                    className="text-sm font-medium text-medical-primary hover:text-medical-primary-dark"
+                    className="text-sm font-medium text-blue-700 dark:text-blue-300 hover:underline"
                   >
                     Elfelejtett jelszó?
                   </Link>
@@ -126,7 +128,7 @@ export default function Login() {
               </div>
 
               {error && (
-                <div className="bg-medical-error/10 border border-medical-error/20 text-medical-error px-4 py-3 rounded-lg text-sm font-medium">
+                <div role="alert" className="bg-medical-error/10 border border-medical-error/20 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg text-sm font-medium">
                   {error}
                 </div>
               )}
@@ -151,7 +153,7 @@ export default function Login() {
               <div className="text-center mt-4">
                 <p className="text-sm text-gray-600 dark:text-gray-400">
                   Még nincs fiókja?{' '}
-                  <Link href="/register" className="font-medium text-medical-primary hover:text-medical-primary-dark">
+                  <Link href="/register" className="font-medium text-blue-700 dark:text-blue-300 hover:underline">
                     Regisztráció
                   </Link>
                 </p>
@@ -162,7 +164,7 @@ export default function Login() {
           {/* Páciens portál - Jobb oldal */}
           <div className="card py-8 px-4 sm:px-10 shadow-soft-lg flex flex-col justify-center">
             <div className="bg-medical-success/10 border border-medical-success/20 rounded-lg p-4">
-              <p className="text-sm text-medical-success-dark font-medium mb-2">
+              <p className="text-sm text-green-800 dark:text-green-200 font-medium mb-2">
                 Ha Ön páciens, kérem kattintson az alábbi linkre és kövesse az utasításokat.
               </p>
               <Link
@@ -179,11 +181,11 @@ export default function Login() {
       {/* Footer */}
       <div className="mt-8 text-center space-y-2">
         <div className="flex justify-center gap-4 text-xs">
-          <Link href="/privacy" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+          <Link href="/privacy" className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300 transition-colors">
             Privacy Policy
           </Link>
           <span className="text-gray-300 dark:text-gray-700">|</span>
-          <Link href="/terms" className="text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 transition-colors">
+          <Link href="/terms" className="text-gray-600 dark:text-gray-400 hover:text-gray-800 dark:hover:text-gray-300 transition-colors">
             Terms of Service
           </Link>
         </div>

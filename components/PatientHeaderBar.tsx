@@ -3,6 +3,7 @@
 import { useEffect, useState } from 'react';
 import { Patient, patientStageOptions, PatientStageEntry } from '@/lib/types';
 import type { WorklistItemBackend } from '@/lib/worklist-types';
+import { selectPatientNextStep, patientNextStepLabel } from '@/lib/patient-next-step';
 import { calculateAge } from '@/lib/dateUtils';
 import { requiresGuardian } from '@/lib/legal/legal-capacity';
 import { Phone, CalendarPlus, ArrowRight, ChevronDown } from 'lucide-react';
@@ -99,6 +100,7 @@ export function PatientHeaderBar({
   }, [patient.id]);
 
   useEffect(() => {
+    setNextStepLabel(null);
     if (!canSeeNextStep || !patient.id) return;
     let cancelled = false;
     (async () => {
@@ -110,15 +112,8 @@ export function PatientHeaderBar({
         if (!res.ok) return;
         const data = await res.json();
         const items: WorklistItemBackend[] = data.items ?? [];
-        if (items.length === 0) return;
-        const sorted = [...items].sort((a, b) => {
-          const epA = a.episodeOrder ?? 0;
-          const epB = b.episodeOrder ?? 0;
-          if (epA !== epB) return epA - epB;
-          return (a.stepSeq ?? 0) - (b.stepSeq ?? 0);
-        });
-        const first = sorted[0];
-        if (!cancelled) setNextStepLabel(first.stepLabel || first.nextStep || null);
+        const first = selectPatientNextStep(items, patient.id!);
+        if (!cancelled) setNextStepLabel(first ? patientNextStepLabel(first) : null);
       } catch {
         /* non-critical */
       }

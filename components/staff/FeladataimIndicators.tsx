@@ -8,7 +8,7 @@ type FeladataimIndicatorsProps = {
 };
 
 /**
- * Staff Feladataim affordance: strong (red count) for unseen tasks,
+ * Staff Feladataim affordance: blue count for unseen tasks,
  * softer (amber count) for seen-but-still-open tasks.
  */
 export function FeladataimIndicators({ unviewed, viewedOpen, variant = 'corner' }: FeladataimIndicatorsProps) {
@@ -20,8 +20,8 @@ export function FeladataimIndicators({ unviewed, viewedOpen, variant = 'corner' 
       <span
         className={
           isInline
-            ? 'ml-auto shrink-0 min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold'
-            : 'pointer-events-none absolute -top-1.5 -right-1.5 min-w-[1.125rem] h-5 px-1 flex items-center justify-center rounded-full bg-red-500 text-white text-[10px] font-bold shadow-sm'
+            ? 'ml-auto shrink-0 min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-blue-600 text-white text-[10px] font-bold'
+            : 'pointer-events-none absolute -top-1.5 -right-1.5 min-w-[1.125rem] h-5 px-1 flex items-center justify-center rounded-full bg-blue-600 text-white text-[10px] font-bold shadow-sm'
         }
         aria-hidden
       >
@@ -36,8 +36,8 @@ export function FeladataimIndicators({ unviewed, viewedOpen, variant = 'corner' 
       <span
         className={
           isInline
-            ? 'ml-auto shrink-0 min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 text-[10px] font-semibold border border-amber-300 dark:border-amber-700'
-            : 'pointer-events-none absolute -top-1.5 -right-1.5 min-w-[1.125rem] h-5 px-1 flex items-center justify-center rounded-full bg-amber-100 dark:bg-amber-950/50 text-amber-900 dark:text-amber-200 text-[10px] font-semibold border border-amber-300 dark:border-amber-700'
+            ? 'ml-auto shrink-0 min-w-[1.25rem] h-5 px-1.5 inline-flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-[10px] font-semibold border border-gray-300 dark:border-gray-600'
+            : 'pointer-events-none absolute -top-1.5 -right-1.5 min-w-[1.125rem] h-5 px-1 flex items-center justify-center rounded-full bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-200 text-[10px] font-semibold border border-gray-300 dark:border-gray-600'
         }
         aria-hidden
       >

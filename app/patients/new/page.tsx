@@ -28,7 +28,7 @@ export default function NewPatientPage() {
         return;
       }
       if (user.role !== 'admin' && user.role !== 'fogpótlástanász' && user.role !== 'beutalo_orvos') {
-        router.push('/');
+        router.push('/patients');
         return;
       }
       setAuthorized(true);
@@ -97,7 +97,7 @@ export default function NewPatientPage() {
   };
 
   const handleCancel = () => {
-    router.push('/');
+    router.push('/patients');
   };
 
   if (!authorized) {
@@ -112,7 +112,7 @@ export default function NewPatientPage() {
   }
 
   return (
-    <AppShell title="Új beteg" backTo="/" maxWidth="lg">
+    <AppShell title="Új beteg" backTo="/patients" maxWidth="lg">
       <p className="text-xs text-gray-500 dark:text-gray-400 font-medium mb-4 line-clamp-2">
         Gyors rögzítés: alapadatok és személyes minimum — részletek a beteg lapon.
       </p>
