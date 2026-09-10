@@ -4,10 +4,13 @@ import {
   REQUIRED_DOC_RULES,
   RESEARCH_FIELD_WEIGHT,
   getMissingRequiredFields,
+  requiredFieldSeverity,
   type RequiredField,
+  type RequiredFieldSeverity,
 } from '@/lib/clinical-rules';
 import type { Patient } from '@/lib/types';
 import { getPlausibilityWarnings, type PlausibilityWarning } from '@/lib/data-plausibility';
+import { isDefectRasterEmpty } from '@/lib/defect-raster';
 
 /** Mindig értelmezhető klinikai tételek száma: kötelező mezők + kötelező dokumentumok. */
 const CLINICAL_APPLICABLE = REQUIRED_FIELDS.length + REQUIRED_DOC_RULES.length;
@@ -60,17 +63,34 @@ export type MissingItem = {
   key: string;
   label: string;
   group: MissingItemGroup;
+  /**
+   * Klinikai tételnél a szigorúság: 'error' = kötelező (alapértelmezés, blokkol),
+   * 'warning' = ajánlott (pl. email — jelzés, nem blokkol). Kutatási tételnél nincs.
+   */
+  severity?: RequiredFieldSeverity;
   /** N/A-jelölt tételnél a hiányzás okkódja (lib/field-na-reasons). */
   reasonCode?: string;
 };
+
+/** Ajánlott (nem blokkoló) hiányzó tétel? Csak a `severity: 'warning'` jelölésűek. */
+export function isRecommendedMissingItem(item: Pick<MissingItem, 'severity'>): boolean {
+  return item.severity === 'warning';
+}
+
+/** Csak a szigorúan kötelező (blokkoló) tételek — a klinikai minimum kapujához. */
+export function blockingClinicalMissing<T extends Pick<MissingItem, 'severity'>>(items: T[]): T[] {
+  return items.filter((i) => !isRecommendedMissingItem(i));
+}
 
 export type PatientCompletenessRow = {
   patientId: string;
   patientName: string | null;
   kezeleoorvos: string | null;
   etiologia: string | null;
+  /** Hiányzó klinikai tételek — a `severity` különíti el a kötelezőt az ajánlottól. */
   clinicalMissing: MissingItem[];
   researchMissing: MissingItem[];
+  /** Klinikai minimum teljesül: nincs KÖTELEZŐ (error) klinikai hiány; az ajánlott nem számít. */
   clinicalComplete: boolean;
   researchComplete: boolean;
   /** Explicit N/A-ként ("nem értelmezhető / nem ismert") megjelölt mezők. */
@@ -91,6 +111,8 @@ export type FieldGapSummary = {
   key: string;
   label: string;
   group: MissingItemGroup;
+  /** Klinikai tételnél: kötelező ('error') vagy ajánlott ('warning'). */
+  severity?: RequiredFieldSeverity;
   count: number;
 };
 
@@ -152,23 +174,19 @@ const RESEARCH_RULES: ResearchRule[] = [
     applicable: (r) => r.kezelesre_erkezes_indoka === ONKO,
     missing: (r) => isBlank(r.tnm_staging),
   },
+  // Defektus-kiterjedés a raszteren (a Brown / Kovács–Dobák osztályok helyett):
+  // ha van defektus, legalább egy bejelölt mező kell.
   {
-    key: 'brownFuggoleges',
-    label: 'Brown-osztály (függőleges)',
+    key: 'maxillaDefektusRaszter',
+    label: 'Maxilladefektus kiterjedése (raszter)',
     applicable: (r) => r.maxilladefektus_van === true,
-    missing: (r) => isBlank(r.brown_fuggoleges_osztaly),
+    missing: (r) => isDefectRasterEmpty('maxilla', r.maxilla_defektus_raszter),
   },
   {
-    key: 'brownVizszintes',
-    label: 'Brown vízszintes komponens',
-    applicable: (r) => r.maxilladefektus_van === true,
-    missing: (r) => isBlank(r.brown_vizszintes_komponens),
-  },
-  {
-    key: 'kovacsDobak',
-    label: 'Kovács-Dobák-osztály',
+    key: 'mandibulaDefektusRaszter',
+    label: 'Mandibuladefektus kiterjedése (raszter)',
     applicable: (r) => r.mandibuladefektus_van === true,
-    missing: (r) => isBlank(r.kovacs_dobak_osztaly),
+    missing: (r) => isDefectRasterEmpty('mandibula', r.mandibula_defektus_raszter),
   },
   {
     key: 'radioterapiaDozis',
@@ -281,9 +299,8 @@ export async function getPatientDataCompleteness(
         d.felso_fogpotlas_elegedett,
         d.also_fogpotlas_van,
         d.also_fogpotlas_elegedett,
-        a.brown_fuggoleges_osztaly,
-        a.brown_vizszintes_komponens,
-        a.kovacs_dobak_osztaly,
+        a.maxilla_defektus_raszter,
+        a.mandibula_defektus_raszter,
         a.maxilladefektus_van,
         a.mandibuladefektus_van,
         a.radioterapia,
@@ -326,7 +343,14 @@ export async function getPatientDataCompleteness(
   const bump = (item: MissingItem) => {
     const existing = fieldGapMap.get(item.key);
     if (existing) existing.count += 1;
-    else fieldGapMap.set(item.key, { key: item.key, label: item.label, group: item.group, count: 1 });
+    else
+      fieldGapMap.set(item.key, {
+        key: item.key,
+        label: item.label,
+        group: item.group,
+        severity: item.severity,
+        count: 1,
+      });
   };
 
   let clinicalComplete = 0;
@@ -351,13 +375,18 @@ export async function getPatientDataCompleteness(
     } as unknown as Patient;
 
     const clinicalMissing: MissingItem[] = getMissingRequiredFields(patientLike).map(
-      (f: RequiredField) => ({ key: String(f.key), label: f.label, group: 'clinical' as const }),
+      (f: RequiredField) => ({
+        key: String(f.key),
+        label: f.label,
+        group: 'clinical' as const,
+        severity: requiredFieldSeverity(f),
+      }),
     );
 
     // Kötelező dokumentum: OP röntgen (min. 1)
     const opRule = REQUIRED_DOC_RULES.find((r) => r.tag === 'op');
     if (opRule && (row.op_count ?? 0) < opRule.minCount) {
-      clinicalMissing.push({ key: 'doc:op', label: opRule.label, group: 'clinical' });
+      clinicalMissing.push({ key: 'doc:op', label: opRule.label, group: 'clinical', severity: 'error' });
     }
 
     // --- Kutatási mezők (feltételes) ---
@@ -390,7 +419,9 @@ export async function getPatientDataCompleteness(
     clinicalMissing.forEach(bump);
     researchMissing.forEach(bump);
 
-    const isClinicalComplete = clinicalMissing.length === 0;
+    // A klinikai minimum kapuja csak a KÖTELEZŐ tételeken múlik — az ajánlott
+    // (pl. email) hiánya a pontszámban látszik, de nem teszi hiányossá a beteget.
+    const isClinicalComplete = blockingClinicalMissing(clinicalMissing).length === 0;
     const isResearchComplete = researchMissing.length === 0;
     const isResearchReady = isClinicalComplete && isResearchComplete;
     const applicableCount = CLINICAL_APPLICABLE + researchApplicable;

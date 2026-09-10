@@ -3,7 +3,7 @@
 import { Dispatch, SetStateAction, useState } from 'react';
 import { UseFormRegister, UseFormWatch, UseFormSetValue, FieldErrors, UseFormRegisterReturn } from 'react-hook-form';
 import { Patient, kezelesiTervOptions, fabianFejerdyProtetikaiOsztalyOptions } from '@/lib/types';
-import { REQUIRED_FIELDS } from '@/lib/clinical-rules';
+import { isHardRequiredField } from '@/lib/clinical-rules';
 import { type ToothStatus } from '@/hooks/usePatientAutoSave';
 import { Calendar, Download, Check, CircleDashed, AlertTriangle, AlertCircle, Activity, Layers, type LucideIcon } from 'lucide-react';
 import {
@@ -25,6 +25,7 @@ import {
 import { describeSurfaces } from './odontogram/tooth-surfaces';
 import { applyTreatmentOutcome } from '@/lib/tooth-treatment-outcome';
 import { PerioChart } from './perio/PerioChart';
+import { DefectRaster } from './DefectRaster';
 
 const FOGPOTLAS_TIPUS_OPTIONS = kezelesiTervOptions.filter((o) => o !== 'sebészi sablon készítése');
 
@@ -115,6 +116,21 @@ function BoolFieldRow({
       <span className="text-sm text-gray-700 dark:text-gray-300">{label}</span>
       <SegToggle value={value} onChange={onChange} disabled={disabled} markMissing options={[...YES_NO_OPTIONS]} />
     </div>
+  );
+}
+
+/**
+ * Archív Brown / Kovács–Dobák érték, ha a betegnél korábban rögzítették. Az
+ * osztályozást a raszter váltotta fel (lib/defect-raster.ts); a régi érték
+ * csak olvasható, hogy ne vesszen el.
+ */
+function LegacyClassNote({ label, value }: { label: string; value: string | null | undefined }) {
+  if (!value) return null;
+  return (
+    <p className="text-[11px] text-gray-400 dark:text-gray-500">
+      Korábbi {label}: <span className="font-medium text-gray-500 dark:text-gray-400">{value}</span> (archív érték — a
+      kiterjedést mostantól a rácson jelöljük)
+    </p>
   );
 }
 
@@ -286,7 +302,7 @@ export function BetegvizsgalatSection({
         <div className="border-t pt-4 mt-4">
           <div className="flex items-center gap-2 mb-3">
             <h5 className="text-base sm:text-md font-semibold text-gray-900 dark:text-gray-100">Felvételi státusz</h5>
-            {REQUIRED_FIELDS.some(f => f.key === 'meglevoFogak') && (
+            {isHardRequiredField('meglevoFogak') && (
               <span className="text-medical-error text-sm">*</span>
             )}
           </div>
@@ -499,40 +515,35 @@ export function BetegvizsgalatSection({
 
         {/* ===== Defektusok ===== */}
         <div className="border-t pt-4 mt-4">
-          <GroupHeader icon={AlertTriangle} title="Defektusok" subtitle="Maxilla- és mandibuladefektus, osztályozással." />
+          <GroupHeader icon={AlertTriangle} title="Defektusok" subtitle="Maxilla- és mandibuladefektus — a kiterjedés jelölése az állcsontkép rácsán." />
           <div className="grid grid-cols-1 md:grid-cols-2 gap-4 items-stretch">
             <div className={`rounded-lg border p-4 bg-white dark:bg-gray-800/30 h-full ${watch('maxilladefektusVan') === true ? 'border-medical-primary/50' : 'border-gray-200 dark:border-gray-700'}`}>
               <div className="flex items-center justify-between gap-x-3 gap-y-2 flex-wrap">
                 <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Maxilladefektus</span>
                 <SegToggle
                   value={watch('maxilladefektusVan')}
-                  onChange={(v) => setValue('maxilladefektusVan', v, { shouldDirty: true })}
+                  onChange={(v) => {
+                    setValue('maxilladefektusVan', v, { shouldDirty: true });
+                    // „Nem" = nincs defektus → a rácsjelölés is törlődik.
+                    if (!v) setValue('maxillaDefektusRaszter', [], { shouldDirty: true });
+                  }}
                   disabled={isViewOnly}
                   markMissing
                   options={[...YES_NO_OPTIONS]}
                 />
               </div>
               {watch('maxilladefektusVan') === true && (
-                <div className="space-y-3 mt-3">
-                  <div>
-                    <label className="form-label">Brown – függőleges komponens</label>
-                    <select {...register('brownFuggolegesOsztaly')} className="form-input" disabled={isViewOnly}>
-                      <option value="">Válasszon...</option>
-                      <option value="1">1. osztály – maxillectomia oroantralis sipoly nélkül</option>
-                      <option value="2">2. osztály – alacsony maxillectomia (orbita fenék/tartalom nélkül)</option>
-                      <option value="3">3. osztály – magas maxillectomia (orbita tartalom érintett)</option>
-                      <option value="4">4. osztály – radikális maxillectomia (orbitexenterációval)</option>
-                    </select>
-                  </div>
-                  <div>
-                    <label className="form-label">Brown – vízszintes/palatinalis komponens</label>
-                    <select {...register('brownVizszintesKomponens')} className="form-input" disabled={isViewOnly}>
-                      <option value="">Válasszon...</option>
-                      <option value="a">a – egyoldali alveolaris maxillectomia</option>
-                      <option value="b">b – kétoldali alveolaris maxillectomia</option>
-                      <option value="c">c – teljes alveolaris maxilla resectio</option>
-                    </select>
-                  </div>
+                <div className="mt-3 space-y-2">
+                  <DefectRaster
+                    jaw="maxilla"
+                    value={watch('maxillaDefektusRaszter')}
+                    onChange={(cells) => setValue('maxillaDefektusRaszter', cells, { shouldDirty: true })}
+                    readOnly={isViewOnly}
+                  />
+                  <LegacyClassNote
+                    label="Brown-osztály"
+                    value={[watch('brownFuggolegesOsztaly'), watch('brownVizszintesKomponens')].filter(Boolean).join('')}
+                  />
                 </div>
               )}
             </div>
@@ -542,23 +553,24 @@ export function BetegvizsgalatSection({
                 <span className="text-sm font-medium text-gray-900 dark:text-gray-100">Mandibuladefektus</span>
                 <SegToggle
                   value={watch('mandibuladefektusVan')}
-                  onChange={(v) => setValue('mandibuladefektusVan', v, { shouldDirty: true })}
+                  onChange={(v) => {
+                    setValue('mandibuladefektusVan', v, { shouldDirty: true });
+                    if (!v) setValue('mandibulaDefektusRaszter', [], { shouldDirty: true });
+                  }}
                   disabled={isViewOnly}
                   markMissing
                   options={[...YES_NO_OPTIONS]}
                 />
               </div>
               {watch('mandibuladefektusVan') === true && (
-                <div className="mt-3">
-                  <label className="form-label">Kovács–Dobák osztályozás</label>
-                  <select {...register('kovacsDobakOsztaly')} className="form-input" disabled={isViewOnly}>
-                    <option value="">Válasszon...</option>
-                    <option value="1">1. osztály – két nagyobb mandibula-maradvány, 2+ értékes foggal</option>
-                    <option value="2">2. osztály – egy mandibula-maradvány</option>
-                    <option value="3">3. osztály – két, minimális nagyságú mandibula-maradvány</option>
-                    <option value="4">4. osztály – kétoldali egység alloplasztikával/osteosynthesissel helyreállítva</option>
-                    <option value="5">5. osztály – egy/két kisméretű maradvány, szájfenék nem mozgatható → fogpótlás nem készíthető</option>
-                  </select>
+                <div className="mt-3 space-y-2">
+                  <DefectRaster
+                    jaw="mandibula"
+                    value={watch('mandibulaDefektusRaszter')}
+                    onChange={(cells) => setValue('mandibulaDefektusRaszter', cells, { shouldDirty: true })}
+                    readOnly={isViewOnly}
+                  />
+                  <LegacyClassNote label="Kovács–Dobák-osztály" value={watch('kovacsDobakOsztaly')} />
                 </div>
               )}
             </div>

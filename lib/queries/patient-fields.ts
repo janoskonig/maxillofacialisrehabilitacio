@@ -1,7 +1,7 @@
 /**
  * Canonical SELECT field lists for the patients table and patients_full view.
  *
- * PATIENT_SELECT_FIELDS — full patient row from the patients_full VIEW (all 82 columns).
+ * PATIENT_SELECT_FIELDS — full patient row from the patients_full VIEW (core + all child-table columns).
  * PATIENT_LIST_FIELDS  — narrow projection from core patients table (~12 cols) for list views.
  *
  * All column aliases match the camelCase property names used by the front-end
@@ -38,6 +38,8 @@ export const PATIENT_SELECT_FIELDS = `
   brown_vizszintes_komponens as "brownVizszintesKomponens",
   mandibuladefektus_van as "mandibuladefektusVan",
   kovacs_dobak_osztaly as "kovacsDobakOsztaly",
+  maxilla_defektus_raszter as "maxillaDefektusRaszter",
+  mandibula_defektus_raszter as "mandibulaDefektusRaszter",
   nyelvmozgasok_akadalyozottak as "nyelvmozgásokAkadályozottak",
   gombocos_beszed as "gombocosBeszed",
   nyalmirigy_allapot as "nyalmirigyAllapot",

@@ -1,7 +1,7 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
-import { REQUIRED_DOC_TAGS, REQUIRED_DOC_RULES, getMissingRequiredDocRules, getMissingRequiredDocTags, getChecklistStatus, getMissingRequiredFields } from '@/lib/clinical-rules';
+import { REQUIRED_DOC_TAGS, REQUIRED_DOC_RULES, getMissingRequiredDocRules, getMissingRequiredDocTags, getChecklistStatus, getMissingRequiredFields, requiredFieldSeverity } from '@/lib/clinical-rules';
 import { Patient, LabQuoteRequest } from '@/lib/types';
 import { patientSelectSql, normalizePatientRow } from '@/lib/patient-select';
 import { downloadFile } from '@/lib/ftp-client';
@@ -346,8 +346,16 @@ export const GET = authedHandler(async (req, { auth, params, correlationId }) =>
     // Check if ready (no missing tags)
     const isReady = missingDocTags.length === 0;
 
-    // Get checklist status for summary
-    const checklistStatus = getChecklistStatus(patient, documents);
+    // Get checklist status for summary. A NEAK-összefoglaló „Kötelező mezők"
+    // sorában csak a szigorúan kötelező (error) mezők számítanak — az ajánlott
+    // (warning, pl. email) hiánya nem NEAK-hiány.
+    const fullChecklistStatus = getChecklistStatus(patient, documents);
+    const checklistStatus = {
+      ...fullChecklistStatus,
+      missingFields: fullChecklistStatus.missingFields.filter(
+        (f) => requiredFieldSeverity(f) === 'error'
+      ),
+    };
 
     // DRY-RUN: Return status only
     if (isDryRun) {

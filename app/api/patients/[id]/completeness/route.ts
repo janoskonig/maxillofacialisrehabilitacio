@@ -1,6 +1,9 @@
 import { NextResponse } from 'next/server';
 import { authedHandler } from '@/lib/api/route-handler';
-import { getPatientCompletenessRow } from '@/lib/patient-data-completeness';
+import {
+  blockingClinicalMissing,
+  getPatientCompletenessRow,
+} from '@/lib/patient-data-completeness';
 
 export const dynamic = 'force-dynamic';
 
@@ -16,13 +19,22 @@ export const GET = authedHandler(async (_req, { params }) => {
     return NextResponse.json({ error: 'Beteg nem található' }, { status: 404 });
   }
 
+  const blocking = blockingClinicalMissing(row.clinicalMissing);
+
   return NextResponse.json({
     score: row.completenessScore,
-    clinicalMissing: row.clinicalMissing.length,
+    // Kötelező klinikai hiányok száma — az ajánlott (pl. email) nem számít ide.
+    clinicalMissing: blocking.length,
+    // Ajánlott, nem kötelező hiányok (severity 'warning'): jelzés, nem kapu.
+    recommendedMissing: row.clinicalMissing.length - blocking.length,
     researchMissing: row.researchMissing.length,
     clinicalComplete: row.clinicalComplete,
     // Tételes hiánylista a betegkartonon megjelenő, deep-linkelhető checklisthez.
-    clinicalMissingItems: row.clinicalMissing.map((m) => ({ key: m.key, label: m.label })),
+    clinicalMissingItems: row.clinicalMissing.map((m) => ({
+      key: m.key,
+      label: m.label,
+      severity: m.severity ?? 'error',
+    })),
     researchMissingItems: row.researchMissing.map((m) => ({ key: m.key, label: m.label })),
   });
 });

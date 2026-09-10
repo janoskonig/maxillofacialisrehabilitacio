@@ -1,5 +1,12 @@
 import { describe, it, expect } from 'vitest';
-import { getChecklistStatus, PROTOCOL_VERSION } from '@/lib/clinical-rules';
+import {
+  getChecklistStatus,
+  isHardRequiredField,
+  isRecommendedField,
+  HARD_REQUIRED_FIELDS,
+  RECOMMENDED_FIELDS,
+  PROTOCOL_VERSION,
+} from '@/lib/clinical-rules';
 import type { Patient, PatientDocument } from '@/lib/types';
 
 const completePatient = {
@@ -38,5 +45,31 @@ describe('getChecklistStatus — protocol version traceability (WP7)', () => {
     const status = getChecklistStatus(completePatient, []);
     expect(status.missingDocs.map((d) => d.tag)).toContain('op');
     expect(status.isComplete).toBe(false);
+  });
+});
+
+describe('email — ajánlott, nem kötelező mező', () => {
+  const noEmail = { ...completePatient, email: '' } as unknown as Patient;
+
+  it('az email hiánya figyelmeztetés, nem hiba', () => {
+    const status = getChecklistStatus(noEmail, [opDoc]);
+    expect(status.hasErrors).toBe(false);
+    expect(status.hasWarnings).toBe(true);
+    expect(status.missingFields.map((f) => f.key)).toEqual(['email']);
+  });
+
+  it('az email nem szigorúan kötelező, hanem ajánlott', () => {
+    expect(isHardRequiredField('email')).toBe(false);
+    expect(isRecommendedField('email')).toBe(true);
+    expect(HARD_REQUIRED_FIELDS.map((f) => f.key)).not.toContain('email');
+    expect(RECOMMENDED_FIELDS.map((f) => f.key)).toEqual(['email']);
+  });
+
+  it('a klinikai minimum többi mezője szigorúan kötelező marad', () => {
+    const hard = ['nev', 'nem', 'szuletesiDatum', 'taj', 'kezelesreErkezesIndoka', 'diagnozis', 'meglevoFogak'] as const;
+    for (const key of hard) {
+      expect(isHardRequiredField(key)).toBe(true);
+      expect(isRecommendedField(key)).toBe(false);
+    }
   });
 });

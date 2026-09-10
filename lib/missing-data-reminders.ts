@@ -4,6 +4,7 @@ import { queueAdminNotification } from '@/lib/email/admin-notification-queue';
 import { insertUserTask } from '@/lib/user-tasks';
 import {
   getPatientDataCompleteness,
+  isRecommendedMissingItem,
   type MissingItem,
   type PatientCompletenessRow,
 } from '@/lib/patient-data-completeness';
@@ -31,6 +32,12 @@ import { logger } from '@/lib/logger';
  * levélben. Ha egy hét után is hiányzik az adat, a következő futás összesítője
  * "ismételt" jelöléssel hozza a beteget. Ha az adat pótlásra kerül, a nyitott
  * `missing_data` feladatokat lezárjuk.
+ *
+ * AJÁNLOTT (nem kötelező) tételek — pl. email (`severity: 'warning'` a
+ * lib/clinical-rules.ts-ben): ezekről az orvos LEGFELJEBB EGY figyelmeztetést
+ * kap (az első összesítőben szerepelnek), utána nem ismétlődnek, nem nyitnak
+ * feladatot és nem eszkalálódnak. Ha egy betegnél csak ajánlott tétel hiányzik,
+ * a beteg az emlékeztetők szempontjából teljesnek számít.
  */
 
 const REMINDER_COOLDOWN_DAYS = 7;
@@ -52,6 +59,17 @@ export const ESCALATION_AFTER = 3;
 /** Eszkaláljunk-e? — az orvosnak eddig küldött emlékeztetők száma alapján. */
 export function shouldEscalate(priorReminderCount: number): boolean {
   return priorReminderCount >= ESCALATION_AFTER;
+}
+
+/**
+ * Ajánlott (nem kötelező) tételről — pl. email — ennyi figyelmeztetés mehet ki
+ * egy (beteg, címzett) párnak összesen. Utána csend: se levél, se feladat.
+ */
+export const RECOMMENDED_REMINDER_LIMIT = 1;
+
+/** Szerepeljen-e még az ajánlott tétel a levélben? — az eddigi emlékeztetők száma alapján. */
+export function shouldRemindRecommended(priorReminderCount: number): boolean {
+  return priorReminderCount < RECOMMENDED_REMINDER_LIMIT;
 }
 
 export interface MissingDataReminderResult {
@@ -125,12 +143,23 @@ export const PATIENT_FILLABLE_KEYS: ReadonlySet<string> = new Set([
 ]);
 
 /**
- * Az orvosi intézkedést igénylő hiányok: a teljes hiánylistából kiszűrve a
- * páciens által kitöltendő tételeket.
+ * Az orvosi intézkedést igénylő (KÖTELEZŐ) hiányok: a teljes hiánylistából
+ * kiszűrve a páciens által kitöltendő és az ajánlott (nem blokkoló) tételeket.
+ * Ez nyit feladatot, ez ismétlődik hetente és ez eszkalálódik.
  */
 export function doctorActionableMissing(row: PatientCompletenessRow): MissingItem[] {
   return [...row.clinicalMissing, ...row.researchMissing].filter(
-    (i) => !PATIENT_FILLABLE_KEYS.has(i.key)
+    (i) => !PATIENT_FILLABLE_KEYS.has(i.key) && !isRecommendedMissingItem(i)
+  );
+}
+
+/**
+ * Az ajánlott (nem kötelező) hiányok — pl. email. Ezekről csak egyetlen
+ * figyelmeztetés megy (RECOMMENDED_REMINDER_LIMIT), feladat és eszkaláció nélkül.
+ */
+export function recommendedMissing(row: PatientCompletenessRow): MissingItem[] {
+  return [...row.clinicalMissing, ...row.researchMissing].filter(
+    (i) => !PATIENT_FILLABLE_KEYS.has(i.key) && isRecommendedMissingItem(i)
   );
 }
 
@@ -214,7 +243,11 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
 
   // Csak az orvosi intézkedést igénylő hiányokat vesszük figyelembe — a páciens
   // által kitöltendő tételek (pl. OHIP-14) nem váltanak ki orvosi értesítőt.
-  const incomplete = report.patients.filter((p) => doctorActionableMissing(p).length > 0);
+  // Az ajánlott tételek (pl. email) csak egyetlen figyelmeztetést érnek: a
+  // feladat-lezárás szempontjából a csak-ajánlott hiányú beteg teljesnek számít.
+  const incomplete = report.patients.filter(
+    (p) => doctorActionableMissing(p).length > 0 || recommendedMissing(p).length > 0
+  );
   const completeIds = report.patients
     .filter((p) => doctorActionableMissing(p).length === 0)
     .map((p) => p.patientId);
@@ -250,6 +283,7 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
     const patientId = row.patientId;
     try {
       const allMissing = doctorActionableMissing(row);
+      const recommended = recommendedMissing(row);
       const { referrerItems, kezeloItems: baseKezeloItems } = splitByResponsible(allMissing);
       let kezeloItems = baseKezeloItems;
 
@@ -289,9 +323,14 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
       }
 
       if (kezeloItems.length === 0) {
-        // A kezelőorvosnak nincs teendője ennél a betegnél — a nyitott
-        // kezelőorvosi feladatait lezárjuk, e-mailt nem kap.
+        // A kezelőorvosnak nincs KÖTELEZŐ teendője ennél a betegnél — a nyitott
+        // kezelőorvosi feladatait lezárjuk.
         result.tasksClosed += await closeRoleTasks(pool, patientId, KEZELOORVOS_ROLE);
+        if (recommended.length > 0) {
+          // Csak ajánlott tétel (pl. email) hiányzik: egyetlen figyelmeztetés,
+          // feladat, eszkaláció és admin-jelzés nélkül — utána csend.
+          await queueRecommendedOnlyWarning(pool, digests, row, recommended, result);
+        }
         continue;
       }
 
@@ -351,7 +390,11 @@ export async function sendMissingDataReminders(): Promise<MissingDataReminderRes
         queueDigestEntry(digests, 'kezeloorvos', recipient, {
           patientId,
           patientName: row.patientName,
-          items: missingItems,
+          // Az ajánlott tételek (pl. email) csak az ELSŐ levélben szerepelnek —
+          // egy figyelmeztetés után nem ismételjük őket.
+          items: shouldRemindRecommended(priorCount)
+            ? [...missingItems, ...recommended]
+            : missingItems,
           isFollowUp: priorCount > 0,
         });
       }
@@ -463,6 +506,45 @@ async function flushDigests(
   }
 }
 
+/**
+ * Csak ajánlott (nem kötelező) hiányú beteg — pl. csak az email nincs meg:
+ * a felelős orvos EGYETLEN figyelmeztetést kap az összesítőben, feladat,
+ * eszkaláció és „nincs kezelőorvos" admin-jelzés nélkül. Ha erről a betegről
+ * már ment neki emlékeztető, többé nem szerepel a levélben.
+ */
+async function queueRecommendedOnlyWarning(
+  pool: ReturnType<typeof getDbPool>,
+  digests: DigestMap,
+  row: PatientCompletenessRow,
+  recommended: MissingItem[],
+  result: MissingDataReminderResult
+): Promise<void> {
+  const patientId = row.patientId;
+  const kezeloorvos = await resolveKezeloorvos(pool, patientId);
+  const fallback = kezeloorvos
+    ? []
+    : [await resolveReferrer(pool, patientId), await resolveLatestProsthodontist(pool, patientId)];
+  const { recipients } = resolvePrimaryRecipients(kezeloorvos, fallback);
+  if (recipients.length === 0) {
+    result.skipped++;
+    return;
+  }
+
+  for (const recipient of recipients) {
+    const priorCount = await reminderCount(pool, patientId, recipient.userId);
+    if (!shouldRemindRecommended(priorCount)) {
+      result.skipped++;
+      continue;
+    }
+    queueDigestEntry(digests, 'kezeloorvos', recipient, {
+      patientId,
+      patientName: row.patientName,
+      items: recommended,
+      isFollowUp: false,
+    });
+  }
+}
+
 const DIGEST_NOTIFICATION_LABEL: Record<MissingDataDigestKind, string> = {
   kezeloorvos: 'Kezelőorvosi összesítő',
   beutalo: 'Beutalói összesítő',
@@ -547,7 +629,8 @@ async function resolveAdmins(
 /**
  * Egyetlen beteg orvosi intézkedést igénylő hiányai (a heti riporttal azonos
  * forrásból, hogy ne térjen el a logika). Üres tömb = nincs mit pótolniuk az
- * orvosoknak (a páciens-kitöltendő tételek, pl. OHIP-14, ki vannak szűrve).
+ * orvosoknak (a páciens-kitöltendő tételek, pl. OHIP-14, és az ajánlott, nem
+ * kötelező tételek, pl. email, ki vannak szűrve).
  */
 export async function getDoctorActionableMissingForPatient(
   patientId: string,

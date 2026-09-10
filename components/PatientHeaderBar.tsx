@@ -14,6 +14,8 @@ import { KezeloorvosDelegationWidget } from '@/components/KezeloorvosDelegationW
 interface MissingItemLite {
   key: string;
   label: string;
+  /** Klinikai tételnél: 'warning' = ajánlott, nem kötelező (borostyán, nem piros). */
+  severity?: 'error' | 'warning';
 }
 
 interface PatientHeaderBarProps {
@@ -65,7 +67,10 @@ export function PatientHeaderBar({
   const [checklistOpen, setChecklistOpen] = useState(false);
   const [completeness, setCompleteness] = useState<{
     score: number;
+    /** Kötelező klinikai hiányok száma (az ajánlott nem számít ide). */
     clinicalMissing: number;
+    /** Ajánlott, nem kötelező hiányok (pl. email) — jelzés, nem kapu. */
+    recommendedMissing: number;
     researchMissing: number;
     clinicalMissingItems: MissingItemLite[];
     researchMissingItems: MissingItemLite[];
@@ -85,6 +90,7 @@ export function PatientHeaderBar({
           setCompleteness({
             score: data.score,
             clinicalMissing: data.clinicalMissing ?? 0,
+            recommendedMissing: data.recommendedMissing ?? 0,
             researchMissing: data.researchMissing ?? 0,
             clinicalMissingItems: data.clinicalMissingItems ?? [],
             researchMissingItems: data.researchMissingItems ?? [],
@@ -145,13 +151,19 @@ export function PatientHeaderBar({
       : completeness.score >= 70
       ? 'bg-amber-500'
       : 'bg-red-500';
-  const totalMissing = completeness ? completeness.clinicalMissing + completeness.researchMissing : 0;
+  const totalMissing = completeness
+    ? completeness.clinicalMissing + completeness.researchMissing + completeness.recommendedMissing
+    : 0;
   const completenessTitle =
     completeness == null
       ? ''
       : totalMissing === 0
       ? 'Adatteljesség: minden értelmezhető adat megvan'
-      : `Adatteljesség — ${completeness.clinicalMissing} klinikai · ${completeness.researchMissing} kutatási hiányzó adat`;
+      : `Adatteljesség — ${completeness.clinicalMissing} klinikai · ${completeness.researchMissing} kutatási hiányzó adat${
+          completeness.recommendedMissing > 0
+            ? ` · ${completeness.recommendedMissing} ajánlott (nem kötelező)`
+            : ''
+        }`;
 
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800 px-3 sm:px-4 py-3 mb-4 sm:mb-6">
@@ -243,20 +255,26 @@ export function PatientHeaderBar({
                 {[
                   ...completeness.clinicalMissingItems.map((m) => ({ ...m, group: 'clinical' as const })),
                   ...completeness.researchMissingItems.map((m) => ({ ...m, group: 'research' as const })),
-                ].map((m) => (
-                  <li key={`${m.group}:${m.key}`}>
-                    <Link
-                      href={completenessEditHref(patient.id!, m.key)}
-                      className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors ${
-                        m.group === 'clinical'
-                          ? 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-950/60'
-                          : 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/60'
-                      }`}
-                    >
-                      {m.label}
-                    </Link>
-                  </li>
-                ))}
+                ].map((m) => {
+                  // Ajánlott (nem kötelező) klinikai tétel — pl. email: nem piros hiány, csak jelzés.
+                  const isRecommended = m.group === 'clinical' && m.severity === 'warning';
+                  return (
+                    <li key={`${m.group}:${m.key}`}>
+                      <Link
+                        href={completenessEditHref(patient.id!, m.key)}
+                        className={`inline-flex items-center px-2 py-0.5 rounded-full text-[11px] font-medium border transition-colors ${
+                          m.group === 'clinical' && !isRecommended
+                            ? 'border-red-200 dark:border-red-900 bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 hover:bg-red-100 dark:hover:bg-red-950/60'
+                            : 'border-amber-200 dark:border-amber-900 bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 hover:bg-amber-100 dark:hover:bg-amber-950/60'
+                        }`}
+                        title={isRecommended ? 'Ajánlott, nem kötelező adat' : undefined}
+                      >
+                        {m.label}
+                        {isRecommended && <span className="ml-1 font-normal opacity-80">(ajánlott)</span>}
+                      </Link>
+                    </li>
+                  );
+                })}
               </ul>
             </div>
           )}

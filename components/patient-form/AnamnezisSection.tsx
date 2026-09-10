@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { UseFormRegister, UseFormWatch, UseFormSetValue, FieldErrors } from 'react-hook-form';
 import { Patient, nyakiBlokkdisszekcioOptions } from '@/lib/types';
-import { REQUIRED_FIELDS } from '@/lib/clinical-rules';
+import { isHardRequiredField } from '@/lib/clinical-rules';
 import { formatDateForInput } from '@/lib/dateUtils';
 import { Calendar } from 'lucide-react';
 import { format } from 'date-fns';
@@ -35,7 +35,7 @@ function fmtDate(value?: string | null): string {
   }
 }
 
-const isReq = (key: keyof Patient) => REQUIRED_FIELDS.some(f => f.key === key);
+const isReq = (key: keyof Patient) => isHardRequiredField(key);
 
 export function AnamnezisSection({
   register,

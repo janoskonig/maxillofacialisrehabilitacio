@@ -3,7 +3,7 @@
 import { useState } from 'react';
 import { UseFormRegister, FieldErrors, UseFormWatch } from 'react-hook-form';
 import { Patient } from '@/lib/types';
-import { REQUIRED_FIELDS } from '@/lib/clinical-rules';
+import { isHardRequiredField, isRecommendedField } from '@/lib/clinical-rules';
 import { User, AlertTriangle } from 'lucide-react';
 import { ReadField, ReadGrid, SectionShell, isEmptyValue } from './read/ReadView';
 import { FieldErrorText, fieldAriaProps } from './field-a11y';
@@ -38,7 +38,9 @@ export function AlapadatokSection({
   const req = (key: keyof Patient) =>
     minimalNewPatient
       ? key === 'nev' || key === 'taj'
-      : REQUIRED_FIELDS.some(f => f.key === key);
+      : isHardRequiredField(key);
+  // Ajánlott (nem kötelező) mező — pl. email: borostyán jelzés, nem piros „kötelező".
+  const recommended = (key: keyof Patient) => !minimalNewPatient && isRecommendedField(key);
 
   const nev = watch('nev');
   const taj = watch('taj');
@@ -117,7 +119,11 @@ export function AlapadatokSection({
               <div>
                 <label className={`form-label ${req('email') ? 'form-label-required' : ''}`}>
                   Email
-                  {minimalNewPatient && <span className="font-normal text-gray-500 dark:text-gray-400"> (opcionális)</span>}
+                  {minimalNewPatient ? (
+                    <span className="font-normal text-gray-500 dark:text-gray-400"> (opcionális)</span>
+                  ) : recommended('email') ? (
+                    <span className="font-normal text-gray-500 dark:text-gray-400"> (ajánlott, nem kötelező)</span>
+                  ) : null}
                 </label>
                 <input
                   {...register('email')}

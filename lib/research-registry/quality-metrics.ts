@@ -3,8 +3,10 @@
  */
 
 import {
+  HARD_REQUIRED_FIELDS,
   getMissingRequiredFields,
   getMissingRequiredDocRules,
+  requiredFieldSeverity,
   PROTOCOL_VERSION,
 } from '@/lib/clinical-rules';
 import type { Patient } from '@/lib/types';
@@ -23,7 +25,10 @@ export function computeQualityMetrics(
   documents: PatientDocument[] = [],
   lastUpdatedAt?: Date | string | null
 ): QualityMetrics {
-  const missingFields = getMissingRequiredFields(patient);
+  // Csak a szigorúan kötelező mezők „kritikusak" — az ajánlott (pl. email) nem.
+  const missingFields = getMissingRequiredFields(patient).filter(
+    (f) => requiredFieldSeverity(f) === 'error'
+  );
   const missingDocs = getMissingRequiredDocRules(documents);
   const missingCriticalFields = [
     ...missingFields.map((f) => f.key as string),
@@ -33,7 +38,7 @@ export function computeQualityMetrics(
   const totalRequired =
     missingFields.length +
     missingDocs.reduce((sum, d) => sum + d.minCount, 0) +
-    (patient ? 8 : 0);
+    (patient ? HARD_REQUIRED_FIELDS.length : 0);
   const missingCount = missingCriticalFields.length;
   const completenessScore =
     totalRequired > 0

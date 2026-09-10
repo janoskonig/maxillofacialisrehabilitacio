@@ -1301,7 +1301,8 @@ export async function sendFeedbackResponseEmail(params: {
 export interface MissingDataDigestEntry {
   patientId: string;
   patientName: string | null;
-  missingItems: { label: string; group: 'clinical' | 'research' }[];
+  /** `severity: 'warning'` = ajánlott (nem kötelező) tétel — külön, enyhébb blokkban jelenik meg. */
+  missingItems: { label: string; group: 'clinical' | 'research'; severity?: 'error' | 'warning' }[];
   /** Igaz, ha erről a betegről már ment korábban emlékeztető ennek a címzettnek. */
   isFollowUp: boolean;
 }
@@ -1394,8 +1395,9 @@ export async function sendMissingDataDigestEmail(params: {
       return `
         <div style="border: 1px solid #e5e7eb; border-left: 4px solid ${headingColor}; border-radius: 6px; padding: 12px 16px; margin-bottom: 12px;">
           <p style="margin: 0 0 6px 0; font-size: 16px;"><strong>${patientLabel(e.patientName)}</strong>${badge}</p>
-          ${renderGroup('Klinikai minimum', e.missingItems.filter((i) => i.group === 'clinical'))}
-          ${renderGroup('Kutatási adatok', e.missingItems.filter((i) => i.group === 'research'))}
+          ${renderGroup('Klinikai minimum', e.missingItems.filter((i) => i.group === 'clinical' && i.severity !== 'warning'))}
+          ${renderGroup('Kutatási adatok', e.missingItems.filter((i) => i.group === 'research' && i.severity !== 'warning'))}
+          ${renderGroup('Ajánlott, nem kötelező (csak egyszer jelezzük)', e.missingItems.filter((i) => i.severity === 'warning'))}
           <p style="margin: 10px 0 0 0;">
             <a href="${patientUrl}" style="color: #2563eb; font-weight: bold; text-decoration: none;">Karton megnyitása &rarr;</a>
           </p>
@@ -1403,10 +1405,14 @@ export async function sendMissingDataDigestEmail(params: {
     })
     .join('');
 
+  const hasRecommended = entries.some((e) => e.missingItems.some((i) => i.severity === 'warning'));
   const footer =
     kind === 'escalation'
       ? 'Amennyiben az adatok pótlásra kerülnek (vagy N/A-ként jelölik), az értesítő automatikusan megszűnik.'
-      : 'Amennyiben az adatok pótlásra kerülnek, az értesítő automatikusan megszűnik. Ellenkező esetben egy hét múlva küldünk újabb összesítőt — betegenként legfeljebb hetente egyszer.';
+      : 'Amennyiben az adatok pótlásra kerülnek, az értesítő automatikusan megszűnik. Ellenkező esetben egy hét múlva küldünk újabb összesítőt — betegenként legfeljebb hetente egyszer.' +
+        (hasRecommended
+          ? ' Az ajánlott, nem kötelező adatokról (pl. email) csak ez az egyszeri jelzés megy ki, további emlékeztetőt nem küldünk.'
+          : '');
 
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 640px; margin: 0 auto;">

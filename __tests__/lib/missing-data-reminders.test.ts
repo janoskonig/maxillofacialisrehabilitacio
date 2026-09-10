@@ -9,7 +9,10 @@ import {
   REFERRER_FILLABLE_KEYS,
   splitByResponsible,
   shouldEscalate,
+  shouldRemindRecommended,
+  recommendedMissing,
   ESCALATION_AFTER,
+  RECOMMENDED_REMINDER_LIMIT,
   type Recipient,
 } from '@/lib/missing-data-reminders';
 import type { MissingItem, PatientCompletenessRow } from '@/lib/patient-data-completeness';
@@ -190,13 +193,13 @@ describe('splitByResponsible — beutaló-routing', () => {
       item('szovettan'),
       item('bno'),
       item('tnmStaging'),
-      item('brownFuggoleges'),
+      item('maxillaDefektusRaszter'),
       { key: 'taj', label: 'TAJ', group: 'clinical' },
     ]);
     expect(referrerItems.map(i => i.key)).toEqual([
       'beutaloIndokolas', 'mutetLeiras', 'mutetIdeje', 'szovettan', 'bno', 'tnmStaging',
     ]);
-    expect(kezeloItems.map(i => i.key)).toEqual(['brownFuggoleges', 'taj']);
+    expect(kezeloItems.map(i => i.key)).toEqual(['maxillaDefektusRaszter', 'taj']);
   });
 
   it('üres listára üres felosztás', () => {
@@ -224,5 +227,53 @@ describe('digestKey', () => {
 
   it('a címzettek nem keverednek', () => {
     expect(digestKey('kezeloorvos', 'u1')).not.toBe(digestKey('kezeloorvos', 'u2'));
+  });
+});
+
+describe('ajánlott (nem kötelező) tételek — pl. email', () => {
+  const rowWith = (clinical: MissingItem[], research: MissingItem[] = []): PatientCompletenessRow => ({
+    patientId: 'p1',
+    patientName: 'Teszt Elek',
+    kezeleoorvos: null,
+    etiologia: null,
+    clinicalMissing: clinical,
+    researchMissing: research,
+    clinicalComplete: false,
+    researchComplete: research.length === 0,
+    naMarked: [],
+    warnings: [],
+    applicableCount: 9,
+    completenessScore: 90,
+    researchReady: false,
+    publicationReady: false,
+  });
+  const email: MissingItem = { key: 'email', label: 'Email', group: 'clinical', severity: 'warning' };
+  const taj: MissingItem = { key: 'taj', label: 'TAJ', group: 'clinical', severity: 'error' };
+
+  it('doctorActionableMissing kiszűri az ajánlott tételt — csak a kötelező marad', () => {
+    expect(doctorActionableMissing(rowWith([taj, email])).map((i) => i.key)).toEqual(['taj']);
+  });
+
+  it('csak-email hiányú betegnél az orvosnak nincs kötelező teendője', () => {
+    expect(doctorActionableMissing(rowWith([email]))).toHaveLength(0);
+    expect(recommendedMissing(rowWith([email])).map((i) => i.key)).toEqual(['email']);
+  });
+
+  it('a szigorúság nélküli (régi) tétel kötelezőnek számít', () => {
+    const legacy: MissingItem = { key: 'diagnozis', label: 'Diagnózis', group: 'clinical' };
+    expect(doctorActionableMissing(rowWith([legacy])).map((i) => i.key)).toEqual(['diagnozis']);
+    expect(recommendedMissing(rowWith([legacy]))).toHaveLength(0);
+  });
+
+  it('recommendedMissing a páciens-kitöltendő tételeket sem adja vissza', () => {
+    const ohip: MissingItem = { key: 'ohipT0', label: 'OHIP-14 T0', group: 'research', severity: 'warning' };
+    expect(recommendedMissing(rowWith([email], [ohip])).map((i) => i.key)).toEqual(['email']);
+  });
+
+  it('egy figyelmeztetés után az ajánlott tétel nem ismétlődik', () => {
+    expect(RECOMMENDED_REMINDER_LIMIT).toBe(1);
+    expect(shouldRemindRecommended(0)).toBe(true);
+    expect(shouldRemindRecommended(1)).toBe(false);
+    expect(shouldRemindRecommended(ESCALATION_AFTER)).toBe(false);
   });
 });

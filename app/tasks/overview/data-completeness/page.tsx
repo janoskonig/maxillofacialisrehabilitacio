@@ -57,6 +57,8 @@ type MissingItem = {
   key: string;
   label: string;
   group: 'clinical' | 'research';
+  /** Klinikai tételnél: 'warning' = ajánlott, nem kötelező (pl. email). */
+  severity?: 'error' | 'warning';
   /** N/A-jelölt tételnél a hiányzás okkódja. */
   reasonCode?: string;
 };
@@ -554,9 +556,13 @@ export default function DataCompletenessPage() {
                                 href={editHref(p.patientId, m.key)}
                                 target="_blank"
                                 rel="noopener noreferrer"
-                                title="Pótlás a betegűrlapon (új lapon)"
+                                title={
+                                  m.severity === 'warning'
+                                    ? 'Ajánlott, nem kötelező adat — pótlás a betegűrlapon (új lapon)'
+                                    : 'Pótlás a betegűrlapon (új lapon)'
+                                }
                                 className={`text-xs rounded-l-full px-2 py-0.5 border inline-flex items-center gap-1 transition-colors ${
-                                  m.group === 'clinical'
+                                  m.group === 'clinical' && m.severity !== 'warning'
                                     ? 'bg-red-50 dark:bg-red-950/40 text-red-700 dark:text-red-300 border-red-200 dark:border-red-800 hover:bg-red-100 dark:hover:bg-red-900/40'
                                     : 'bg-amber-50 dark:bg-amber-950/40 text-amber-700 dark:text-amber-300 border-amber-200 dark:border-amber-800 hover:bg-amber-100 dark:hover:bg-amber-900/40'
                                 } ${m.group === 'research' ? '' : 'rounded-r-full'}`}
