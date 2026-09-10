@@ -109,10 +109,12 @@ describe('WP-0.2/a — mark_unsuccessful intent-lejáratás (audit #04)', () => 
     const res = await attemptOutcomePatch(req, { params: { id: appointment.id } });
     expect(res.status).toBe(200);
 
-    // Nincs care pathway → a post-commit projektor NO_PATHWAY-jal kilép, így
-    // a route saját hatása látszik: az intent expired (nem maradhat converted).
+    // A route az intentet expired-re állítja (nem maradhat converted). A
+    // post-commit projektor sablon nélkül is fut (a fázis-sor az igazság), és
+    // a visszanyílt pending fázisra ugyanezt az intentet open-re nyithatja —
+    // mindkét végállapot helyes; a converted nem.
     const after = await pool.query(`SELECT state FROM slot_intents WHERE id = $1`, [intent.id]);
-    expect(after.rows[0].state).toBe('expired');
+    expect(['expired', 'open']).toContain(after.rows[0].state);
 
     // A munkafázis visszanyílt, a link lekerült róla.
     const ewpAfter = await pool.query(

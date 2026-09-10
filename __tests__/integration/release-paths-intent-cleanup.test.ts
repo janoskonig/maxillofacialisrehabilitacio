@@ -142,10 +142,14 @@ describe('WP-0.8 kiegészítés (a) — „Mégsem kész" ág intent-takarítás
     expect(slotAfter.rows[0].state).toBe('free');
     expect(slotAfter.rows[0].status).toBe('available');
 
+    // A route az intentet expired-re állítja (a halott foglalás nem birtokolhatja);
+    // a post-commit projektor sablon nélkül is fut (WP-6.6), és a visszanyílt
+    // pending fázisra ugyanezt az intentet open-re nyithatja — mindkét
+    // végállapot helyes, a converted nem.
     const intentAfter = await pool.query(`SELECT state FROM slot_intents WHERE id = $1`, [
       intent.id,
     ]);
-    expect(intentAfter.rows[0].state).toBe('expired');
+    expect(['expired', 'open']).toContain(intentAfter.rows[0].state);
   });
 
   it('duplikált fáziskódnál a testvér-fázis foglalását nem bántja', async () => {

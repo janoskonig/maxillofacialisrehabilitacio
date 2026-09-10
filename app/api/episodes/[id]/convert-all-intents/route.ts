@@ -36,9 +36,13 @@ const DEFAULT_PATHWAY_GAP_DAYS = 14;
  * "Ablak (terv szerint)" oszlop and the bulk-convert booking agree on what
  * counts as the minimum spacing):
  *
+ *   0. episode_visits.days_offset  (puzzle v2: a vizitköz — „ennyi nappal az
+ *      előző alkalom után"; a tábláról állítható, a projektor és a lánc is
+ *      ezen jár; a fázis sorának alkalmán át olvassuk)
  *   1. episode_work_phases.default_days_offset  (per-step override on a
  *      specific patient's episode — what the operator edits when they want a
- *      longer/shorter gap on THIS treatment without touching the template)
+ *      longer/shorter gap on THIS treatment without touching the template;
+ *      vizit nélküli, legacy sorok fallbackje)
  *   2. care_pathways.work_phases_json.default_days_offset  (sablon-szintű
  *      default; admin > Kezelési útvonalak)
  *   3. DEFAULT_PATHWAY_GAP_DAYS  (hard fallback when neither source supplies
@@ -70,7 +74,7 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   // ("N alkalom ugyanabból a fázisból") MEGSOKSZOROZTA az intent-sorokat,
   // így ugyanaz az intent kétszer került a konverziós ciklusba (a második kör
   // hamis "Intent nem található vagy már nem open" skipped-bejegyzést termelt).
-  let ewpOffsetSelect = ', NULL::int AS episode_offset';
+  let ewpOffsetSelect = ', NULL::int AS episode_offset, NULL::int AS visit_offset';
   let ewpJoinSql = '';
   try {
     const colCheck = await pool.query(
@@ -86,7 +90,13 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
            WHERE table_schema = 'public'
              AND table_name = 'slot_intents'
              AND column_name = 'work_phase_id'
-         ) AS has_intent_wp`
+         ) AS has_intent_wp,
+         EXISTS (
+           SELECT 1 FROM information_schema.columns
+           WHERE table_schema = 'public'
+             AND table_name = 'episode_work_phases'
+             AND column_name = 'visit_id'
+         ) AS has_visit`
     );
     if (colCheck.rows[0]?.has_offset === true) {
       const wpMatch =
@@ -94,11 +104,16 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
           ? `(si.work_phase_id IS NOT NULL AND e.id = si.work_phase_id)
              OR (si.work_phase_id IS NULL AND e.episode_id = si.episode_id AND e.work_phase_code = si.step_code)`
           : `e.episode_id = si.episode_id AND e.work_phase_code = si.step_code`;
-      ewpOffsetSelect = ', ewp.default_days_offset AS episode_offset';
+      // Puzzle v2 (089+): a fázis alkalmának vizitköze az elsődleges lépésköz —
+      // a tábla ezt állítja, a fázis default_days_offset-je nem követi.
+      const hasVisit = colCheck.rows[0]?.has_visit === true;
+      ewpOffsetSelect = ', ewp.default_days_offset AS episode_offset, ewp.visit_days_offset AS visit_offset';
       ewpJoinSql =
         `LEFT JOIN LATERAL (
-           SELECT e.default_days_offset
+           SELECT e.default_days_offset,
+                  ${hasVisit ? 'v.days_offset' : 'NULL::int'} AS visit_days_offset
            FROM episode_work_phases e
+           ${hasVisit ? 'LEFT JOIN episode_visits v ON v.id = e.visit_id' : ''}
            WHERE ${wpMatch}
            ORDER BY COALESCE(e.seq, e.pathway_order_index) NULLS LAST
            LIMIT 1
@@ -132,6 +147,12 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
      * pathway template, then a hard 14-day default.
      */
     episode_offset?: number | null;
+    /**
+     * Puzzle v2: a fázis alkalmának vizitköze (`episode_visits.days_offset`) —
+     * ha van, ez a lépésköz (a projektor és a lánc ugyanígy). NULL, ha a
+     * sornak nincs vizitje (legacy) vagy a séma a 089 előtti.
+     */
+    visit_offset?: number | null;
   }>;
 
   if (intents.length === 0) {
@@ -162,15 +183,21 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
     if (prevActualStart) {
       const stepCode = row.step_code ?? '';
       // Precedence (mirror of worklist + projector):
+      //   0. episode_visits.days_offset (a vizitköz — puzzle v2)
       //   1. episode_work_phases.default_days_offset (per-step override)
       //   2. pathway template default_days_offset (sablon-szintű)
       //   3. DEFAULT_PATHWAY_GAP_DAYS hard fallback
+      const visitOverrideDays =
+        typeof row.visit_offset === 'number' && row.visit_offset >= 0
+          ? row.visit_offset
+          : null;
       const episodeOverrideDays =
         typeof row.episode_offset === 'number' && row.episode_offset >= 0
           ? row.episode_offset
           : null;
       const gapDays =
-        episodeOverrideDays
+        visitOverrideDays
+        ?? episodeOverrideDays
         ?? gapByStep.get(stepCode)
         ?? DEFAULT_PATHWAY_GAP_DAYS;
       chainMinStartTime = new Date(prevActualStart.getTime() + gapDays * MS_PER_DAY);

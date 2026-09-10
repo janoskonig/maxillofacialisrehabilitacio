@@ -6,7 +6,7 @@
 import type { PoolClient } from 'pg';
 import { getDbPool } from './db';
 import { computeStepWindow } from './step-window';
-import { slotPoolForStep, type PathwayWorkPhaseTemplate } from './next-step-engine';
+import { slotPoolForStep, type PathwayWorkPhaseTemplate, type PoolType } from './next-step-engine';
 import { normalizePathwayWorkPhaseArray } from './pathway-work-phases-for-episode';
 import { groupProjectionUnits } from './slot-intent-projection-units';
 
@@ -63,6 +63,11 @@ export interface ProjectionResult {
   reason?: string;
 }
 
+/** Az EWP sor pool oszlopa (paletta-alapérték) PoolType-ként; ismeretlen / NULL → work. */
+function poolFromEwp(v: unknown): PoolType {
+  return v === 'consult' || v === 'control' ? v : 'work';
+}
+
 export async function projectRemainingSteps(episodeId: string): Promise<ProjectionResult> {
   const pool = getDbPool();
   // Dedicated client: BEGIN/COMMIT and pg_advisory_xact_lock are connection-scoped,
@@ -107,7 +112,14 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       return { projected: 0, reason: 'NO_EPISODE' };
     }
 
-    // Multi-pathway: merge steps from all episode_pathways, fall back to legacy care_pathway_id
+    // Multi-pathway: merge steps from all episode_pathways, fall back to legacy care_pathway_id.
+    //
+    // Puzzle v2: a terv a palettából is épülhet, sablon (care_pathway) NÉLKÜL —
+    // ilyenkor a `steps` üres marad, és a vetítés forrása az episode_work_phases
+    // (lent). A sablon csak a fázis-alapértékek (pool / offset / hossz)
+    // feloldásához kell; a hiánya nem ok a kilépésre. Korábban a projektor itt
+    // NO_PATHWAY-jel kilépett, így a sablon nélküli tervre sosem született
+    // intent, és az „Összes időpont lefoglalása" köteg 0 időpontot foglalt.
     let steps: PathwayWorkPhaseTemplate[] = [];
     let pathwayHash = '';
     await client.query('SAVEPOINT sp_multipw');
@@ -150,48 +162,13 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
          WHERE pe.id = $1`,
         [episodeId]
       );
-      if (!pathwayRow.rows[0]) {
-        await client.query('COMMIT');
-        return { projected: 0, reason: 'NO_PATHWAY' };
-      }
       const row = pathwayRow.rows[0];
-      steps =
-        normalizePathwayWorkPhaseArray(row.work_phases_json) ??
-        normalizePathwayWorkPhaseArray(row.steps_json) ??
-        [];
-      pathwayHash = pathwayRow.rows[0].pathway_hash;
-    }
-
-    if (!steps || steps.length === 0) {
-      await client.query('COMMIT');
-      return { projected: 0, reason: 'NO_PATHWAY' };
-    }
-    const epRow = episodeRow.rows[0];
-    const openedAt = new Date(epRow.opened_at);
-    const planStartDate = epRow.plan_start_date ? new Date(epRow.plan_start_date) : null;
-
-    const pathwayByCode = new Map<string, PathwayWorkPhaseTemplate>();
-    for (const s of steps) pathwayByCode.set(s.work_phase_code, s);
-
-    // WP-4.2: a lefedettség work_phase_id-elsődleges. A step_code halmazokba
-    // CSAK a work_phase_id NÉLKÜLI (legacy) foglalás-sorok kerülnek —
-    // duplikált work_phase_code-nál (két állcsont / több fog) a csupasz
-    // kód-kulcs a TESTVÉR fázist is lefedettnek mutatná / járatná le.
-    const completedStepCodes = new Set<string>();
-    const bookedStepCodes = new Set<string>();
-    const completedWpIds = new Set<string>();
-    const bookedWpIds = new Set<string>();
-    let lastHardAnchor = planStartDate ?? openedAt;
-    for (const a of apptsRow.rows) {
-      const startTime = a.start_time ? new Date(a.start_time) : null;
-      if (a.appointment_status === 'completed') {
-        if (a.work_phase_id) completedWpIds.add(a.work_phase_id);
-        else completedStepCodes.add(a.step_code);
-        if (startTime && startTime > lastHardAnchor) lastHardAnchor = startTime;
-      } else {
-        if (a.work_phase_id) bookedWpIds.add(a.work_phase_id);
-        else bookedStepCodes.add(a.step_code);
-        if (startTime && startTime > lastHardAnchor) lastHardAnchor = startTime;
+      if (row) {
+        steps =
+          normalizePathwayWorkPhaseArray(row.work_phases_json) ??
+          normalizePathwayWorkPhaseArray(row.steps_json) ??
+          [];
+        pathwayHash = row.pathway_hash ?? '';
       }
     }
 
@@ -204,6 +181,8 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       completed_at: Date | null;
       default_days_offset?: number | null;
       duration_minutes?: number | null;
+      /** A sor saját pool-ja (paletta-alapérték) — sablon-sor híján ebből oldjuk fel a slot-poolt. */
+      pool?: string | null;
       /** Puzzle v2: a sor vizitje — a vetítés egysége. */
       visit_id?: string | null;
       /** Puzzle v2: a vizit days_offset-je; NULL → a fázis offsetje a fallback. */
@@ -253,7 +232,7 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       }
       const esResult = await client.query(
         `SELECT e.id, e.work_phase_code, COALESCE(e.seq, e.pathway_order_index) as step_seq, e.status, e.completed_at,
-                e.default_days_offset, e.duration_minutes${visitCols}
+                e.default_days_offset, e.duration_minutes, e.pool${visitCols}
          FROM episode_work_phases e${visitJoin}
          WHERE e.episode_id = $1${mergedIntoFilter}
          ORDER BY COALESCE(e.seq, e.pathway_order_index)`,
@@ -264,6 +243,40 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     } catch {
       /* table may not exist */
       await client.query('ROLLBACK TO SAVEPOINT sp_ewp');
+    }
+
+    // Se sablon, se terv-sorok: nincs mit vetíteni.
+    if (steps.length === 0 && !episodeWorkPhaseRows) {
+      await client.query('COMMIT');
+      return { projected: 0, reason: 'NO_PATHWAY' };
+    }
+    const epRow = episodeRow.rows[0];
+    const openedAt = new Date(epRow.opened_at);
+    const planStartDate = epRow.plan_start_date ? new Date(epRow.plan_start_date) : null;
+
+    const pathwayByCode = new Map<string, PathwayWorkPhaseTemplate>();
+    for (const s of steps) pathwayByCode.set(s.work_phase_code, s);
+
+    // WP-4.2: a lefedettség work_phase_id-elsődleges. A step_code halmazokba
+    // CSAK a work_phase_id NÉLKÜLI (legacy) foglalás-sorok kerülnek —
+    // duplikált work_phase_code-nál (két állcsont / több fog) a csupasz
+    // kód-kulcs a TESTVÉR fázist is lefedettnek mutatná / járatná le.
+    const completedStepCodes = new Set<string>();
+    const bookedStepCodes = new Set<string>();
+    const completedWpIds = new Set<string>();
+    const bookedWpIds = new Set<string>();
+    let lastHardAnchor = planStartDate ?? openedAt;
+    for (const a of apptsRow.rows) {
+      const startTime = a.start_time ? new Date(a.start_time) : null;
+      if (a.appointment_status === 'completed') {
+        if (a.work_phase_id) completedWpIds.add(a.work_phase_id);
+        else completedStepCodes.add(a.step_code);
+        if (startTime && startTime > lastHardAnchor) lastHardAnchor = startTime;
+      } else {
+        if (a.work_phase_id) bookedWpIds.add(a.work_phase_id);
+        else bookedStepCodes.add(a.step_code);
+        if (startTime && startTime > lastHardAnchor) lastHardAnchor = startTime;
+      }
     }
 
     if (episodeWorkPhaseRows) {
@@ -296,7 +309,7 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
              OR (work_phase_id IS NULL AND step_code = ANY($3::text[]))
              OR (source_pathway_hash IS NOT NULL AND source_pathway_hash IS DISTINCT FROM $4)
            )`,
-        [episodeId, coveredWpIds, legacyCoveredCodes, pathwayHash]
+        [episodeId, coveredWpIds, legacyCoveredCodes, pathwayHash || null]
       );
     }
 
@@ -343,7 +356,10 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
                 : ewpDur != null && ewpDur > 0
                   ? ewpDur
                   : (pw?.duration_minutes ?? 30),
-          pool: pw ? slotPoolForStep(pw) : 'work',
+          // Sablon-sor híján (palettából épített terv) a fázis saját pool-ja
+          // számít — ugyanaz a feloldás, mint a worklisté (next-step-engine
+          // episodeWorkPhaseAsPathwayTemplate + slotPoolForStep).
+          pool: slotPoolForStep(pw ?? { work_phase_code: es.work_phase_code, pool: poolFromEwp(es.pool) }),
           visitId: es.visit_id ?? null,
           visitDaysOffset: es.visit_days_offset ?? null,
         });
@@ -475,7 +491,10 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
     // az újranyitás is kitölti, így a konverzió wp-elsődleges guardjai élnek.
     if (projections.length > 0) {
       const values: string[] = [];
-      const params: unknown[] = [episodeId, pathwayHash];
+      // Sablon nélkül a hash NULL — a hash-eltérés alapú lejáratás (fent) a
+      // NULL-t nem tekinti „eltérőnek", így a palettából épített terv intentjei
+      // nem járnak le futásonként.
+      const params: unknown[] = [episodeId, pathwayHash || null];
       let paramIdx = 3;
 
       for (const p of projections) {

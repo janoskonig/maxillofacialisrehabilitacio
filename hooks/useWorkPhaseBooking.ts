@@ -464,6 +464,13 @@ export function useWorkPhaseBooking({
           type: converted > 0 ? 'success' : 'error',
           text: `${converted} időpont lefoglalva, ${skipped.length} kihagyva: ${reasonSummary}`,
         });
+      } else if (converted === 0) {
+        // Nem volt nyitott intent (minden alkalomnak van már időpontja, vagy
+        // nincs várakozó fázis) — a „0 időpont lefoglalva." semmitmondó lenne.
+        setConvertAllMessage({
+          type: 'error',
+          text: 'Nincs foglalható alkalom: minden alkalomnak van már időpontja, vagy nincs várakozó munkafázis.',
+        });
       } else {
         setConvertAllMessage({
           type: 'success',

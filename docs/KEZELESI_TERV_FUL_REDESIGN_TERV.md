@@ -43,6 +43,7 @@ Jelmagyarázat: ⬜ nincs elkezdve · 🔄 folyamatban · ✅ kész (mergelve) �
 | WP-4.1b step_code→work_phase_id identitás | ✅ | [#78](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/78) | Minden identitás-út wp-elsődleges (legacy fallback); review: CRITICAL param-kötési hiba a prereq-ágon javítva; mellékjavítás: a worklist „korábbi próbák" lekérdezés eddig némán elhasalt (ats.end_time) |
 | WP-4.2 vizit API + forecast | ✅ | [#79](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/79) | Vizit CRUD + PATCH visitId/jaw/teeth + vizit-tudatos forecast (kompat-invariáns fuzz-igazolva) + wp-tudatos projektor; review: 4 major javítva (kombinált body, csoport-mozgatás, reorder=EWP-átszámozás, scoped backfill), 1 medium cáfolva (advisory lock) |
 | WP-4.3 vizit-kártyás UI | ✅ | [#80](https://github.com/janoskonig/maxillofacialisrehabilitacio/pull/80) | Alkalom-kártyák + kockák (hatókör-badge), drag-drop + teljes nem-drag alternatíva, „Feltöltés sablonból"; élőben ellenőrizve; review-major (visit-move seq-átszámozás) javítva. **Ezzel a FÁZIS 4 és a TELJES TERV kész.** |
+| WP-6.6 „Összes időpont lefoglalása" sablon nélküli terven (2026-09-10) | ✅ | main | A gomb sablon (care_pathway) nélküli, palettából épített terven 0 időpontot foglalt: a projektor `NO_PATHWAY`-jel kilépett, intent nem született. Javítás: a projektor forrása az `episode_work_phases` (a sablon csak alapértékekhez; pool a fázis sorából; hash NULL); a köteg lépésköze a vizitköz (`episode_visits.days_offset`); a kliens `converted: 0`-ra értelmes üzenetet ad. 4 integrációs teszt. |
 | WP-6.5 „A terv rácsúszik a foglalt időpontokra" — automatikus rácsúszás (2026-09-03) | ✅ | main | A Csanádi-eset: hat heti időpont a naptárból, fázis nélkül foglalva az epizódra → egyik alkalom sem vette át, a tábla becsült ablakot mutatott, a sáv csak kézi hozzárendelést kínált. Új: `slidePlanOntoAppointments` (lib/visit-appointment-sync.ts) — az epizód alkalom nélküli, nyitott, jövőbeli foglalásai időrendben a tervezett (időpont nélküli, nyitott tartalmú) alkalmakra csúsznak, a fázishoz kötött a saját fázisának alkalmára, a maradékból üres-foglalt alkalom lesz; fut a GET work-phases olvasásakor (idempotens, auditált, `planSlide` a válaszban) és a POST /api/appointments után. 097: `appointments.visit_detached_at` — a kézi leválasztás jelölője (a rácsúszás kihagyja, attach/adopt törli), a sávban „(leválasztva)". 6 integrációs teszt. |
 | WP-6.4 Sablonok a palettán — a katalógus a tábláról szerkeszthető (2026-09-03) | ✅ | main | 095: „Fogelőkészítés (csonkpreparálás)" + 3 hiányzó generikus (lenyomat gyári/egyéni kanállal, primerpróba és gyűjtőlenyomat) → 23 paletta-sablon; 096: cisztaszűkítős lenyomat → 24. Paletta-elem ⋯ menü: alap-időtartam, „Levétel a palettáról"; keresésből talált elemnél „Felvétel a palettára"; egyedi fázisnál „Mentés a palettára is" pipa → `POST /api/step-catalog` (gen_<slug>, ütközésnél _2, legacy tükör) majd a kocka a kóddal. PATCH /step-catalog/:code `paletteOrder/defaultDurationMinutes/defaultPool` (probe-őr, 503 a 091 előtt). Csak admin/fogpótlástanász (`canEditPalette`). 4 komponens- + 5 integrációs teszt. |
 | WP-6.3b Éles hotfix: séma-őr a 094 előtti DB-re + opt-in migrate-on-start (2026-09-03) | ✅ | main | Az éles deploy a 094 nélkül ment ki → `column v.appointment_id does not exist` (42703) a fázis-áthelyezésen/törlésen. A vizit-időpont helperek és a route-ok probe-őrt kaptak (`hasVisitAppointmentColumn`): migráció előtt a blokk-rendezés marad, a vizit-időpont logika kimarad, attach/detach 503 `MIGRATION_PENDING`. Új: `AUTO_MIGRATE_ON_START=true` env → az `npm start` prestart hookja lefuttatja a tracked migrációkat (scripts/migrate-on-start.js); RENDER_DEPLOYMENT.md leírja. |
@@ -868,13 +869,45 @@ A felhasználó szabálya viszont az volt, hogy a terv **magától** csússzon r
   időpontú várakozó igen), fázishoz kötött foglalás a saját alkalmára, epizód nélküli
   foglalás a sávban marad, a naptári POST azonnal rácsúszik.
 
+### 6.2f „Összes időpont lefoglalása" sablon nélküli terven (WP-6.6)
+
+**Hiba (2026-09-10):** a felhasználó szerint a gomb „nem működik". A puzzle-tábla a
+palettából épül, a betegnek jellemzően nincs kezelési sablonja (care_pathway). A gomb a
+`POST /api/episodes/:id/convert-all-intents` útra megy, amely előbb a slot-intent
+projektort futtatja — az viszont sablon nélkül `NO_PATHWAY`-jel kilépett (a régi
+„sablon = terv" feltevés), intent nem született, a köteg `{converted: 0, skipped: []}`-t
+adott, a kártya „0 időpont lefoglalva." üzenetet írt. Integrációs teszttel reprodukálva.
+
+- **Projektor (`lib/slot-intent-projector.ts`):** a sablon csak a fázis-alapértékek
+  (pool / offset / hossz) feloldásához kell; a vetítés forrása az `episode_work_phases`.
+  `NO_PATHWAY` csak akkor, ha se sablon, se terv-sor nincs. Sablon-sor híján a fázis saját
+  `pool`-ja számít (a worklist `episodeWorkPhaseAsPathwayTemplate` mintája); a
+  `source_pathway_hash` sablon nélkül NULL, így a hash-eltérés alapú lejáratás nem járatja
+  le futásonként az intenteket.
+- **Köteg (`convert-all-intents`):** a lánc lépésköze a fázis alkalmának vizitköze
+  (`episode_visits.days_offset` → EWP `default_days_offset` → sablon → 14 nap), ahogy a
+  projektor és a lánc — eddig a fázis létrehozáskori offsetje élt, a tábláról állított
+  vizitközt nem követte.
+- **Kliens (`useWorkPhaseBooking`, `PatientWorklistWidget`):** `converted: 0` és üres
+  `skipped` esetén értelmes üzenet („Nincs foglalható alkalom…") a „0 időpont lefoglalva."
+  helyett.
+- **Tesztek:** `__tests__/integration/convert-all-visit-plan.test.ts` (4): projektor sablon
+  nélkül (pool a sorból, hash NULL, idempotens), két alkalom → két időpont + alkalom-időpont,
+  több-fázisú alkalom `prepare-booking` után, vizitköz-precedencia; a WP-0.2 (a) teszt
+  elvárása igazítva (a projektor sablon nélkül is visszanyithatja az intentet).
+
 ### 6.3 Nyitott / követés
 
 - A `default_days_offset` oszlop EWP-n és a pathway JSON-ban megmarad (sablon-alkalmazás
   továbbra is fázisonként egyfős vizitet nyit a sablon offsetjével).
-- A `convert-all-intents` lánc-gap továbbra is a fázis-offsetből számol
-  (`gapByStep`); a projektor és a lánc már vizit-alapú — a köteg-foglalás a több-fázisú
-  alkalmakat előbb `prepare-booking`-gal vonja egybe (kliens), így egy alkalom = egy intent.
+- ~~A `convert-all-intents` lánc-gap továbbra is a fázis-offsetből számol~~ **Kész
+  (WP-6.6):** a köteg lépésköze a fázis alkalmának vizitköze (`episode_visits.days_offset`),
+  a fázis `default_days_offset`-je csak vizit nélküli (legacy) sor fallbackje; a több-fázisú
+  alkalmakat a kliens előbb `prepare-booking`-gal vonja egybe, így egy alkalom = egy intent.
+- A köteg ELSŐ intentjének padlója továbbra is a `now`, nem az epizód már foglalt
+  időpontja: ha egy korábbi alkalom már foglalt, a köteg a következő tervezett alkalmat
+  elé is teheti. A projektor ablaka (`window_start`) ezt tudja, a köteg szándékosan nem
+  használja (drift — lásd a route fejkommentjét). Nyitott.
 - Admin katalógus-szerkesztő (`StepCatalogEditor`) még nem kezeli a paletta-mezőket.
 
 ---

@@ -34,8 +34,8 @@ async function twoSameCodePhases() {
   const pool = getDbPool();
   const patient = await createTestPatient();
   const episode = await createTestEpisode(undefined, patient.id);
-  // A projektor pathway nélkül NO_PATHWAY-jel kilép — kell egy sablon, amiben
-  // a 'lenyomat' szerepel (a pool/duration feloldásához is).
+  // Sablon a 'lenyomat' lépéssel a pool/duration/offset feloldásához. (A
+  // projektor sablon nélkül is vetít — lásd convert-all-visit-plan.test.ts.)
   const tt = await createTestTreatmentType(undefined);
   const cp = await createTestCarePathway(undefined, tt.id);
   await pool.query(`UPDATE care_pathways SET work_phases_json = $1::jsonb WHERE id = $2`, [
