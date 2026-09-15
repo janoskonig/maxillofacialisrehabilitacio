@@ -221,6 +221,23 @@ export function getSocketIO(): SocketIOServer | null {
 }
 
 /**
+ * Egy felhasználó összes élő socket-kapcsolatának bontása (pl. fiók
+ * inaktiválásakor). A `user:{id}` szobába minden orvos-socket automatikusan
+ * belép csatlakozáskor, így ez a szoba lefedi az összes eszközét/fülét.
+ * Biztonságos API-route-ból hívni: ha a Socket.io nincs inicializálva
+ * (külön processz), csendben nem csinál semmit.
+ */
+export function disconnectUserSockets(userId: string): void {
+  const socketIO = getSocketIO();
+  if (!socketIO) return;
+  try {
+    socketIO.in(`user:${userId}`).disconnectSockets(true);
+  } catch (error) {
+    console.error('[socket-server] disconnectUserSockets failed:', error);
+  }
+}
+
+/**
  * Emit new message event to patient room
  * Safe to call from API routes - will silently fail if Socket.io not initialized
  * Note: In Next.js, API routes may run in separate processes, so Socket.io might not be available

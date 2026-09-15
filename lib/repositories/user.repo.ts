@@ -6,6 +6,9 @@ export interface UserRow {
   doktor_neve: string | null;
   role: string;
   active: boolean;
+  /** Admin általi inaktiválás időpontja; active=false + NULL = jóváhagyásra váró regisztráció (100-as migráció). */
+  deactivated_at: string | null;
+  deactivated_by: string | null;
   restricted_view: boolean;
   intezmeny: string | null;
   hozzaferes_indokolas: string | null;
@@ -19,7 +22,7 @@ export class UserRepository {
 
   async findById(id: string): Promise<UserRow | null> {
     const result = await this.pool.query(
-      'SELECT id, email, doktor_neve, role, active, restricted_view, intezmeny, hozzaferes_indokolas, created_at, updated_at, last_login FROM users WHERE id = $1',
+      'SELECT id, email, doktor_neve, role, active, deactivated_at, deactivated_by, restricted_view, intezmeny, hozzaferes_indokolas, created_at, updated_at, last_login FROM users WHERE id = $1',
       [id]
     );
     return result.rows[0] ?? null;
@@ -27,7 +30,7 @@ export class UserRepository {
 
   async findByEmail(email: string): Promise<UserRow | null> {
     const result = await this.pool.query(
-      'SELECT id, email, doktor_neve, role, active, restricted_view, intezmeny, hozzaferes_indokolas, created_at, updated_at, last_login FROM users WHERE email = $1',
+      'SELECT id, email, doktor_neve, role, active, deactivated_at, deactivated_by, restricted_view, intezmeny, hozzaferes_indokolas, created_at, updated_at, last_login FROM users WHERE email = $1',
       [email.toLowerCase().trim()]
     );
     return result.rows[0] ?? null;
@@ -35,7 +38,7 @@ export class UserRepository {
 
   async findAll(): Promise<UserRow[]> {
     const result = await this.pool.query(
-      'SELECT id, email, doktor_neve, role, active, restricted_view, intezmeny, hozzaferes_indokolas, created_at, updated_at, last_login FROM users ORDER BY email ASC'
+      'SELECT id, email, doktor_neve, role, active, deactivated_at, deactivated_by, restricted_view, intezmeny, hozzaferes_indokolas, created_at, updated_at, last_login FROM users ORDER BY email ASC'
     );
     return result.rows;
   }

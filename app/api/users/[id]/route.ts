@@ -8,8 +8,18 @@ import {
   closeStaffRegistrationReviewTasks,
   deleteStaffRegistrationReviewTasks,
 } from '@/lib/user-tasks';
+import {
+  afterDeactivation,
+  assertCanDeactivate,
+  deactivateUserAccount,
+  userAccountState,
+} from '@/lib/user-deactivation';
+import { invalidateUserActiveCache } from '@/lib/user-active-check';
 
 export const dynamic = 'force-dynamic';
+
+const USER_RETURNING =
+  'id, email, doktor_neve, role, active, restricted_view, deactivated_at, deactivated_by, updated_at';
 
 export const PUT = authedHandler(async (req, { auth, params }) => {
   const { id } = params;
@@ -18,7 +28,10 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
 
   const pool = getDbPool();
 
-  const userResult = await pool.query('SELECT id, email, active FROM users WHERE id = $1', [id]);
+  const userResult = await pool.query(
+    'SELECT id, email, role, active, deactivated_at FROM users WHERE id = $1',
+    [id]
+  );
   if (userResult.rows.length === 0) {
     return NextResponse.json(
       { error: 'Felhasználó nem található' },
@@ -26,8 +39,18 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
     );
   }
 
-  const user = userResult.rows[0];
+  const user = userResult.rows[0] as {
+    id: string;
+    email: string;
+    role: string;
+    active: boolean;
+    deactivated_at: string | null;
+  };
   const wasInactive = !user.active;
+  // Első jóváhagyás (regisztráció) vs. inaktivált fiók újraaktiválása — a
+  // „Fiók jóváhagyva" levél és a regisztrációs feladatok csak az előbbihez
+  // tartoznak.
+  const wasPendingApproval = userAccountState(user) === 'pending_approval';
 
   const isOwnProfile = auth.userId === id;
   const canModifyRole = auth.role === 'admin';
@@ -83,6 +106,7 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
     paramIndex++;
   }
 
+  let deactivating = false;
   if (active !== undefined) {
     if (!canModifyActive) {
       return NextResponse.json(
@@ -90,9 +114,33 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
         { status: 403 }
       );
     }
-    updates.push(`active = $${paramIndex}`);
-    values.push(active);
-    paramIndex++;
+    if (typeof active !== 'boolean') {
+      return NextResponse.json(
+        { error: 'Az active mező csak true/false lehet', code: 'INVALID_ACTIVE' },
+        { status: 400 }
+      );
+    }
+    if (active === false) {
+      // Saját fiók / utolsó aktív admin: HttpError → 400 / 409 a közös hibakezelőn át.
+      await assertCanDeactivate(pool, user, auth.userId);
+      deactivating = !wasInactive;
+      updates.push(`active = $${paramIndex}`);
+      values.push(false);
+      paramIndex++;
+      if (deactivating) {
+        updates.push('deactivated_at = CURRENT_TIMESTAMP');
+        updates.push(`deactivated_by = $${paramIndex}`);
+        values.push(auth.email);
+        paramIndex++;
+      }
+    } else {
+      updates.push(`active = $${paramIndex}`);
+      values.push(true);
+      paramIndex++;
+      // Újraaktiválás / jóváhagyás: az inaktiválás nyoma törlődik.
+      updates.push('deactivated_at = NULL');
+      updates.push('deactivated_by = NULL');
+    }
   }
 
   if (restricted_view !== undefined) {
@@ -127,30 +175,33 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
   }
 
   values.push(id);
-  const query = `UPDATE users SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramIndex} RETURNING id, email, doktor_neve, role, active, restricted_view, updated_at`;
+  const query = `UPDATE users SET ${updates.join(', ')}, updated_at = CURRENT_TIMESTAMP WHERE id = $${paramIndex} RETURNING ${USER_RETURNING}`;
 
   const result = await pool.query(query, values);
   const updatedUser = result.rows[0];
 
-  if (active === true && wasInactive && updatedUser.email) {
-    try {
-      await sendApprovalEmail(updatedUser.email);
-    } catch (emailError) {
-      logger.error('Failed to send approval email:', emailError);
-    }
-    try {
-      await closeStaffRegistrationReviewTasks(id, 'done');
-    } catch (taskError) {
-      logger.error('Failed to close staff registration review tasks (approve):', taskError);
+  if (active === true && wasInactive) {
+    // A session-cache-ben „inaktív"-ként ülhet — újraaktiválás után azonnal
+    // beléphessen.
+    invalidateUserActiveCache(id);
+    if (wasPendingApproval) {
+      if (updatedUser.email) {
+        try {
+          await sendApprovalEmail(updatedUser.email);
+        } catch (emailError) {
+          logger.error('Failed to send approval email:', emailError);
+        }
+      }
+      try {
+        await closeStaffRegistrationReviewTasks(id, 'done');
+      } catch (taskError) {
+        logger.error('Failed to close staff registration review tasks (approve):', taskError);
+      }
     }
   }
 
-  if (active === false && !wasInactive) {
-    try {
-      await closeStaffRegistrationReviewTasks(id, 'cancelled');
-    } catch (taskError) {
-      logger.error('Failed to close staff registration review tasks (deactivate):', taskError);
-    }
+  if (deactivating) {
+    afterDeactivation(id);
   }
 
   return NextResponse.json({ user: updatedUser });
@@ -161,20 +212,26 @@ export const DELETE = roleHandler(['admin'], async (req, { auth, params }) => {
   const pool = getDbPool();
 
   const userResult = await pool.query(
-    'SELECT id, active FROM users WHERE id = $1',
+    'SELECT id, role, active, deactivated_at FROM users WHERE id = $1',
     [id]
   );
   if (userResult.rows.length === 0) {
     return NextResponse.json({ error: 'Felhasználó nem található' }, { status: 404 });
   }
-  const targetUser = userResult.rows[0] as { id: string; active: boolean };
+  const targetUser = userResult.rows[0] as {
+    id: string;
+    role: string;
+    active: boolean;
+    deactivated_at: string | null;
+  };
+  const state = userAccountState(targetUser);
 
   // Ha a felhasználó még sosem volt aktív (függő regisztráció elutasítása),
   // ténylegesen töröljük a sort, hogy ne maradjon bent a „Jóváhagyásra váró"
   // listán. Ehhez előbb el kell tüntetni a kapcsolódó user_tasks sorokat,
   // mert a `created_by_user_id` NOT NULL + ON DELETE SET NULL ellentmondás
   // miatt egyébként hibára futna a törlés.
-  if (!targetUser.active) {
+  if (state === 'pending_approval') {
     try {
       await deleteStaffRegistrationReviewTasks(id);
     } catch (taskError) {
@@ -184,14 +241,21 @@ export const DELETE = roleHandler(['admin'], async (req, { auth, params }) => {
     return NextResponse.json({ success: true, deleted: true });
   }
 
-  // Aktív felhasználó esetén soft-delete: csak deaktiváljuk.
-  await pool.query('UPDATE users SET active = false WHERE id = $1', [id]);
-
-  try {
-    await closeStaffRegistrationReviewTasks(id, 'cancelled');
-  } catch (taskError) {
-    logger.error('Failed to close staff registration review tasks (deactivate):', taskError);
+  // Inaktivált fiók: az adatai (időpontok, üzenetek, naplók) hivatkoznak rá —
+  // fizikai törlés helyett inaktív marad, szükség esetén újraaktiválható.
+  if (state === 'deactivated') {
+    return NextResponse.json(
+      {
+        error: 'Az inaktivált fiók nem törölhető, mert adatok hivatkoznak rá. Szükség esetén újraaktiválható.',
+        code: 'USER_ALREADY_DEACTIVATED',
+      },
+      { status: 409 }
+    );
   }
 
-  return NextResponse.json({ success: true, deleted: false });
+  // Aktív felhasználó esetén soft-delete: csak inaktiváljuk.
+  await assertCanDeactivate(pool, targetUser, auth.userId);
+  await deactivateUserAccount(pool, id, auth.email);
+
+  return NextResponse.json({ success: true, deleted: false, deactivated: true });
 });
