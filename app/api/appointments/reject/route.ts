@@ -4,6 +4,7 @@ import { apiHandler } from '@/lib/api/route-handler';
 import { sendConditionalAppointmentRequestToPatient } from '@/lib/email';
 import { logger } from '@/lib/logger';
 import { queueAdminNotification } from '@/lib/email/admin-notification-queue';
+import { releaseRejectedOfferLinks } from '@/lib/conditional-offer-release';
 
 /**
  * Reject a pending appointment (via email link)
@@ -34,7 +35,7 @@ export const GET = apiHandler(async (req) => {
      JOIN available_time_slots ats ON a.time_slot_id = ats.id
      JOIN patients p ON a.patient_id = p.id
      LEFT JOIN users u ON a.dentist_email = u.email
-     WHERE a.approval_token = $1 AND a.approval_status = 'pending'`,
+     WHERE a.approval_token = $1 AND a.approval_status = 'pending' AND a.appointment_status IS NULL`,
     [token]
   );
 
@@ -124,20 +125,26 @@ export const GET = apiHandler(async (req) => {
     if (nextAlternativeIndex !== null) {
       const nextAlternativeId = alternativeIds[nextAlternativeIndex];
       
+      // A slot-állapotgép (`state`) és a legacy `status` együtt mozog — a
+      // foglaló utak csak `state='free'` slotot vesznek fel.
       await client.query(
-        'UPDATE available_time_slots SET status = $1 WHERE id = $2',
-        ['available', appointment.time_slot_id]
+        `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = $1`,
+        [appointment.time_slot_id]
       );
       
       const nextAltSlotResult = await client.query(
         `SELECT ats.*, u.doktor_neve, u.email as dentist_email
          FROM available_time_slots ats
          JOIN users u ON ats.user_id = u.id
-         WHERE ats.id = $1`,
+         WHERE ats.id = $1
+         FOR UPDATE OF ats`,
         [nextAlternativeId]
       );
       
-      if (nextAltSlotResult.rows.length === 0 || nextAltSlotResult.rows[0].status !== 'available') {
+      const nextAltState =
+        nextAltSlotResult.rows[0]?.state ??
+        (nextAltSlotResult.rows[0]?.status === 'available' ? 'free' : 'booked');
+      if (nextAltSlotResult.rows.length === 0 || nextAltState !== 'free') {
         await client.query(
           'UPDATE appointments SET approval_status = $1 WHERE id = $2',
           ['rejected', appointment.id]
@@ -146,10 +153,19 @@ export const GET = apiHandler(async (req) => {
         const validIds = alternativeIds.filter((id: any) => id && typeof id === 'string');
         if (validIds.length > 0) {
           await client.query(
-            'UPDATE available_time_slots SET status = $1 WHERE id = ANY($2::uuid[])',
-            ['available', validIds]
+            `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = ANY($1::uuid[])`,
+            [validIds]
           );
         }
+
+        // Végleges elutasítás: a lemondás utáni ajánlat epizód/fázis/recall
+        // kötései visszakerülnek (sima ajánlatnál no-op).
+        await releaseRejectedOfferLinks(client, {
+          id: appointment.id,
+          episode_id: appointment.episode_id ?? null,
+          step_code: appointment.step_code ?? null,
+          work_phase_id: appointment.work_phase_id ?? null,
+        });
         
         await client.query('COMMIT');
         
@@ -201,8 +217,8 @@ export const GET = apiHandler(async (req) => {
       const nextAltSlot = nextAltSlotResult.rows[0];
       
       await client.query(
-        'UPDATE available_time_slots SET status = $1 WHERE id = $2',
-        ['booked', nextAlternativeId]
+        `UPDATE available_time_slots SET status = 'booked', state = 'booked' WHERE id = $1`,
+        [nextAlternativeId]
       );
       
       await client.query(
@@ -312,17 +328,26 @@ export const GET = apiHandler(async (req) => {
       );
 
       await client.query(
-        'UPDATE available_time_slots SET status = $1 WHERE id = $2',
-        ['available', appointment.time_slot_id]
+        `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = $1`,
+        [appointment.time_slot_id]
       );
 
       const validIds = alternativeIds.filter((id: any) => id && typeof id === 'string');
       if (validIds.length > 0) {
         await client.query(
-          'UPDATE available_time_slots SET status = $1 WHERE id = ANY($2::uuid[])',
-          ['available', validIds]
+          `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = ANY($1::uuid[])`,
+          [validIds]
         );
       }
+
+      // Végleges elutasítás: a lemondás utáni ajánlat epizód/fázis/recall
+      // kötései visszakerülnek (sima ajánlatnál no-op).
+      await releaseRejectedOfferLinks(client, {
+        id: appointment.id,
+        episode_id: appointment.episode_id ?? null,
+        step_code: appointment.step_code ?? null,
+        work_phase_id: appointment.work_phase_id ?? null,
+      });
 
       await client.query('COMMIT');
 

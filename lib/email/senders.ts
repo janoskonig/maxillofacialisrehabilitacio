@@ -554,6 +554,102 @@ export async function sendConditionalAppointmentRequestToPatient(
 }
 
 /**
+ * Lemondás + új időpont-ajánlat EGY levélben a betegnek.
+ *
+ * A „Lemondás és új időpont ajánlása" folyamat (POST
+ * /api/appointments/[id]/cancel-and-offer) használja: a régi időpont
+ * lemondásáról és az új, jóváhagyásra váró ajánlatról nem két külön levél
+ * megy, hanem egy — az Elfogadom / Elvetem gombok ugyanazok, mint a
+ * feltételes időpontnál (approve / reject token-linkek).
+ */
+export async function sendCancellationWithNewOfferToPatient(params: {
+  patientEmail: string;
+  patientName: string | null;
+  patientNem: string | null;
+  cancelledTime: Date;
+  newTime: Date;
+  dentistFullName: string;
+  approvalToken: string;
+  baseUrl: string;
+  patientId: string;
+  cim?: string | null;
+  teremszam?: string | null;
+  hasAlternatives?: boolean;
+}): Promise<void> {
+  const {
+    patientEmail,
+    patientName,
+    patientNem,
+    cancelledTime,
+    newTime,
+    dentistFullName,
+    approvalToken,
+    baseUrl,
+    patientId,
+    cim,
+    teremszam,
+    hasAlternatives,
+  } = params;
+
+  const greeting = patientGreeting(patientName, patientNem);
+  const DEFAULT_CIM = '1088 Budapest, Szentkirályi utca 47';
+  const displayCim = cim || DEFAULT_CIM;
+  let formattedAddress = displayCim.replace(/,/g, '').replace(/\.$/, '');
+  if (teremszam) {
+    formattedAddress = `${formattedAddress}. ${teremszam}. terem`;
+  }
+
+  const approveUrl = `${baseUrl}/api/appointments/approve?token=${approvalToken}`;
+  const rejectUrl = `${baseUrl}/api/appointments/reject?token=${approvalToken}`;
+
+  const alternativesNote = hasAlternatives
+    ? `<p style="color: #6b7280; font-size: 14px; margin-top: 10px;">
+        Ha ez az időpont nem megfelelő, az elvetés után automatikusan másik időpontot ajánlunk Önnek.
+      </p>`
+    : '';
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #2563eb;">Időpontja lemondásra került — új időpontot ajánlunk</h2>
+      <p>${greeting}!</p>
+      <p>Sajnáljuk, de az alábbi időpontját le kellett mondanunk:</p>
+      <ul>
+        <li><strong>Lemondott időpont:</strong> ${formatDateForEmail(cancelledTime)}</li>
+      </ul>
+      <p>Helyette új időpontot ajánlunk Önnek:</p>
+      <ul>
+        <li><strong>Új időpont:</strong> ${formatDateForEmail(newTime)}</li>
+        <li><strong>Cím:</strong> ${formattedAddress}</li>
+        <li><strong>Kezelőorvos:</strong> ${dentistFullName}</li>
+      </ul>
+      ${alternativesNote}
+      <p style="margin-top: 20px; color: #6b7280; font-size: 14px;">
+        <strong>Fontos:</strong> Kérjük, válaszát az új időpontig küldje el. Az új időpont csak az elfogadás után válik véglegessé.
+      </p>
+      <p style="margin-top: 20px;">Kérjük, válassza ki az alábbi lehetőségek közül:</p>
+      <div style="margin: 30px 0; text-align: center;">
+        <a href="${approveUrl}" style="display: inline-block; background-color: #10b981; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 5px; font-weight: bold;">✓ Elfogadom</a>
+        <a href="${rejectUrl}" style="display: inline-block; background-color: #ef4444; color: white; padding: 12px 24px; text-decoration: none; border-radius: 6px; margin: 5px; font-weight: bold;">✗ Elvetem</a>
+      </div>
+      <p style="color: #6b7280; font-size: 14px; margin-top: 30px;">
+        Ha a gombok nem működnek, másolja be az alábbi linkeket a böngészőjébe:<br>
+        Elfogadás: <a href="${approveUrl}" style="color: #3b82f6;">${approveUrl}</a><br>
+        Elvetés: <a href="${rejectUrl}" style="color: #3b82f6;">${rejectUrl}</a>
+      </p>
+      <p>Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer</p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: patientEmail,
+    subject: 'Időpontja lemondásra került — új időpontot ajánlunk - Maxillofaciális Rehabilitáció',
+    html,
+    patientId,
+    emailType: 'cancellation_with_new_offer',
+  });
+}
+
+/**
  * Queue conditional appointment notification for admin daily summary
  */
 export async function sendConditionalAppointmentNotificationToAdmin(

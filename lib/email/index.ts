@@ -15,6 +15,7 @@ export {
   sendPatientRegistrationNotificationToAdmins,
   sendPatientLoginNotificationToAdmins,
   sendConditionalAppointmentRequestToPatient,
+  sendCancellationWithNewOfferToPatient,
   sendConditionalAppointmentNotificationToAdmin,
   sendNewAppointmentRequestToAdmin,
   sendNewMessageNotification,
