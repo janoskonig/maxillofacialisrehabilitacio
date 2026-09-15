@@ -43,7 +43,7 @@ export const GET = apiHandler(async (req, { params }) => {
        JOIN patients p ON a.patient_id = p.id
        JOIN available_time_slots ats ON a.time_slot_id = ats.id
        JOIN users u ON a.dentist_email = u.email
-       WHERE a.approval_token = $1 AND a.approval_status = 'pending'`,
+       WHERE a.approval_token = $1 AND a.approval_status = 'pending' AND a.appointment_status IS NULL`,
       [token]
     );
 
@@ -140,8 +140,13 @@ export const GET = apiHandler(async (req, { params }) => {
         : (alternativeIdsRaw ? [alternativeIdsRaw] : []);
       
       if (alternativeIds.length > 0) {
-        // Filter out any null/undefined values and ensure they're valid UUIDs
-        const validIds = alternativeIds.filter((id: any) => id && typeof id === 'string');
+        // Filter out any null/undefined values and ensure they're valid UUIDs.
+        // Ha a beteg egy elvetés után már az egyik ALTERNATÍVÁT fogadta el, az
+        // az appointment aktuális slotja — azt NEM szabad felszabadítani,
+        // különben az elfogadott időpont újra foglalhatóvá válna (dupla foglalás).
+        const validIds = alternativeIds.filter(
+          (id: any) => id && typeof id === 'string' && id !== appointment.time_slot_id
+        );
         if (validIds.length > 0) {
           // Free all alternative time slots
           await client.query(

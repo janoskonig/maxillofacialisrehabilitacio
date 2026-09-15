@@ -15,6 +15,8 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
       u.doktor_neve,
       u.role,
       u.active,
+      u.deactivated_at,
+      u.deactivated_by,
       u.restricted_view,
       u.intezmeny,
       u.hozzaferes_indokolas,

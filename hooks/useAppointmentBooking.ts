@@ -29,10 +29,18 @@ export interface TimeSlot {
 export interface Appointment {
   id: string;
   patientId: string;
+  /** A beteg e-mail címe (a lista-API adja) — a lemondás utáni ajánlathoz kell. */
+  patientEmail?: string | null;
   episodeId?: string | null;
   timeSlotId: string;
   startTime: string;
   dentistEmail: string | null;
+  /**
+   * E-mailes (feltételes) ajánlat állapota: 'pending' = a beteg még nem
+   * válaszolt, 'approved' = elfogadta, 'rejected' = elvetette. NULL = normál,
+   * közvetlenül lefoglalt időpont.
+   */
+  approvalStatus?: 'pending' | 'approved' | 'rejected' | null;
   cim?: string | null;
   teremszam?: string | null;
   appointmentStatus?: AppointmentStatus | null;
@@ -89,6 +97,14 @@ export interface ModifyAppointmentParams {
   appointmentType?: AppointmentType | null;
 }
 
+export interface CancelWithOfferParams {
+  /** Az ajánlott (szabad) időpont. */
+  timeSlotId: string;
+  alternativeTimeSlotIds?: string[];
+  /** Ha nincs megadva, a lemondott időpont típusa öröklődik. */
+  appointmentType?: AppointmentType | null;
+}
+
 export interface UpdateStatusParams {
   appointmentStatus: AppointmentStatus | null;
   completionNotes?: string | null;
@@ -124,6 +140,8 @@ export interface UseAppointmentBookingReturn {
   refreshData: () => Promise<void>;
   bookAppointment: (params: BookAppointmentParams) => Promise<OperationResult>;
   cancelAppointment: (appointmentId: string) => Promise<OperationResult>;
+  /** Lemondás + feltételes új ajánlat e-mailben (POST /api/appointments/:id/cancel-and-offer). */
+  cancelAppointmentWithOffer: (appointmentId: string, params: CancelWithOfferParams) => Promise<OperationResult>;
   modifyAppointment: (appointmentId: string, params: ModifyAppointmentParams) => Promise<OperationResult>;
   updateAppointmentStatus: (appointmentId: string, params: UpdateStatusParams) => Promise<OperationResult>;
   markUnsuccessful: (appointmentId: string, reason: string) => Promise<OperationResult>;
@@ -366,6 +384,38 @@ export function useAppointmentBooking(
     }
   };
 
+  const cancelAppointmentWithOffer = async (
+    appointmentId: string,
+    params: CancelWithOfferParams,
+  ): Promise<OperationResult> => {
+    try {
+      const response = await fetch(`/api/appointments/${appointmentId}/cancel-and-offer`, {
+        method: 'POST',
+        headers: { 'Content-Type': 'application/json' },
+        credentials: 'include',
+        body: JSON.stringify({
+          timeSlotId: params.timeSlotId,
+          alternativeTimeSlotIds: params.alternativeTimeSlotIds ?? [],
+          ...(params.appointmentType !== undefined ? { appointmentType: params.appointmentType } : {}),
+        }),
+      });
+
+      if (response.ok) {
+        await reloadAll();
+        notifyWorkPhasesChanged();
+        return { success: true };
+      }
+
+      return {
+        success: false,
+        error: await toUserMessage(response, 'Hiba történt a lemondás és az új ajánlat küldése közben'),
+      };
+    } catch (error) {
+      console.error('Error cancelling appointment with offer:', error);
+      return { success: false, error: 'Hiba történt a lemondás és az új ajánlat küldése közben (hálózati hiba)' };
+    }
+  };
+
   const modifyAppointment = async (appointmentId: string, params: ModifyAppointmentParams): Promise<OperationResult> => {
     try {
       const isoDateTime = toLocalISOString(params.startTime);
@@ -571,6 +621,7 @@ export function useAppointmentBooking(
     refreshData,
     bookAppointment,
     cancelAppointment,
+    cancelAppointmentWithOffer,
     modifyAppointment,
     updateAppointmentStatus,
     markUnsuccessful,

@@ -39,6 +39,8 @@ export interface ConditionalOffer {
   patientTaj: string | null;
   patientEmail: string | null;
   approvalStatus: 'pending' | 'approved' | 'rejected';
+  /** A sor foglalás-státusza: lemondott ajánlat = visszavont (lásd OfferStatusChip). */
+  appointmentStatus?: string | null;
   createdAt: string;
 }
 
@@ -69,8 +71,27 @@ const OFFER_STATUS_CHIP: Record<
   },
 };
 
-function OfferStatusChip({ status }: { status: ConditionalOffer['approvalStatus'] }) {
-  const chip = OFFER_STATUS_CHIP[status];
+/** Visszavont ajánlat: a beteg még nem válaszolt, de a rendelő közben lemondta (pl. lemondás + új ajánlat). */
+function isWithdrawnOffer(offer: Pick<ConditionalOffer, 'approvalStatus' | 'appointmentStatus'>): boolean {
+  return (
+    offer.approvalStatus === 'pending' &&
+    (offer.appointmentStatus === 'cancelled_by_doctor' || offer.appointmentStatus === 'cancelled_by_patient')
+  );
+}
+
+const WITHDRAWN_CHIP = {
+  label: 'Visszavonva',
+  className: 'bg-gray-100 dark:bg-gray-800 text-gray-600 dark:text-gray-300',
+};
+
+function OfferStatusChip({
+  status,
+  appointmentStatus,
+}: {
+  status: ConditionalOffer['approvalStatus'];
+  appointmentStatus?: string | null;
+}) {
+  const chip = isWithdrawnOffer({ approvalStatus: status, appointmentStatus }) ? WITHDRAWN_CHIP : OFFER_STATUS_CHIP[status];
   return (
     <span
       className={`inline-flex items-center px-2.5 py-0.5 rounded-full text-xs font-medium flex-shrink-0 ${chip.className}`}
@@ -234,6 +255,19 @@ export function ConditionalAppointmentOffers({
     loadData();
   }, [loadData]);
 
+  // A lemondás-dialógus „lemondás és új ajánlat" útja (useAppointmentBooking)
+  // ugyanezen a kartonon hoz létre ajánlatot — a lista frissüljön újratöltés
+  // nélkül. Mindkét foglalás-változás eseményre hallgatunk.
+  useEffect(() => {
+    const handler = () => { void loadOffers(); };
+    window.addEventListener('appointments-changed', handler);
+    window.addEventListener('episode-work-phases-reload', handler);
+    return () => {
+      window.removeEventListener('appointments-changed', handler);
+      window.removeEventListener('episode-work-phases-reload', handler);
+    };
+  }, [loadOffers]);
+
   // =========================================================================
   // Handlers
   // =========================================================================
@@ -385,7 +419,7 @@ export function ConditionalAppointmentOffers({
   );
 
   const pendingOffers = useMemo(
-    () => offers.filter((o) => o.approvalStatus === 'pending'),
+    () => offers.filter((o) => o.approvalStatus === 'pending' && !isWithdrawnOffer(o)),
     [offers],
   );
 
@@ -634,7 +668,7 @@ export function ConditionalAppointmentOffers({
                 </span>
               </td>
               <td className="px-6 py-4 whitespace-nowrap">
-                <OfferStatusChip status={offer.approvalStatus} />
+                <OfferStatusChip status={offer.approvalStatus} appointmentStatus={offer.appointmentStatus} />
               </td>
             </>
           )}
@@ -647,7 +681,7 @@ export function ConditionalAppointmentOffers({
                     {formatDateTime(offer.startTime)}
                   </h3>
                 </div>
-                <OfferStatusChip status={offer.approvalStatus} />
+                <OfferStatusChip status={offer.approvalStatus} appointmentStatus={offer.appointmentStatus} />
               </div>
               <MobileKeyValueGrid
                 items={[{ key: 'Kiküldve', value: new Date(offer.createdAt).toLocaleString('hu-HU') }]}

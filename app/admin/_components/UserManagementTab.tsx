@@ -2,7 +2,8 @@
 
 import { useState, useEffect, useMemo } from 'react';
 import { useRouter, useSearchParams } from 'next/navigation';
-import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown, User, LogIn, Search, UserCircle } from 'lucide-react';
+import { MessageCircle, ChevronDown, ChevronUp, AlertCircle, Bug, Lightbulb, Mail, Send, ArrowUp, ArrowDown, User, LogIn, Search, UserCircle, UserX, UserCheck } from 'lucide-react';
+import { getCurrentUser } from '@/lib/auth';
 
 type UserRole = 'admin' | 'fogpótlástanász' | 'technikus' | 'beutalo_orvos';
 type FeedbackPriority = 'critical' | 'high' | 'medium' | 'low';
@@ -10,8 +11,12 @@ type FeedbackPriority = 'critical' | 'high' | 'medium' | 'low';
 type UserRow = {
   id: string;
   email: string;
+  doktor_neve?: string | null;
   role: UserRole;
   active: boolean;
+  /** Admin általi inaktiválás (100-as migráció); active=false + null = jóváhagyásra váró regisztráció. */
+  deactivated_at: string | null;
+  deactivated_by: string | null;
   restricted_view: boolean;
   intezmeny: string | null;
   hozzaferes_indokolas: string | null;
@@ -95,11 +100,18 @@ export function UserManagementTab() {
 
   const [userSortField, setUserSortField] = useState<'email' | 'role' | 'last_activity' | null>(null);
   const [userSortDirection, setUserSortDirection] = useState<'asc' | 'desc'>('asc');
+  const [showDeactivated, setShowDeactivated] = useState(false);
+  const [currentUserId, setCurrentUserId] = useState<string | null>(null);
+  const [userActionBusy, setUserActionBusy] = useState<string | null>(null);
+
+  // Fiók-állapotok: aktív / jóváhagyásra váró (sosem volt aktív) / inaktivált.
+  const pendingUsers = useMemo(() => users.filter((u) => !u.active && !u.deactivated_at), [users]);
+  const deactivatedUsers = useMemo(() => users.filter((u) => !u.active && !!u.deactivated_at), [users]);
 
   const sortedUsers = useMemo(() => {
-    const activeUsers = users.filter((u) => u.active);
-    if (!userSortField) return activeUsers;
-    return [...activeUsers].sort((a, b) => {
+    const listed = users.filter((u) => u.active || (showDeactivated && !!u.deactivated_at));
+    if (!userSortField) return listed;
+    return [...listed].sort((a, b) => {
       let comparison = 0;
       switch (userSortField) {
         case 'email': comparison = a.email.localeCompare(b.email, 'hu'); break;
@@ -113,7 +125,7 @@ export function UserManagementTab() {
       }
       return userSortDirection === 'asc' ? comparison : -comparison;
     });
-  }, [users, userSortField, userSortDirection]);
+  }, [users, userSortField, userSortDirection, showDeactivated]);
 
   const handleUserSort = (field: 'email' | 'role' | 'last_activity') => {
     if (userSortField === field) {
@@ -137,13 +149,26 @@ export function UserManagementTab() {
     );
   };
 
+  const reloadUsers = async () => {
+    try {
+      const res = await fetch('/api/users', { credentials: 'include' });
+      if (res.ok) { const data = await res.json(); setUsers(data.users || []); }
+    } catch { /* ignore */ }
+  };
+
   useEffect(() => {
     (async () => {
       setUsersLoading(true);
       try {
-        const res = await fetch('/api/users', { credentials: 'include' });
-        if (res.ok) { const data = await res.json(); setUsers(data.users || []); }
-      } catch { /* ignore */ } finally { setUsersLoading(false); }
+        await reloadUsers();
+      } finally { setUsersLoading(false); }
+    })();
+  }, []);
+
+  useEffect(() => {
+    (async () => {
+      const me = await getCurrentUser();
+      setCurrentUserId(me?.id ?? null);
     })();
   }, []);
 
@@ -191,10 +216,38 @@ export function UserManagementTab() {
     try {
       const res = await fetch(`/api/users/${userId}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ active: true }) });
       if (res.ok) {
-        const res2 = await fetch('/api/users', { credentials: 'include' });
-        if (res2.ok) { const data = await res2.json(); setUsers(data.users || []); }
+        await reloadUsers();
       } else { const data = await res.json(); alert(data.error || 'Hiba'); }
     } catch { alert('Hiba történt a jóváhagyáskor'); }
+  };
+
+  const deactivateUser = async (user: UserRow) => {
+    const name = user.doktor_neve ? `${user.doktor_neve} (${user.email})` : user.email;
+    if (
+      !confirm(
+        `Biztosan inaktiválja a következő fiókot: ${name}?\n\n` +
+          'A felhasználó nem tud többé bejelentkezni, a futó munkamenetei megszűnnek. ' +
+          'Az adatai (időpontok, üzenetek, naplók) megmaradnak, a fiók később újraaktiválható.'
+      )
+    ) return;
+    setUserActionBusy(user.id);
+    try {
+      const res = await fetch(`/api/users/${user.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ active: false }) });
+      if (res.ok) { await reloadUsers(); }
+      else { const data = await res.json().catch(() => ({})); alert(data.error || 'Hiba történt az inaktiváláskor'); }
+    } catch { alert('Hiba történt az inaktiváláskor'); }
+    finally { setUserActionBusy(null); }
+  };
+
+  const reactivateUser = async (user: UserRow) => {
+    if (!confirm(`Újraaktiválja a következő fiókot: ${user.email}? A felhasználó ismét be tud jelentkezni.`)) return;
+    setUserActionBusy(user.id);
+    try {
+      const res = await fetch(`/api/users/${user.id}`, { method: 'PUT', headers: { 'Content-Type': 'application/json' }, credentials: 'include', body: JSON.stringify({ active: true }) });
+      if (res.ok) { await reloadUsers(); }
+      else { const data = await res.json().catch(() => ({})); alert(data.error || 'Hiba történt az újraaktiváláskor'); }
+    } catch { alert('Hiba történt az újraaktiváláskor'); }
+    finally { setUserActionBusy(null); }
   };
 
   const rejectUser = async (userId: string) => {
@@ -412,14 +465,14 @@ export function UserManagementTab() {
       </div>
 
       {/* Pending users */}
-      {users.filter(u => !u.active).length > 0 && (
+      {pendingUsers.length > 0 && (
         <div className="card mb-6 border-l-4 border-yellow-400">
-          <h2 className="text-xl font-semibold mb-4 text-yellow-800 dark:text-yellow-300">Jóváhagyásra váró felhasználók ({users.filter(u => !u.active).length})</h2>
+          <h2 className="text-xl font-semibold mb-4 text-yellow-800 dark:text-yellow-300">Jóváhagyásra váró felhasználók ({pendingUsers.length})</h2>
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
               <thead className="bg-gray-50 dark:bg-gray-800/60"><tr><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Email</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Intézmény</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Indokolás</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Regisztráció</th><th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Műveletek</th></tr></thead>
               <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
-                {users.filter(u => !u.active).map(user => (
+                {pendingUsers.map(user => (
                   <tr key={user.id} className="bg-yellow-50 dark:bg-yellow-950/40">
                     <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{user.email}</td>
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">{user.intezmeny || '-'}</td>
@@ -436,26 +489,83 @@ export function UserManagementTab() {
 
       {/* User table */}
       <div className="card">
-        <h2 className="text-xl font-semibold mb-4">Felhasználók kezelése</h2>
+        <div className="flex items-center justify-between gap-3 flex-wrap mb-4">
+          <h2 className="text-xl font-semibold">Felhasználók kezelése</h2>
+          <label className="flex items-center gap-2 text-sm text-gray-700 dark:text-gray-300 cursor-pointer select-none">
+            <input
+              type="checkbox"
+              checked={showDeactivated}
+              onChange={e => setShowDeactivated(e.target.checked)}
+              className="h-4 w-4 text-medical-primary focus:ring-medical-primary border-gray-300 dark:border-gray-700 rounded"
+            />
+            Inaktivált fiókok mutatása ({deactivatedUsers.length})
+          </label>
+        </div>
         {usersLoading ? (<p className="text-gray-600 dark:text-gray-400">Betöltés...</p>) : users.length === 0 ? (<p className="text-gray-600 dark:text-gray-400">Nincsenek felhasználók.</p>) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
-              <thead className="bg-gray-50 dark:bg-gray-800/60"><tr>{renderSortableHeader('Email', 'email')}{renderSortableHeader('Szerepkör', 'role')}<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Állapot</th>{renderSortableHeader('Utolsó aktivitás', 'last_activity')}</tr></thead>
+              <thead className="bg-gray-50 dark:bg-gray-800/60"><tr>{renderSortableHeader('Email', 'email')}{renderSortableHeader('Szerepkör', 'role')}<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Állapot</th>{renderSortableHeader('Utolsó aktivitás', 'last_activity')}<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Műveletek</th></tr></thead>
               <tbody className="bg-white dark:bg-gray-900 divide-y divide-gray-200 dark:divide-gray-800">
-                {sortedUsers.map(user => (
-                  <tr key={user.id}>
-                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">{user.email}</td>
+                {sortedUsers.map(user => {
+                  const isSelf = currentUserId === user.id;
+                  const busy = userActionBusy === user.id;
+                  return (
+                  <tr key={user.id} className={user.active ? '' : 'bg-gray-50 dark:bg-gray-800/40 text-gray-500'}>
+                    <td className="px-4 py-3 text-sm text-gray-900 dark:text-gray-100">
+                      <div>{user.email}</div>
+                      {user.doktor_neve && <div className="text-xs text-gray-500 dark:text-gray-400">{user.doktor_neve}</div>}
+                    </td>
                     <td className="px-4 py-3">
-                      <select className="form-input" value={user.role} onChange={e => updateRole(user.id, e.target.value as UserRole)}>
+                      <select className="form-input" value={user.role} onChange={e => updateRole(user.id, e.target.value as UserRole)} disabled={!user.active}>
                         <option value="admin">admin</option><option value="fogpótlástanász">fogpótlástanász</option><option value="technikus">technikus</option><option value="beutalo_orvos">beutaló orvos</option>
                       </select>
                     </td>
-                    <td className="px-4 py-3 text-sm">{user.active ? <span className="text-green-600 dark:text-green-300">Aktív</span> : <span className="text-red-600 dark:text-red-300">Inaktív</span>}</td>
+                    <td className="px-4 py-3 text-sm">
+                      {user.active ? (
+                        <span className="text-green-600 dark:text-green-300">Aktív</span>
+                      ) : (
+                        <div>
+                          <span className="text-red-600 dark:text-red-300 font-medium">Inaktív</span>
+                          {user.deactivated_at && (
+                            <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">
+                              {new Date(user.deactivated_at).toLocaleString('hu-HU')}
+                              {user.deactivated_by && user.deactivated_by !== 'migration_100' ? ` · ${user.deactivated_by}` : ''}
+                            </div>
+                          )}
+                        </div>
+                      )}
+                    </td>
                     <td className="px-4 py-3 text-sm text-gray-700 dark:text-gray-300">
                       {user.last_activity ? (<div><div className="font-medium">{ACTIVITY_LABELS[user.last_activity_action || ''] || user.last_activity_action || 'Ismeretlen'}</div>{user.last_activity_detail && <div className="text-xs text-gray-500 dark:text-gray-400 mt-1">{user.last_activity_detail}</div>}<div className="text-xs text-gray-400 dark:text-gray-500 mt-1">{new Date(user.last_activity).toLocaleString('hu-HU')}</div></div>) : '-'}
                     </td>
+                    <td className="px-4 py-3 text-sm">
+                      {user.active ? (
+                        <button
+                          type="button"
+                          onClick={() => deactivateUser(user)}
+                          disabled={isSelf || busy}
+                          title={isSelf ? 'A saját fiókját nem inaktiválhatja' : 'A felhasználó nem tud többé bejelentkezni; az adatai megmaradnak'}
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded border border-red-200 dark:border-red-800 text-red-700 dark:text-red-300 hover:bg-red-50 dark:hover:bg-red-950/40 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <UserX className="w-3.5 h-3.5" />
+                          {busy ? 'Inaktiválás…' : 'Inaktiválás'}
+                        </button>
+                      ) : (
+                        <button
+                          type="button"
+                          onClick={() => reactivateUser(user)}
+                          disabled={busy}
+                          title="A felhasználó ismét be tud jelentkezni"
+                          className="inline-flex items-center gap-1 px-3 py-1.5 text-xs font-medium rounded border border-green-200 dark:border-green-800 text-green-700 dark:text-green-300 hover:bg-green-50 dark:hover:bg-green-950/40 disabled:opacity-40 disabled:cursor-not-allowed"
+                        >
+                          <UserCheck className="w-3.5 h-3.5" />
+                          {busy ? 'Aktiválás…' : 'Újraaktiválás'}
+                        </button>
+                      )}
+                    </td>
                   </tr>
-                ))}
+                  );
+                })}
               </tbody>
             </table>
           </div>

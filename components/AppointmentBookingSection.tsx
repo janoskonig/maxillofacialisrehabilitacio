@@ -36,6 +36,7 @@ import {
   type UnsuccessfulAttemptConfirmPayload,
 } from './UnsuccessfulAttemptModal';
 import { RevertUnsuccessfulModal } from './RevertUnsuccessfulModal';
+import { CancelAppointmentDialog } from './CancelAppointmentDialog';
 import type { WorklistItemBackend } from '@/lib/worklist-types';
 import { APPOINTMENT_TYPE_OPTIONS, getAppointmentTypeLabel } from '@/lib/appointment-constants';
 
@@ -83,6 +84,7 @@ export function AppointmentBookingSection({
     DEFAULT_CIM,
     bookAppointment,
     cancelAppointment,
+    cancelAppointmentWithOffer,
     modifyAppointment,
     updateAppointmentStatus,
     markUnsuccessful,
@@ -107,6 +109,7 @@ export function AppointmentBookingSection({
   const [newModifyTeremszam, setNewModifyTeremszam] = useState<string>('');
   const [newModifyAppointmentType, setNewModifyAppointmentType] = useState<AppointmentType | null>(null);
   const [editingStatus, setEditingStatus] = useState<Appointment | null>(null);
+  const [cancelDialogAppointment, setCancelDialogAppointment] = useState<Appointment | null>(null);
   const [cascadeAfterModify, setCascadeAfterModify] = useState<{
     episodeId: string;
     deltaMs: number;
@@ -205,15 +208,10 @@ export function AppointmentBookingSection({
     }
   };
 
-  const handleCancelAppointment = async (appointmentId: string) => {
-    if (!confirm('Biztosan le szeretné mondani ezt az időpontot?')) return;
-
-    const result = await cancelAppointment(appointmentId);
-    if (result.success) {
-      alert('Időpont sikeresen lemondva!');
-    } else {
-      alert(result.error || 'Hiba történt az időpont lemondásakor');
-    }
+  // A lemondás dialógusban történik: „csak lemondás" vagy „lemondás és új
+  // időpont ajánlása" (feltételes ajánlat e-mailben) — lásd CancelAppointmentDialog.
+  const handleCancelAppointment = (appointment: Appointment) => {
+    setCancelDialogAppointment(appointment);
   };
 
   const handleModifyAppointment = (appointment: Appointment) => {
@@ -718,6 +716,26 @@ export function AppointmentBookingSection({
           }}
         />
       )}
+      {cancelDialogAppointment && (
+        <CancelAppointmentDialog
+          appointment={cancelDialogAppointment}
+          availableSlots={availableSlots}
+          canOffer={userRole === 'admin' || userRole === 'fogpótlástanász'}
+          canCreateSlot={userRole === 'admin' || userRole === 'fogpótlástanász'}
+          defaultCim={DEFAULT_CIM}
+          pool={pool === 'work' && !episodeId ? 'consult' : pool}
+          onClose={() => setCancelDialogAppointment(null)}
+          onPlainCancel={() => cancelAppointment(cancelDialogAppointment.id)}
+          onCancelWithOffer={(params) => cancelAppointmentWithOffer(cancelDialogAppointment.id, params)}
+          onDone={(mode) => {
+            alert(
+              mode === 'offer'
+                ? 'Időpont lemondva, az új ajánlat e-mailben elment a betegnek (jóváhagyásra vár).'
+                : 'Időpont sikeresen lemondva!'
+            );
+          }}
+        />
+      )}
       {/* Status Edit Modal */}
       {editingStatus && (
         <div className="fixed inset-0 bg-black bg-opacity-50 flex items-center justify-center z-50">
@@ -904,6 +922,19 @@ export function AppointmentBookingSection({
                 metaBorder = 'border-orange-200 dark:border-orange-800';
                 LeadIcon = AlertTriangle;
                 leadIconClass = 'text-orange-600 dark:text-orange-300';
+              } else if (appointment.approvalStatus === 'pending') {
+                // E-mailes ajánlat, a beteg még nem válaszolt — nem végleges foglalás.
+                cardWrap =
+                  'flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-md';
+                metaBorder = 'border-amber-200 dark:border-amber-800';
+                LeadIcon = ClockIcon;
+                leadIconClass = 'text-amber-600 dark:text-amber-300';
+              } else if (appointment.approvalStatus === 'rejected') {
+                cardWrap =
+                  'flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/60 border border-gray-300 dark:border-gray-700 rounded-md';
+                metaBorder = 'border-gray-300 dark:border-gray-700';
+                LeadIcon = XCircle;
+                leadIconClass = 'text-gray-500 dark:text-gray-400';
               }
               const canMarkUnsuccessful =
                 !!appointment.episodeId &&
@@ -995,6 +1026,18 @@ export function AppointmentBookingSection({
                           </div>
                         )}
                       </div>
+                      {appointment.approvalStatus === 'pending' && !st && (
+                        <div className="flex items-center gap-1 mt-1 text-amber-700 dark:text-amber-300">
+                          <ClockIcon className="w-3 h-3" />
+                          <span>Jóváhagyásra vár — a beteg e-mailben kapta az ajánlatot</span>
+                        </div>
+                      )}
+                      {appointment.approvalStatus === 'rejected' && !st && (
+                        <div className="flex items-center gap-1 mt-1 text-gray-600 dark:text-gray-400">
+                          <XCircle className="w-3 h-3" />
+                          <span>A beteg elvetette az e-mailes ajánlatot</span>
+                        </div>
+                      )}
                       {(() => {
                         if (appointment.isLate) {
                           return (
@@ -1127,9 +1170,9 @@ export function AppointmentBookingSection({
                         Státusz
                       </button>
                       <button
-                        onClick={() => handleCancelAppointment(appointment.id)}
+                        onClick={() => handleCancelAppointment(appointment)}
                         className="text-sm text-red-600 dark:text-red-300 hover:text-red-800 flex items-center gap-1"
-                        title="Időpont lemondása"
+                        title="Időpont lemondása (opcionálisan új ajánlattal)"
                       >
                         <X className="w-4 h-4" />
                         Lemondás

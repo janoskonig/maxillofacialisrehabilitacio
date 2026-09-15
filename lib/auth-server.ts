@@ -1,5 +1,6 @@
 import { NextRequest } from 'next/server';
 import { jwtVerify } from 'jose';
+import { isUserActive } from './user-active-check';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -44,8 +45,13 @@ export async function verifyAuth(request: NextRequest): Promise<AuthPayload | nu
 
   try {
     const { payload } = await jwtVerify(token, JWT_SECRET);
+    const userId = payload.userId as string;
+    // Inaktivált fiók: a még le nem járt JWT sem ér semmit — a session az
+    // adatbázis `users.active` értékét követi (cache-elt lookup, lásd
+    // lib/user-active-check.ts).
+    if (!userId || !(await isUserActive(userId))) return null;
     return {
-      userId: payload.userId as string,
+      userId,
       email: payload.email as string,
       role: payload.role as 'admin' | 'fogpótlástanász' | 'technikus' | 'beutalo_orvos',
       restrictedView: payload.restrictedView as boolean | undefined,

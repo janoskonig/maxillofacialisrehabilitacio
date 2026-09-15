@@ -7,6 +7,11 @@ import { deleteGoogleCalendarEvent, updateGoogleCalendarEvent, createGoogleCalen
 import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
 import { isAppointmentType } from '@/lib/appointment-constants';
+import { releaseGoogleCalendarEventForCancelledSlot } from '@/lib/appointment-calendar-release';
+import {
+  findEwpForAppointmentRevert,
+  revertWorkPhaseLinkToPending,
+} from '@/lib/episode-work-phase-revert-lookup';
 
 // Update an appointment (change time slot)
 export const dynamic = 'force-dynamic';
@@ -442,6 +447,8 @@ export const DELETE = authedHandler(async (req, { auth, params }) => {
         a.google_calendar_event_id,
         a.approval_status,
         a.alternative_time_slot_ids,
+        a.step_code,
+        a.work_phase_id,
         ats.start_time,
         ats.user_id as time_slot_user_id,
         ats.source as time_slot_source,
@@ -491,6 +498,32 @@ export const DELETE = authedHandler(async (req, { auth, params }) => {
           WHERE appointment_id = $1 AND task_type = 'recall_due'`,
         [id]
       );
+      // A törölt foglalás munkafázis-kötése: a fázis visszanyílik (pending) és
+      // elengedi az appointment_id linket — enélkül a fázis „scheduled"
+      // maradna egy már nem létező foglaláshoz láncolva
+      // (EWP_DANGLING_APPOINTMENT_LINK), és a terv nem mutatná újra
+      // foglalhatónak. Ugyanaz a helper, mint a státusz-lemondásnál.
+      if (appointment.episode_id) {
+        const ewp = await findEwpForAppointmentRevert(client, {
+          episodeId: appointment.episode_id,
+          stepCode: appointment.step_code ?? null,
+          workPhaseId: appointment.work_phase_id ?? null,
+          appointmentId: id,
+        });
+        if (
+          ewp &&
+          ewp.appointmentId === id &&
+          (ewp.status === 'scheduled' || ewp.status === 'completed')
+        ) {
+          await revertWorkPhaseLinkToPending(client, {
+            ewpId: ewp.id,
+            episodeId: appointment.episode_id,
+            oldEwpStatus: ewp.status,
+            changedBy: auth.email ?? auth.userId ?? 'unknown',
+            reasonText: `appointment ${id} törölve (lemondás) — fázis visszanyitva`,
+          });
+        }
+      }
       // Delete the appointment
       await client.query('DELETE FROM appointments WHERE id = $1', [id]);
 
@@ -545,62 +578,15 @@ export const DELETE = authedHandler(async (req, { auth, params }) => {
             auth.email
           ),
           // Google Calendar esemény kezelése (ha van event ID) — auth hiba esetén nem blokkoljuk a törlést
-          (async () => {
-            if (appointment.google_calendar_event_id && appointment.time_slot_user_id) {
-              try {
-                const userCalendarResult = await pool.query(
-                  `SELECT google_calendar_source_calendar_id, google_calendar_target_calendar_id 
-                   FROM users 
-                   WHERE id = $1`,
-                  [appointment.time_slot_user_id]
-                );
-                const sourceCalendarId = userCalendarResult.rows[0]?.google_calendar_source_calendar_id || 'primary';
-                const targetCalendarId = userCalendarResult.rows[0]?.google_calendar_target_calendar_id || 'primary';
-
-                await deleteGoogleCalendarEvent(
-                  appointment.time_slot_user_id,
-                  appointment.google_calendar_event_id,
-                  targetCalendarId
-                );
-                logger.info('[Appointment Cancellation] Deleted patient event from target calendar');
-
-                // Always recreate a "szabad" event so the slot reappears as free in Google Calendar
-                const endTime = new Date(startTime);
-                endTime.setMinutes(endTime.getMinutes() + 30);
-                const szabadCalendarId = appointment.time_slot_source === 'google_calendar'
-                  ? sourceCalendarId
-                  : targetCalendarId;
-                const szabadEventId = await createGoogleCalendarEvent(
-                  appointment.time_slot_user_id,
-                  {
-                    summary: 'szabad',
-                    description: 'Szabad időpont (lemondás után felszabadult)',
-                    startTime: startTime,
-                    endTime: endTime,
-                    location: 'Maxillofaciális Rehabilitáció',
-                    calendarId: szabadCalendarId,
-                  }
-                );
-                if (szabadEventId) {
-                  logger.info(`[Appointment Cancellation] Recreated "szabad" event in ${szabadCalendarId} calendar`);
-                  await pool.query(
-                    `UPDATE available_time_slots 
-                     SET google_calendar_event_id = $1, source = 'google_calendar'
-                     WHERE id = $2`,
-                    [szabadEventId, appointment.time_slot_id]
-                  );
-                }
-              } catch (error: unknown) {
-                const msg = error instanceof Error ? error.message : String(error);
-                const isAuthError = /access token|authenticate|state|unauthorized/i.test(msg);
-                if (isAuthError) {
-                  logger.warn('[Appointment Cancellation] Google Calendar sync skipped (token invalid/expired). Időpont törölve, naptár nincs szinkronizálva.');
-                } else {
-                  logger.error('Failed to handle Google Calendar event:', error);
-                }
-              }
-            }
-          })(),
+          releaseGoogleCalendarEventForCancelledSlot(pool, {
+            timeSlotId: appointment.time_slot_id,
+            timeSlotUserId: appointment.time_slot_user_id,
+            googleCalendarEventId: appointment.google_calendar_event_id,
+            timeSlotSource: appointment.time_slot_source,
+            startTime,
+            logPrefix: '[Appointment Cancellation]',
+            freedDescription: 'Szabad időpont (lemondás után felszabadult)',
+          }),
         ]);
       } catch (emailError) {
         logger.error('Failed to send cancellation email to dentist:', emailError);
