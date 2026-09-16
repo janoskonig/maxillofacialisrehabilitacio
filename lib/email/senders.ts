@@ -32,6 +32,48 @@ export async function sendApprovalEmail(userEmail: string): Promise<void> {
 }
 
 /**
+ * Jelszó-visszaállítás helyett küldött tájékoztató inaktív fiókhoz: kimondja,
+ * hogy NEM a jelszó hibás, ezért visszaállító link nem is megy.
+ */
+export async function sendAccountInactiveNoticeEmail(
+  userEmail: string,
+  kind: 'deactivated' | 'pending_approval' | 'unknown'
+): Promise<void> {
+  const explanation =
+    kind === 'deactivated'
+      ? 'Ehhez a fiókhoz jelszó-visszaállítást kért, de a fiókot az adminisztrátor <strong>inaktiválta</strong>. A jelszava nem hibás, és a visszaállítás nem segítene, ezért visszaállító linket nem küldtünk.'
+      : kind === 'pending_approval'
+        ? 'Ehhez a fiókhoz jelszó-visszaállítást kért, de a fiók <strong>még jóváhagyásra vár</strong>. A jelszava nem hibás, a jóváhagyás után ugyanazzal be tud majd jelentkezni; a jóváhagyásról külön e-mailt küldünk.'
+        : 'Ehhez a fiókhoz jelszó-visszaállítást kért, de a fiók <strong>inaktív</strong>. A jelszava nem hibás, és a visszaállítás nem segítene, ezért visszaállító linket nem küldtünk.';
+  const nextStep =
+    kind === 'pending_approval'
+      ? 'Ha sürgős, kérjük, jelezze az adminisztrátornak.'
+      : 'Ha úgy gondolja, hogy ez tévedés, vagy újra hozzáférésre van szüksége, kérjük, forduljon az adminisztrátorhoz — csak ő tudja a fiókot újraaktiválni.';
+
+  const html = `
+    <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
+      <h2 style="color: #b45309;">A fiók inaktív — a jelszó nem hibás</h2>
+      <p>Kedves felhasználó,</p>
+      <p>${explanation}</p>
+      <p>${nextStep}</p>
+      <p style="color: #666; font-size: 12px; margin-top: 30px;">
+        Ha nem Ön kérte a jelszó-visszaállítást, kérjük, hagyja figyelmen kívül ezt az e-mailt.
+      </p>
+      <p style="color: #666; font-size: 12px;">
+        Üdvözlettel,<br>Maxillofaciális Rehabilitáció Rendszer
+      </p>
+    </div>
+  `;
+
+  await sendEmail({
+    to: userEmail,
+    subject: 'A fiók inaktív - a jelszó nem hibás - Maxillofaciális Rehabilitáció',
+    html,
+    emailType: 'account_inactive_notice',
+  });
+}
+
+/**
  * Send password reset email
  */
 export async function sendPasswordResetEmail(

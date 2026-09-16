@@ -16,10 +16,18 @@ const closeTasksMock = vi.fn(async () => undefined);
 vi.mock('@/lib/user-tasks', () => ({
   closeStaffRegistrationReviewTasks: (...a: unknown[]) => closeTasksMock(...(a as [])),
 }));
+const probeColumnExistsMock = vi.fn(async () => true);
+vi.mock('@/lib/schema-probe', () => ({
+  probeColumnExists: (...a: unknown[]) => probeColumnExistsMock(...(a as [])),
+}));
 
 import {
   assertCanDeactivate,
+  classifyInactiveAccount,
   deactivateUserAccount,
+  deactivationSelectSql,
+  INACTIVE_ACCOUNT_CODES,
+  INACTIVE_ACCOUNT_MESSAGES,
   userAccountState,
 } from '@/lib/user-deactivation';
 import { HttpError } from '@/lib/auth-server';
@@ -74,6 +82,32 @@ describe('assertCanDeactivate', () => {
   });
 });
 
+describe('classifyInactiveAccount + üzenetek', () => {
+  const db = { query: vi.fn() } as any;
+
+  it('inaktivált / jóváhagyásra váró / oszlop nélküli eset', async () => {
+    expect(await classifyInactiveAccount(db, { active: false, deactivated_at: '2026-09-15T10:00:00Z' })).toBe('deactivated');
+    expect(await classifyInactiveAccount(db, { active: false, deactivated_at: null })).toBe('pending_approval');
+    probeColumnExistsMock.mockResolvedValueOnce(false);
+    expect(await classifyInactiveAccount(db, { active: false, deactivated_at: null })).toBe('unknown');
+  });
+
+  it('minden üzenet kimondja, hogy nem a jelszó hibás', () => {
+    for (const kind of ['deactivated', 'pending_approval', 'unknown'] as const) {
+      expect(INACTIVE_ACCOUNT_MESSAGES[kind]).toMatch(/jelszó nem hibás/);
+      expect(INACTIVE_ACCOUNT_CODES[kind]).toMatch(/^ACCOUNT_/);
+    }
+    expect(INACTIVE_ACCOUNT_MESSAGES.deactivated).toMatch(/inaktiválta/);
+    expect(INACTIVE_ACCOUNT_MESSAGES.deactivated).toMatch(/visszaállítás nem segít/);
+  });
+
+  it('a toleráns SELECT-darab to_jsonb-n át olvassa az oszlopokat', () => {
+    expect(deactivationSelectSql('u')).toBe(
+      "(to_jsonb(u) ->> 'deactivated_at')::timestamptz AS deactivated_at, (to_jsonb(u) ->> 'deactivated_by') AS deactivated_by"
+    );
+  });
+});
+
 describe('deactivateUserAccount', () => {
   it('active=false + deactivated_at/by, majd cache-érvénytelenítés, socket-bontás, feladat-lezárás', async () => {
     const pool = { query: vi.fn().mockResolvedValue({ rows: [] }) };
@@ -86,5 +120,17 @@ describe('deactivateUserAccount', () => {
     expect(invalidateMock).toHaveBeenCalledWith('u9');
     expect(disconnectMock).toHaveBeenCalledWith('u9');
     expect(closeTasksMock).toHaveBeenCalledWith('u9', 'cancelled');
+  });
+
+  it('oszlop nélkül (100-as migráció előtt) csak active=false íródik, a kizárás így is azonnali', async () => {
+    probeColumnExistsMock.mockResolvedValueOnce(false);
+    const pool = { query: vi.fn().mockResolvedValue({ rows: [] }) };
+    await deactivateUserAccount(pool as any, 'u9', 'admin@dev.local');
+    const [sql, params] = pool.query.mock.calls[0];
+    expect(sql).toMatch(/SET active = false/);
+    expect(sql).not.toMatch(/deactivated_at/);
+    expect(params).toEqual(['u9']);
+    expect(invalidateMock).toHaveBeenCalledWith('u9');
+    expect(disconnectMock).toHaveBeenCalledWith('u9');
   });
 });

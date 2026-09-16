@@ -2,7 +2,7 @@
 
 import { useState } from 'react';
 import { useRouter } from 'next/navigation';
-import { User, Lock, Eye, EyeOff } from 'lucide-react';
+import { User, Lock, Eye, EyeOff, UserX } from 'lucide-react';
 import Link from 'next/link';
 import { Logo } from '@/components/Logo';
 
@@ -11,13 +11,24 @@ export default function Login() {
   const [password, setPassword] = useState('');
   const [showPassword, setShowPassword] = useState(false);
   const [error, setError] = useState('');
+  // Inaktivált / jóváhagyásra váró fiók: külön, egyértelmű doboz — NEM a jelszó
+  // hibás, ezért ilyenkor az „Elfelejtett jelszó?" linket sem kínáljuk fel.
+  const [inactiveNotice, setInactiveNotice] = useState<{ code: string; message: string } | null>(null);
   const [isLoading, setIsLoading] = useState(false);
   const router = useRouter();
+
+  const inactiveTitle =
+    inactiveNotice?.code === 'ACCOUNT_DEACTIVATED'
+      ? 'A fiókot inaktiválták'
+      : inactiveNotice?.code === 'ACCOUNT_PENDING_APPROVAL'
+        ? 'A fiók még jóváhagyásra vár'
+        : 'A fiók inaktív';
 
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     setIsLoading(true);
     setError('');
+    setInactiveNotice(null);
 
     try {
       const response = await fetch('/api/auth/login', {
@@ -32,7 +43,11 @@ export default function Login() {
       const data = await response.json();
 
       if (!response.ok) {
-        setError(data.error || 'Hibás email cím vagy jelszó');
+        if (response.status === 403 && typeof data.code === 'string' && data.code.startsWith('ACCOUNT_')) {
+          setInactiveNotice({ code: data.code, message: data.error || 'Ez a fiók inaktív.' });
+        } else {
+          setError(data.error || 'Hibás email cím vagy jelszó');
+        }
         setIsLoading(false);
         return;
       }
@@ -117,15 +132,34 @@ export default function Login() {
                     {showPassword ? <EyeOff className="w-4 h-4" /> : <Eye className="w-4 h-4" />}
                   </button>
                 </div>
-                <div className="mt-2 text-right">
-                  <Link
-                    href="/forgot-password"
-                    className="text-sm font-medium text-blue-700 dark:text-blue-300 hover:underline"
-                  >
-                    Elfelejtett jelszó?
-                  </Link>
-                </div>
+                {!inactiveNotice && (
+                  <div className="mt-2 text-right">
+                    <Link
+                      href="/forgot-password"
+                      className="text-sm font-medium text-blue-700 dark:text-blue-300 hover:underline"
+                    >
+                      Elfelejtett jelszó?
+                    </Link>
+                  </div>
+                )}
               </div>
+
+              {inactiveNotice && (
+                <div
+                  role="alert"
+                  data-testid="inactive-account-notice"
+                  className="bg-amber-50 dark:bg-amber-950/40 border border-amber-300 dark:border-amber-700 text-amber-900 dark:text-amber-200 px-4 py-3 rounded-lg text-sm"
+                >
+                  <div className="flex items-center gap-2 font-semibold text-base mb-1">
+                    <UserX className="w-5 h-5 flex-shrink-0" />
+                    {inactiveTitle}
+                  </div>
+                  <p>{inactiveNotice.message}</p>
+                  <p className="mt-2 font-semibold">
+                    Nem a jelszó hibás, jelszó-visszaállítást nem kell kérnie.
+                  </p>
+                </div>
+              )}
 
               {error && (
                 <div role="alert" className="bg-medical-error/10 border border-medical-error/20 text-red-700 dark:text-red-300 px-4 py-3 rounded-lg text-sm font-medium">

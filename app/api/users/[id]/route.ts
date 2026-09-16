@@ -12,14 +12,18 @@ import {
   afterDeactivation,
   assertCanDeactivate,
   deactivateUserAccount,
+  deactivationSelectSql,
   userAccountState,
+  usersDeactivatedAtColumnExists,
 } from '@/lib/user-deactivation';
 import { invalidateUserActiveCache } from '@/lib/user-active-check';
+import { HttpError } from '@/lib/auth-server';
 
 export const dynamic = 'force-dynamic';
 
-const USER_RETURNING =
-  'id, email, doktor_neve, role, active, restricted_view, deactivated_at, deactivated_by, updated_at';
+// A RETURNING-ban a `users` név az új sort jelöli; a to_jsonb-s kifejezés a
+// 100-as migráció előtti sémán is lefut (NULL).
+const USER_RETURNING = `id, email, doktor_neve, role, active, restricted_view, updated_at, ${deactivationSelectSql('users')}`;
 
 export const PUT = authedHandler(async (req, { auth, params }) => {
   const { id } = params;
@@ -29,7 +33,7 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
   const pool = getDbPool();
 
   const userResult = await pool.query(
-    'SELECT id, email, role, active, deactivated_at FROM users WHERE id = $1',
+    `SELECT u.id, u.email, u.role, u.active, ${deactivationSelectSql('u')} FROM users u WHERE u.id = $1`,
     [id]
   );
   if (userResult.rows.length === 0) {
@@ -120,10 +124,18 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
         { status: 400 }
       );
     }
+    const hasDeactivationColumns = await usersDeactivatedAtColumnExists(pool);
     if (active === false) {
       // Saját fiók / utolsó aktív admin: HttpError → 400 / 409 a közös hibakezelőn át.
       await assertCanDeactivate(pool, user, auth.userId);
       deactivating = !wasInactive;
+      if (deactivating && !hasDeactivationColumns) {
+        throw new HttpError(
+          409,
+          'A fiók-inaktiválás a 100-as adatbázis-migráció lefuttatásáig nem elérhető (users.deactivated_at hiányzik). Futtassa: npm run migrate',
+          'MIGRATION_PENDING'
+        );
+      }
       updates.push(`active = $${paramIndex}`);
       values.push(false);
       paramIndex++;
@@ -138,8 +150,10 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
       values.push(true);
       paramIndex++;
       // Újraaktiválás / jóváhagyás: az inaktiválás nyoma törlődik.
-      updates.push('deactivated_at = NULL');
-      updates.push('deactivated_by = NULL');
+      if (hasDeactivationColumns) {
+        updates.push('deactivated_at = NULL');
+        updates.push('deactivated_by = NULL');
+      }
     }
   }
 
@@ -212,7 +226,7 @@ export const DELETE = roleHandler(['admin'], async (req, { auth, params }) => {
   const pool = getDbPool();
 
   const userResult = await pool.query(
-    'SELECT id, role, active, deactivated_at FROM users WHERE id = $1',
+    `SELECT u.id, u.role, u.active, ${deactivationSelectSql('u')} FROM users u WHERE u.id = $1`,
     [id]
   );
   if (userResult.rows.length === 0) {

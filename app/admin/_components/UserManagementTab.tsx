@@ -59,6 +59,9 @@ export function UserManagementTab() {
   const linkedFeedbackId = searchParams.get('feedback');
   const [users, setUsers] = useState<UserRow[]>([]);
   const [usersLoading, setUsersLoading] = useState(false);
+  // A lista-lekérés hibája (401/500) NE tűnjön „nincs felhasználó"-nak: a
+  // szerver üzenete + a correlationId látszik, hogy a logban visszakereshető legyen.
+  const [usersError, setUsersError] = useState<string | null>(null);
   const [usage, setUsage] = useState<Array<{ user_email: string; last_seen: string | null; last_7d: number; last_30d: number; last_90d: number }>>([]);
   const [usageLoading, setUsageLoading] = useState(false);
   const [feedback, setFeedback] = useState<Feedback[]>([]);
@@ -152,8 +155,19 @@ export function UserManagementTab() {
   const reloadUsers = async () => {
     try {
       const res = await fetch('/api/users', { credentials: 'include' });
-      if (res.ok) { const data = await res.json(); setUsers(data.users || []); }
-    } catch { /* ignore */ }
+      if (res.ok) {
+        const data = await res.json();
+        setUsers(data.users || []);
+        setUsersError(null);
+      } else {
+        const data = await res.json().catch(() => ({}));
+        const code = data?._errorMeta?.code ? ` [${data._errorMeta.code}]` : '';
+        const corr = data?._errorMeta?.correlationId ? ` · ${data._errorMeta.correlationId}` : '';
+        setUsersError(`${data?.error || `Hiba a felhasználók betöltésekor (HTTP ${res.status})`}${code}${corr}`);
+      }
+    } catch {
+      setUsersError('Hálózati hiba a felhasználók betöltésekor');
+    }
   };
 
   useEffect(() => {
@@ -501,7 +515,11 @@ export function UserManagementTab() {
             Inaktivált fiókok mutatása ({deactivatedUsers.length})
           </label>
         </div>
-        {usersLoading ? (<p className="text-gray-600 dark:text-gray-400">Betöltés...</p>) : users.length === 0 ? (<p className="text-gray-600 dark:text-gray-400">Nincsenek felhasználók.</p>) : (
+        {usersLoading ? (<p className="text-gray-600 dark:text-gray-400">Betöltés...</p>) : usersError ? (
+          <div role="alert" className="p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded text-sm text-red-800 dark:text-red-300">
+            A felhasználók listája nem tölthető be: {usersError}
+          </div>
+        ) : users.length === 0 ? (<p className="text-gray-600 dark:text-gray-400">Nincsenek felhasználók.</p>) : (
           <div className="overflow-x-auto">
             <table className="min-w-full divide-y divide-gray-200 dark:divide-gray-800">
               <thead className="bg-gray-50 dark:bg-gray-800/60"><tr>{renderSortableHeader('Email', 'email')}{renderSortableHeader('Szerepkör', 'role')}<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Állapot</th>{renderSortableHeader('Utolsó aktivitás', 'last_activity')}<th className="px-4 py-3 text-left text-xs font-medium text-gray-500 dark:text-gray-400 uppercase">Műveletek</th></tr></thead>

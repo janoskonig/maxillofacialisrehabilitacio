@@ -79,6 +79,10 @@ describe('felhasználó-inaktiválás', () => {
       })
     );
     expect(loginRes.status).toBe(403);
+    const loginBody = await loginRes.json();
+    expect(loginBody.code).toBe('ACCOUNT_DEACTIVATED');
+    expect(loginBody.error).toMatch(/inaktiválta/);
+    expect(loginBody.error).toMatch(/jelszó nem hibás/);
 
     // Újraaktiválás: nyom törlődik, session újra él.
     const re = await putUser(await putReq(admin, doctor.id, { active: true }), { params: { id: doctor.id } });

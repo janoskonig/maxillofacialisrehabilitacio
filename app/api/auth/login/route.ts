@@ -4,6 +4,12 @@ import bcrypt from 'bcryptjs';
 import { SignJWT } from 'jose';
 import { logActivity } from '@/lib/activity';
 import { apiHandler } from '@/lib/api/route-handler';
+import {
+  INACTIVE_ACCOUNT_CODES,
+  INACTIVE_ACCOUNT_MESSAGES,
+  classifyInactiveAccount,
+  deactivationSelectSql,
+} from '@/lib/user-deactivation';
 
 const JWT_SECRET = new TextEncoder().encode(
   process.env.JWT_SECRET || 'change-this-to-a-random-secret-in-production'
@@ -27,7 +33,8 @@ export const POST = apiHandler(async (req) => {
   const pool = getDbPool();
   
   const userResult = await pool.query(
-    'SELECT id, email, password_hash, role, active, restricted_view FROM users WHERE email = $1',
+    `SELECT u.id, u.email, u.password_hash, u.role, u.active, u.restricted_view, ${deactivationSelectSql('u')}
+       FROM users u WHERE u.email = $1`,
     [email.toLowerCase().trim()]
   );
 
@@ -41,8 +48,16 @@ export const POST = apiHandler(async (req) => {
   const user = userResult.rows[0];
 
   if (!user.active) {
+    // Inaktivált vagy még jóvá nem hagyott fiók: a jelszót nem is nézzük, és a
+    // válasz egyértelműen kimondja, hogy NEM a jelszó hibás — különben a
+    // felhasználó jelszó-visszaállítást kezdeményezne.
+    const kind = await classifyInactiveAccount(pool, user);
     return NextResponse.json(
-      { error: 'A felhasználói fiók inaktív' },
+      {
+        error: INACTIVE_ACCOUNT_MESSAGES[kind],
+        code: INACTIVE_ACCOUNT_CODES[kind],
+        accountState: kind,
+      },
       { status: 403 }
     );
   }

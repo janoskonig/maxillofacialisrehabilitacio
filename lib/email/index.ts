@@ -3,6 +3,7 @@ export type { EmailAttachment, SendEmailOptions } from './config';
 export { formatDateForEmail, formatDateForEmailShort, getBaseUrlForEmail } from './templates';
 export {
   sendApprovalEmail,
+  sendAccountInactiveNoticeEmail,
   sendPasswordResetEmail,
   sendAppointmentBookingNotification,
   sendAppointmentBookingNotificationToPatient,
