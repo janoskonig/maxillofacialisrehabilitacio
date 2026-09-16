@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import bcrypt from 'bcryptjs';
 import { HttpError } from '@/lib/auth-server';
 import { roleHandler } from '@/lib/api/route-handler';
+import { deactivationSelectSql } from '@/lib/user-deactivation';
 
 export const dynamic = 'force-dynamic';
 
@@ -15,8 +16,7 @@ export const GET = roleHandler(['admin'], async (req, { auth }) => {
       u.doktor_neve,
       u.role,
       u.active,
-      u.deactivated_at,
-      u.deactivated_by,
+      ${deactivationSelectSql('u')},
       u.restricted_view,
       u.intezmeny,
       u.hozzaferes_indokolas,

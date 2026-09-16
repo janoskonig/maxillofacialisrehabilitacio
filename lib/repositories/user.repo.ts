@@ -1,4 +1,5 @@
 import type { Pool } from 'pg';
+import { deactivationSelectSql } from '../user-deactivation';
 
 export interface UserRow {
   id: string;
@@ -22,7 +23,7 @@ export class UserRepository {
 
   async findById(id: string): Promise<UserRow | null> {
     const result = await this.pool.query(
-      'SELECT id, email, doktor_neve, role, active, deactivated_at, deactivated_by, restricted_view, intezmeny, hozzaferes_indokolas, created_at, updated_at, last_login FROM users WHERE id = $1',
+      `SELECT u.id, u.email, u.doktor_neve, u.role, u.active, ${deactivationSelectSql('u')}, u.restricted_view, u.intezmeny, u.hozzaferes_indokolas, u.created_at, u.updated_at, u.last_login FROM users u WHERE u.id = $1`,
       [id]
     );
     return result.rows[0] ?? null;
@@ -30,7 +31,7 @@ export class UserRepository {
 
   async findByEmail(email: string): Promise<UserRow | null> {
     const result = await this.pool.query(
-      'SELECT id, email, doktor_neve, role, active, deactivated_at, deactivated_by, restricted_view, intezmeny, hozzaferes_indokolas, created_at, updated_at, last_login FROM users WHERE email = $1',
+      `SELECT u.id, u.email, u.doktor_neve, u.role, u.active, ${deactivationSelectSql('u')}, u.restricted_view, u.intezmeny, u.hozzaferes_indokolas, u.created_at, u.updated_at, u.last_login FROM users u WHERE u.email = $1`,
       [email.toLowerCase().trim()]
     );
     return result.rows[0] ?? null;
@@ -38,7 +39,7 @@ export class UserRepository {
 
   async findAll(): Promise<UserRow[]> {
     const result = await this.pool.query(
-      'SELECT id, email, doktor_neve, role, active, deactivated_at, deactivated_by, restricted_view, intezmeny, hozzaferes_indokolas, created_at, updated_at, last_login FROM users ORDER BY email ASC'
+      `SELECT u.id, u.email, u.doktor_neve, u.role, u.active, ${deactivationSelectSql('u')}, u.restricted_view, u.intezmeny, u.hozzaferes_indokolas, u.created_at, u.updated_at, u.last_login FROM users u ORDER BY u.email ASC`
     );
     return result.rows;
   }

@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { sendPasswordResetEmail } from '@/lib/email';
+import { sendPasswordResetEmail, sendAccountInactiveNoticeEmail } from '@/lib/email';
+import { classifyInactiveAccount, deactivationSelectSql } from '@/lib/user-deactivation';
 import { logActivity } from '@/lib/activity';
 import { apiHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
@@ -48,7 +49,7 @@ export const POST = apiHandler(async (req) => {
   }
 
   const userResult = await pool.query(
-    'SELECT id, email, active FROM users WHERE email = $1',
+    `SELECT u.id, u.email, u.active, ${deactivationSelectSql('u')} FROM users u WHERE u.email = $1`,
     [normalizedEmail]
   );
 
@@ -64,7 +65,17 @@ export const POST = apiHandler(async (req) => {
   const user = userResult.rows[0];
 
   if (!user.active) {
-    await logActivity(req, normalizedEmail, 'password_reset_requested', 'inactive_user');
+    // Inaktív fiókhoz nem megy visszaállító link — helyette a postafiók
+    // tulajdonosa egyértelmű tájékoztatást kap, hogy nem a jelszóval van gond.
+    // Az API-válasz szándékosan a semleges szöveg marad (nem árulja el
+    // kívülállónak, létezik-e a fiók).
+    const kind = await classifyInactiveAccount(pool, user);
+    await logActivity(req, normalizedEmail, 'password_reset_requested', `inactive_user:${kind}`);
+    try {
+      await sendAccountInactiveNoticeEmail(normalizedEmail, kind);
+    } catch (emailError) {
+      logger.error('Error sending inactive-account notice email:', emailError);
+    }
     
     return NextResponse.json(
       { success: true, message: 'Ha ez az email cím regisztrálva van, akkor elküldtük a jelszó-visszaállítási linket.' },

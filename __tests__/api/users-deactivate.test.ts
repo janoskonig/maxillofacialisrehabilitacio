@@ -52,6 +52,11 @@ const invalidateMock = vi.fn();
 vi.mock('@/lib/user-active-check', () => ({
   invalidateUserActiveCache: (...a: unknown[]) => invalidateMock(...a),
 }));
+// A 100-as migráció oszlopa létezik (a migráció-előtti ágat külön teszt fedi).
+const probeColumnExistsMock = vi.fn(async () => true);
+vi.mock('@/lib/schema-probe', () => ({
+  probeColumnExists: (...a: unknown[]) => probeColumnExistsMock(...(a as [])),
+}));
 const disconnectMock = vi.fn();
 vi.mock('@/lib/socket-server', () => ({
   disconnectUserSockets: (...a: unknown[]) => disconnectMock(...a),
@@ -151,6 +156,25 @@ describe('PUT /api/users/[id] — inaktiválás', () => {
     expect(res.status).toBe(200);
     expect(sendApprovalEmailMock).toHaveBeenCalledWith(activeDoctor.email);
     expect(closeTasksMock).toHaveBeenCalledWith(TARGET, 'done');
+  });
+
+  it('100-as migráció előtt (nincs deactivated_at oszlop): inaktiválás 409 MIGRATION_PENDING, jóváhagyás megy', async () => {
+    probeColumnExistsMock.mockResolvedValueOnce(false);
+    queryMock.mockResolvedValueOnce({ rows: [activeDoctor] });
+    const res = await PUT(putReq({ active: false }), { params: { id: TARGET } });
+    expect(res.status).toBe(409);
+    expect((await res.json()).code).toBe('MIGRATION_PENDING');
+    expect(queryMock).toHaveBeenCalledTimes(1);
+
+    probeColumnExistsMock.mockResolvedValueOnce(false);
+    queryMock
+      .mockResolvedValueOnce({ rows: [pendingDoctor] })
+      .mockResolvedValueOnce({ rows: [{ ...activeDoctor }] });
+    const ok = await PUT(putReq({ active: true }), { params: { id: TARGET } });
+    expect(ok.status).toBe(200);
+    const [updateSql] = queryMock.mock.calls[queryMock.mock.calls.length - 1];
+    expect(updateSql).toMatch(/active = \$1/);
+    expect(updateSql).not.toMatch(/deactivated_at = NULL/);
   });
 
   it('active nem boolean → 400', async () => {

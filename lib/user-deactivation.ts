@@ -12,12 +12,66 @@
  * (JWT-ellenőrzés: lib/user-active-check.ts; élő socketek: disconnect).
  */
 
-import type { Pool } from 'pg';
+import type { Pool, PoolClient } from 'pg';
 import { HttpError } from './auth-server';
 import { invalidateUserActiveCache } from './user-active-check';
 import { disconnectUserSockets } from './socket-server';
 import { closeStaffRegistrationReviewTasks } from './user-tasks';
+import { probeColumnExists } from './schema-probe';
 import { logger } from './logger';
+
+/**
+ * Oszlop-toleráns SELECT-darab a `users.deactivated_at` / `deactivated_by`
+ * olvasásához: a 100-as migráció ELŐTTI sémán is lefut (NULL-t ad), így a
+ * bejelentkezés és a felhasználó-lista nem 500-azik, ha a deploy megelőzi a
+ * migrációt (séma-probe konvenció, RENDER_DEPLOYMENT.md). `alias` a users
+ * tábla aliasa a FROM-ban (pl. `u`), RETURNING-ban maga a `users` név.
+ */
+export function deactivationSelectSql(alias: string): string {
+  return `(to_jsonb(${alias}) ->> 'deactivated_at')::timestamptz AS deactivated_at, (to_jsonb(${alias}) ->> 'deactivated_by') AS deactivated_by`;
+}
+
+/** Létezik-e már a 100-as migráció oszlopa (cache-elt probe; negatív találat rövid TTL-lel). */
+export async function usersDeactivatedAtColumnExists(db: Pool | PoolClient): Promise<boolean> {
+  return probeColumnExists(db, 'users', 'deactivated_at');
+}
+
+/** Inaktív fiók fajtája a belépési / jelszó-visszaállítási üzenetekhez. */
+export type InactiveAccountKind = 'deactivated' | 'pending_approval' | 'unknown';
+
+export const INACTIVE_ACCOUNT_CODES: Record<InactiveAccountKind, string> = {
+  deactivated: 'ACCOUNT_DEACTIVATED',
+  pending_approval: 'ACCOUNT_PENDING_APPROVAL',
+  unknown: 'ACCOUNT_INACTIVE',
+};
+
+/**
+ * A felhasználónak szánt, egyértelmű üzenetek. A lényeg minden ágon: NEM a
+ * jelszó hibás, a jelszó-visszaállítás nem segít — különben az inaktivált
+ * felhasználók reflexből jelszó-visszaállítást kezdeményeznek.
+ */
+export const INACTIVE_ACCOUNT_MESSAGES: Record<InactiveAccountKind, string> = {
+  deactivated:
+    'Ezt a fiókot az adminisztrátor inaktiválta. A jelszó nem hibás, és a jelszó-visszaállítás nem segít. A hozzáférés visszaállításához forduljon az adminisztrátorhoz.',
+  pending_approval:
+    'Ez a fiók még jóváhagyásra vár. A jelszó nem hibás; a jóváhagyásról e-mailben értesítjük.',
+  unknown:
+    'Ez a fiók inaktív. A jelszó nem hibás, és a jelszó-visszaállítás nem segít. Forduljon az adminisztrátorhoz.',
+};
+
+/**
+ * Inaktív (active=false) fiók besorolása. Ha a `deactivated_at` oszlop még
+ * nem létezik, nem tudunk különbséget tenni → 'unknown' (semleges, de a
+ * jelszó-félreértést így is kizáró üzenet).
+ */
+export async function classifyInactiveAccount(
+  db: Pool | PoolClient,
+  user: Pick<DeactivationTarget, 'active' | 'deactivated_at'>
+): Promise<InactiveAccountKind> {
+  if (user.active) return 'unknown';
+  if (!(await usersDeactivatedAtColumnExists(db))) return 'unknown';
+  return userAccountState(user) === 'deactivated' ? 'deactivated' : 'pending_approval';
+}
 
 export interface DeactivationTarget {
   id: string;
@@ -61,19 +115,29 @@ export async function assertCanDeactivate(
  * (assertCanDeactivate), hogy a hibaüzenet a route-nak megfelelő legyen.
  */
 export async function deactivateUserAccount(
-  pool: Pick<Pool, 'query'>,
+  pool: Pool | PoolClient,
   targetId: string,
   actorEmail: string
 ): Promise<void> {
-  await pool.query(
-    `UPDATE users
-        SET active = false,
-            deactivated_at = CURRENT_TIMESTAMP,
-            deactivated_by = $2,
-            updated_at = CURRENT_TIMESTAMP
-      WHERE id = $1`,
-    [targetId, actorEmail]
-  );
+  if (await usersDeactivatedAtColumnExists(pool)) {
+    await pool.query(
+      `UPDATE users
+          SET active = false,
+              deactivated_at = CURRENT_TIMESTAMP,
+              deactivated_by = $2,
+              updated_at = CURRENT_TIMESTAMP
+        WHERE id = $1`,
+      [targetId, actorEmail]
+    );
+  } else {
+    // 100-as migráció előtt: a régi soft-delete (a fiók „jóváhagyásra váró"-ként
+    // fog látszani, amíg a migráció le nem fut) — de a kizárás azonnal érvényes.
+    logger.warn('[user-deactivation] users.deactivated_at hiányzik (100-as migráció) — csak active=false íródik');
+    await pool.query(
+      `UPDATE users SET active = false, updated_at = CURRENT_TIMESTAMP WHERE id = $1`,
+      [targetId]
+    );
+  }
   afterDeactivation(targetId);
 }
 
