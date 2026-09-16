@@ -14,7 +14,7 @@ vi.mock('@/lib/api-error-handler', () => ({
   ),
 }));
 vi.mock('@/lib/legal/patient-data-access-log', () => ({ maybeLogPatientAccess: vi.fn() }));
-const logActivityMock = vi.fn(async () => true);
+const logActivityMock = vi.fn(async (..._args: unknown[]) => true);
 vi.mock('@/lib/activity', () => ({ logActivity: (...a: unknown[]) => logActivityMock(...(a as [])) }));
 vi.mock('@/lib/logger', () => ({
   logger: { error: vi.fn(), warn: vi.fn(), info: vi.fn(), log: vi.fn(), debug: vi.fn() },
