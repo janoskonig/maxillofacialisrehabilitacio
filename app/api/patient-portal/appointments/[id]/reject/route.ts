@@ -4,6 +4,7 @@ import { verifyPatientPortalSession } from '@/lib/patient-portal-server';
 import { sendConditionalAppointmentRequestToPatient } from '@/lib/email';
 import { apiHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
+import { purgeCancelledAppointmentsOnSlot } from '@/lib/appointment-slot-release';
 
 export const dynamic = 'force-dynamic';
 
@@ -69,8 +70,8 @@ export const POST = apiHandler(async (req, { correlationId, params }) => {
       const nextAlternativeId = alternativeIds[nextAlternativeIndex];
 
       await client.query(
-        'UPDATE available_time_slots SET status = $1 WHERE id = $2',
-        ['available', appointment.time_slot_id]
+        `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = $1`,
+        [appointment.time_slot_id]
       );
 
       const nextAltSlotResult = await client.query(
@@ -90,8 +91,8 @@ export const POST = apiHandler(async (req, { correlationId, params }) => {
         const validIds = alternativeIds.filter((id: any) => id && typeof id === 'string');
         if (validIds.length > 0) {
           await client.query(
-            'UPDATE available_time_slots SET status = $1 WHERE id = ANY($2::uuid[])',
-            ['available', validIds]
+            `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = ANY($1::uuid[])`,
+            [validIds]
           );
         }
 
@@ -107,9 +108,16 @@ export const POST = apiHandler(async (req, { correlationId, params }) => {
       const nextAltSlot = nextAltSlotResult.rows[0];
 
       await client.query(
-        'UPDATE available_time_slots SET status = $1 WHERE id = $2',
-        ['booked', nextAlternativeId]
+        `UPDATE available_time_slots SET status = 'booked', state = 'booked' WHERE id = $1`,
+        [nextAlternativeId]
       );
+
+      // Az alternatív sloton ülhet egy lemondott foglalás sora (UNIQUE
+      // time_slot_id) — az áthelyezés előtt el kell takarítani.
+      await purgeCancelledAppointmentsOnSlot(client, nextAlternativeId, {
+        exceptAppointmentId: appointment.id,
+        changedBy: 'patient_portal',
+      });
 
       await client.query(
         `UPDATE appointments 
@@ -182,15 +190,15 @@ export const POST = apiHandler(async (req, { correlationId, params }) => {
       );
 
       await client.query(
-        'UPDATE available_time_slots SET status = $1 WHERE id = $2',
-        ['available', appointment.time_slot_id]
+        `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = $1`,
+        [appointment.time_slot_id]
       );
 
       const validIds = alternativeIds.filter((id: any) => id && typeof id === 'string');
       if (validIds.length > 0) {
         await client.query(
-          'UPDATE available_time_slots SET status = $1 WHERE id = ANY($2::uuid[])',
-          ['available', validIds]
+          `UPDATE available_time_slots SET status = 'available', state = 'free' WHERE id = ANY($1::uuid[])`,
+          [validIds]
         );
       }
 

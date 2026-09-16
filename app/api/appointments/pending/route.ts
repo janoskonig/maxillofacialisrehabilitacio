@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
 import { sendConditionalAppointmentRequestToPatient, sendConditionalAppointmentNotificationToAdmin } from '@/lib/email';
 import { translateUniqueViolation } from '@/lib/appointment-constraint-errors';
+import { purgeCancelledAppointmentsOnSlot } from '@/lib/appointment-slot-release';
 import { logger } from '@/lib/logger';
 import { randomBytes } from 'crypto';
 
@@ -143,6 +144,10 @@ export const POST = roleHandler(['admin'], async (req, { auth }) => {
         { status: 409 },
       );
     }
+
+    // A slot szabad, de egy korábbi, lemondott foglalás sora még rajta lehet
+    // (UNIQUE time_slot_id) — az INSERT előtt el kell takarítani.
+    await purgeCancelledAppointmentsOnSlot(client, timeSlotId, { changedBy: auth.email });
 
     const alternativeIdsJson = JSON.stringify(alternativeIds);
     const appointmentResult = await client.query(
