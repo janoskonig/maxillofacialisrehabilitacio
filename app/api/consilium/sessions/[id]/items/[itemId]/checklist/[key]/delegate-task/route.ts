@@ -49,7 +49,7 @@ export const POST = authedHandler(async (req, { auth, params }) => {
   await ensurePatientVisibleForUser(patientId, auth, institutionId);
 
   // A konzílium vetítésen több intézmény is jelen lehet, ezért a delegálás
-  // intézménytől függetlenül engedélyezett (bármely aktív, nem technikus user).
+  // intézménytől függetlenül engedélyezett (bármely aktív user, technikus is).
   const assigneeOk = await assertAssignableStaffUser(
     pool,
     body.assigneeUserId,
@@ -59,7 +59,7 @@ export const POST = authedHandler(async (req, { auth, params }) => {
   );
   if (!assigneeOk) {
     return NextResponse.json(
-      { error: 'A kijelölt felhasználó nem található, inaktív, technikus, vagy nem kiosztható' },
+      { error: 'A kijelölt felhasználó nem található, inaktív, vagy nem kiosztható' },
       { status: 400 },
     );
   }

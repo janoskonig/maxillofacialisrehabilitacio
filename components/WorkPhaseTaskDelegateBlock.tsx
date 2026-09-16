@@ -236,7 +236,7 @@ export function WorkPhaseTaskDelegateBlock({
 
       {userRole === 'admin' && (
         <p className="text-[10px] text-indigo-800/80 dark:text-indigo-300">
-          Admin: feladat kiosztható bármely aktív, nem technikus felhasználónak (intézménytől függetlenül).
+          Admin: feladat kiosztható bármely aktív felhasználónak (intézménytől függetlenül).
         </p>
       )}
 

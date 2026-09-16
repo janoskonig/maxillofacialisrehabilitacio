@@ -407,7 +407,6 @@ export async function cancelConsiliumMeetingTaskForUser(
   actorRole: string,
   institutionId: string,
 ): Promise<boolean> {
-  if (actorRole === 'technikus') return false;
   const pool = getDbPool();
   const result = await pool.query(
     `UPDATE user_tasks t

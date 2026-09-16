@@ -11,12 +11,10 @@ export const dynamic = 'force-dynamic';
 /**
  * POST /api/user-tasks/:id/delegate
  * A jelenlegi címzett átadja a saját nyitott feladatát egy kollégának.
+ * Bármely aktív munkatárs átadhatja és fogadhatja — a technikus is
+ * (a tulajdonjogot a delegateStaffTask SQL-je ellenőrzi).
  */
 export const POST = authedHandler(async (req, { auth, params }) => {
-  if (!['admin', 'beutalo_orvos', 'fogpótlástanász'].includes(auth.role)) {
-    return NextResponse.json({ error: 'Nincs jogosultság feladat delegálásához' }, { status: 403 });
-  }
-
   let taskId: string;
   let assigneeUserId: string;
   try {
@@ -42,7 +40,7 @@ export const POST = authedHandler(async (req, { auth, params }) => {
   const ok = await assertAssignableStaffUser(pool, assigneeUserId, institutionId, auth.role);
   if (!ok) {
     return NextResponse.json(
-      { error: 'A címzett nem található, inaktív, technikus, vagy nem kiosztható' },
+      { error: 'A címzett nem található, inaktív, vagy nem kiosztható' },
       { status: 400 },
     );
   }

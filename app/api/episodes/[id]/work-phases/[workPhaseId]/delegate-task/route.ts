@@ -207,7 +207,7 @@ export const POST = authedHandler(async (req, { auth, params }) => {
         );
         if (!ok) {
           return NextResponse.json(
-            { error: 'A címzett nem található, inaktív, technikus, vagy nem kiosztható' },
+            { error: 'A címzett nem található, inaktív, vagy nem kiosztható' },
             { status: 400 },
           );
         }
@@ -274,7 +274,7 @@ export const POST = authedHandler(async (req, { auth, params }) => {
     const msg = err instanceof Error ? err.message : '';
     if (msg === 'MISSING_ASSIGNEE' || msg === 'INVALID_ASSIGNEE') {
       return NextResponse.json(
-        { error: 'A címzett nem található, inaktív, technikus, vagy nem kiosztható' },
+        { error: 'A címzett nem található, inaktív, vagy nem kiosztható' },
         { status: 400 },
       );
     }

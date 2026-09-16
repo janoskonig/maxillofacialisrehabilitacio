@@ -27,8 +27,6 @@ function formatUserOption(u: InstitutionUserRow): string {
   return inst ? `${base} — ${inst}` : base;
 }
 
-const DELEGATABLE_ROLES = ['admin', 'beutalo_orvos', 'fogpótlástanász'];
-
 export interface QuickTaskFormProps {
   /** Ha meg van adva, a teendő ehhez a beteghez kötve jön létre. */
   patientId?: string;
@@ -58,7 +56,8 @@ export function QuickTaskForm({ patientId, onCreated }: QuickTaskFormProps) {
 
   useEffect(() => {
     void getCurrentUser().then((u) => {
-      setCanDelegate(!!u && DELEGATABLE_ROLES.includes(u.role));
+      // Bármely bejelentkezett munkatárs delegálhat (technikus is).
+      setCanDelegate(!!u);
     });
   }, []);
 

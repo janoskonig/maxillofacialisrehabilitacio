@@ -90,7 +90,7 @@ export const POST = authedHandler(async (req, { auth, params }) => {
     const ok = await assertAssignableStaffUser(pool, parsed.assigneeUserId!, institutionId, auth.role);
     if (!ok) {
       return NextResponse.json(
-        { error: 'A címzett nem található, inaktív, technikus, vagy nem kiosztható' },
+        { error: 'A címzett nem található, inaktív, vagy nem kiosztható' },
         { status: 400 },
       );
     }

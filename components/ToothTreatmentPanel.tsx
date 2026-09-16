@@ -335,7 +335,7 @@ function ToothTreatmentDelegateBlock({
 
       {userRole === 'admin' && (
         <p className="text-[10px] text-indigo-800/80 dark:text-indigo-300">
-          Admin: feladat kiosztható bármely aktív, nem technikus felhasználónak.
+          Admin: feladat kiosztható bármely aktív felhasználónak.
         </p>
       )}
 
