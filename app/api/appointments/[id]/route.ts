@@ -8,6 +8,7 @@ import { logger } from '@/lib/logger';
 import { logActivity } from '@/lib/activity';
 import { isAppointmentType } from '@/lib/appointment-constants';
 import { releaseGoogleCalendarEventForCancelledSlot } from '@/lib/appointment-calendar-release';
+import { purgeCancelledAppointmentsOnSlot } from '@/lib/appointment-slot-release';
 import {
   findEwpForAppointmentRevert,
   revertWorkPhaseLinkToPending,
@@ -222,6 +223,14 @@ export const PUT = authedHandler(async (req, { auth, params }) => {
     const client = await pool.connect();
     try {
       await client.query('BEGIN');
+      // Meglévő slotra áthelyezésnél a cél-sloton ülhet egy lemondott foglalás
+      // sora (UNIQUE time_slot_id) — az UPDATE előtt el kell takarítani.
+      if (!startTime) {
+        await purgeCancelledAppointmentsOnSlot(client, finalTimeSlotId, {
+          exceptAppointmentId: id,
+          changedBy: auth.email,
+        });
+      }
       // Update appointment to new time slot
       // Build update query dynamically to handle optional appointmentType
       const updateFields: string[] = ['time_slot_id = $1', 'dentist_email = $2'];

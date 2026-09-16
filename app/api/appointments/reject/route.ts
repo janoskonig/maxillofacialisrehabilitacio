@@ -5,6 +5,7 @@ import { sendConditionalAppointmentRequestToPatient } from '@/lib/email';
 import { logger } from '@/lib/logger';
 import { queueAdminNotification } from '@/lib/email/admin-notification-queue';
 import { releaseRejectedOfferLinks } from '@/lib/conditional-offer-release';
+import { purgeCancelledAppointmentsOnSlot } from '@/lib/appointment-slot-release';
 
 /**
  * Reject a pending appointment (via email link)
@@ -221,6 +222,13 @@ export const GET = apiHandler(async (req) => {
         [nextAlternativeId]
       );
       
+      // Az alternatív sloton ülhet egy lemondott foglalás sora (UNIQUE
+      // time_slot_id) — az áthelyezés előtt el kell takarítani.
+      await purgeCancelledAppointmentsOnSlot(client, nextAlternativeId, {
+        exceptAppointmentId: appointment.id,
+        changedBy: 'patient_email_link',
+      });
+
       await client.query(
         `UPDATE appointments 
          SET time_slot_id = $1, current_alternative_index = $2, approval_status = 'pending'

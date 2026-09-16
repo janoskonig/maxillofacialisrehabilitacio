@@ -14,6 +14,7 @@ import {
 import { insertWorkPhaseAudit } from '@/lib/work-phase-audit';
 import { adoptAppointmentForPhaseVisit } from '@/lib/visit-appointment-sync';
 import { releaseGoogleCalendarEventForCancelledSlot } from '@/lib/appointment-calendar-release';
+import { purgeCancelledAppointmentsOnSlot } from '@/lib/appointment-slot-release';
 import {
   sendAppointmentCancellationNotification,
   sendCancellationWithNewOfferToPatient,
@@ -277,6 +278,13 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
     }
 
     // ── 2) Az új, jóváhagyásra váró ajánlat ────────────────────────────────
+    // Az új slot szabad, de egy korábban lemondott foglalás sora még rajta
+    // lehet (UNIQUE time_slot_id) — az INSERT előtt el kell takarítani.
+    await purgeCancelledAppointmentsOnSlot(client, timeSlotId, {
+      exceptAppointmentId: id,
+      changedBy,
+    });
+
     const approvalToken = randomBytes(32).toString('hex');
     const insertResult = await client.query(
       `INSERT INTO appointments
