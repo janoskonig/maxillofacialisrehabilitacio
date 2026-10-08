@@ -14,7 +14,9 @@ import {
   drawFooter,
   HeaderConfig,
   drawHeader,
+  wrapTextLines,
 } from './layout';
+import { resolveTooth, isToothMissing, computeDentalDMFT, describeTooth } from '@/lib/dental-status-text';
 
 interface Patient {
   id?: string;
@@ -38,14 +40,6 @@ interface Patient {
   meglevoImplantatumok?: Record<string, string>;
   nemIsmertPoziciokbanImplantatum?: boolean;
   nemIsmertPoziciokbanImplantatumRészletek?: string | null;
-}
-
-type ToothStatus = { status?: 'D' | 'F' | 'M'; description?: string } | string;
-
-function normalizeToothData(value: ToothStatus | undefined): { status?: 'D' | 'F' | 'M'; description?: string } | null {
-  if (!value) return null;
-  if (typeof value === 'string') return { description: value };
-  return value;
 }
 
 // Note: With DejaVu fonts, we no longer need toWinAnsiSafe for ő/ű characters
@@ -175,7 +169,7 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
   draw('FOGAZATI STÁTUSZ', TYPOGRAPHY.scale.h3, true);
   moveDown(state, TYPOGRAPHY.spacing.sm);
 
-  const fogak = patient.meglevoFogak || {};
+  const fogak: Record<string, unknown> = patient.meglevoFogak || {};
   const upperLeft = [18, 17, 16, 15, 14, 13, 12, 11];
   const upperRight = [21, 22, 23, 24, 25, 26, 27, 28];
   const lowerLeft = [48, 47, 46, 45, 44, 43, 42, 41];
@@ -189,10 +183,9 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
   const cellHeight = 18;
   const startX = LAYOUT.margin;
 
-  const drawRow = (teeth: number[]) => {
-    let xPos = startX;
+  const drawRow = (teeth: number[], rowStartX: number) => {
+    let xPos = rowStartX;
     for (const tooth of teeth) {
-      addPageIfNeeded(pdf, state);
       state.page.drawRectangle({
         x: xPos,
         y: state.y - cellHeight,
@@ -207,46 +200,24 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
         font: fontBold,
         color: rgb(0, 0, 0),
       });
-      const value = fogak[tooth.toString()];
-      const norm = normalizeToothData(value as ToothStatus | undefined);
-      if (norm) {
-        const st: 'M' | 'present' | null = norm.status === 'M' ? 'M' : 'present';
-        drawToothStatus(state.page, xPos, state.y - cellHeight, cellWidth, cellHeight, st, norm.description);
+      const resolved = resolveTooth(fogak[tooth.toString()]);
+      if (resolved) {
+        const st: 'M' | 'present' = isToothMissing(resolved) ? 'M' : 'present';
+        drawToothStatus(state.page, xPos, state.y - cellHeight, cellWidth, cellHeight, st, resolved.description);
       }
       xPos += cellWidth + spacing;
     }
   };
+  const rightSideX = startX + (cellWidth + spacing) * numTeethPerRow + gapBetweenSides;
 
-  drawRow(upperLeft);
-  let xPos = startX + (cellWidth + spacing) * 8 + gapBetweenSides;
-  for (const tooth of upperRight) {
-    addPageIfNeeded(pdf, state);
-    state.page.drawRectangle({ x: xPos, y: state.y - cellHeight, width: cellWidth, height: cellHeight, borderColor: rgb(0, 0, 0) });
-    state.page.drawText(tooth.toString(), { x: xPos + 1, y: state.y - 10, size: 7, font: fontBold, color: rgb(0, 0, 0) });
-    const value = fogak[tooth.toString()];
-    const norm = normalizeToothData(value as ToothStatus | undefined);
-    if (norm) {
-      const st: 'M' | 'present' | null = norm.status === 'M' ? 'M' : 'present';
-      drawToothStatus(state.page, xPos, state.y - cellHeight, cellWidth, cellHeight, st, norm.description);
-    }
-    xPos += cellWidth + spacing;
-  }
+  addPageIfNeeded(pdf, state);
+  drawRow(upperLeft, startX);
+  drawRow(upperRight, rightSideX);
   moveDown(state, cellHeight + TYPOGRAPHY.spacing.sm);
 
-  drawRow(lowerLeft);
-  xPos = startX + (cellWidth + spacing) * 8 + gapBetweenSides;
-  for (const tooth of lowerRight) {
-    addPageIfNeeded(pdf, state);
-    state.page.drawRectangle({ x: xPos, y: state.y - cellHeight, width: cellWidth, height: cellHeight, borderColor: rgb(0, 0, 0) });
-    state.page.drawText(tooth.toString(), { x: xPos + 1, y: state.y - 10, size: 7, font: fontBold, color: rgb(0, 0, 0) });
-    const value = fogak[tooth.toString()];
-    const norm = normalizeToothData(value as ToothStatus | undefined);
-    if (norm) {
-      const st: 'M' | 'present' | null = norm.status === 'M' ? 'M' : 'present';
-      drawToothStatus(state.page, xPos, state.y - cellHeight, cellWidth, cellHeight, st, norm.description);
-    }
-    xPos += cellWidth + spacing;
-  }
+  addPageIfNeeded(pdf, state);
+  drawRow(lowerLeft, startX);
+  drawRow(lowerRight, rightSideX);
   moveDown(state, cellHeight + TYPOGRAPHY.spacing.md);
 
   const legend = normalizeText(
@@ -256,18 +227,7 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
   drawLeftAlignedText(state.page, legend, state.y, 8, font, LAYOUT.margin, rgb(0.4, 0.4, 0.4));
   moveDown(state, TYPOGRAPHY.spacing.lg);
 
-  let dCount = 0,
-    fCount = 0,
-    mCount = 0;
-  Object.values(fogak).forEach((value) => {
-    const norm = normalizeToothData(value as ToothStatus | undefined);
-    if (norm) {
-      if (norm.status === 'D') dCount++;
-      else if (norm.status === 'F') fCount++;
-      else if (norm.status === 'M') mCount++;
-    }
-  });
-  const dmft = dCount + fCount + mCount;
+  const { d: dCount, f: fCount, m: mCount, dmft } = computeDentalDMFT(fogak);
 
   addPageIfNeeded(pdf, state);
   const dmftBoxHeight = 50;
@@ -282,9 +242,9 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
   
   // Calculate positions using grid-based approach
   const col1X = LAYOUT.margin + 10;
-  const col2X = LAYOUT.margin + 150;
-  const col3X = LAYOUT.margin + 290;
-  const col4X = LAYOUT.margin + 400;
+  const col2X = LAYOUT.margin + 130;
+  const col3X = LAYOUT.margin + 250;
+  const col4X = LAYOUT.margin + 360;
   
   state.page.drawText('DMF-T INDEX', { x: col1X, y: state.y - 18, size: 11, font: fontBold, color: rgb(0, 0, 0) });
   state.page.drawText(`D (szuvas): ${dCount}`, { x: col1X, y: state.y - 35, size: 10, font, color: rgb(0.86, 0.15, 0.15) });
@@ -299,81 +259,37 @@ export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer>
   });
   moveDown(state, dmftBoxHeight + TYPOGRAPHY.spacing.sm);
 
-  const formatToothDetail = (
-    toothNumber: string,
-    norm: { status?: 'D' | 'F' | 'M'; description?: string } | null
-  ): string => {
-    if (!norm) return '';
-    let desc = norm.description || '';
-    if (!desc && norm.status) {
-      if (norm.status === 'D') desc = 'Szuvas';
-      else if (norm.status === 'F') desc = 'Tömött';
-      else if (norm.status === 'M') desc = 'Hiányzik';
+  const drawWrapped = (text: string, size: number) => {
+    for (const line of wrapTextLines(normalizeText(text), font, size, LAYOUT.contentWidth)) {
+      addPageIfNeeded(pdf, state);
+      drawLeftAlignedText(state.page, line, state.y, size, font);
+      moveDown(state, size + TYPOGRAPHY.spacing.xs);
     }
-    const st = norm.status === 'D' ? ' (D)' : norm.status === 'F' ? ' (F)' : norm.status === 'M' ? ' (M)' : '';
-    return `${toothNumber}: ${desc}${st}`;
   };
 
-  const upperTeeth = [11, 12, 13, 14, 15, 16, 17, 18, 21, 22, 23, 24, 25, 26, 27, 28];
-  const upperTeethWithData = upperTeeth
-    .map((t) => t.toString())
-    .filter((num) => {
-      const v = fogak[num];
-      const n = normalizeToothData(v as ToothStatus | undefined);
-      return n && (n.description || n.status);
-    })
-    .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
+  const drawArch = (title: string, teeth: number[], fabianFejerdy?: string | null) => {
+    const lines = teeth
+      .slice()
+      .sort((a, b) => a - b)
+      .map((tooth) => {
+        const text = describeTooth(tooth, fogak[tooth.toString()]);
+        return text ? `${tooth}: ${text}` : '';
+      })
+      .filter(Boolean);
+    if (lines.length === 0 && !fabianFejerdy) return;
 
-  if (upperTeethWithData.length > 0) {
     moveDown(state, TYPOGRAPHY.spacing.sm);
-    draw('FELSÖ FOGAK', 11, true);
-    for (const num of upperTeethWithData) {
-      const n = normalizeToothData(fogak[num] as ToothStatus | undefined);
-      const line = formatToothDetail(num, n);
-      if (line) {
-        addPageIfNeeded(pdf, state);
-        drawLeftAlignedText(state.page, line, state.y, 10, font);
-        moveDown(state, 10 + TYPOGRAPHY.spacing.xs);
-      }
-    }
-    draw('Fábián- és Fejérdy-féle protetikai foghiányosztályozás:', 10, true);
-    if (patient.fabianFejerdyProtetikaiOsztalyFelso) {
-      addPageIfNeeded(pdf, state);
-      drawLeftAlignedText(state.page, patient.fabianFejerdyProtetikaiOsztalyFelso, state.y, 10, font);
-      moveDown(state, 10 + TYPOGRAPHY.spacing.xs);
+    draw(title, 11, true);
+    for (const line of lines) drawWrapped(line, 10);
+    if (fabianFejerdy) {
+      draw('Fábián- és Fejérdy-féle protetikai foghiányosztályozás:', 10, true);
+      drawWrapped(fabianFejerdy, 10);
     }
     moveDown(state, TYPOGRAPHY.spacing.sm);
-  }
+  };
 
-  const lowerTeeth = [31, 32, 33, 34, 35, 36, 37, 38, 41, 42, 43, 44, 45, 46, 47, 48];
-  const lowerTeethWithData = lowerTeeth
-    .map((t) => t.toString())
-    .filter((num) => {
-      const v = fogak[num];
-      const n = normalizeToothData(v as ToothStatus | undefined);
-      return n && (n.description || n.status);
-    })
-    .sort((a, b) => parseInt(a, 10) - parseInt(b, 10));
-
-  if (lowerTeethWithData.length > 0) {
-    draw('ALSÓ FOGAK', 11, true);
-    for (const num of lowerTeethWithData) {
-      const n = normalizeToothData(fogak[num] as ToothStatus | undefined);
-      const line = formatToothDetail(num, n);
-      if (line) {
-        addPageIfNeeded(pdf, state);
-        drawLeftAlignedText(state.page, line, state.y, 10, font);
-        moveDown(state, 10 + TYPOGRAPHY.spacing.xs);
-      }
-    }
-    draw('Fábián- és Fejérdy-féle protetikai foghiányosztályozás:', 10, true);
-    if (patient.fabianFejerdyProtetikaiOsztalyAlso) {
-      addPageIfNeeded(pdf, state);
-      drawLeftAlignedText(state.page, patient.fabianFejerdyProtetikaiOsztalyAlso, state.y, 10, font);
-      moveDown(state, 10 + TYPOGRAPHY.spacing.xs);
-    }
-    moveDown(state, TYPOGRAPHY.spacing.sm);
-  }
+  drawArch('FELSŐ FOGAK', [...upperLeft, ...upperRight], patient.fabianFejerdyProtetikaiOsztalyFelso);
+  drawArch('ALSÓ FOGAK', [...lowerLeft, ...lowerRight], patient.fabianFejerdyProtetikaiOsztalyAlso);
 
   if (
     (patient.meglevoImplantatumok && Object.keys(patient.meglevoImplantatumok).length > 0) ||
