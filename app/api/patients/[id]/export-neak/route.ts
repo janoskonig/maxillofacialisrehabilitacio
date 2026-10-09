@@ -1,98 +1,29 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
-import { REQUIRED_DOC_TAGS, REQUIRED_DOC_RULES, getMissingRequiredDocRules, getMissingRequiredDocTags, getChecklistStatus, getMissingRequiredFields, requiredFieldSeverity } from '@/lib/clinical-rules';
+import { REQUIRED_DOC_RULES, getChecklistStatus, requiredFieldSeverity } from '@/lib/clinical-rules';
 import { Patient, LabQuoteRequest } from '@/lib/types';
 import { patientSelectSql, normalizePatientRow } from '@/lib/patient-select';
 import { downloadFile } from '@/lib/ftp-client';
 import archiver from 'archiver';
 import { Readable } from 'stream';
 import { buildStructuredAnamnesisSummary } from '@/lib/anamnesis-summary';
-import { normalizeTags, safeFilename, ExportLimiter, ExportLimits } from '@/lib/utils';
-import { hasTag } from '@/lib/doc-tags';
+import { normalizeTags, safeFilename, ExportLimiter } from '@/lib/utils';
+import { buildNeakExportPlan, NEAK_EXPORT_LIMITS, withNeakDownloadTimeout } from '@/lib/neak-export';
 import { generateDentalStatusPDF } from '@/lib/pdf/generateDentalStatusPDF';
 import { markdownToPDF, generatePatientSummaryMarkdown, generateMedicalHistoryMarkdown } from '@/lib/pdf/markdown-to-pdf';
-import { createPlaceholderPdf } from '@/lib/pdf/placeholder-pdf';
 import { generateEquityRequestPDF } from '@/lib/pdf/equity-request';
 import { generatePatientDataEquityPDF } from '@/lib/pdf/equity-request-patient';
 import { logger } from '@/lib/logger';
+import { buildDentalExportContent } from '@/lib/neak-dental-content';
+import { loadNeakTreatmentSources } from '@/lib/neak-treatment-sources';
+import { buildTreatmentExportContent, treatmentContentToText } from '@/lib/neak-treatment-content';
+import { generateTreatmentPlanPDF } from '@/lib/pdf/treatment-plan';
 
 // Force Node.js runtime (required for archiver, pdf-lib, Buffer operations)
 export const runtime = 'nodejs';
 
-// Size limits
-const MAX_EXPORT_SIZE = 200 * 1024 * 1024; // 200 MB total
-const MAX_FILE_SIZE = 50 * 1024 * 1024; // 50 MB per file
-const MAX_DOCS_COUNT = 200; // Maximum number of documents
-const FILE_DOWNLOAD_TIMEOUT_MS = 30000; // 30 seconds per file
-
-// Export limits configuration
-const EXPORT_LIMITS: ExportLimits = {
-  maxDocs: MAX_DOCS_COUNT,
-  maxFileBytes: MAX_FILE_SIZE,
-  maxTotalBytes: MAX_EXPORT_SIZE,
-};
-
-// Feature flag: ENABLE_NEAK_EXPORT
-const ENABLE_NEAK_EXPORT = process.env.ENABLE_NEAK_EXPORT === 'true';
-
-// Régi PDF helper függvények eltávolítva - már nem kellenek, mert markdown → HTML → PDF workflow-t használunk
-
-/**
- * Format treatment plan as text
- */
-function formatTreatmentPlan(patient: Patient): string {
-  const lines: string[] = [];
-  lines.push('KEZELESI TERV');
-  lines.push('='.repeat(50));
-  lines.push('');
-
-  if (patient.kezelesiTervFelso && Array.isArray(patient.kezelesiTervFelso) && patient.kezelesiTervFelso.length > 0) {
-    lines.push('FELSO ALLCSONT:');
-    patient.kezelesiTervFelso.forEach((plan: any, index: number) => {
-      lines.push(`${index + 1}. ${plan.tipus || 'N/A'}`);
-      if (plan.tervezettAtadasDatuma) {
-        lines.push(`   Tervezett atadas datuma: ${plan.tervezettAtadasDatuma}`);
-      }
-      lines.push(`   Elkeszult: ${plan.elkeszult ? 'Igen' : 'Nem'}`);
-      lines.push('');
-    });
-  }
-
-  if (patient.kezelesiTervAlso && Array.isArray(patient.kezelesiTervAlso) && patient.kezelesiTervAlso.length > 0) {
-    lines.push('ALSO ALLCSONT:');
-    patient.kezelesiTervAlso.forEach((plan: any, index: number) => {
-      lines.push(`${index + 1}. ${plan.tipus || 'N/A'}`);
-      if (plan.tervezettAtadasDatuma) {
-        lines.push(`   Tervezett atadas datuma: ${plan.tervezettAtadasDatuma}`);
-      }
-      lines.push(`   Elkeszult: ${plan.elkeszult ? 'Igen' : 'Nem'}`);
-      lines.push('');
-    });
-  }
-
-  if (patient.kezelesiTervArcotErinto && Array.isArray(patient.kezelesiTervArcotErinto) && patient.kezelesiTervArcotErinto.length > 0) {
-    lines.push('ARCOT ERINTO REHABILITACIO:');
-    patient.kezelesiTervArcotErinto.forEach((plan: any, index: number) => {
-      lines.push(`${index + 1}. ${plan.tipus || 'N/A'}`);
-      if (plan.elhorgonyzasEszkoze) {
-        lines.push(`   Elhorgonyzas eszkoze: ${plan.elhorgonyzasEszkoze}`);
-      }
-      if (plan.tervezettAtadasDatuma) {
-        lines.push(`   Tervezett atadas datuma: ${plan.tervezettAtadasDatuma}`);
-      }
-      lines.push(`   Elkeszult: ${plan.elkeszult ? 'Igen' : 'Nem'}`);
-      lines.push('');
-    });
-  }
-
-  if (lines.length === 3) {
-    // Only header and separator, no actual plans
-    lines.push('Nincs megadott kezelesi terv.');
-  }
-
-  return lines.join('\n');
-}
+const FILE_DOWNLOAD_TIMEOUT_MS = 30000;
 
 /**
  * Format quote requests as text
@@ -131,7 +62,6 @@ function generateReadme(
   exportDate: Date,
   files: Array<{ name: string; size: number }>,
   documentCount?: number,
-  dentalPdfFailed?: boolean,
   missingFields?: string[]
 ): string {
   const lines: string[] = [];
@@ -153,10 +83,6 @@ function generateReadme(
   }
 
   lines.push('');
-  if (dentalPdfFailed) {
-    lines.push('');
-    lines.push('MEGJEGYZES: A fogazati státusz PDF generálása sikertelen volt. A dental_status.pdf placeholder tartalmat tartalmaz.');
-  }
   if (missingFields && missingFields.length > 0) {
     lines.push('');
     lines.push('Nem áll rendelkezésre (FNMT.150.K): ' + missingFields.join(', '));
@@ -164,8 +90,6 @@ function generateReadme(
 
   return lines.join('\n');
 }
-
-// Régi PDF generáló függvény eltávolítva - most markdown → HTML → PDF workflow-t használunk
 
 /**
  * Dry-run endpoint: Check if patient is ready for NEAK export
@@ -175,9 +99,9 @@ function generateReadme(
  */
 export const dynamic = 'force-dynamic';
 
-export const GET = authedHandler(async (req, { auth, params, correlationId }) => {
+export const GET = authedHandler(async (req, { params, correlationId }) => {
   // Feature flag check
-  if (!ENABLE_NEAK_EXPORT) {
+  if (process.env.ENABLE_NEAK_EXPORT !== 'true') {
     return NextResponse.json(
       {
         error: 'NEAK export feature is not enabled',
@@ -246,110 +170,20 @@ export const GET = authedHandler(async (req, { auth, params, correlationId }) =>
 
     const documents = documentsResult.rows;
 
-    // Check missing required doc rules (tag + minCount)
-    const missingDocRules = getMissingRequiredDocRules(documents);
-    const missingDocTags = missingDocRules.map((rule) => rule.tag);
-
-    // Get documents that match required rules (for includedDocuments list)
-    // Include: REQUIRED_DOC_RULES tags + technikus_meltanyossagi + only last arajanlat + allergiavizsgálat
-    const includedDocuments: Array<{
-      id: string;
-      tags: string[];
-      filename?: string;
-      sizeBytes?: number;
-      category: 'required' | 'quote' | 'allergy' | 'technikus_meltanyossagi';
-    }> = [];
-
-    // ts for ordering: uploaded_at ?? created_at (ISO), tie-break id DESC
-    const ts = (d: { uploadedAt?: Date | string; createdAt?: Date | string }) => {
-      const v = d.uploadedAt ?? d.createdAt;
-      if (v instanceof Date) return v.getTime();
-      if (typeof v === 'string') {
-        const n = Date.parse(v);
-        return Number.isNaN(n) ? 0 : n;
-      }
-      return 0;
+    const treatmentSources = await loadNeakTreatmentSources(pool, patientId);
+    const treatmentContent = buildTreatmentExportContent(patient, treatmentSources);
+    const dentalContent = buildDentalExportContent(patient);
+    const basePlan = buildNeakExportPlan(patient, documents);
+    const plan = {
+      ...basePlan, treatmentContent, dentalContent,
+      warnings: [...basePlan.warnings, ...treatmentSources.warnings],
     };
-
-    const quoteDocs: Array<{ id: string; tags: string[]; filename?: string; sizeBytes?: number; uploadedAt?: Date | string; createdAt?: Date | string }> = [];
-
-    documents.forEach((doc: any) => {
-      const docTags = normalizeTags(doc.tags);
-
-      const hasRequiredTag = REQUIRED_DOC_RULES.some((rule) =>
-        docTags.includes(rule.tag.toLowerCase())
-      );
-      const hasTechnikusTag = hasTag(doc.tags, 'technikus méltányossági');
-      const hasQuoteTag = docTags.includes('arajanlat');
-      const hasAllergyTag = docTags.includes('allergiavizsgalat');
-
-      if (hasRequiredTag) {
-        includedDocuments.push({
-          id: doc.id,
-          tags: docTags,
-          filename: doc.filename || undefined,
-          sizeBytes: doc.fileSize || undefined,
-          category: 'required',
-        });
-      } else if (hasTechnikusTag) {
-        includedDocuments.push({
-          id: doc.id,
-          tags: docTags,
-          filename: doc.filename || undefined,
-          sizeBytes: doc.fileSize || undefined,
-          category: 'technikus_meltanyossagi',
-        });
-      } else if (hasQuoteTag) {
-        quoteDocs.push({
-          id: doc.id,
-          tags: docTags,
-          filename: doc.filename || undefined,
-          sizeBytes: doc.fileSize || undefined,
-          uploadedAt: doc.uploadedAt,
-          createdAt: doc.createdAt,
-        });
-      } else if (hasAllergyTag) {
-        includedDocuments.push({
-          id: doc.id,
-          tags: docTags,
-          filename: doc.filename || undefined,
-          sizeBytes: doc.fileSize || undefined,
-          category: 'allergy',
-        });
-      }
-    });
-
-    // Only the last quote (by uploaded_at DESC, id DESC) goes into the ZIP
-    if (quoteDocs.length > 0) {
-      const sorted = [...quoteDocs].sort((a, b) => {
-        const ta = ts(a);
-        const tb = ts(b);
-        if (tb !== ta) return tb - ta;
-        return (b.id || '').localeCompare(a.id || '');
-      });
-      const lastQuote = sorted[0];
-      includedDocuments.push({
-        id: lastQuote.id,
-        tags: lastQuote.tags,
-        filename: lastQuote.filename,
-        sizeBytes: lastQuote.sizeBytes,
-        category: 'quote',
-      });
-    }
-
-    // Calculate estimated total bytes (sum of included documents)
-    const estimatedTotalBytes = includedDocuments.reduce(
-      (sum, doc) => sum + (doc.sizeBytes || 0),
-      0
-    );
-
-    // Check if ready (no missing tags)
-    const isReady = missingDocTags.length === 0;
+    const { includedDocuments, isReady } = plan;
 
     // Get checklist status for summary. A NEAK-összefoglaló „Kötelező mezők"
     // sorában csak a szigorúan kötelező (error) mezők számítanak — az ajánlott
     // (warning, pl. email) hiánya nem NEAK-hiány.
-    const fullChecklistStatus = getChecklistStatus(patient, documents);
+    const fullChecklistStatus = getChecklistStatus(patient, documents.map((doc) => ({ ...doc, tags: normalizeTags(doc.tags) })));
     const checklistStatus = {
       ...fullChecklistStatus,
       missingFields: fullChecklistStatus.missingFields.filter(
@@ -361,56 +195,30 @@ export const GET = authedHandler(async (req, { auth, params, correlationId }) =>
     if (isDryRun) {
       const response = NextResponse.json(
         {
-          isReady,
-          missingDocTags,
-          requiredDocTags: REQUIRED_DOC_RULES.map((rule) => rule.tag), // Backward compatibility
-          requiredDocRules: REQUIRED_DOC_RULES.map((rule) => ({
-            tag: rule.tag,
-            label: rule.label,
-            minCount: rule.minCount,
-          })),
-          missingDocRules: missingDocRules.map((rule) => ({
-            tag: rule.tag,
-            label: rule.label,
-            minCount: rule.minCount,
-            actualCount: rule.actualCount,
-          })),
-          includedDocuments,
-          estimatedTotalBytes: estimatedTotalBytes > 0 ? estimatedTotalBytes : undefined,
+          ...plan,
+          requiredDocTags: REQUIRED_DOC_RULES.map((rule) => rule.tag),
+          requiredDocRules: REQUIRED_DOC_RULES,
           quoteRequestsCount: quoteRequests.length,
-          checklistSummary: {
-            missingFields: checklistStatus.missingFields.length,
-            missingDocs: checklistStatus.missingDocs.length,
-            hasErrors: checklistStatus.hasErrors,
-          },
           correlationId,
         },
         { status: 200 }
       );
       response.headers.set('x-correlation-id', correlationId);
+      response.headers.set('Cache-Control', 'private, no-store');
       return response;
     }
 
-    // EXPORT: Generate ZIP package
-    // Check if required docs are missing
     if (!isReady) {
-      const response = NextResponse.json(
-        {
-          error: 'Hiányoznak kötelező dokumentumok',
-          code: 'MISSING_REQUIRED_DOCS',
-          details: {
-            missingDocTags,
-          },
-          correlationId,
-        },
-        { status: 422 }
-      );
-      response.headers.set('x-correlation-id', correlationId);
-      return response;
+      const limitError = plan.limitErrors[0];
+      return NextResponse.json({
+        error: limitError?.message ?? 'Az exporthoz kötelező adatok vagy dokumentumok hiányoznak.',
+        code: limitError?.code ?? 'EXPORT_NOT_READY',
+        details: plan,
+        correlationId,
+      }, { status: limitError ? 413 : 422 });
     }
 
-    // Initialize export limiter
-    const limiter = new ExportLimiter(EXPORT_LIMITS);
+    const limiter = new ExportLimiter(NEAK_EXPORT_LIMITS);
 
     const anamnesisInput = {
       patientId: patient.id || patientId,
@@ -426,10 +234,10 @@ export const GET = authedHandler(async (req, { auth, params, correlationId }) =>
         tnm: patient.tnmStaging || null,
       },
       therapies: {
-        radiotherapy: patient.radioterapia ? 'Igen' : null,
+        radiotherapy: patient.radioterapia === true ? 'Igen' : patient.radioterapia === false ? 'Nem' : null,
         radiotherapyDose: patient.radioterapiaDozis || null,
         radiotherapyInterval: patient.radioterapiaDatumIntervallum || null,
-        chemotherapy: patient.chemoterapia ? 'Igen' : null,
+        chemotherapy: patient.chemoterapia === true ? 'Igen' : patient.chemoterapia === false ? 'Nem' : null,
         chemotherapyDesc: patient.chemoterapiaLeiras || null,
       },
       risks: {
@@ -451,7 +259,7 @@ export const GET = authedHandler(async (req, { auth, params, correlationId }) =>
     try {
       const patientSummaryMarkdown = generatePatientSummaryMarkdown(
         patient,
-        documents,
+        documents.map((doc) => ({ ...doc, tags: normalizeTags(doc.tags) })),
         checklistStatus,
         REQUIRED_DOC_RULES
       );
@@ -478,31 +286,14 @@ export const GET = authedHandler(async (req, { auth, params, correlationId }) =>
       );
     }
 
-    // Dental status PDF (optional: on failure use placeholder so ZIP always contains dental_status.pdf)
-    let dentalStatusBuffer: Buffer;
-    let dentalPdfFailed = false;
-    try {
-      dentalStatusBuffer = await generateDentalStatusPDF(patient);
-      limiter.addFile(dentalStatusBuffer.length);
-    } catch (error) {
-      logger.error('[NEAK Export] Dental status PDF generation failed (DENTAL_PDF_GEN_FAILED):', error);
-      dentalPdfFailed = true;
-      if (process.env.ENABLE_SENTRY === 'true') {
-        try {
-          const Sentry = await import('@sentry/nextjs');
-          Sentry.captureException(error, { tags: { error_fingerprint: 'DENTAL_PDF_GEN_FAILED' } });
-        } catch {
-          /* ignore */
-        }
-      }
-      dentalStatusBuffer = await createPlaceholderPdf('Fogazati státusz PDF generálása sikertelen.');
-      limiter.addFile(dentalStatusBuffer.length);
-    }
+    // Every generated PDF must succeed; a placeholder is not an exportable status.
+    const dentalStatusBuffer = await generateDentalStatusPDF(patient);
+    limiter.addFile(dentalStatusBuffer.length);
 
     // Fogorvosi méltányossági (FNMT.152.K)
     let equityDentalBuffer: Buffer;
     try {
-      equityDentalBuffer = await generateEquityRequestPDF(patient);
+      equityDentalBuffer = await generateEquityRequestPDF(patient, { treatmentPlanSummary: 'A részletes, állcsontonkénti és fogankénti kezelési tervet a treatment_plan.pdf melléklet tartalmazza.' });
       limiter.addFile(equityDentalBuffer.length);
     } catch (error) {
       logger.error('[NEAK Export] Equity request dental PDF failed:', error);
@@ -526,8 +317,11 @@ export const GET = authedHandler(async (req, { auth, params, correlationId }) =>
       );
     }
 
-    // 2. TXT fájlok
-    const treatmentPlanText = formatTreatmentPlan(patient);
+    const treatmentPlanPdfBuffer = await generateTreatmentPlanPDF(patient, treatmentContent);
+    limiter.addFile(treatmentPlanPdfBuffer.length);
+
+    // PDF and TXT share the same clinical content.
+    const treatmentPlanText = treatmentContentToText(patient, treatmentContent);
     const treatmentPlanBuffer = Buffer.from(treatmentPlanText, 'utf-8');
     limiter.addFile(treatmentPlanBuffer.length);
 
@@ -543,169 +337,102 @@ export const GET = authedHandler(async (req, { auth, params, correlationId }) =>
       { name: 'dental_status.pdf', size: dentalStatusBuffer.length },
       { name: 'equity_request_dental.pdf', size: equityDentalBuffer.length },
       { name: 'equity_request_patient_data.pdf', size: equityPatientBuffer.length },
+      { name: 'treatment_plan.pdf', size: treatmentPlanPdfBuffer.length },
       { name: 'treatment_plan.txt', size: treatmentPlanBuffer.length },
       { name: 'quote_requests.txt', size: quoteRequestsBuffer.length },
     ];
 
-    // Create ZIP archive stream
-    const archive = archiver('zip', {
-      zlib: { level: 9 }, // Maximum compression
-    });
-
-    // Track archive state for proper error handling
-    let archiveError: Error | null = null as Error | null;
-    let archiveFinished = false;
-
-    // Handle archive errors (critical for proper cleanup)
-    archive.on('error', (err: unknown) => {
-      const error: Error = err instanceof Error ? err : new Error(String(err));
-      logger.error('[NEAK Export] Archive error:', error);
-      archiveError = error;
-      archive.abort(); // Abort archive on error
-    });
-
-    // Track when archive is fully finalized
-    archive.on('end', () => {
-      archiveFinished = true;
-      if (process.env.NODE_ENV === 'development') {
-        logger.info('[NEAK Export] Archive finalized successfully');
+    // Fetch every selected attachment before starting the archive. A failed or empty
+    // attachment must produce an error response, never a partial successful package.
+    const attachments: Array<{ name: string; buffer: Buffer }> = [];
+    for (const doc of includedDocuments) {
+      limiter.addDoc();
+      const source = documents.find((entry) => entry.id === doc.id);
+      if (!source?.filePath) {
+        return NextResponse.json({
+          error: `A melléklet elérési útja hiányzik: ${doc.filename || doc.id}`,
+          code: 'DOCUMENT_UNAVAILABLE', correlationId,
+        }, { status: 422 });
       }
-    });
+      let buffer: Buffer;
+      try {
+        buffer = await withNeakDownloadTimeout(
+          downloadFile(source.filePath, patientId), FILE_DOWNLOAD_TIMEOUT_MS
+        );
+      } catch (error) {
+        logger.error('[NEAK Export] Attachment download failed:', error);
+        return NextResponse.json({
+          error: `Nem tölthető le a melléklet: ${doc.filename || doc.id}. Próbálja újra az exportot.`,
+          code: 'DOCUMENT_DOWNLOAD_FAILED', correlationId,
+        }, { status: 502 });
+      }
+      if (buffer.length === 0) {
+        return NextResponse.json({
+          error: `A melléklet üres: ${doc.filename || doc.id}`,
+          code: 'DOCUMENT_EMPTY', correlationId,
+        }, { status: 422 });
+      }
+      try {
+        limiter.addFile(buffer.length);
+      } catch (error) {
+        if (!(error instanceof Error)) throw error;
+        return NextResponse.json({
+          error: ExportLimiter.formatError(error),
+          code: error.message.split(':')[0], correlationId,
+        }, { status: 413 });
+      }
+      const folder = doc.category === 'quote' ? 'quotes/'
+        : doc.category === 'allergy' ? 'allergy/'
+        : doc.category === 'technikus_meltanyossagi' ? 'technikus_meltanyossagi/' : '';
+      const name = `documents/${folder}${doc.id}_${safeFilename(doc.filename || 'document')}`;
+      attachments.push({ name, buffer });
+      files.push({ name, size: buffer.length });
+    }
 
-    // Deterministic ZIP order: 1. PDF-ek, 2. TXT-k, 3. README, 4. documents/
-    // 1. PDF-ek
+    const readmeBuffer = Buffer.from(generateReadme(
+      exportDate, files, attachments.length, equityPatientMissingFields
+    ), 'utf-8');
+    try {
+      limiter.addFile(readmeBuffer.length);
+    } catch (error) {
+      if (!(error instanceof Error)) throw error;
+      return NextResponse.json({
+        error: ExportLimiter.formatError(error),
+        code: error.message.split(':')[0], correlationId,
+      }, { status: 413 });
+    }
+
+    const archive = archiver('zip', { zlib: { level: 9 } });
+    // Attach the consumer before finalizing; propagate archive failures to the download.
+    const stream = Readable.toWeb(archive);
+    archive.on('error', (error) => {
+      logger.error('[NEAK Export] Archive error:', error);
+      archive.destroy(error);
+    });
     archive.append(patientSummaryBuffer, { name: 'patient_summary.pdf' });
     archive.append(medicalHistoryBuffer, { name: 'medical_history.pdf' });
     archive.append(dentalStatusBuffer, { name: 'dental_status.pdf' });
     archive.append(equityDentalBuffer, { name: 'equity_request_dental.pdf' });
     archive.append(equityPatientBuffer, { name: 'equity_request_patient_data.pdf' });
-
-    // 2. TXT-k
+    archive.append(treatmentPlanPdfBuffer, { name: 'treatment_plan.pdf' });
     archive.append(treatmentPlanBuffer, { name: 'treatment_plan.txt' });
     archive.append(quoteRequestsBuffer, { name: 'quote_requests.txt' });
-
-    // 4. Documents (determinisztikus sorrend: alfanumerikusan docId szerint)
-    // Sort előre, hogy a README-ben használhassuk a számot
-    const sortedDocuments = [...includedDocuments].sort((a, b) => a.id.localeCompare(b.id));
-
-    // 3. README.txt (deterministic position: after TXT files, before documents)
-    // Include document count info; missingFields from FNMT.150.K
-    const readmeText = generateReadme(
-      exportDate,
-      files,
-      sortedDocuments.length,
-      dentalPdfFailed,
-      equityPatientMissingFields.length > 0 ? equityPatientMissingFields : undefined
-    );
-    const readmeBuffer = Buffer.from(readmeText, 'utf-8');
-    limiter.addFile(readmeBuffer.length);
     archive.append(readmeBuffer, { name: 'README.txt' });
-
-    for (const doc of sortedDocuments) {
-      try {
-        limiter.addDoc();
-
-        // Get full document data from DB
-        const docResult = await pool.query(
-          `SELECT file_path, filename, file_size FROM patient_documents WHERE id = $1`,
-          [doc.id]
-        );
-
-        if (docResult.rows.length === 0) {
-          console.warn(`[NEAK Export] Document ${doc.id} not found in DB, skipping`);
-          continue;
-        }
-
-        const docData = docResult.rows[0];
-
-        // Download file with timeout
-        const downloadPromise = downloadFile(docData.file_path, patientId);
-        const timeoutPromise = new Promise<Buffer>((_, reject) => {
-          setTimeout(() => reject(new Error(`File download timeout after ${FILE_DOWNLOAD_TIMEOUT_MS}ms`)), FILE_DOWNLOAD_TIMEOUT_MS);
-        });
-
-        const fileBuffer = await Promise.race([downloadPromise, timeoutPromise]);
-
-        // Check per-file size limit (after download, use actual size)
-        // Use actual buffer size, not DB file_size (more accurate)
-        const actualSize = fileBuffer.length;
-        limiter.addFile(actualSize);
-
-        // Determine file path based on category
-        const safeName = safeFilename(docData.filename || `document_${doc.id}`);
-        let filePath: string;
-
-        if (doc.category === 'quote') {
-          filePath = `documents/quotes/${doc.id}_${safeName}`;
-        } else if (doc.category === 'allergy') {
-          filePath = `documents/allergy/${doc.id}_${safeName}`;
-        } else if (doc.category === 'technikus_meltanyossagi') {
-          filePath = `documents/technikus_meltanyossagi/${doc.id}_${safeName}`;
-        } else {
-          filePath = `documents/${doc.id}_${safeName}`;
-        }
-
-        // Add to archive
-        archive.append(fileBuffer, { name: filePath });
-
-        // Log progress (for debugging)
-        if (process.env.NODE_ENV === 'development') {
-          logger.info(`[NEAK Export] Added document: ${filePath} (${actualSize} bytes, total: ${limiter.totalBytes} bytes)`);
-        }
-      } catch (error) {
-        logger.error(`[NEAK Export] Error adding document ${doc.id} to archive:`, error);
-        
-        // Check if it's a limit error and format it properly
-        if (error instanceof Error && (
-          error.message.startsWith('FILE_TOO_LARGE:') ||
-          error.message.startsWith('ZIP_TOO_LARGE:') ||
-          error.message.startsWith('TOO_MANY_DOCS:')
-        )) {
-          const userMessage = ExportLimiter.formatError(error);
-          const response = NextResponse.json(
-            {
-              error: userMessage,
-              code: error.message.split(':')[0],
-              correlationId,
-            },
-            { status: 413 }
-          );
-          response.headers.set('x-correlation-id', correlationId);
-          archive.abort();
-          return response;
-        }
-        
-        // Abort archive on error
-        archive.abort();
-        // Re-throw with context for proper error handling
-        throw new Error(
-          `Failed to add document ${doc.filename || doc.id} to export: ${error instanceof Error ? error.message : 'Unknown error'}`
-        );
-      }
+    for (const attachment of attachments) {
+      archive.append(attachment.buffer, { name: attachment.name });
     }
-
-    // Check if archive had errors during document addition
-    if (archiveError) {
-      // TypeScript narrowing: archiveError is Error here
-      const errorMsg = (archiveError as Error).message;
-      throw new Error(`Archive error during document processing: ${errorMsg}`);
-    }
-
-    // Finalize archive (this triggers the 'end' event when complete)
-    archive.finalize();
-
-    // Create response stream
-    const stream = Readable.from(archive);
+    void archive.finalize().catch((error: Error) => archive.destroy(error));
 
     // Generate filename
     const dateStr = new Date().toISOString().split('T')[0];
     const filename = `NEAK_${patientId}_${dateStr}.zip`;
 
     // Create response with proper error handling
-    const response = new NextResponse(stream as any, {
+    const response = new NextResponse(stream as ReadableStream<Uint8Array>, {
       status: 200,
       headers: {
         'Content-Type': 'application/zip',
+        'Cache-Control': 'private, no-store',
         'Content-Disposition': `attachment; filename="${filename}"`,
         'x-correlation-id': correlationId,
       },

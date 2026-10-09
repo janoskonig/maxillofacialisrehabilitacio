@@ -2,7 +2,7 @@ import {
   normalizeToothData,
   type ToothStatus,
   type ToothBase,
-} from '@/hooks/usePatientAutoSave';
+} from '@/lib/tooth-data';
 import {
   readSurfaces,
   hasSurfaceMark,

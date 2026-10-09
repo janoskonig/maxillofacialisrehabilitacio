@@ -3,6 +3,7 @@ import fs from 'fs';
 import path from 'path';
 import { Patient } from '@/lib/types';
 import { EQUITY_REQUEST_CONFIG } from '@/lib/equity-request-config';
+import { treatmentLabel } from '@/lib/neak-treatment-content';
 import bnoCodesData from '@/lib/bno-codes.json';
 import { readFileFromCandidates, projectRootCandidates, resolveExistingPath } from '@/lib/pdf/fs';
 
@@ -43,7 +44,7 @@ function getEquityTemplateBytes(): Buffer {
 /**
  * Méltányossági kérelem PDF generálása beteg adataiból
  */
-export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer> {
+export async function generateEquityRequestPDF(patient: Patient, options?: { treatmentPlanSummary?: string; treatmentLabels?: Map<string, string> }): Promise<Buffer> {
   const templateBytes = getEquityTemplateBytes();
   const pdfDoc = await PDFDocument.load(new Uint8Array(templateBytes), { ignoreEncryption: true });
 
@@ -115,16 +116,19 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
   // Kezelési terv összeállítása
   const kezelesiTervParts: string[] = [];
   if (patient.kezelesiTervFelso && Array.isArray(patient.kezelesiTervFelso) && patient.kezelesiTervFelso.length > 0) {
-    const felsoTipusok = patient.kezelesiTervFelso.map(t => t.tipus).join(', ');
+    const felsoTipusok = patient.kezelesiTervFelso.map(t => treatmentLabel(t, options?.treatmentLabels ?? new Map())).join(', ');
     kezelesiTervParts.push(`Felső: ${felsoTipusok}`);
   }
   if (patient.kezelesiTervAlso && Array.isArray(patient.kezelesiTervAlso) && patient.kezelesiTervAlso.length > 0) {
-    const alsoTipusok = patient.kezelesiTervAlso.map(t => t.tipus).join(', ');
+    const alsoTipusok = patient.kezelesiTervAlso.map(t => treatmentLabel(t, options?.treatmentLabels ?? new Map())).join(', ');
     kezelesiTervParts.push(`Alsó: ${alsoTipusok}`);
   }
-  const kezelesiTerv = kezelesiTervParts.length > 0 
+  if (patient.kezelesiTervArcotErinto?.length) {
+    kezelesiTervParts.push(`Arc: ${patient.kezelesiTervArcotErinto.map(t => t.tipus).join(', ')}`);
+  }
+  const kezelesiTerv = options?.treatmentPlanSummary ?? (kezelesiTervParts.length > 0
     ? `${kezelesiTervParts.join('; ')} (lásd melléklet)`
-    : '(lásd melléklet)';
+    : '(lásd melléklet)');
 
   // Nyilatkozat generálása (a felelős orvos epizódonként a Stádiumok oldalon állítható)
   const nyilatkozat = `${EQUITY_REQUEST_CONFIG.megbizottNeve} megbízásából alulírott, a kezelési tervben foglaltak elvégzését vállalom.`;
@@ -419,4 +423,3 @@ export async function generateEquityRequestPDF(patient: Patient): Promise<Buffer
 
   return Buffer.from(pdfBytes);
 }
-

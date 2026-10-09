@@ -94,14 +94,16 @@ describe('describeTooth', () => {
 });
 
 describe('generateDentalStatusPDF', () => {
-  it('vegyes (új + régi modellű) fogtérképből érvényes PDF-et készít', async () => {
+  it('vegyes (új + régi modellű) fogtérképből részletes, kétoldalas PDF-et készít', async () => {
     const buf = await generateDentalStatusPDF({
       nev: 'Minta Péterné',
       meglevoFogak: fogak,
       fabianFejerdyProtetikaiOsztalyAlso: '2A',
     });
     expect(buf.subarray(0, 5).toString('latin1')).toBe('%PDF-');
-    expect((await PDFDocument.load(buf)).getPageCount()).toBe(1);
+    const pdf = await PDFDocument.load(buf);
+    expect(pdf.getPageCount()).toBe(2);
+    expect(pdf.getTitle()).toBe('Fogazati státusz');
   });
 
   it('hosszú megjegyzést tördel, sok sornál új oldalt nyit', async () => {

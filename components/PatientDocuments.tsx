@@ -4,7 +4,7 @@ import { useState, useEffect, useRef, useCallback } from 'react';
 import { PatientDocument } from '@/lib/types';
 import type { PatientDocumentAnnotation } from '@/lib/types/document-annotation';
 import { fetchAnnotationsBatchForPatient } from '@/lib/document-annotations-batch-client';
-import { Upload, File, Download, Trash2, X, Tag, Plus, Package, AlertTriangle, Loader2, FileQuestion } from 'lucide-react';
+import { Upload, File, Download, Trash2, X, Tag, Plus, Package, Loader2, FileQuestion } from 'lucide-react';
 import { getCurrentUser } from '@/lib/auth';
 import { formatDateForDisplay } from '@/lib/dateUtils';
 import { useToast } from '@/contexts/ToastContext';
@@ -12,6 +12,8 @@ import { logEvent } from '@/lib/event-logger';
 import { DocumentCard } from './DocumentCard';
 import { LightboxModal } from './LightboxModal';
 import { DocumentRequestSendWizard } from './DocumentRequestSendWizard';
+import { NeakExportPreview } from './NeakExportPreview';
+import type { NeakExportPlan } from '@/lib/neak-export';
 import { tagStringIsPortraitTag } from '@/lib/patient-portrait-tag';
 
 interface PatientDocumentsProps {
@@ -58,16 +60,17 @@ export function PatientDocuments({
   const [isDragging, setIsDragging] = useState(false);
   const [fileAccept, setFileAccept] = useState<string | undefined>(undefined);
   const [neakExportLoading, setNeakExportLoading] = useState(false);
-  const [neakExportStatus, setNeakExportStatus] = useState<{
-    isReady: boolean;
-    missingDocTags: string[];
-  } | null>(null);
+  const [neakExportStatus, setNeakExportStatus] = useState<NeakExportPlan | null>(null);
   const [previewDocument, setPreviewDocument] = useState<PatientDocument | null>(null);
   const [showRequestWizard, setShowRequestWizard] = useState(false);
   const [annotationByDocId, setAnnotationByDocId] = useState<Record<
     string,
     PatientDocumentAnnotation[]
   > | null>(null);
+
+  useEffect(() => {
+    setNeakExportStatus(null);
+  }, [patientId, documents, isPatientDirty]);
 
   useEffect(() => {
     const checkRole = async () => {
@@ -612,9 +615,14 @@ export function PatientDocuments({
   };
 
   // NEAK Export handler
-  const handleNeakExport = async () => {
+  const handleNeakExport = async (download = false) => {
     if (!patientId) {
       showToast('Beteg ID hiányzik', 'error');
+      return;
+    }
+
+    if (isPatientDirty) {
+      showToast('Az export előtt mentse a beteg adatlapján végzett módosításokat.', 'info');
       return;
     }
 
@@ -640,10 +648,11 @@ export function PatientDocuments({
           showToast('NEAK export funkció nincs engedélyezve', 'error');
           return;
         }
-        throw new Error(errorData.error || 'Dry-run hiba');
+        throw new Error(errorData.error || 'Az export ellenőrzése sikertelen.');
       }
 
-      const dryRunData = await dryRunResponse.json();
+      const dryRunData: NeakExportPlan & { correlationId: string } = await dryRunResponse.json();
+      setNeakExportStatus(dryRunData);
 
       // Log attempt
       logEvent('neak_export_attempt', {
@@ -652,18 +661,7 @@ export function PatientDocuments({
         missingDocTags: dryRunData.missingDocTags || [],
       }, dryRunData.correlationId);
 
-      if (!dryRunData.isReady) {
-        // Show missing tags
-        setNeakExportStatus({
-          isReady: false,
-          missingDocTags: dryRunData.missingDocTags || [],
-        });
-        showToast(
-          `Hiányoznak kötelező dokumentumok: ${dryRunData.missingDocTags?.join(', ') || 'ismeretlen'}`,
-          'info'
-        );
-        return;
-      }
+      if (!download || !dryRunData.isReady) return;
 
       // Ready: Start export
       const exportResponse = await fetch(`/api/patients/${patientId}/export-neak`, {
@@ -672,12 +670,9 @@ export function PatientDocuments({
 
       if (!exportResponse.ok) {
         const errorData = await exportResponse.json().catch(() => ({}));
-        if (errorData.code === 'MISSING_REQUIRED_DOCS') {
-          setNeakExportStatus({
-            isReady: false,
-            missingDocTags: errorData.details?.missingDocTags || [],
-          });
-          showToast('Hiányoznak kötelező dokumentumok', 'error');
+        if (errorData.code === 'EXPORT_NOT_READY' || ['FILE_TOO_LARGE', 'ZIP_TOO_LARGE', 'TOO_MANY_DOCS'].includes(errorData.code)) {
+          if (errorData.details?.missingFields) setNeakExportStatus(errorData.details);
+          showToast(errorData.error || 'Az export ellenőrzése sikertelen.', 'error');
           logEvent('neak_export_fail', {
             patientIdHash: patientId ? patientId.substring(0, 8) : null,
             errorCode: errorData.code,
@@ -695,7 +690,7 @@ export function PatientDocuments({
       
       // Verify blob is not empty (basic sanity check)
       if (blob.size === 0) {
-        throw new Error('Downloaded ZIP is empty - export may have failed');
+        throw new Error('A letöltött ZIP üres; az export sikertelen.');
       }
 
       const url = window.URL.createObjectURL(blob);
@@ -705,7 +700,7 @@ export function PatientDocuments({
       document.body.appendChild(a);
       a.click();
       document.body.removeChild(a);
-      window.URL.revokeObjectURL(url);
+      window.setTimeout(() => window.URL.revokeObjectURL(url), 1000);
 
       // Log success ONLY after ZIP is fully downloaded and verified
       // This ensures the archive.on("end") event fired on the server
@@ -745,7 +740,7 @@ export function PatientDocuments({
         <div className="flex gap-2">
           {process.env.NEXT_PUBLIC_ENABLE_NEAK_EXPORT === 'true' && patientId && (
             <button
-              onClick={handleNeakExport}
+              onClick={() => handleNeakExport()}
               disabled={neakExportLoading}
               className="btn-secondary text-sm"
             >
@@ -799,44 +794,17 @@ export function PatientDocuments({
         />
       )}
 
-      {/* NEAK Export Status */}
-      {neakExportStatus && !neakExportStatus.isReady && (
-        <div className="mb-4 p-4 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-lg">
-          <div className="flex items-start">
-            <AlertTriangle className="w-5 h-5 text-amber-600 dark:text-amber-300 mr-3 mt-0.5 flex-shrink-0" />
-            <div className="flex-1">
-              <h5 className="text-sm font-semibold text-amber-800 dark:text-amber-300 mb-2">
-                Hiányoznak kötelező dokumentumok
-              </h5>
-              <p className="text-sm text-amber-700 dark:text-amber-300 mb-2">
-                Az alábbi tag-ekkel rendelkező dokumentumok hiányoznak:
-              </p>
-              <ul className="list-disc list-inside text-sm text-amber-700 dark:text-amber-300 mb-3">
-                {neakExportStatus.missingDocTags.map((tag) => (
-                  <li key={tag}>{tag.toUpperCase()}</li>
-                ))}
-              </ul>
-              <button
-                onClick={() => {
-                  setNeakExportStatus(null);
-                  setShowUploadForm(true);
-                  if (fileInputRef.current) {
-                    fileInputRef.current.click();
-                  }
-                }}
-                className="text-sm text-amber-800 dark:text-amber-300 hover:text-amber-900 underline"
-              >
-                Ugrás dokumentum feltöltéshez →
-              </button>
-            </div>
-            <button
-              onClick={() => setNeakExportStatus(null)}
-              className="text-amber-600 dark:text-amber-300 hover:text-amber-800 ml-2"
-            >
-              <X className="w-4 h-4" />
-            </button>
-          </div>
-        </div>
+      {neakExportStatus && (
+        <NeakExportPreview
+          plan={neakExportStatus}
+          loading={neakExportLoading}
+          onDownload={() => handleNeakExport(true)}
+          onClose={() => setNeakExportStatus(null)}
+          onUpload={canUpload && !isViewOnly ? () => {
+            setShowUploadForm(true);
+            fileInputRef.current?.click();
+          } : undefined}
+        />
       )}
 
       {/* Upload Form */}

@@ -44,7 +44,9 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   const patient = patientSchema.parse(normalizedPatientData) as Patient;
 
   // PDF generálása
-  const pdfBuffer = await generateEquityRequestPDF(patient);
+  const treatmentTypes = await pool.query('SELECT code, label_hu AS label FROM treatment_types');
+  const treatmentLabels = new Map<string, string>(treatmentTypes.rows.map((row: { code: string; label: string }) => [row.code, row.label]));
+  const pdfBuffer = await generateEquityRequestPDF(patient, { treatmentLabels });
 
   // Fájlnév generálása
   const patientName = patient.nev || 'Beteg';
