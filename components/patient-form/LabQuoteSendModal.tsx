@@ -2,6 +2,7 @@
 
 import { useEffect, useMemo, useRef, useState, type KeyboardEvent } from 'react';
 import { Clock, Loader2, Mail, Paperclip, Plus, Send, X } from 'lucide-react';
+import { LAB_QUOTE_TARGETS, type LabQuoteTarget, type LabQuoteTargetId } from '@/lib/email/lab-quote-target-catalog';
 
 const EMAIL_REGEX = /^[A-Za-z0-9._%+\-]+@[A-Za-z0-9.\-]+\.[A-Za-z]{2,}$/;
 
@@ -57,7 +58,7 @@ function splitCc(cc: string | null | undefined): string[] {
 
 /**
  * Árajánlatkérő e-mail küldése választható címzett(ek)nek.
- * Alapból a beállított labor cím van kiválasztva; javaslatként a korábbi címzettek
+ * Alapból a fogtechnikai partner van kiválasztva; javaslatként a korábbi címzettek
  * és a munkatársak jelennek meg, de bármilyen e-mail cím szabadon beírható.
  * Az első cím a levél címzettje, a többi másolatot kap.
  */
@@ -78,9 +79,14 @@ export function LabQuoteSendModal({
   const [open, setOpen] = useState(false);
   const [highlight, setHighlight] = useState(0);
   const [sending, setSending] = useState(false);
+  const [targets, setTargets] = useState<LabQuoteTarget[]>([...LAB_QUOTE_TARGETS]);
+  const [targetId, setTargetId] = useState<LabQuoteTargetId | 'custom'>('fogtechnika');
+  const [targetEmail, setTargetEmail] = useState('');
+  const [savingTarget, setSavingTarget] = useState(false);
+  const [includeUploadLink, setIncludeUploadLink] = useState(true);
   const rootRef = useRef<HTMLDivElement>(null);
 
-  // Megnyitáskor: javaslatok betöltése, a labor alapértelmezett címe előre kiválasztva.
+  // Megnyitáskor a mentett célcsoport-címekkel indulunk.
   useEffect(() => {
     if (!isOpen) {
       setSelected([]);
@@ -93,6 +99,11 @@ export function LabQuoteSendModal({
     let cancelled = false;
     setLoading(true);
     setLoadError(null);
+    setTargetId('fogtechnika');
+    setTargets([...LAB_QUOTE_TARGETS]);
+    setIncludeUploadLink(true);
+    setTargetEmail('idssote@gmail.com');
+    setSelected(['idssote@gmail.com']);
     fetch('/api/lab-quote-recipients', { credentials: 'include' })
       .then(async (res) => {
         if (!res.ok) throw new Error(`status_${res.status}`);
@@ -102,8 +113,11 @@ export function LabQuoteSendModal({
         if (cancelled) return;
         const list: LabQuoteRecipientSuggestion[] = Array.isArray(data?.suggestions) ? data.suggestions : [];
         setSuggestions(list);
-        const defaultTo = typeof data?.defaultTo === 'string' ? normalizeEmail(data.defaultTo) : '';
-        setSelected(defaultTo && EMAIL_REGEX.test(defaultTo) ? [defaultTo] : []);
+        const loadedTargets: LabQuoteTarget[] = Array.isArray(data?.targets) ? data.targets : [...LAB_QUOTE_TARGETS];
+        setTargets(loadedTargets);
+        const email = loadedTargets.find(target => target.id === 'fogtechnika')?.email ?? '';
+        setTargetEmail(email);
+        setSelected(email ? [normalizeEmail(email)] : []);
       })
       .catch(() => {
         if (!cancelled) {
@@ -213,7 +227,7 @@ export function LabQuoteSendModal({
         method: 'POST',
         credentials: 'include',
         headers: { 'Content-Type': 'application/json' },
-        body: JSON.stringify({ recipients: selected }),
+        body: JSON.stringify({ recipients: selected, targetId: targetId === 'custom' ? null : targetId, includeUploadLink }),
       });
       const data = await res.json().catch(() => ({}));
       if (!res.ok) {
@@ -236,6 +250,35 @@ export function LabQuoteSendModal({
     }
   };
 
+  const chooseTarget = (id: LabQuoteTargetId | 'custom') => {
+    setTargetId(id);
+    const email = targets.find(target => target.id === id)?.email ?? '';
+    setTargetEmail(email);
+    setSelected(email ? [normalizeEmail(email)] : []);
+    setQ('');
+    setOpen(false);
+  };
+
+  const saveTargetEmail = async () => {
+    if (targetId === 'custom' || savingTarget || !EMAIL_REGEX.test(targetEmail.trim())) return;
+    setSavingTarget(true);
+    try {
+      const res = await fetch('/api/lab-quote-recipients', {
+        method: 'PUT', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ targetId, email: targetEmail }),
+      });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'A cím mentése nem sikerült');
+      setTargets(data.targets);
+      setSelected([normalizeEmail(targetEmail)]);
+      showToast('Célcsoport e-mail címe elmentve', 'success');
+    } catch (error) {
+      showToast(error instanceof Error ? error.message : 'A cím mentése nem sikerült', 'error');
+    } finally {
+      setSavingTarget(false);
+    }
+  };
+
   if (!isOpen || !quote) return null;
 
   const deadline = quote.datuma ? new Date(quote.datuma).toLocaleDateString('hu-HU') : null;
@@ -243,7 +286,7 @@ export function LabQuoteSendModal({
   return (
     <div
       className="fixed inset-0 bg-black/60 backdrop-blur-sm flex items-center justify-center p-4 z-50"
-      onClick={onClose}
+      onClick={() => { if (!sending && !savingTarget) onClose(); }}
     >
       <div
         className="bg-white dark:bg-gray-900 rounded-xl max-w-lg w-full max-h-[90vh] flex flex-col shadow-soft-xl"
@@ -262,6 +305,7 @@ export function LabQuoteSendModal({
           <button
             type="button"
             onClick={onClose}
+            disabled={sending || savingTarget}
             className="p-1.5 text-gray-400 dark:text-gray-500 hover:text-gray-600 dark:hover:text-gray-300 rounded-md hover:bg-gray-100 dark:hover:bg-gray-700"
             aria-label="Bezárás"
           >
@@ -269,7 +313,7 @@ export function LabQuoteSendModal({
           </button>
         </div>
 
-        <div className="p-5 space-y-4 overflow-y-auto">
+        <fieldset disabled={sending || savingTarget} className="p-5 space-y-4 overflow-y-auto">
           <div className="rounded-md border border-blue-100 dark:border-blue-800 bg-blue-50/70 dark:bg-blue-950/40 px-3 py-2 space-y-1">
             <p className="text-xs text-blue-900/70 dark:text-blue-300">Beteg</p>
             <p className="text-sm font-medium text-blue-950 dark:text-blue-200 truncate">
@@ -279,6 +323,38 @@ export function LabQuoteSendModal({
               <Paperclip className="w-3 h-3 shrink-0" />
               Melléklet: árajánlatkérő PDF{deadline ? ` · határidő: ${deadline}` : ''}
             </p>
+          </div>
+
+          <div className="space-y-2">
+            <label htmlFor="lab-quote-target" className="text-xs font-medium text-gray-700 dark:text-gray-300">Mire kérünk ajánlatot?</label>
+            <select id="lab-quote-target" value={targetId} disabled={loading || sending || savingTarget}
+              onChange={event => chooseTarget(event.target.value as LabQuoteTargetId | 'custom')}
+              className="w-full rounded-md border border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 p-2 text-sm">
+              {targets.map(target => <option key={target.id} value={target.id}>{target.label} · {target.recipientName}</option>)}
+              <option value="custom">Egyéb címzett</option>
+            </select>
+            {targetId !== 'custom' && (
+              <div className="space-y-2">
+                <label htmlFor="lab-quote-target-email" className="block text-xs text-gray-600 dark:text-gray-400">
+                  {targets.find(target => target.id === targetId)?.recipientName} e-mail címe
+                </label>
+                <div className="flex gap-2">
+                  <input id="lab-quote-target-email" type="email" value={targetEmail} disabled={loading}
+                    placeholder="Az e-mail cím még pontosításra vár" maxLength={255}
+                    className="min-w-0 flex-1 rounded-md border border-gray-300 dark:border-gray-700 bg-transparent p-2 text-sm"
+                    onChange={event => {
+                      setTargetEmail(event.target.value);
+                      const email = normalizeEmail(event.target.value);
+                      setSelected(EMAIL_REGEX.test(email) ? [email] : []);
+                    }} />
+                  <button type="button" className="btn-secondary text-xs" onClick={saveTargetEmail}
+                    disabled={loading || savingTarget || !EMAIL_REGEX.test(targetEmail.trim()) || normalizeEmail(targetEmail) === targets.find(target => target.id === targetId)?.email}>
+                    {savingTarget ? 'Mentés…' : 'Cím mentése'}
+                  </button>
+                </div>
+                {!targetEmail && <p className="text-xs text-amber-700 dark:text-amber-300">Küldés előtt add meg a pontos e-mail címet. A mentett címet a következő ajánlatkérésnél is használhatod.</p>}
+              </div>
+            )}
           </div>
 
           {quote.lastEmailStatus === 'sent' && quote.lastEmailSentAt && (
@@ -293,7 +369,7 @@ export function LabQuoteSendModal({
                 <button
                   type="button"
                   className="text-blue-700 dark:text-blue-300 hover:underline"
-                  onClick={() => setSelected(lastRecipients)}
+                  onClick={() => { setTargetId('custom'); setSelected(lastRecipients); }}
                 >
                   Ugyanoda újra
                 </button>
@@ -420,16 +496,22 @@ export function LabQuoteSendModal({
               Az első cím a levél címzettje, a többi másolatot kap. Bármilyen e-mail cím megadható, pl. a főnővéré.
             </p>
           </div>
-        </div>
+          <label className="flex items-start gap-2 rounded-md bg-gray-50 dark:bg-gray-800 p-3 text-sm">
+            <input type="checkbox" checked={includeUploadLink} onChange={event => setIncludeUploadLink(event.target.checked)} className="mt-1" />
+            <span>Dokumentumfeltöltési link az e-mailben
+              <span className="block text-xs text-gray-500 dark:text-gray-400 mt-1">A címzettek bejelentkezés nélkül tölthetnek fel elkészült dokumentumokat közvetlenül a beteghez. A link 30 napig érvényes.</span>
+            </span>
+          </label>
+        </fieldset>
 
         <div className="border-t dark:border-gray-800 px-5 py-3 flex items-center justify-end gap-2">
-          <button type="button" onClick={onClose} className="btn-secondary text-sm" disabled={sending}>
+          <button type="button" onClick={onClose} className="btn-secondary text-sm" disabled={sending || savingTarget}>
             Mégse
           </button>
           <button
             type="button"
             onClick={handleSend}
-            disabled={sending || selected.length === 0}
+            disabled={sending || savingTarget || loading || selected.length === 0}
             className="btn-primary text-sm flex items-center gap-2 disabled:opacity-50 disabled:cursor-not-allowed"
           >
             {sending ? <Loader2 className="w-4 h-4 animate-spin" /> : <Send className="w-4 h-4" />}

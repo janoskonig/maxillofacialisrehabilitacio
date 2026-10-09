@@ -33,6 +33,7 @@ const PUBLIC_API_PREFIXES = [
 ];
 
 function isPublicRoute(pathname: string): boolean {
+  if (pathname === '/api/lab-quote-upload') return true;
   return PUBLIC_API_PREFIXES.some(prefix => pathname.startsWith(prefix));
 }
 

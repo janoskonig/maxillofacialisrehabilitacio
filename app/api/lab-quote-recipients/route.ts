@@ -1,7 +1,8 @@
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
-import { authedHandler } from '@/lib/api/route-handler';
+import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import { EMAIL_REGEX, resolveLabQuoteRecipients } from '@/lib/email/lab-quote-recipients';
+import { getLabQuoteTargets, isLabQuoteTargetId } from '@/lib/email/lab-quote-targets';
 
 export const dynamic = 'force-dynamic';
 
@@ -23,6 +24,7 @@ const MAX_RECENT = 10;
 export const GET = authedHandler(async () => {
   const pool = getDbPool();
   const defaults = resolveLabQuoteRecipients();
+  const targets = await getLabQuoteTargets();
 
   const suggestions: LabQuoteRecipientSuggestion[] = [];
   const seen = new Set<string>();
@@ -35,6 +37,9 @@ export const GET = authedHandler(async () => {
   };
 
   push(defaults.to, 'Labor (alapértelmezett)', 'labor');
+  for (const target of targets) {
+    if (target.email) push(target.email, target.recipientName, 'labor');
+  }
 
   const [recent, users] = await Promise.all([
     pool.query(
@@ -67,5 +72,23 @@ export const GET = authedHandler(async () => {
     push(row.email, row.doktor_neve?.trim() || null, 'kollega');
   }
 
-  return NextResponse.json({ defaultTo: defaults.to, defaultCc: defaults.cc, suggestions });
+  return NextResponse.json({ defaultTo: defaults.to, defaultCc: defaults.cc, suggestions, targets });
+});
+
+export const PUT = roleHandler(['admin', 'fogpótlástanász', 'beutalo_orvos', 'technikus'], async (req, { auth }) => {
+  const body = await req.json();
+  if (!isLabQuoteTargetId(body?.targetId) || typeof body?.email !== 'string') {
+    return NextResponse.json({ error: 'Érvénytelen célcsoport vagy e-mail cím' }, { status: 400 });
+  }
+  const email = body.email.trim().toLowerCase();
+  if (email.length > 255 || (email && !EMAIL_REGEX.test(email))) {
+    return NextResponse.json({ error: 'Érvénytelen e-mail cím' }, { status: 400 });
+  }
+  await getDbPool().query(
+    `INSERT INTO lab_quote_target_settings (target_id, email, updated_by)
+     VALUES ($1, $2, $3) ON CONFLICT (target_id) DO UPDATE
+     SET email = EXCLUDED.email, updated_by = EXCLUDED.updated_by, updated_at = now()`,
+    [body.targetId, email || null, auth.email]
+  );
+  return NextResponse.json({ targets: await getLabQuoteTargets() });
 });
