@@ -6,6 +6,13 @@ import { buildLabQuoteSendPlan, LabQuoteRecipientError } from '@/lib/email/lab-q
 import { generateLabQuoteRequestPDF } from '@/lib/pdf/lab-quote-request';
 import { HttpError } from '@/lib/auth-server';
 import { Patient, patientSchema } from '@/lib/types';
+import { getLabQuoteTargets, isLabQuoteTargetId } from '@/lib/email/lab-quote-targets';
+import { createLabQuoteUploadLink, LAB_QUOTE_UPLOAD_DAYS } from '@/lib/lab-quote-upload';
+import { getBaseUrlForEmail } from '@/lib/email/templates';
+
+const escapeHtml = (value: string) => value.replace(/[&<>"']/g, char => ({
+  '&': '&amp;', '<': '&lt;', '>': '&gt;', '"': '&quot;', "'": '&#39;',
+}[char]!));
 
 /**
  * Árajánlatkérő PDF email küldése a laboratóriumnak
@@ -27,6 +34,15 @@ export const POST = authedHandler(async (req, { auth, params }) => {
   // Címzettek: a kérés törzséből (recipients: string[] — első = To, többi = CC),
   // üres lista esetén az env-ből / alapértékből. Hibás cím → 400, még a PDF előtt.
   const body = await req.json().catch(() => ({}));
+  let target = null;
+  if (body?.targetId != null) {
+    if (!isLabQuoteTargetId(body.targetId)) throw new HttpError(400, 'Érvénytelen célcsoport');
+    target = (await getLabQuoteTargets()).find(item => item.id === body.targetId)!;
+    if (!body.recipients || (Array.isArray(body.recipients) && body.recipients.length === 0)) {
+      if (!target.email) throw new HttpError(400, 'Ehhez a célcsoporthoz még nincs e-mail cím megadva');
+      body.recipients = [target.email];
+    }
+  }
   let plan;
   try {
     plan = buildLabQuoteSendPlan(body?.recipients);
@@ -35,6 +51,9 @@ export const POST = authedHandler(async (req, { auth, params }) => {
       throw new HttpError(400, error.message, 'INVALID_RECIPIENTS');
     }
     throw error;
+  }
+  if (target && plan.source === 'default') {
+    throw new HttpError(400, 'Adja meg a kiválasztott célcsoport e-mail címét');
   }
 
   // Beteg adatainak lekérdezése
@@ -127,27 +146,36 @@ export const POST = authedHandler(async (req, { auth, params }) => {
 
   // Tárgy előkészítése (kevesebb ékezetes karakter a spam-szűrők miatt)
   const safeSubject = `Arajanlatkero - ${patientName}`;
+  const greeting = target ? `Tisztelt ${target.recipientName}!` : 'Tisztelt Partnerünk!';
+  const uploadLink = body?.includeUploadLink !== false ? await createLabQuoteUploadLink({
+    patientId, quoteId, targetId: target?.id ?? null, recipientEmail: plan.to, createdBy: auth.email,
+  }) : null;
+  // The fragment keeps the secret out of request URLs and access logs.
+  const uploadUrl = uploadLink
+    ? `${getBaseUrlForEmail(req).replace(/\/$/, '')}/lab-quote-upload#token=${uploadLink.token}` : null;
 
   // HTML tartalom előkészítése (tisztább struktúra)
   const htmlContent = `
         <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
           <h2 style="color: #2563eb;">Árajánlatkérő</h2>
-          <p>Tisztelt Laboratórium!</p>
+          <p>${escapeHtml(greeting)}</p>
           <p>Mellékletben küldjük az árajánlatkérőt a következő beteg részére:</p>
           <ul style="line-height: 1.8;">
-            <li><strong>Beteg neve:</strong> ${patientName}</li>
-            ${patient.cim ? `<li><strong>Cím:</strong> ${patient.cim}</li>` : ''}
-            ${patient.varos ? `<li><strong>Város:</strong> ${patient.varos}</li>` : ''}
-            ${patient.iranyitoszam ? `<li><strong>Irányítószám:</strong> ${patient.iranyitoszam}</li>` : ''}
+            <li><strong>Beteg neve:</strong> ${escapeHtml(patientName)}</li>
+            ${patient.cim ? `<li><strong>Cím:</strong> ${escapeHtml(patient.cim)}</li>` : ''}
+            ${patient.varos ? `<li><strong>Város:</strong> ${escapeHtml(patient.varos)}</li>` : ''}
+            ${patient.iranyitoszam ? `<li><strong>Irányítószám:</strong> ${escapeHtml(patient.iranyitoszam)}</li>` : ''}
             ${formattedDate ? `<li><strong>Határidő:</strong> ${formattedDate}</li>` : ''}
           </ul>
-          ${quoteRequest.szoveg ? `<p style="margin-top: 20px;"><strong>Kérés részletei:</strong></p><p style="white-space: pre-wrap; line-height: 1.6;">${quoteRequest.szoveg.replace(/\n/g, '<br>')}</p>` : ''}
-          <p style="margin-top: 30px;">Üdvözlettel,<br><strong>${senderDoctorName}</strong></p>
+          ${quoteRequest.szoveg ? `<p style="margin-top: 20px;"><strong>Kérés részletei:</strong></p><p style="white-space: pre-wrap; line-height: 1.6;">${escapeHtml(quoteRequest.szoveg)}</p>` : ''}
+          ${uploadUrl ? `<p style="margin-top: 24px;"><a href="${escapeHtml(uploadUrl)}" style="display: inline-block; padding: 12px 18px; background: #2563eb; color: white; text-decoration: none; border-radius: 6px;">Elkészült dokumentumok feltöltése</a></p><p>A dokumentumokat ezen a linken közvetlenül feltölthetik hozzánk, bejelentkezés nélkül. A link ${LAB_QUOTE_UPLOAD_DAYS} napig érvényes, kizárólag ehhez az árajánlatkérőhöz használható.</p>` : ''}
+          <p style="margin-top: 30px;">Üdvözlettel,<br><strong>${escapeHtml(senderDoctorName)}</strong></p>
           <p style="margin-top: 10px; color: #6b7280; font-size: 12px;">Semmelweis Egyetem<br>Fogorvostudományi Kar<br>Fogpótlástani Klinika</p>
         </div>
       `;
 
-  await sendEmail({
+  try {
+    await sendEmail({
     to: plan.to,
     ...(plan.cc.length > 0 && { cc: plan.cc }),
     replyTo: plan.replyTo,
@@ -156,7 +184,7 @@ export const POST = authedHandler(async (req, { auth, params }) => {
     text: `
 Árajánlatkérő
 
-Tisztelt Laboratórium!
+${greeting}
 
 Mellékletben küldjük az árajánlatkérőt a következő beteg részére:
 
@@ -167,6 +195,8 @@ ${patient.iranyitoszam ? `Irányítószám: ${patient.iranyitoszam}` : ''}
 ${formattedDate ? `Határidő: ${formattedDate}` : ''}
 
 ${quoteRequest.szoveg ? `Kérés részletei:\n${quoteRequest.szoveg}` : ''}
+
+${uploadUrl ? `Elkészült dokumentumok feltöltése (bejelentkezés nélkül, ${LAB_QUOTE_UPLOAD_DAYS} napig):\n${uploadUrl}` : ''}
 
 Üdvözlettel,
 ${senderDoctorName}
@@ -188,13 +218,21 @@ Fogpótlástani Klinika
       patientId,
       quoteId,
       recipientSource: plan.source,
+      targetId: target?.id ?? null,
+      uploadLinkId: uploadLink?.id ?? null,
     },
   });
+  } catch (error) {
+    if (uploadLink) {
+      await pool.query('UPDATE lab_quote_upload_links SET revoked_at = now() WHERE id = $1', [uploadLink.id]);
+    }
+    throw error;
+  }
 
   return NextResponse.json(
     {
       success: true,
-      message: 'Email sikeresen elküldve a laboratóriumnak',
+      message: 'Email sikeresen elküldve a kiválasztott címzettnek',
       recipient: plan.to,
       cc: plan.cc,
       recipients: [plan.to, ...plan.cc],
