@@ -1,323 +1,83 @@
-import { PDFDocument, rgb, PDFPage } from 'pdf-lib';
-import { getDejaVuFont, getDejaVuBoldFont } from './fonts';
-import { CLINIC_FOOTER } from './clinic-contact';
-import {
-  LAYOUT,
-  TYPOGRAPHY,
-  PDFState,
-  moveDown,
-  addPageIfNeeded,
-  drawCenteredText,
-  drawRightAlignedText,
-  drawLeftAlignedText,
-  drawHorizontalLine,
-  drawFooter,
-  HeaderConfig,
-  drawHeader,
-  wrapTextLines,
-} from './layout';
-import { resolveTooth, isToothMissing, computeDentalDMFT, describeTooth } from '@/lib/dental-status-text';
+import { rgb } from 'pdf-lib';
+import type { Patient } from '@/lib/types';
+import { buildDentalExportContent, dentalProsthesisLines, DENTAL_CODES } from '@/lib/neak-dental-content';
+import { UPPER_ROW, LOWER_ROW, BASE_LABELS } from '@/components/patient-form/odontogram/tooth-conditions';
+import { LAYOUT } from './layout';
+import { ClinicalDocument } from './clinical-document';
 
-interface Patient {
-  id?: string;
-  nev?: string | null;
-  taj?: string | null;
-  meglevoFogak?: Record<string, unknown>;
-  felsoFogpotlasVan?: boolean | null;
-  felsoFogpotlasMikor?: string | null;
-  felsoFogpotlasKeszito?: string | null;
-  felsoFogpotlasElegedett?: boolean | null;
-  felsoFogpotlasProblema?: string | null;
-  felsoFogpotlasTipus?: string | null;
-  fabianFejerdyProtetikaiOsztalyFelso?: string | null;
-  alsoFogpotlasVan?: boolean | null;
-  alsoFogpotlasMikor?: string | null;
-  alsoFogpotlasKeszito?: string | null;
-  alsoFogpotlasElegedett?: boolean | null;
-  alsoFogpotlasProblema?: string | null;
-  alsoFogpotlasTipus?: string | null;
-  fabianFejerdyProtetikaiOsztalyAlso?: string | null;
-  meglevoImplantatumok?: Record<string, string>;
-  nemIsmertPoziciokbanImplantatum?: boolean;
-  nemIsmertPoziciokbanImplantatumRészletek?: string | null;
-}
+/** The current saved odontogram, including both legacy and modern annotations. */
+export async function generateDentalStatusPDF(patient: Partial<Patient>): Promise<Buffer> {
+  const content = buildDentalExportContent(patient);
+  const doc = await ClinicalDocument.create('Fogazati státusz', patient);
+  doc.text('Jelenleg mentett állapot', 11, true);
+  doc.text(content.notes[0], 9);
+  doc.gap(8);
 
-// Note: With DejaVu fonts, we no longer need toWinAnsiSafe for ő/ű characters
-// However, we still need to handle special characters like ✓/✗ and normalize line breaks
-function normalizeText(text: string): string {
-  return String(text)
-    .replace(/\r\n/g, ' ')
-    .replace(/\n/g, ' ')
-    .replace(/\r/g, ' ')
-    .replace(/\u2713/g, '+') // ✓ → +
-    .replace(/\u2717/g, 'X'); // ✗ → X
-}
-
-function drawToothStatus(
-  page: PDFPage,
-  x: number,
-  y: number,
-  cellWidth: number,
-  cellHeight: number,
-  status: 'M' | 'present' | null,
-  description?: string
-): void {
-  const centerX = x + cellWidth / 2;
-  const centerY = y + cellHeight / 2;
-  const size = 7;
-
-  if (status === 'M') {
-    page.drawLine({
-      start: { x: centerX - size, y: centerY - size },
-      end: { x: centerX + size, y: centerY + size },
-      thickness: 2,
-      color: rgb(0.42, 0.45, 0.5),
+  doc.ensureSpace(132);
+  const drawArch = (numbers: number[], label: string) => {
+    doc.text(label, 10, true);
+    const width = LAYOUT.contentWidth / 16;
+    const top = doc.state.y;
+    numbers.forEach((number, i) => {
+      const row = content.rows.find((entry) => entry.number === number)!;
+      const x = LAYOUT.margin + i * width;
+      const hasImplant = Boolean(patient.meglevoImplantatumok?.[String(number)]);
+      const code = hasImplant && !row.explicit ? 'I*' : row.code;
+      doc.state.page.drawRectangle({
+        x, y: top - 36, width, height: 36,
+        borderColor: rgb(0.75, 0.78, 0.8), borderWidth: 0.5,
+        color: row.base === 'missing' ? rgb(0.94, 0.94, 0.94) : rgb(0.97, 0.98, 0.99),
+      });
+      doc.state.page.drawText(String(number), { x: x + 5, y: top - 12, size: 8, font: doc.bold });
+      const size = 7.5;
+      const textWidth = doc.font.widthOfTextAtSize(code, size);
+      doc.state.page.drawText(code, { x: x + (width - textWidth) / 2, y: top - 28, size, font: doc.font });
     });
-    page.drawLine({
-      start: { x: centerX + size, y: centerY - size },
-      end: { x: centerX - size, y: centerY + size },
-      thickness: 2,
-      color: rgb(0.42, 0.45, 0.5),
-    });
-  } else if (status === 'present') {
-    const desc = (description || '').toLowerCase();
-    const hasRemenytelen = desc.includes('reménytelen');
-    const hasKerdeses = desc.includes('kérdéses');
-    if (hasRemenytelen) {
-      page.drawLine({
-        start: { x: centerX, y: centerY - size },
-        end: { x: centerX, y: centerY + size / 3 },
-        thickness: 2.5,
-        color: rgb(0.86, 0.15, 0.15),
-      });
-      page.drawCircle({ x: centerX, y: centerY + size * 0.8, size: 1.8, color: rgb(0.86, 0.15, 0.15) });
-    } else if (hasKerdeses) {
-      page.drawCircle({
-        x: centerX,
-        y: centerY - size / 2,
-        size: size / 2.2,
-        borderColor: rgb(0.92, 0.7, 0.03),
-        borderWidth: 2,
-      });
-      page.drawCircle({ x: centerX, y: centerY + size * 0.75, size: 1.5, color: rgb(0.92, 0.7, 0.03) });
-    } else {
-      page.drawLine({
-        start: { x: centerX - size, y: centerY },
-        end: { x: centerX - size / 3, y: centerY + size },
-        thickness: 2.5,
-        color: rgb(0.06, 0.73, 0.51),
-      });
-      page.drawLine({
-        start: { x: centerX - size / 3, y: centerY + size },
-        end: { x: centerX + size, y: centerY - size },
-        thickness: 2.5,
-        color: rgb(0.06, 0.73, 0.51),
-      });
-    }
-  }
-}
-
-export async function generateDentalStatusPDF(patient: Patient): Promise<Buffer> {
-  const pdf = await PDFDocument.create();
-  const font = await getDejaVuFont(pdf);
-  const fontBold = await getDejaVuBoldFont(pdf);
-  const state: PDFState = {
-    page: pdf.addPage([LAYOUT.pageWidth, LAYOUT.pageHeight]),
-    y: LAYOUT.pageHeight - LAYOUT.margin,
+    doc.gap(44);
   };
+  drawArch(UPPER_ROW, 'Felső állcsont (FDI fogszámok)');
+  drawArch(LOWER_ROW, 'Alsó állcsont (FDI fogszámok)');
+  doc.text(content.notes[1], 8.5);
+  doc.text('I*: külön implantátum-nyilvántartásban szerepel. D / +D: szuvasodás jelölése.', 8.5);
+  doc.text('?: az alapállapot nincs külön megadva; a szöveges bejegyzés a részletes listában olvasható.', 8.5);
+  doc.text(Object.entries(DENTAL_CODES).map(([base, code]) => `${code} = ${BASE_LABELS[base as keyof typeof BASE_LABELS]}`).join('; '), 8.5);
 
-  // Helper function for drawing text
-  const draw = (text: string, size: number, bold: boolean, options?: { align?: 'left' | 'center' }) => {
-    addPageIfNeeded(pdf, state);
-    const normalized = normalizeText(text);
-    const f = bold ? fontBold : font;
-    
-    if (options?.align === 'center') {
-      drawCenteredText(state.page, normalized, state.y, size, f);
-    } else {
-      drawLeftAlignedText(state.page, normalized, state.y, size, f);
-    }
-    moveDown(state, size + TYPOGRAPHY.spacing.sm);
-  };
-
-  // Header with logos
-  await drawHeader(pdf, state.page, state, {
-    institutionName: ['SEMMELWEIS EGYETEM', 'Fogorvostudományi Kar', 'Fogpótlástani Klinika'],
-    director: 'Igazgató: Prof. Dr. Hermann Péter',
-    logo1Path: 'logo_1.png',
-    logo2Path: 'logo_2.png',
-    logoWidth: 60,
-  }, font, fontBold);
-
-  // Date (right-aligned)
-  const currentDate = new Date().toLocaleDateString('hu-HU', { year: 'numeric', month: 'long', day: 'numeric' });
-  addPageIfNeeded(pdf, state);
-  drawRightAlignedText(state.page, `Dátum: ${currentDate}`, state.y, TYPOGRAPHY.scale.small, font, LAYOUT.margin, rgb(0.4, 0.4, 0.4));
-  moveDown(state, TYPOGRAPHY.scale.small + TYPOGRAPHY.spacing.lg);
-
-  // Separator line
-  addPageIfNeeded(pdf, state);
-  drawHorizontalLine(state.page, state.y, LAYOUT.margin, LAYOUT.pageWidth - LAYOUT.margin);
-  moveDown(state, TYPOGRAPHY.spacing.lg);
-
-  // Patient data
-  draw('PÁCIENS ADATOK', TYPOGRAPHY.scale.h3, true);
-  draw(`Beteg neve: ${patient.nev || 'Név nélküli beteg'}`, TYPOGRAPHY.scale.body, false);
-  if (patient.taj) draw(`TAJ szám: ${patient.taj}`, TYPOGRAPHY.scale.body, false);
-  moveDown(state, TYPOGRAPHY.spacing.md);
-
-  draw('FOGAZATI STÁTUSZ', TYPOGRAPHY.scale.h3, true);
-  moveDown(state, TYPOGRAPHY.spacing.sm);
-
-  const fogak: Record<string, unknown> = patient.meglevoFogak || {};
-  const upperLeft = [18, 17, 16, 15, 14, 13, 12, 11];
-  const upperRight = [21, 22, 23, 24, 25, 26, 27, 28];
-  const lowerLeft = [48, 47, 46, 45, 44, 43, 42, 41];
-  const lowerRight = [31, 32, 33, 34, 35, 36, 37, 38];
-
-  const pageWidth = LAYOUT.pageWidth - 2 * LAYOUT.margin;
-  const numTeethPerRow = 8;
-  const spacing = 2;
-  const gapBetweenSides = 10;
-  const cellWidth = Math.floor((pageWidth - numTeethPerRow * spacing - gapBetweenSides) / (numTeethPerRow * 2));
-  const cellHeight = 18;
-  const startX = LAYOUT.margin;
-
-  const drawRow = (teeth: number[], rowStartX: number) => {
-    let xPos = rowStartX;
-    for (const tooth of teeth) {
-      state.page.drawRectangle({
-        x: xPos,
-        y: state.y - cellHeight,
-        width: cellWidth,
-        height: cellHeight,
-        borderColor: rgb(0, 0, 0),
-      });
-      state.page.drawText(tooth.toString(), {
-        x: xPos + 1,
-        y: state.y - 10,
-        size: 7,
-        font: fontBold,
-        color: rgb(0, 0, 0),
-      });
-      const resolved = resolveTooth(fogak[tooth.toString()]);
-      if (resolved) {
-        const st: 'M' | 'present' = isToothMissing(resolved) ? 'M' : 'present';
-        drawToothStatus(state.page, xPos, state.y - cellHeight, cellWidth, cellHeight, st, resolved.description);
-      }
-      xPos += cellWidth + spacing;
-    }
-  };
-  const rightSideX = startX + (cellWidth + spacing) * numTeethPerRow + gapBetweenSides;
-
-  addPageIfNeeded(pdf, state);
-  drawRow(upperLeft, startX);
-  drawRow(upperRight, rightSideX);
-  moveDown(state, cellHeight + TYPOGRAPHY.spacing.sm);
-
-  addPageIfNeeded(pdf, state);
-  drawRow(lowerLeft, startX);
-  drawRow(lowerRight, rightSideX);
-  moveDown(state, cellHeight + TYPOGRAPHY.spacing.md);
-
-  const legend = normalizeText(
-    'Jelentés: + = Megvan (zöld), ? = Kérdéses (sárga), ! = Reménytelen (piros), X = Hiányzik (szürke)'
-  );
-  addPageIfNeeded(pdf, state);
-  drawLeftAlignedText(state.page, legend, state.y, 8, font, LAYOUT.margin, rgb(0.4, 0.4, 0.4));
-  moveDown(state, TYPOGRAPHY.spacing.lg);
-
-  const { d: dCount, f: fCount, m: mCount, dmft } = computeDentalDMFT(fogak);
-
-  addPageIfNeeded(pdf, state);
-  const dmftBoxHeight = 50;
-  state.page.drawRectangle({
-    x: LAYOUT.margin,
-    y: state.y - dmftBoxHeight,
-    width: LAYOUT.contentWidth,
-    height: dmftBoxHeight,
-    color: rgb(0.88, 0.95, 1),
-    borderColor: rgb(0.58, 0.77, 0.99),
-  });
-  
-  // Calculate positions using grid-based approach
-  const col1X = LAYOUT.margin + 10;
-  const col2X = LAYOUT.margin + 130;
-  const col3X = LAYOUT.margin + 250;
-  const col4X = LAYOUT.margin + 360;
-  
-  state.page.drawText('DMF-T INDEX', { x: col1X, y: state.y - 18, size: 11, font: fontBold, color: rgb(0, 0, 0) });
-  state.page.drawText(`D (szuvas): ${dCount}`, { x: col1X, y: state.y - 35, size: 10, font, color: rgb(0.86, 0.15, 0.15) });
-  state.page.drawText(`F (tömött): ${fCount}`, { x: col2X, y: state.y - 35, size: 10, font, color: rgb(0.15, 0.39, 0.92) });
-  state.page.drawText(`M (hiányzik): ${mCount}`, { x: col3X, y: state.y - 35, size: 10, font, color: rgb(0.42, 0.45, 0.5) });
-  state.page.drawText(`DMF-T összesen: ${dmft} / 32`, {
-    x: col4X,
-    y: state.y - 35,
-    size: 10,
-    font: fontBold,
-    color: rgb(0, 0, 0),
-  });
-  moveDown(state, dmftBoxHeight + TYPOGRAPHY.spacing.sm);
-
-  const drawWrapped = (text: string, size: number) => {
-    for (const line of wrapTextLines(normalizeText(text), font, size, LAYOUT.contentWidth)) {
-      addPageIfNeeded(pdf, state);
-      drawLeftAlignedText(state.page, line, state.y, size, font);
-      moveDown(state, size + TYPOGRAPHY.spacing.xs);
-    }
-  };
-
-  const drawArch = (title: string, teeth: number[], fabianFejerdy?: string | null) => {
-    const lines = teeth
-      .slice()
-      .sort((a, b) => a - b)
-      .map((tooth) => {
-        const text = describeTooth(tooth, fogak[tooth.toString()]);
-        return text ? `${tooth}: ${text}` : '';
-      })
-      .filter(Boolean);
-    if (lines.length === 0 && !fabianFejerdy) return;
-
-    moveDown(state, TYPOGRAPHY.spacing.sm);
-    draw(title, 11, true);
-    for (const line of lines) drawWrapped(line, 10);
-    if (fabianFejerdy) {
-      draw('Fábián- és Fejérdy-féle protetikai foghiányosztályozás:', 10, true);
-      drawWrapped(fabianFejerdy, 10);
-    }
-    moveDown(state, TYPOGRAPHY.spacing.sm);
-  };
-
-  drawArch('FELSŐ FOGAK', [...upperLeft, ...upperRight], patient.fabianFejerdyProtetikaiOsztalyFelso);
-  drawArch('ALSÓ FOGAK', [...lowerLeft, ...lowerRight], patient.fabianFejerdyProtetikaiOsztalyAlso);
-
-  if (
-    (patient.meglevoImplantatumok && Object.keys(patient.meglevoImplantatumok).length > 0) ||
-    patient.nemIsmertPoziciokbanImplantatum
-  ) {
-    moveDown(state, TYPOGRAPHY.spacing.md);
-    draw('IMPLANTATUMOK', 11, true);
-    if (patient.meglevoImplantatumok && Object.keys(patient.meglevoImplantatumok).length > 0) {
-      for (const num of Object.keys(patient.meglevoImplantatumok).sort((a, b) => parseInt(a, 10) - parseInt(b, 10))) {
-        addPageIfNeeded(pdf, state);
-        drawLeftAlignedText(state.page, `${num}. fog: ${patient.meglevoImplantatumok[num]}`, state.y, 10, font);
-        moveDown(state, 10 + TYPOGRAPHY.spacing.xs);
-      }
-    }
-    if (patient.nemIsmertPoziciokbanImplantatum) {
-      draw('Nem ismert pozíciókban implantátum', 10, true);
-      if (patient.nemIsmertPoziciokbanImplantatumRészletek) {
-        addPageIfNeeded(pdf, state);
-        drawLeftAlignedText(state.page, patient.nemIsmertPoziciokbanImplantatumRészletek, state.y, 9, font, LAYOUT.margin + 10, rgb(0.29, 0.34, 0.39));
-        moveDown(state, 9 + TYPOGRAPHY.spacing.sm);
-      }
-    }
+  if (content.hasStatus) {
+    const { d, f, m, dmft } = content.index;
+    doc.heading('Jelölésekből számított D/F/M összesítés');
+    doc.text(`D: ${d} | F: ${f} | M: ${m} | D+F+M: ${dmft}`, 10, true);
+    doc.text(content.notes[2], 8.5);
   }
 
-  // Footer
-  const footerY = Math.max(state.y - 20, LAYOUT.margin + 40);
-  drawFooter(state.page, footerY, CLINIC_FOOTER, TYPOGRAPHY.scale.tiny, font);
+  for (const [label, numbers, jaw] of [
+    ['Felső állcsont - részletes státusz', UPPER_ROW, 'upper'],
+    ['Alsó állcsont - részletes státusz', LOWER_ROW, 'lower'],
+  ] as const) {
+    doc.heading(label);
+    const rows = numbers.map((number) => content.rows.find((row) => row.number === number)!).filter((row) => row.explicit);
+    if (rows.length === 0) doc.text(content.hasStatus ? 'Nincs külön fogszintű bejegyzés.' : 'Nincs rögzített fogazati státusz.');
+    for (const row of rows) doc.text(`${row.number}. fog: ${row.detail}`);
+    doc.gap(5);
+    for (const line of dentalProsthesisLines(patient, jaw)) doc.text(line);
+  }
 
-  const bytes = await pdf.save();
-  return Buffer.from(bytes);
+  doc.heading('Implantátumok');
+  const implants = Object.entries(patient.meglevoImplantatumok ?? {}).sort(([a], [b]) => Number(a) - Number(b));
+  const chartImplants = content.rows.filter((row) => row.explicit && row.base === 'implant');
+  for (const [number, detail] of implants) doc.text(`${number}. pozíció: ${detail || 'Implantátum; részletek nincsenek megadva'}`);
+  for (const row of chartImplants) {
+    if (!implants.some(([number]) => number === String(row.number))) doc.text(`${row.number}. pozíció: az odontogramon jelölt implantátum; külön implantátum-adat nincs.`);
+  }
+  if (patient.nemIsmertPoziciokbanImplantatum) {
+    doc.text('Ismeretlen pozícióban lévő implantátum is szerepel a nyilvántartásban.');
+    if (patient.nemIsmertPoziciokbanImplantatumRészletek) doc.text(patient.nemIsmertPoziciokbanImplantatumRészletek);
+  }
+  if (implants.length === 0 && chartImplants.length === 0 && !patient.nemIsmertPoziciokbanImplantatum) {
+    doc.text('Nincs rögzített implantátumadat.');
+  }
+  if (patient.fabianFejerdyProtetikaiOsztaly && !patient.fabianFejerdyProtetikaiOsztalyFelso && !patient.fabianFejerdyProtetikaiOsztalyAlso) {
+    doc.heading('Korábban rögzített, állcsontmegjelölés nélküli osztályozás');
+    doc.text(`Fábián-Fejérdy foghiányosztály: ${patient.fabianFejerdyProtetikaiOsztaly}`);
+  }
+  return doc.finish();
 }
