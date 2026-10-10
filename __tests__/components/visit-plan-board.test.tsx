@@ -380,7 +380,7 @@ describe('Puzzle v2 — kéthasábos vizit-tábla', () => {
   it('üres tervnél a paletta kattintása ÚJ alkalmat nyit (daysOffset = 7, egy kérés)', async () => {
     const { calls } = installFetchMock({ visits: [], workPhases: [] });
     renderManager();
-    await screen.findByText(/A kezelési terv még üres/);
+    await screen.findByText(/Még nincsenek kezelési lépések/);
 
     fireEvent.click(paletteButton('Átadás'));
 
@@ -392,7 +392,7 @@ describe('Puzzle v2 — kéthasábos vizit-tábla', () => {
     });
     const row = await screen.findByTestId('visit-row-v-new-1');
     expect(within(row).getByRole('button', { name: 'Átadás — műveletek' })).toBeTruthy();
-    expect(screen.queryByText(/A kezelési terv még üres/)).toBeNull();
+    expect(screen.queryByText(/Még nincsenek kezelési lépések/)).toBeNull();
   });
 
   it('az egyedi fázis (szabad szöveg) Enterre POST-ol label-lel az aktív alkalomba', async () => {

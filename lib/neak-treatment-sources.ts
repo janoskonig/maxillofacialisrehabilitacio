@@ -10,7 +10,9 @@ export async function loadNeakTreatmentSources(pool: Pick<Pool, 'query'>, patien
   const schema = await pool.query(`SELECT
     to_regclass('public.tooth_treatments') IS NOT NULL AS "hasToothTreatments",
     to_regclass('public.tooth_treatment_catalog') IS NOT NULL AS "hasToothCatalog",
-    to_regclass('public.patient_episodes') IS NOT NULL AS "hasEpisodes"`);
+    to_regclass('public.patient_episodes') IS NOT NULL AS "hasEpisodes",
+    EXISTS (SELECT 1 FROM information_schema.columns
+      WHERE table_schema = 'public' AND table_name = 'patient_episodes' AND column_name = 'treatment_plan') AS "hasEpisodeTreatmentPlan"`);
   const availability = schema.rows[0];
   if (availability?.hasToothTreatments && availability?.hasToothCatalog) {
     const result = await pool.query(
@@ -28,6 +30,7 @@ export async function loadNeakTreatmentSources(pool: Pick<Pool, 'query'>, patien
   if (availability?.hasEpisodes) {
     const result = await pool.query(
       `SELECT pe.id, pe.case_title AS "caseTitle", pe.chief_complaint AS "chiefComplaint", pe.status,
+              ${availability.hasEpisodeTreatmentPlan ? 'pe.treatment_plan' : 'NULL::text'} AS "treatmentPlan",
               tt.label_hu AS "treatmentTypeLabel"
        FROM patient_episodes pe
        LEFT JOIN treatment_types tt ON tt.id = pe.treatment_type_id
@@ -35,6 +38,9 @@ export async function loadNeakTreatmentSources(pool: Pick<Pool, 'query'>, patien
        ORDER BY pe.opened_at DESC, pe.id`, [patientId]
     );
     sources.episodes = result.rows;
+    if (!availability.hasEpisodeTreatmentPlan) {
+      sources.warnings.push('Az epizódonkénti kezelési terv mezőjéhez az adatbázis frissítése szükséges.');
+    }
   } else {
     sources.warnings.push('Az ellátási epizódok adatforrása nem érhető el ezen a rendszeren.');
   }

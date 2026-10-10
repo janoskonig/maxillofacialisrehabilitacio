@@ -502,7 +502,7 @@ export function EpisodeStepsManager({
           aria-expanded={expanded}
         >
           <div className="min-w-0">
-            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Kezelési terv</h3>
+            <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Kezelési lépések</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
               Az időpontok a váz, a kezelések a tartalom — bal oldalról pakolható, egy alkalom = egy időpont
             </p>
@@ -767,7 +767,7 @@ export function EpisodeStepsManager({
                       )}
                       {!hasAnyPlanContent && (
                         <p className="rounded-lg border border-gray-200 dark:border-gray-800 bg-gray-50 dark:bg-gray-800/60 p-3 text-sm text-gray-600 dark:text-gray-400">
-                          A kezelési terv még üres. Kattintson egy kezelésre a bal oldali palettán
+                          Még nincsenek kezelési lépések. Kattintson egy kezelésre a bal oldali palettán
                           (az első alkalom magától létrejön){hasPathways ? ', vagy töltse fel a tervet sablonból' : ''}.
                         </p>
                       )}

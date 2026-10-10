@@ -16,6 +16,7 @@ export interface NeakEpisodeTreatment {
   chiefComplaint?: string | null;
   status: string;
   treatmentTypeLabel?: string | null;
+  treatmentPlan?: string | null;
 }
 
 export interface NeakTreatmentSources {
@@ -43,6 +44,9 @@ function formatDate(value?: Date | string | null): string {
 export function buildTreatmentExportContent(patient: Partial<Patient>, sources: NeakTreatmentSources) {
   const sections: NeakTreatmentSection[] = [];
   const add = (title: string, lines: string[]) => { if (lines.length) sections.push({ title, lines }); };
+  add('Epizódonként rögzített kezelési tervek', sources.episodes
+    .filter((ep) => ep.status !== 'closed')
+    .map((ep) => `${ep.caseTitle?.trim() || ep.chiefComplaint?.trim() || 'Ellátási epizód'}\n${ep.treatmentPlan?.trim() || 'Nincs rögzített szöveges kezelési terv ehhez az epizódhoz.'}`));
   const jaws = [
     ['Felső állcsont - adatlapon rögzített terv', patient.kezelesiTervFelso],
     ['Alsó állcsont - adatlapon rögzített terv', patient.kezelesiTervAlso],
