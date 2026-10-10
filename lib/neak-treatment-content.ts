@@ -1,3 +1,4 @@
+import { getUnassignedLegacyPlan } from '@/lib/episode-treatment-plan';
 import type { Patient } from '@/lib/types';
 
 export interface NeakToothTreatment {
@@ -17,6 +18,8 @@ export interface NeakEpisodeTreatment {
   status: string;
   treatmentTypeLabel?: string | null;
   treatmentPlan?: string | null;
+  treatmentPlanUpper?: string | null;
+  treatmentPlanLower?: string | null;
 }
 
 export interface NeakTreatmentSources {
@@ -44,9 +47,13 @@ function formatDate(value?: Date | string | null): string {
 export function buildTreatmentExportContent(patient: Partial<Patient>, sources: NeakTreatmentSources) {
   const sections: NeakTreatmentSection[] = [];
   const add = (title: string, lines: string[]) => { if (lines.length) sections.push({ title, lines }); };
-  add('Epizódonként rögzített kezelési tervek', sources.episodes
-    .filter((ep) => ep.status !== 'closed')
-    .map((ep) => `${ep.caseTitle?.trim() || ep.chiefComplaint?.trim() || 'Ellátási epizód'}\n${ep.treatmentPlan?.trim() || 'Nincs rögzített szöveges kezelési terv ehhez az epizódhoz.'}`));
+  for (const ep of sources.episodes.filter((episode) => episode.status !== 'closed')) {
+    const title = ep.caseTitle?.trim() || ep.chiefComplaint?.trim() || 'Ellátási epizód';
+    add(`${title} - felső állcsont kezelési terve`, [ep.treatmentPlanUpper?.trim() || 'Nincs rögzített felső kezelési terv.']);
+    add(`${title} - alsó állcsont kezelési terve`, [ep.treatmentPlanLower?.trim() || 'Nincs rögzített alsó kezelési terv.']);
+    const legacy = getUnassignedLegacyPlan(ep);
+    if (legacy) add(`${title} - korábbi, állcsontmegjelölés nélküli terv`, [legacy]);
+  }
   const jaws = [
     ['Felső állcsont - adatlapon rögzített terv', patient.kezelesiTervFelso],
     ['Alsó állcsont - adatlapon rögzített terv', patient.kezelesiTervAlso],

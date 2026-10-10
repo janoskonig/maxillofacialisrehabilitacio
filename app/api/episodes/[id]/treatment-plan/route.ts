@@ -9,6 +9,7 @@ import { parseEpisodeTreatmentPlanUpdate } from '@/lib/episode-treatment-plan';
 export const dynamic = 'force-dynamic';
 
 const SELECT_PLAN = `SELECT id AS "episodeId", treatment_plan AS "treatmentPlan",
+  treatment_plan_upper AS "treatmentPlanUpper", treatment_plan_lower AS "treatmentPlanLower",
   treatment_plan_version AS version FROM patient_episodes WHERE id = $1`;
 
 async function checkSchema() {
@@ -16,6 +17,8 @@ async function checkSchema() {
   const available = await Promise.all([
     probeColumnExists(pool, 'patient_episodes', 'treatment_plan'),
     probeColumnExists(pool, 'patient_episodes', 'treatment_plan_version'),
+    probeColumnExists(pool, 'patient_episodes', 'treatment_plan_upper'),
+    probeColumnExists(pool, 'patient_episodes', 'treatment_plan_lower'),
   ]);
   return available.every(Boolean);
 }
@@ -39,12 +42,19 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
   if ('error' in update) return NextResponse.json({ error: update.error }, { status: 400 });
   if (!await checkSchema()) return unavailable();
   const pool = getDbPool();
+  const isJawUpdate = update.mode === 'jaws';
+  const setPlan = isJawUpdate ? 'treatment_plan_upper = $2, treatment_plan_lower = $3' : 'treatment_plan = $2';
+  const versionIndex = isJawUpdate ? 4 : 3;
+  const values = update.mode === 'jaws'
+    ? [params.id, update.treatmentPlanUpper, update.treatmentPlanLower, update.expectedVersion]
+    : [params.id, update.treatmentPlan, update.expectedVersion];
   const result = await pool.query(
     `UPDATE patient_episodes
-       SET treatment_plan = $2, treatment_plan_version = treatment_plan_version + 1
-     WHERE id = $1 AND treatment_plan_version = $3
-     RETURNING id AS "episodeId", treatment_plan AS "treatmentPlan", treatment_plan_version AS version`,
-    [params.id, update.treatmentPlan, update.expectedVersion]
+       SET ${setPlan}, treatment_plan_version = treatment_plan_version + 1
+     WHERE id = $1 AND treatment_plan_version = $${versionIndex}
+     RETURNING id AS "episodeId", treatment_plan AS "treatmentPlan",
+       treatment_plan_upper AS "treatmentPlanUpper", treatment_plan_lower AS "treatmentPlanLower", treatment_plan_version AS version`,
+    values
   );
   if (!result.rows.length) {
     const current = await pool.query(SELECT_PLAN, [params.id]);

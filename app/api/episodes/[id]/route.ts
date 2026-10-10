@@ -35,11 +35,13 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   ]);
   const planStartSelect = hasPlanStartCol ? ', pe.plan_start_date as "planStartDate"' : '';
   const recallRiskSelect = hasRecallRiskCol ? ', pe.recall_risk_level as "recallRiskLevel"' : '';
+  const hasJawPlans = await probeColumnExists(pool, 'patient_episodes', 'treatment_plan_upper');
   const treatmentPlanSelect = hasTreatmentPlan
     ? ', pe.treatment_plan as "treatmentPlan", pe.treatment_plan_version as "treatmentPlanVersion"' : '';
+  const jawPlanSelect = hasJawPlans ? ', pe.treatment_plan_upper AS "treatmentPlanUpper", pe.treatment_plan_lower AS "treatmentPlanLower"' : '';
   const epRow = await pool.query(
     `SELECT pe.id, pe.patient_id as "patientId", pe.reason, pe.pathway_code as "pathwayCode",
-      pe.chief_complaint as "chiefComplaint", pe.case_title as "caseTitle"${treatmentPlanSelect}, pe.status,
+      pe.chief_complaint as "chiefComplaint", pe.case_title as "caseTitle"${treatmentPlanSelect}${jawPlanSelect}, pe.status,
       pe.opened_at as "openedAt", pe.closed_at as "closedAt"${planStartSelect},
       pe.parent_episode_id as "parentEpisodeId", pe.trigger_type as "triggerType",
       pe.created_at as "createdAt", pe.created_by as "createdBy",
@@ -89,6 +91,8 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     pathwayCode: row.pathwayCode,
     chiefComplaint: row.chiefComplaint,
     treatmentPlan: hasTreatmentPlan ? row.treatmentPlan ?? null : null,
+    treatmentPlanUpper: hasJawPlans ? row.treatmentPlanUpper ?? null : null,
+    treatmentPlanLower: hasJawPlans ? row.treatmentPlanLower ?? null : null,
     treatmentPlanVersion: hasTreatmentPlan ? Number(row.treatmentPlanVersion ?? 0) : 0,
     caseTitle: row.caseTitle,
     status: row.status,
