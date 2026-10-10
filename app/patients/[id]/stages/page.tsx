@@ -19,6 +19,7 @@ import { PatientStageStepper } from '@/components/PatientStageStepper';
 import { PatientCareTimeline } from '@/components/PatientCareTimeline';
 import { PatientEpisodeForm } from '@/components/PatientEpisodeForm';
 import { PatientQuickTaskBlock } from '@/components/PatientQuickTaskBlock';
+import { EpisodeTreatmentPlanEditor, EpisodeTreatmentPlanDisclosure } from '@/components/EpisodeTreatmentPlanEditor';
 import { EpisodeRecallPanel } from '@/components/EpisodeRecallPanel';
 import { useToast } from '@/contexts/ToastContext';
 
@@ -44,9 +45,13 @@ function DomainGlossary() {
             <p className="mt-0.5">Egy beteg egy kezelési ciklusa az elejétől a végéig (pl. „Felső teljes fogpótlás"). Egy betegnek több epizódja is lehet (pl. felső + alsó állcsont külön).</p>
           </div>
           <div>
-            <strong className="text-gray-900 dark:text-gray-100">Kezelési terv sablon (kezelési út)</strong>
+            <strong className="text-gray-900 dark:text-gray-100">Kezelési terv</strong>
+            <p className="mt-0.5">Az epizód céljának, a választott ellátásnak és indoklásának önálló szöveges leírása. A lépéslista fölött rögzíthető, és a NEAK-export kezelési terv dokumentumába is bekerül.</p>
+          </div>
+          <div>
+            <strong className="text-gray-900 dark:text-gray-100">Lépéssablon (kezelési út)</strong>
             <span className="text-gray-500 dark:text-gray-400"> — a terv kiindulópontja</span>
-            <p className="mt-0.5">Előre definiált lépéssorrend, amelyből az epizód kezelési terve generálható. Az adminisztrációban konfigurálható; az epizódra alkalmazva a terv szabadon egyéniesíthető (hozzáadás, átugrás, összevonás, átrendezés).</p>
+            <p className="mt-0.5">Előre definiált lépéssorrend, amelyből az epizód munkafázisai generálhatók. Az adminisztrációban konfigurálható; az epizódra alkalmazva a lépéssor szabadon egyéniesíthető (hozzáadás, átugrás, összevonás, átrendezés).</p>
           </div>
           <div>
             <strong className="text-gray-900 dark:text-gray-100">Munkafázis (lépés)</strong>
@@ -68,7 +73,7 @@ export default function PatientStagesPage() {
   const router = useRouter();
   const params = useParams();
   const patientId = params.id as string;
-  const { showToast } = useToast();
+  const { showToast, confirm: confirmDialog } = useToast();
   const [authorized, setAuthorized] = useState(false);
   const [patient, setPatient] = useState<Patient | null>(null);
   const [loading, setLoading] = useState(true);
@@ -83,6 +88,11 @@ export default function PatientStagesPage() {
   // Több nyitott epizódnál a felhasználó által kiválasztott epizód vezérli a
   // terv-kártyát, a steppert és a foglalást. Alapérték: az első nyitott.
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(null);
+  const [treatmentPlanState, setTreatmentPlanState] = useState({ dirty: false, saving: false });
+  const canLeaveTreatmentPlan = async () => {
+    if (treatmentPlanState.saving) return false;
+    return !treatmentPlanState.dirty || await confirmDialog('A kezelési terv módosításai még nincsenek mentve. Elveti őket és továbblép?');
+  };
 
   const refreshStagesAndEpisodes = useCallback(() => {
     setRefreshKey((k) => k + 1);
@@ -265,7 +275,7 @@ export default function PatientStagesPage() {
                           <li key={ep.id}>
                             <button
                               type="button"
-                              onClick={() => setSelectedEpisodeId(ep.id)}
+                              onClick={async () => { if (activeEpisode?.id !== ep.id && await canLeaveTreatmentPlan()) setSelectedEpisodeId(ep.id); }}
                               aria-pressed={isSelected}
                               className={`w-full text-left flex items-center gap-2 flex-wrap rounded-md px-2 py-1 transition-colors ${
                                 isSelected
@@ -300,7 +310,7 @@ export default function PatientStagesPage() {
               {!isDeceased && !showNewEpisodeForm && (
                 <button
                   type="button"
-                  onClick={() => setShowNewEpisodeForm(true)}
+                  onClick={async () => { if (await canLeaveTreatmentPlan()) setShowNewEpisodeForm(true); }}
                   className="inline-flex items-center gap-1.5 text-sm font-medium text-medical-primary hover:underline shrink-0"
                 >
                   <Plus className="w-4 h-4" />
@@ -345,9 +355,9 @@ export default function PatientStagesPage() {
                   Korábbi epizódok ({closedEpisodes.length})
                 </summary>
                 <ul className="mt-2 space-y-1 text-sm text-gray-700 dark:text-gray-300">
-                  {closedEpisodes.slice(0, 10).map((ep) => (
+                  {closedEpisodes.map((ep) => (
                     <li key={ep.id} className="flex items-center gap-2 flex-wrap">
-                      <span className="text-gray-500 dark:text-gray-400">○ Zárt</span>
+                      <span className="text-gray-500 dark:text-gray-400">{ep.status === 'paused' ? '○ Szünetel' : '○ Zárt'}</span>
                       <span>{ep.chiefComplaint}</span>
                       <span className="text-gray-400 dark:text-gray-500">
                         {new Date(ep.openedAt).toLocaleDateString('hu-HU')}
@@ -357,6 +367,7 @@ export default function PatientStagesPage() {
                           {[ep.carePathwayName, ep.assignedProviderName].filter(Boolean).join(' · ')}
                         </span>
                       )}
+                      <EpisodeTreatmentPlanDisclosure episodeId={ep.id} canEdit={canEditEpisodeSettings} />
                     </li>
                   ))}
                 </ul>
@@ -377,7 +388,16 @@ export default function PatientStagesPage() {
             />
           )}
 
-          {/* 2) Kezelési terv — munkafázisok + tervezett ütemezés EGY kártyán,
+          {activeEpisode && (
+            <EpisodeTreatmentPlanEditor
+              key={`treatment-description-${activeEpisode.id}`}
+              episodeId={activeEpisode.id}
+              canEdit={canEditEpisodeSettings}
+              onStateChange={setTreatmentPlanState}
+            />
+          )}
+
+          {/* 2) Kezelési lépések — munkafázisok + tervezett ütemezés EGY kártyán,
               fejlécében a sablon + felelős orvos metasorral. A foglalás a terv
               soraiból történik (worklist-motor), a lánc-foglalással együtt. */}
           {activeEpisode && (

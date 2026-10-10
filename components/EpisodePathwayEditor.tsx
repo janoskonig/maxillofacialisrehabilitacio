@@ -8,7 +8,7 @@ import { extractSuggestedTreatmentTypeCodes } from '@/lib/treatment-type-normali
 /**
  * Kezelési terv sablon szerkesztő — CSAK a sablonok (kezelési utak) és az
  * állcsont-hozzárendelés. A felelős orvos innen kikerült: az epizód
- * elsőrendű tulajdonsága, a terv-kártya fejlécében váltható
+ * elsőrendű tulajdonsága, a lépéskártya fejlécében váltható
  * (EpisodeProviderControl), a sablontól függetlenül.
  */
 export interface EpisodePathwayEditorProps {
@@ -224,10 +224,10 @@ export function EpisodePathwayEditor({
       aria-labelledby="episode-pathway-heading"
     >
       <h3 id="episode-pathway-heading" className={`font-semibold text-gray-900 dark:text-gray-100 ${compact ? 'text-sm mb-2' : 'text-base mb-3'}`}>
-        Kezelési terv sablonok
+        Kezelési lépéssablonok
       </h3>
       <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-        Alkalmazd a <strong>kezelési terv sablonokat</strong> (lépéssor: konzultáció → munkafázisok). Egy epizódra több sablon is alkalmazható — lépéseik összefésülve jelennek meg, és a tervben szabadon egyéniesíthetők. A felelős orvos a terv-kártya fejlécében váltható, a sablontól függetlenül. A recall (kontroll) időpontok nem a terv részei — a Gyors foglalás blokkban foglalhatók.
+        Alkalmazd a <strong>lépéssablonokat</strong> (lépéssor: konzultáció → munkafázisok). Egy epizódra több sablon is alkalmazható — lépéseik összefésülve jelennek meg, és a lépéslistában szabadon egyéniesíthetők. A felelős orvos a lépéskártya fejlécében váltható, a sablontól függetlenül. A recall (kontroll) időpontok nem a lépéssor részei — a Gyors foglalás blokkban foglalhatók.
       </p>
 
       <div className={`space-y-4 ${compact ? 'space-y-3' : ''}`}>

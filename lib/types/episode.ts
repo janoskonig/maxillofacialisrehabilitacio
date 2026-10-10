@@ -15,6 +15,9 @@ export interface PatientEpisode {
   reason: ReasonType;
   pathwayCode?: string | null;
   chiefComplaint: string;
+  /** Az epizód önálló, szöveges klinikai terve (nem a munkafázislista). */
+  treatmentPlan?: string | null;
+  treatmentPlanVersion?: number;
   caseTitle?: string | null;
   status: EpisodeStatus;
   openedAt: string;

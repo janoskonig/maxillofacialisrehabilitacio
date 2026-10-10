@@ -28,15 +28,18 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   const pool = getDbPool();
   const episodeId = params.id;
 
-  const [hasPlanStartCol, hasRecallRiskCol] = await Promise.all([
+  const [hasPlanStartCol, hasRecallRiskCol, hasTreatmentPlan] = await Promise.all([
     probeColumnExists(pool, 'patient_episodes', 'plan_start_date'),
     probeColumnExists(pool, 'patient_episodes', 'recall_risk_level'),
+    probeColumnExists(pool, 'patient_episodes', 'treatment_plan'),
   ]);
   const planStartSelect = hasPlanStartCol ? ', pe.plan_start_date as "planStartDate"' : '';
   const recallRiskSelect = hasRecallRiskCol ? ', pe.recall_risk_level as "recallRiskLevel"' : '';
+  const treatmentPlanSelect = hasTreatmentPlan
+    ? ', pe.treatment_plan as "treatmentPlan", pe.treatment_plan_version as "treatmentPlanVersion"' : '';
   const epRow = await pool.query(
     `SELECT pe.id, pe.patient_id as "patientId", pe.reason, pe.pathway_code as "pathwayCode",
-      pe.chief_complaint as "chiefComplaint", pe.case_title as "caseTitle", pe.status,
+      pe.chief_complaint as "chiefComplaint", pe.case_title as "caseTitle"${treatmentPlanSelect}, pe.status,
       pe.opened_at as "openedAt", pe.closed_at as "closedAt"${planStartSelect},
       pe.parent_episode_id as "parentEpisodeId", pe.trigger_type as "triggerType",
       pe.created_at as "createdAt", pe.created_by as "createdBy",
@@ -85,6 +88,8 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     reason: row.reason,
     pathwayCode: row.pathwayCode,
     chiefComplaint: row.chiefComplaint,
+    treatmentPlan: hasTreatmentPlan ? row.treatmentPlan ?? null : null,
+    treatmentPlanVersion: hasTreatmentPlan ? Number(row.treatmentPlanVersion ?? 0) : 0,
     caseTitle: row.caseTitle,
     status: row.status,
     openedAt: (row.openedAt as Date)?.toISOString?.() ?? String(row.openedAt),

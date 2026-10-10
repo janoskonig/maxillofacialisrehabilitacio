@@ -1,0 +1,115 @@
+'use client';
+
+import { useCallback, useEffect, useState } from 'react';
+import { useToast } from '@/contexts/ToastContext';
+import { MAX_EPISODE_TREATMENT_PLAN_LENGTH, type EpisodeTreatmentPlanRecord } from '@/lib/episode-treatment-plan';
+
+interface Props {
+  episodeId: string;
+  canEdit: boolean;
+  onStateChange?: (state: { dirty: boolean; saving: boolean }) => void;
+}
+
+export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange }: Props) {
+  const { showToast } = useToast();
+  const [plan, setPlan] = useState<EpisodeTreatmentPlanRecord | null>(null);
+  const [draft, setDraft] = useState('');
+  const [loading, setLoading] = useState(true);
+  const [saving, setSaving] = useState(false);
+  const [error, setError] = useState<string | null>(null);
+  const [conflict, setConflict] = useState(false);
+  const dirty = plan !== null && draft.trim() !== (plan.treatmentPlan ?? '');
+
+  const load = useCallback(async (signal?: AbortSignal) => {
+    setLoading(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/treatment-plan`, { credentials: 'include', signal });
+      const data = await res.json();
+      if (!res.ok) throw new Error(data.error || 'Nem sikerült betölteni a kezelési tervet.');
+      if (signal?.aborted) return;
+      setPlan(data.plan);
+      setDraft(data.plan.treatmentPlan ?? '');
+      setConflict(false);
+    } catch (e) {
+      if (!signal?.aborted) setError(e instanceof Error ? e.message : 'Betöltési hiba.');
+    } finally {
+      if (!signal?.aborted) setLoading(false);
+    }
+  }, [episodeId]);
+
+  useEffect(() => {
+    const controller = new AbortController();
+    void load(controller.signal);
+    return () => controller.abort();
+  }, [load]);
+  useEffect(() => { onStateChange?.({ dirty, saving }); }, [dirty, saving, onStateChange]);
+  useEffect(() => () => onStateChange?.({ dirty: false, saving: false }), [onStateChange]);
+  useEffect(() => {
+    if (!dirty) return;
+    const guard = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
+    window.addEventListener('beforeunload', guard);
+    return () => window.removeEventListener('beforeunload', guard);
+  }, [dirty]);
+
+  const save = async () => {
+    if (!plan || !canEdit || !dirty || saving) return;
+    setSaving(true);
+    setError(null);
+    try {
+      const res = await fetch(`/api/episodes/${episodeId}/treatment-plan`, {
+        method: 'PATCH', credentials: 'include', headers: { 'Content-Type': 'application/json' },
+        body: JSON.stringify({ treatmentPlan: draft.trim() || null, expectedVersion: plan.version }),
+      });
+      const data = await res.json();
+      if (res.status === 409 && data.code === 'TREATMENT_PLAN_CONFLICT') {
+        setPlan(data.plan);
+        setConflict(true);
+        setError('A kezelési tervet közben más módosította. A saját szövege megmaradt; mentés előtt hasonlítsa össze a friss változattal.');
+        return;
+      }
+      if (!res.ok) throw new Error(data.error || 'Nem sikerült menteni a kezelési tervet.');
+      setPlan(data.plan);
+      setDraft(data.plan.treatmentPlan ?? '');
+      setConflict(false);
+      showToast('Kezelési terv mentve.', 'success');
+    } catch (e) {
+      setError(e instanceof Error ? e.message : 'Mentési hiba.');
+    } finally { setSaving(false); }
+  };
+
+  return (
+    <section aria-label="Epizód kezelési terve" className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
+      <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Kezelési terv</h3>
+      <p className="mt-1 mb-3 text-sm text-gray-600 dark:text-gray-400">Az epizód tervezett ellátásának szöveges leírása. Mentés után a NEAK-csomag külön kezelési terv dokumentumában is megjelenik.</p>
+      {loading ? <p role="status">Kezelési terv betöltése…</p> : plan ? (
+        canEdit ? <>
+          <label htmlFor={`treatment-plan-${episodeId}`} className="sr-only">Kezelési terv szövege</label>
+          <textarea id={`treatment-plan-${episodeId}`} value={draft} onChange={(e) => setDraft(e.target.value)} disabled={saving}
+            rows={7} maxLength={MAX_EPISODE_TREATMENT_PLAN_LENGTH}
+            placeholder="A tervezett ellátás célja, a választott megoldás, az érintett állcsontok vagy fogak és a terv indoklása…"
+            className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-950 p-3 text-sm text-gray-900 dark:text-gray-100" />
+          <div className="mt-2 flex flex-wrap items-center gap-3">
+            <button type="button" onClick={save} disabled={!dirty || saving} className="btn-primary text-sm disabled:opacity-50">{saving ? 'Mentés…' : conflict ? 'Áttekintett terv mentése' : 'Kezelési terv mentése'}</button>
+            {dirty && <button type="button" disabled={saving} onClick={() => { setDraft(plan.treatmentPlan ?? ''); setConflict(false); setError(null); }} className="text-sm underline">Módosítások elvetése</button>}
+            <span className="text-xs text-gray-500 dark:text-gray-400" role="status">{dirty ? 'Nem mentett módosítások' : plan.treatmentPlan ? 'Mentett kezelési terv' : 'Nincs még rögzített kezelési terv'}</span>
+          </div>
+        </> : <p className="whitespace-pre-wrap break-words text-sm text-gray-700 dark:text-gray-300">{plan.treatmentPlan || 'Nincs rögzített kezelési terv.'}</p>
+      ) : <button type="button" onClick={() => load()} className="text-sm underline">Újrapróbálás</button>}
+      {error && <p role="alert" className="mt-3 text-sm text-red-700 dark:text-red-300">{error}</p>}
+      {conflict && plan && <div className="mt-3 rounded border border-amber-200 dark:border-amber-700 p-3 text-sm">
+        <p className="font-semibold">A szerveren mentett friss változat</p>
+        <p className="mt-1 whitespace-pre-wrap break-words">{plan.treatmentPlan || 'Nincs rögzített kezelési terv.'}</p>
+      </div>}
+    </section>
+  );
+}
+
+/** Historical episodes load their saved plan only when expanded. */
+export function EpisodeTreatmentPlanDisclosure({ episodeId, canEdit }: Props) {
+  const [open, setOpen] = useState(false);
+  return <div className="w-full mt-2">
+    <button type="button" onClick={() => setOpen(true)} disabled={open} aria-expanded={open} className="text-sm text-medical-primary underline">Kezelési terv megtekintése</button>
+    {open && <div className="mt-2"><EpisodeTreatmentPlanEditor episodeId={episodeId} canEdit={canEdit} /></div>}
+  </div>;
+}

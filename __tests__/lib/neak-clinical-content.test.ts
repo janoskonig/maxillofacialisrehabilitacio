@@ -62,6 +62,21 @@ describe('NEAK treatment content', () => {
     expect(text).toContain('A rögzített felszíni igényhez kapcsolódó megjegyzés.');
     expect(text).toContain('Felső rehabilitáció; kezelés: Teljes lemezes fogpótlás');
   });
+  it('exports the narrative entered on each active episode before legacy plan content', () => {
+    const result = buildTreatmentExportContent(patient, { ...sources, episodes: [
+      { id: 'e1', caseTitle: 'Felső rehabilitáció', status: 'open', treatmentPlan: 'Egyéni klinikai terv.\nIndoklás.' },
+      { id: 'e2', chiefComplaint: 'Alsó rehabilitáció', status: 'paused', treatmentPlan: 'Másik epizód terve.' },
+      { id: 'e3', status: 'closed', treatmentPlan: 'Korábbi lezárt terv' },
+    ] });
+    expect(result.sections[0].title).toBe('Epizódonként rögzített kezelési tervek');
+    expect(result.sections[0].lines).toEqual(['Felső rehabilitáció\nEgyéni klinikai terv.\nIndoklás.', 'Alsó rehabilitáció\nMásik epizód terve.']);
+  });
+
+  it('does not present episode context as a clinical narrative when no plan is saved', () => {
+    const result = buildTreatmentExportContent({}, { ...sources, toothTreatments: [], episodes: [{ id: 'e1', chiefComplaint: 'Nyitott epizód', status: 'open' }] });
+    expect(result.sections[0].lines[0]).toContain('Nincs rögzített szöveges kezelési terv ehhez az epizódhoz.');
+  });
+
   it('preserves unknown codes visibly and falls back to legacy labels', () => {
     expect(treatmentLabel({ treatmentTypeCode: 'unknown' }, sources.labels)).toBe('Ismeretlen kezeléstípus (unknown)');
     expect(treatmentLabel({ treatmentTypeCode: 'unknown', tipus: 'Régi megnevezés' }, sources.labels)).toBe('Régi megnevezés');

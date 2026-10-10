@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { mapEpisodePathwayRow, type EpisodePathwayApiRow } from '@/lib/map-episode-pathway-response';
 import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import type { PatientEpisode } from '@/lib/types';
+import { probeColumnExists } from '@/lib/schema-probe';
 import { logActivity } from '@/lib/activity';
 import { createOpenEpisodeWithInitialStageZero, EPISODE_REASON_VALUES } from '@/lib/patient-episode-create';
 import { isDeceasedPatientEpisodeError } from '@/lib/patient-death-care';
@@ -17,6 +18,8 @@ function rowToEpisode(row: Record<string, unknown>): PatientEpisode {
     reason: row.reason as PatientEpisode['reason'],
     pathwayCode: (row.pathwayCode as string) || null,
     chiefComplaint: row.chiefComplaint as string,
+    treatmentPlan: (row.treatmentPlan as string) ?? null,
+    treatmentPlanVersion: Number(row.treatmentPlanVersion ?? 0),
     caseTitle: (row.caseTitle as string) || null,
     status: row.status as PatientEpisode['status'],
     openedAt: (row.openedAt as Date)?.toISOString?.() ?? String(row.openedAt),
@@ -57,6 +60,9 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     return NextResponse.json({ episodes: [] });
   }
 
+  const hasTreatmentPlan = await probeColumnExists(pool, 'patient_episodes', 'treatment_plan');
+  const treatmentPlanSelect = hasTreatmentPlan
+    ? ', pe.treatment_plan as "treatmentPlan", pe.treatment_plan_version as "treatmentPlanVersion"' : '';
   const result = await pool.query(
     `SELECT 
       pe.id,
@@ -64,7 +70,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
       pe.reason,
       pe.pathway_code as "pathwayCode",
       pe.chief_complaint as "chiefComplaint",
-      pe.case_title as "caseTitle",
+      pe.case_title as "caseTitle"${treatmentPlanSelect},
       pe.status,
       pe.opened_at as "openedAt",
       pe.closed_at as "closedAt",
