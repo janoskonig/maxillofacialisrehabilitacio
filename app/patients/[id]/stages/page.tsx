@@ -46,7 +46,7 @@ function DomainGlossary() {
           </div>
           <div>
             <strong className="text-gray-900 dark:text-gray-100">Kezelési terv</strong>
-            <p className="mt-0.5">Az epizód céljának, a választott ellátásnak és indoklásának önálló szöveges leírása. A lépéslista fölött rögzíthető, és a NEAK-export kezelési terv dokumentumába is bekerül.</p>
+            <p className="mt-0.5">Az epizód céljának, a választott ellátásnak és indoklásának szöveges leírása, külön a felső és az alsó állcsontra. A lépéslista fölött rögzíthető, és a NEAK-export kezelési terv dokumentumába is bekerül.</p>
           </div>
           <div>
             <strong className="text-gray-900 dark:text-gray-100">Lépéssablon (kezelési út)</strong>

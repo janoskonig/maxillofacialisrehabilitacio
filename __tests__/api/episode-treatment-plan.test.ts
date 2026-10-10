@@ -66,4 +66,23 @@ describe('Episode treatment plan API', () => {
     expect((await GET(request(), { params: { id } })).status).toBe(503);
     expect(m.query).not.toHaveBeenCalled();
   });
+  it('stores upper and lower plans atomically, leaving the old common text untouched', async () => {
+    const res = await PATCH(request({ treatmentPlanUpper: ' Felső terv ', treatmentPlanLower: ' Alsó terv ', expectedVersion: 1 }), { params: { id } });
+    expect(res.status).toBe(200);
+    expect(m.query.mock.calls[0][1]).toEqual([id, 'Felső terv', 'Alsó terv', 1]);
+    const setClause = m.query.mock.calls[0][0].split('WHERE')[0];
+    expect(setClause).toContain('treatment_plan_upper = $2');
+    expect(setClause).toContain('treatment_plan_lower = $3');
+    expect(setClause).not.toContain('treatment_plan =');
+  });
+  it.each([
+    { treatmentPlanUpper: 'Csak felső', expectedVersion: 0 },
+    { treatmentPlanUpper: 'Felső', treatmentPlanLower: 42, expectedVersion: 0 },
+    { treatmentPlanUpper: 'Felső', treatmentPlanLower: null, treatmentPlan: 'Közös', expectedVersion: 0 },
+    { treatmentPlanUpper: 'x'.repeat(MAX_EPISODE_TREATMENT_PLAN_LENGTH + 1), treatmentPlanLower: null, expectedVersion: 0 },
+  ])('rejects incomplete or invalid jaw updates before writing', async (body) => {
+    expect((await PATCH(request(body), { params: { id } })).status).toBe(400);
+    expect(m.query).not.toHaveBeenCalled();
+  });
+
 });

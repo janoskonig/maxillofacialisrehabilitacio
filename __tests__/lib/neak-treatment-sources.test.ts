@@ -6,7 +6,7 @@ describe('NEAK treatment source loading', () => {
   it('uses patient-scoped queries and catalog labels', async () => {
     const query = vi.fn()
       .mockResolvedValueOnce({ rows: [{ code: 'complete', label: 'Teljes fogpótlás' }] })
-      .mockResolvedValueOnce({ rows: [{ hasToothTreatments: true, hasToothCatalog: true, hasEpisodes: true, hasEpisodeTreatmentPlan: true }] })
+      .mockResolvedValueOnce({ rows: [{ hasToothTreatments: true, hasToothCatalog: true, hasEpisodes: true, hasEpisodeTreatmentPlan: true, hasJawTreatmentPlans: true }] })
       .mockResolvedValueOnce({ rows: [{ id: 't1', toothNumber: 15, status: 'pending', labelHu: 'Tömés' }] })
       .mockResolvedValueOnce({ rows: [{ id: 'e1', status: 'open' }] });
     const result = await loadNeakTreatmentSources({ query } as unknown as Pick<Pool, 'query'>, 'p1');

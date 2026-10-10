@@ -49,7 +49,7 @@ beforeEach(() => {
     if (sql.includes('FROM lab_quote_requests')) return { rows: [] };
     if (sql.includes('FROM patient_documents')) return { rows: documents };
     if (sql.includes('FROM treatment_types')) return { rows: [{ code: 'complete', label: 'Teljes lemezes fogpótlás' }] };
-    if (sql.includes('to_regclass')) return { rows: [{ hasToothTreatments: true, hasToothCatalog: true, hasEpisodes: true, hasEpisodeTreatmentPlan: true }] };
+    if (sql.includes('to_regclass')) return { rows: [{ hasToothTreatments: true, hasToothCatalog: true, hasEpisodes: true, hasEpisodeTreatmentPlan: true, hasJawTreatmentPlans: true }] };
     if (sql.includes('FROM tooth_treatments')) return { rows: [{ id: 't1', toothNumber: 16, treatmentCode: 'tomes', labelHu: 'Tömés', status: 'pending', notes: 'Okkluzális felszín' }] };
     if (sql.includes('FROM patient_episodes')) return { rows: [] };
     throw new Error(`Unexpected query: ${sql}`);

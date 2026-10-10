@@ -17,6 +17,8 @@ export interface PatientEpisode {
   chiefComplaint: string;
   /** Az epizód önálló, szöveges klinikai terve (nem a munkafázislista). */
   treatmentPlan?: string | null;
+  treatmentPlanUpper?: string | null;
+  treatmentPlanLower?: string | null;
   treatmentPlanVersion?: number;
   caseTitle?: string | null;
   status: EpisodeStatus;

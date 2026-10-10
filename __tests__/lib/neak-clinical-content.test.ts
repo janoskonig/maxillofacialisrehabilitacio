@@ -62,19 +62,24 @@ describe('NEAK treatment content', () => {
     expect(text).toContain('A rögzített felszíni igényhez kapcsolódó megjegyzés.');
     expect(text).toContain('Felső rehabilitáció; kezelés: Teljes lemezes fogpótlás');
   });
-  it('exports the narrative entered on each active episode before legacy plan content', () => {
-    const result = buildTreatmentExportContent(patient, { ...sources, episodes: [
-      { id: 'e1', caseTitle: 'Felső rehabilitáció', status: 'open', treatmentPlan: 'Egyéni klinikai terv.\nIndoklás.' },
-      { id: 'e2', chiefComplaint: 'Alsó rehabilitáció', status: 'paused', treatmentPlan: 'Másik epizód terve.' },
-      { id: 'e3', status: 'closed', treatmentPlan: 'Korábbi lezárt terv' },
+  it('exports upper and lower clinical plans under separate episode headings', () => {
+    const result = buildTreatmentExportContent({}, { ...sources, toothTreatments: [], episodes: [
+      { id: 'e1', caseTitle: 'Rehabilitáció', status: 'open', treatmentPlanUpper: 'Felső terv.\nIndoklás.', treatmentPlanLower: 'Alsó terv.' },
+      { id: 'e2', status: 'closed', treatmentPlanUpper: 'Lezárt terv' },
     ] });
-    expect(result.sections[0].title).toBe('Epizódonként rögzített kezelési tervek');
-    expect(result.sections[0].lines).toEqual(['Felső rehabilitáció\nEgyéni klinikai terv.\nIndoklás.', 'Alsó rehabilitáció\nMásik epizód terve.']);
+    expect(result.sections[0]).toEqual({ title: 'Rehabilitáció - felső állcsont kezelési terve', lines: ['Felső terv.\nIndoklás.'] });
+    expect(result.sections[1]).toEqual({ title: 'Rehabilitáció - alsó állcsont kezelési terve', lines: ['Alsó terv.'] });
+    expect(JSON.stringify(result)).not.toContain('Lezárt terv');
   });
-
-  it('does not present episode context as a clinical narrative when no plan is saved', () => {
-    const result = buildTreatmentExportContent({}, { ...sources, toothTreatments: [], episodes: [{ id: 'e1', chiefComplaint: 'Nyitott epizód', status: 'open' }] });
-    expect(result.sections[0].lines[0]).toContain('Nincs rögzített szöveges kezelési terv ehhez az epizódhoz.');
+  it('preserves an unclassified older plan without claiming it belongs to either jaw', () => {
+    const result = buildTreatmentExportContent({}, { ...sources, toothTreatments: [], episodes: [{ id: 'e1', chiefComplaint: 'Nyitott epizód', status: 'open', treatmentPlan: 'Korábbi közös terv' }] });
+    expect(result.sections[0].lines).toEqual(['Nincs rögzített felső kezelési terv.']);
+    expect(result.sections[1].lines).toEqual(['Nincs rögzített alsó kezelési terv.']);
+    expect(result.sections[2].lines).toEqual(['Korábbi közös terv']);
+  });
+  it('does not repeat an older plan when its exact text has been assigned to a jaw', () => {
+    const result = buildTreatmentExportContent({}, { ...sources, toothTreatments: [], episodes: [{ id: 'e1', status: 'open', treatmentPlan: 'Régi terv', treatmentPlanUpper: 'Régi terv' }] });
+    expect(result.sections.some((section) => section.title.includes('állcsontmegjelölés nélküli'))).toBe(false);
   });
 
   it('preserves unknown codes visibly and falls back to legacy labels', () => {

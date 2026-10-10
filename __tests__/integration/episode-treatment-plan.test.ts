@@ -41,4 +41,24 @@ describe('Episode treatment plan persistence', () => {
     const row = (await getDbPool().query('SELECT treatment_plan, treatment_plan_version FROM patient_episodes WHERE id = $1', [a.id])).rows[0];
     expect(row).toEqual({ treatment_plan: null, treatment_plan_version: 2 });
   });
+  it('persists both jaw plans separately and preserves old text on update and clear', async () => {
+    const { user, patient, a } = await fixture();
+    await getDbPool().query('UPDATE patient_episodes SET case_title = $2 WHERE id = $1', [a.id, 'Vizsgált epizód']);
+    expect((await save(a.id, user, 'Korábbi közös leírás', 0)).status).toBe(200);
+    const update = async (upper: string | null, lower: string | null, version: number) => PATCH(
+      await authedRequest(`http://test.local/api/episodes/${a.id}/treatment-plan`, { user, method: 'PATCH', body: { treatmentPlanUpper: upper, treatmentPlanLower: lower, expectedVersion: version } }),
+      { params: { id: a.id } }
+    );
+    expect((await update('Felső egyéni terv', 'Alsó egyéni terv', 1)).status).toBe(200);
+    let current = await GET(await authedRequest(`http://test.local/api/episodes/${a.id}/treatment-plan`, { user }), { params: { id: a.id } });
+    expect((await current.json()).plan).toMatchObject({ treatmentPlan: 'Korábbi közös leírás', treatmentPlanUpper: 'Felső egyéni terv', treatmentPlanLower: 'Alsó egyéni terv', version: 2 });
+    const sources = await loadNeakTreatmentSources(getDbPool(), patient.id);
+    const sections = buildTreatmentExportContent({}, sources).sections;
+    expect(sections.find((section) => section.title === 'Vizsgált epizód - felső állcsont kezelési terve')?.lines).toEqual(['Felső egyéni terv']);
+    expect(sections.find((section) => section.title === 'Vizsgált epizód - alsó állcsont kezelési terve')?.lines).toEqual(['Alsó egyéni terv']);
+    expect((await update(null, 'Alsó egyéni terv', 2)).status).toBe(200);
+    current = await GET(await authedRequest(`http://test.local/api/episodes/${a.id}/treatment-plan`, { user }), { params: { id: a.id } });
+    expect((await current.json()).plan).toMatchObject({ treatmentPlanUpper: null, treatmentPlanLower: 'Alsó egyéni terv', treatmentPlan: 'Korábbi közös leírás' });
+  });
+
 });
