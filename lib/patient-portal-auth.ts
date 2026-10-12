@@ -26,8 +26,6 @@ export async function createMagicLinkToken(
 
   console.log('[createMagicLinkToken] Creating token:', {
     patientId,
-    tokenLength: token.length,
-    tokenFirst10: token.substring(0, 10),
     expiresAt: expiresAt.toISOString(),
     ipAddress,
   });
@@ -87,8 +85,8 @@ export async function createEmailVerificationToken(
 }
 
 /**
- * Verify and consume a portal token
- * Returns patient ID if token is valid, null otherwise
+ * Verify a portal token, consuming magic links atomically.
+ * Email verification remains non-consuming; used magic links return isUsed.
  */
 export async function verifyPortalToken(
   token: string,
@@ -96,74 +94,40 @@ export async function verifyPortalToken(
 ): Promise<{ patientId: string; isUsed: boolean } | null> {
   const pool = getDbPool();
 
-  console.log('[verifyPortalToken] Starting verification, tokenType:', tokenType, 'token length:', token?.length, 'token first 10 chars:', token?.substring(0, 10));
-
   try {
+    if (tokenType === 'magic_link') {
+      // PostgreSQL rechecks the predicate after a concurrent row update, so
+      // only one request can claim the link. A separate SELECT then UPDATE
+      // would allow both requests to establish a new session.
+      const consumed = await pool.query(
+        `UPDATE patient_portal_tokens
+         SET used_at = CURRENT_TIMESTAMP
+         WHERE token = $1 AND token_type = $2
+           AND used_at IS NULL AND expires_at > CURRENT_TIMESTAMP
+         RETURNING patient_id`,
+        [token, tokenType]
+      );
+
+      if (consumed.rows.length > 0) {
+        return { patientId: consumed.rows[0].patient_id, isUsed: false };
+      }
+    }
+
     const result = await pool.query(
-      `SELECT patient_id, expires_at, used_at, token_type, created_at
+      `SELECT patient_id, used_at
        FROM patient_portal_tokens
-       WHERE token = $1 AND token_type = $2`,
+       WHERE token = $1 AND token_type = $2
+         AND expires_at > CURRENT_TIMESTAMP`,
       [token, tokenType]
     );
 
-    console.log('[verifyPortalToken] Query result rows:', result.rows.length);
-    
-    if (result.rows.length === 0) {
-      console.log('[verifyPortalToken] Token not found in database');
-      // Let's also check if token exists with different type
-      const checkOtherType = await pool.query(
-        `SELECT token_type FROM patient_portal_tokens WHERE token = $1`,
-        [token]
-      );
-      if (checkOtherType.rows.length > 0) {
-        console.log('[verifyPortalToken] Token found but with different type:', checkOtherType.rows[0].token_type, 'expected:', tokenType);
-      }
-      return null;
-    }
-
     const row = result.rows[0];
-    console.log('[verifyPortalToken] Token found:', {
-      patientId: row.patient_id,
-      expiresAt: row.expires_at,
-      usedAt: row.used_at,
-      tokenType: row.token_type,
-      createdAt: row.created_at,
-      now: new Date(),
-    });
+    if (!row) return null;
 
-    // Check if expired
-    const expiresAt = new Date(row.expires_at);
-    const now = new Date();
-    console.log('[verifyPortalToken] Expiry check:', {
-      expiresAt: expiresAt.toISOString(),
-      now: now.toISOString(),
-      isExpired: expiresAt < now,
-    });
-    
-    if (expiresAt < now) {
-      console.log('[verifyPortalToken] Token expired');
-      return null;
-    }
-
-    // Check if already used (for magic_link tokens)
-    if (tokenType === 'magic_link' && row.used_at) {
-      console.log('[verifyPortalToken] Token already used at:', row.used_at);
-      return { patientId: row.patient_id, isUsed: true };
-    }
-
-    // Mark as used if it's a magic_link token
     if (tokenType === 'magic_link') {
-      console.log('[verifyPortalToken] Marking token as used');
-      await pool.query(
-        `UPDATE patient_portal_tokens 
-         SET used_at = CURRENT_TIMESTAMP 
-         WHERE token = $1`,
-        [token]
-      );
-      console.log('[verifyPortalToken] Token marked as used');
+      return row.used_at ? { patientId: row.patient_id, isUsed: true } : null;
     }
 
-    console.log('[verifyPortalToken] Token verified successfully, patientId:', row.patient_id);
     return { patientId: row.patient_id, isUsed: false };
   } catch (error: any) {
     console.error('[verifyPortalToken] Error:', {

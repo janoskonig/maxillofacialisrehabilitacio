@@ -53,7 +53,7 @@ export async function verifyPatientPortalSession(
  * Returns session info if valid, null otherwise
  */
 export async function getPatientPortalSessionInfo(
-  request: NextRequest
+  request?: NextRequest
 ): Promise<PatientPortalSessionInfo | null> {
   try {
     const cookieStore = await cookies();

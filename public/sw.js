@@ -1,5 +1,5 @@
 /* eslint-disable no-restricted-globals */
-const SW_VERSION = "v3"; // emeld, ha logikát változtatsz (nem kötelező, de hasznos)
+const SW_VERSION = "v4"; // emeld, ha logikát változtatsz (nem kötelező, de hasznos)
 const CACHE_NAME = `maxrehab-static-${SW_VERSION}`;
 
 const STATIC_ASSETS = [
@@ -173,8 +173,12 @@ self.addEventListener("fetch", (event) => {
   // Dev módban ne interceptáljunk semmit — a Next.js dev server kezel mindent
   if (IS_DEV) return;
 
-  // API ne legyen cache-elve
-  if (url.pathname.startsWith("/api/")) {
+  // API és a bejelentkezési tokent tartalmazó oldal ne legyen cache-elve.
+  if (
+    url.pathname.startsWith("/api/") ||
+    url.pathname === "/patient-portal/sign-in" ||
+    url.pathname === "/patient-portal/sign-in/"
+  ) {
     return;
   }
 

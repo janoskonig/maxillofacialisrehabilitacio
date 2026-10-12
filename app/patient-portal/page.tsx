@@ -1,5 +1,9 @@
 import { Suspense } from 'react';
+import { redirect } from 'next/navigation';
+import { getPatientPortalSessionInfo } from '@/lib/patient-portal-server';
 import PatientPortalPageClient from './PatientPortalPageClient';
+
+export const dynamic = 'force-dynamic';
 
 function PatientPortalPageFallback() {
   return (
@@ -9,7 +13,10 @@ function PatientPortalPageFallback() {
   );
 }
 
-export default function PatientPortalPage() {
+export default async function PatientPortalPage() {
+  if (await getPatientPortalSessionInfo()) {
+    redirect('/patient-portal/dashboard');
+  }
   return (
     <Suspense fallback={<PatientPortalPageFallback />}>
       <PatientPortalPageClient />

@@ -21,10 +21,10 @@ export default function PatientPortalPageClient() {
           showToast('Érvénytelen vagy lejárt token', 'error');
           break;
         case 'token_used':
-          showToast('Ez a bejelentkezési link már felhasználva lett. Kérjük, jelentkezzen be újra.', 'error');
+          showToast('Ezt a bejelentkezési linket már felhasználták. Kérjen új linket, majd a megnyíló oldalon nyomja meg a Belépés gombot.', 'error');
           break;
         case 'verification_failed':
-          showToast('Email megerősítés sikertelen', 'error');
+          showToast('A belépés nem sikerült. Kérjük, próbálja újra, vagy kérjen új bejelentkezési linket.', 'error');
           break;
         case 'database_error':
           showToast('Adatbázis hiba. Kérjük, lépjen kapcsolatba az adminisztrációval.', 'error');

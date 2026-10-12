@@ -35,6 +35,7 @@ export function PortalDashboard() {
   const router = useRouter();
   const { showToast } = useToast();
   const [loading, setLoading] = useState(true);
+  const [loadError, setLoadError] = useState<string | null>(null);
   const [patient, setPatient] = useState<Patient | null>(null);
   const [appointments, setAppointments] = useState<Appointment[]>([]);
   const [unreadMessageCount, setUnreadMessageCount] = useState(0);
@@ -50,14 +51,25 @@ export function PortalDashboard() {
   const fetchData = async () => {
     try {
       setLoading(true);
+      setLoadError(null);
 
       const [patientRes, appointmentsRes] = await Promise.all([
         fetch('/api/patient-portal/patient', { credentials: 'include' }),
         fetch('/api/patient-portal/appointments', { credentials: 'include' }),
       ]);
 
-      if (!patientRes.ok || patientRes.status === 401) {
+      if (patientRes.status === 401 || appointmentsRes.status === 401) {
         router.push('/patient-portal');
+        return;
+      }
+
+      if (!patientRes.ok) {
+        setLoadError('A páciens adatait most nem sikerült betölteni. Kérjük, próbálja újra.');
+        return;
+      }
+
+      if (!appointmentsRes.ok) {
+        setLoadError('Az időpontokat most nem sikerült betölteni. Kérjük, próbálja újra.');
         return;
       }
 
@@ -123,7 +135,9 @@ export function PortalDashboard() {
       }
     } catch (error) {
       console.error('Error fetching dashboard data:', error);
-      showToast('Hiba történt az adatok betöltésekor', 'error');
+      setLoadError(
+        'Az adatok betöltése nem sikerült. Kérjük, ellenőrizze az internetkapcsolatot, majd próbálja újra.'
+      );
     } finally {
       setLoading(false);
     }
@@ -189,6 +203,20 @@ export function PortalDashboard() {
       <div className="flex items-center justify-center py-12">
         <div className="animate-spin rounded-full h-8 w-8 border-b-2 border-medical-primary"></div>
         <span className="ml-3 text-gray-600 dark:text-gray-400">Betöltés...</span>
+      </div>
+    );
+  }
+
+  if (loadError) {
+    return (
+      <div role="alert" className="bg-white dark:bg-gray-900 rounded-lg border border-amber-200 dark:border-amber-800 p-4 sm:p-6">
+        <h1 className="text-lg font-semibold text-gray-900 dark:text-gray-100 mb-2">
+          Az áttekintés nem tölthető be
+        </h1>
+        <p className="text-sm sm:text-base text-gray-700 dark:text-gray-300 mb-4">{loadError}</p>
+        <button type="button" onClick={() => void fetchData()} className="btn-primary px-4 py-2.5">
+          Újrapróbálás
+        </button>
       </div>
     );
   }
