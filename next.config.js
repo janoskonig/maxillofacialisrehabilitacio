@@ -61,6 +61,13 @@ const nextConfig = {
   async headers() {
     return [
       {
+        source: "/patient-portal/sign-in",
+        headers: [
+          { key: "Cache-Control", value: "no-store" },
+          { key: "Referrer-Policy", value: "no-referrer" }
+        ]
+      },
+      {
         source: "/sw.js",
         headers: [
           { 

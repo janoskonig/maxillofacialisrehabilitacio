@@ -34,15 +34,12 @@ export async function sendPatientMagicLink(
   // Ensure we always use production URL, never localhost
   const magicLink = `${portalBaseUrl}/api/patient-portal/auth/verify?token=${token}`;
   
-  // Log for debugging
-  console.log('[Email] Sending magic link:', magicLink, 'baseUrl param:', baseUrl, 'final baseUrl:', portalBaseUrl);
-
   const subject = 'Bejelentkezés a páciens portálra';
   const html = `
     <div style="font-family: Arial, sans-serif; max-width: 600px; margin: 0 auto;">
       <h2 style="color: #2563eb;">Bejelentkezés a páciens portálra</h2>
       <p>Kedves ${patientName || 'Páciens'}!</p>
-      <p>Kattintson az alábbi linkre a páciens portálhoz való bejelentkezéshez:</p>
+      <p>Kattintson az alábbi linkre, majd a megnyíló oldalon nyomja meg a Belépés gombot:</p>
       <p style="margin: 20px 0;">
         <a href="${magicLink}" 
            clicktracking="off"
