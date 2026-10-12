@@ -13,8 +13,9 @@ import {
   Image as ImageIcon,
   Columns,
 } from "lucide-react";
-import { formatDateForDisplay } from "@/lib/dateUtils";
 import { PatientCard } from "./PatientCard";
+import { PatientDemographics } from "./PatientDemographics";
+import { PatientRegistrationDetails } from "./PatientRegistrationDetails";
 import { MobileTable } from "./mobile/MobileTable";
 import { PatientListAvatar } from "./PatientListAvatar";
 import { useRemoteData } from "@/hooks/useRemoteData";
@@ -74,9 +75,9 @@ const EXTRA_COLUMNS = [
   { id: "op", label: "OP" },
   { id: "taj", label: "TAJ szám" },
   { id: "contact", label: "Kapcsolat" },
-  { id: "created", label: "Létrehozva" },
 ] as const;
 type ExtraColumn = (typeof EXTRA_COLUMNS)[number]["id"];
+const DEFAULT_EXTRA_COLUMNS: ExtraColumn[] = ["contact"];
 const COLUMN_KEY = "patient-list-columns-v1";
 const cell = "px-3 py-4 text-sm text-gray-900 dark:text-gray-100 align-top";
 const secondary = "text-xs text-gray-600 dark:text-gray-400";
@@ -112,18 +113,18 @@ function PatientListComponent({
       : null,
   );
   const appointments = enrichment.data?.appointments;
-  const [columns, setColumns] = useState<ExtraColumn[]>([]);
+  const [columns, setColumns] = useState<ExtraColumn[]>(DEFAULT_EXTRA_COLUMNS);
   useEffect(() => {
     try {
-      const saved: unknown = JSON.parse(
-        localStorage.getItem(COLUMN_KEY) ?? "[]",
-      );
+      const stored = localStorage.getItem(COLUMN_KEY);
+      if (stored === null) return;
+      const saved: unknown = JSON.parse(stored);
       if (Array.isArray(saved))
         setColumns(
           EXTRA_COLUMNS.filter((c) => saved.includes(c.id)).map((c) => c.id),
         );
     } catch {
-      /* Use the compact default when browser storage is unavailable. */
+      /* Keep the default columns when browser storage is unavailable. */
     }
   }, []);
   const toggleColumn = (id: ExtraColumn) => {
@@ -270,7 +271,6 @@ function PatientListComponent({
   const renderExtraCell = (patient: Patient, column: ExtraColumn) => {
     const id = patient.id ?? "";
     if (column === "taj") return patient.taj || "Nincs megadva";
-    if (column === "created") return formatDateForDisplay(patient.createdAt);
     if (column === "contact")
       return (
         <div className="space-y-1">
@@ -315,7 +315,7 @@ function PatientListComponent({
         <details className="hidden md:block">
           <summary className="inline-flex cursor-pointer list-none items-center gap-2 rounded-lg border border-gray-300 bg-white px-3 py-2 text-sm text-gray-700 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-200">
             <Columns className="h-4 w-4" aria-hidden="true" />
-            Oszlopok{columns.length > 0 ? ` (+${columns.length})` : ""}
+            Oszlopok
           </summary>
           <fieldset className="mt-2 flex flex-wrap gap-4 rounded-lg border border-gray-200 bg-white p-3 dark:border-gray-700 dark:bg-gray-900">
             <legend className="sr-only">További oszlopok</legend>
@@ -384,15 +384,10 @@ function PatientListComponent({
                   scope="col"
                   className="px-3 py-3 text-left text-xs font-medium text-gray-600 dark:text-gray-300"
                 >
-                  {c.id === "created" && onSort ? (
-                    <button type="button" onClick={() => onSort("createdAt")}>
-                      {c.label}
-                    </button>
-                  ) : (
-                    c.label
-                  )}
+                  {c.label}
                 </th>
               ))}
+            {clinical && header("Regisztráció", "createdAt")}
             {header("Műveletek")}
           </>
         )}
@@ -420,15 +415,8 @@ function PatientListComponent({
                     >
                       {patient.nev || "Név nélküli beteg"}
                     </button>
-                    {clinical && patient.szuletesiDatum && (
-                      <span className={`block ${secondary}`}>
-                        Szül.: {formatDateForDisplay(patient.szuletesiDatum)}
-                      </span>
-                    )}
-                    {patient.halalDatum && (
-                      <span className={`block ${secondary}`}>
-                        Elhunyt · {formatDateForDisplay(patient.halalDatum)}
-                      </span>
+                    {clinical && (
+                      <PatientDemographics patient={patient} className={secondary} />
                     )}
                   </div>
                 </div>
@@ -469,6 +457,11 @@ function PatientListComponent({
                     {renderExtraCell(patient, c.id)}
                   </td>
                 ))}
+              {clinical && (
+                <td className={cell}>
+                  <PatientRegistrationDetails patient={patient} />
+                </td>
+              )}
               <td className={cell}>
                 <div className="space-y-2">
                   {canEdit && onEdit && (
