@@ -6,7 +6,8 @@ import { PortalSignInForm } from '@/components/patient-portal/PortalSignInForm';
 export const dynamic = 'force-dynamic';
 export const metadata: Metadata = {
   title: 'Belépés – Páciens portál',
-  referrer: 'no-referrer',
+  // Native POST needs Origin; strict-origin omits the token path and query.
+  referrer: 'strict-origin',
 };
 
 export default function PatientPortalSignInPage({

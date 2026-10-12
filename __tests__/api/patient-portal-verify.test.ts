@@ -145,6 +145,7 @@ describe.each([
 
   it.each<Record<string, string>>([
     { origin: 'https://attacker.example.test' },
+    { origin: 'null' },
     { 'sec-fetch-site': 'cross-site' },
   ])('rejects cross-origin form submissions before consuming a token: %j', async headers => {
     const response = await post(request({ email, method: 'POST', headers }));
