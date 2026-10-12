@@ -237,6 +237,7 @@ export default function PatientViewPage() {
       <PatientHeaderBar
         patient={patient}
         currentStage={currentStage}
+        canSeeRegistration={userRole !== 'technikus'}
         canSeeNextStep
         canAssignDoctor={userRole === 'admin' || userRole === 'fogpótlástanász'}
         onGoToScheduling={

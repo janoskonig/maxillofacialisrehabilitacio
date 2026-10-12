@@ -63,6 +63,7 @@ beforeEach(() => {
 });
 afterEach(() => {
   cleanup();
+  vi.useRealTimers();
   vi.unstubAllGlobals();
   vi.clearAllMocks();
 });
@@ -174,7 +175,9 @@ describe("patient directory", () => {
     };
     const view = render(<PatientList {...props} />);
     const table = await screen.findByRole("table");
-    expect(within(table).getAllByRole("columnheader")).toHaveLength(6);
+    expect(within(table).getAllByRole("columnheader")).toHaveLength(8);
+    expect(within(table).getByRole("columnheader", { name: "Kapcsolat" })).toBeTruthy();
+    expect(within(table).getByRole("columnheader", { name: "Regisztráció" })).toBeTruthy();
     fireEvent.click(screen.getByRole("button", { name: "Minta Anna" }));
     expect(onView).toHaveBeenCalledWith(patient);
     expect(onEdit).not.toHaveBeenCalled();
@@ -194,7 +197,43 @@ describe("patient directory", () => {
     );
   });
 
+  it("always shows age and registration details, including when old preferences hid creation data", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-12T12:00:00"));
+    localStorage.setItem("patient-list-columns-v1", "[]");
+    vi.stubGlobal("fetch", vi.fn((url: string) => response(
+      url.includes("worklists") ? { items: [] } : emptyEnrichment,
+    )));
+    const onSort = vi.fn();
+    const registered = {
+      ...patient,
+      createdBy: "regisztralo.orvos@example.com",
+      createdAt: "2026-09-01T12:00:00Z",
+    };
+    render(<PatientList patients={[registered]} onView={vi.fn()} onSort={onSort} userRole="admin" />);
+    const table = await screen.findByRole("table");
+    expect(within(table).getByText("48 éves")).toBeTruthy();
+    expect(within(table).getByText("Más regisztrálta")).toBeTruthy();
+    expect(within(table).getByText("Regisztráló: regisztralo.orvos@example.com")).toBeTruthy();
+    expect(within(table).getByText("2026-09-01")).toBeTruthy();
+    fireEvent.click(within(table).getByRole("button", { name: "Regisztráció" }));
+    expect(onSort).toHaveBeenCalledWith("createdAt");
+    expect(within(table).queryByRole("columnheader", { name: "Kapcsolat" })).toBeNull();
+  });
+
+  it("does not infer self-registration from missing historical registrar data", async () => {
+    vi.stubGlobal("fetch", vi.fn((url: string) => response(
+      url.includes("worklists") ? { items: [] } : emptyEnrichment,
+    )));
+    render(<PatientList patients={[{ ...patient, createdBy: null, createdAt: null }]} onView={vi.fn()} userRole="admin" />);
+    expect(await screen.findByText("Regisztráló nincs rögzítve")).toBeTruthy();
+    expect(screen.getByText("A regisztráció dátuma nincs rögzítve")).toBeTruthy();
+    expect(screen.queryByText("Más regisztrálta")).toBeNull();
+  });
+
   it("keeps the next action visible on mobile and puts contact details behind an expandable section", async () => {
+    vi.useFakeTimers({ toFake: ["Date"] });
+    vi.setSystemTime(new Date("2026-10-12T12:00:00"));
     vi.stubGlobal(
       "matchMedia",
       vi.fn(() => ({
@@ -215,7 +254,7 @@ describe("patient directory", () => {
     const onEdit = vi.fn();
     render(
       <PatientList
-        patients={[{ ...patient, telefonszam: "+36 00 000 0000" }]}
+        patients={[{ ...patient, telefonszam: "+36 00 000 0000", createdBy: "regisztralo@example.com", createdAt: "2026-09-01T12:00:00Z" }]}
         onView={onView}
         onEdit={onEdit}
         canEdit
@@ -230,6 +269,9 @@ describe("patient directory", () => {
       .getByText("Részletek és dokumentumok")
       .closest("details")!;
     expect(details.open).toBe(false);
+    expect(screen.getByText("48 éves").closest("details")).toBeNull();
+    expect(screen.getByText("Regisztráló: regisztralo@example.com").closest("details")).toBeNull();
+    expect(screen.getByText("2026-09-01").closest("details")).toBeNull();
     fireEvent.click(screen.getByRole("button", { name: "Minta Anna" }));
     expect(onView).toHaveBeenCalledWith(
       expect.objectContaining({ id: patient.id }),
@@ -253,6 +295,9 @@ describe("patient directory", () => {
     expect(
       screen.queryByRole("columnheader", { name: "Következő teendő" }),
     ).toBeNull();
+    expect(screen.queryByRole("columnheader", { name: "Regisztráció" })).toBeNull();
+    expect(screen.queryByText("Regisztráló nincs rögzítve")).toBeNull();
+    expect(screen.queryByText(/éves/)).toBeNull();
   });
 
   it("does not turn a failed appointment request into a no-appointment claim", async () => {

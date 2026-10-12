@@ -4,12 +4,13 @@ import { useEffect, useState } from 'react';
 import { Patient, patientStageOptions, PatientStageEntry } from '@/lib/types';
 import type { WorklistItemBackend } from '@/lib/worklist-types';
 import { selectPatientNextStep, patientNextStepLabel } from '@/lib/patient-next-step';
-import { calculateAge } from '@/lib/dateUtils';
 import { requiresGuardian } from '@/lib/legal/legal-capacity';
 import { Phone, CalendarPlus, ArrowRight, ChevronDown } from 'lucide-react';
 import Link from 'next/link';
 import { completenessEditHref } from '@/lib/completeness-deeplinks';
 import { KezeloorvosDelegationWidget } from '@/components/KezeloorvosDelegationWidget';
+import { PatientDemographics } from '@/components/PatientDemographics';
+import { PatientRegistrationDetails } from '@/components/PatientRegistrationDetails';
 
 interface MissingItemLite {
   key: string;
@@ -27,6 +28,8 @@ interface PatientHeaderBarProps {
   canSeeNextStep?: boolean;
   /** Admin / fogpótlástanász delegálhat kezelőorvost. */
   canAssignDoctor?: boolean;
+  /** A regisztráló adatai a technikus számára nem hozzáférhetők. */
+  canSeeRegistration?: boolean;
 }
 
 const STAGE_BADGE_COLORS: Record<string, string> = {
@@ -62,6 +65,7 @@ export function PatientHeaderBar({
   onGoToScheduling,
   canSeeNextStep = true,
   canAssignDoctor = false,
+  canSeeRegistration = true,
 }: PatientHeaderBarProps) {
   const [nextStepLabel, setNextStepLabel] = useState<string | null>(null);
   const [checklistOpen, setChecklistOpen] = useState(false);
@@ -133,15 +137,10 @@ export function PatientHeaderBar({
     ? patientStageOptions.find((opt) => opt.value === currentStage.stage)?.label || currentStage.stage
     : null;
 
-  const age = calculateAge(patient.szuletesiDatum);
   // Kiskorúnál a nyilatkozatokat a törvényes képviselő teszi meg — ha hiányzik,
   // passzív figyelmeztetés a fejlécben, a pótlás helyére mutató linkkel.
   const isMinor = requiresGuardian(patient.szuletesiDatum);
   const guardianName = patient.torvenyesKepviseloNev?.trim() || '';
-  const metaParts: string[] = [];
-  if (patient.taj) metaParts.push(`TAJ ${patient.taj}`);
-  if (age != null) metaParts.push(`${age} é`);
-  if (patient.nem) metaParts.push(patient.nem);
 
   const completenessDot =
     completeness == null
@@ -205,8 +204,12 @@ export function PatientHeaderBar({
                 </Link>
               ))}
           </div>
+          <PatientDemographics
+            patient={patient}
+            className="text-xs sm:text-[13px] text-gray-500 dark:text-gray-400 mt-0.5"
+          />
           <div className="text-xs sm:text-[13px] text-gray-500 dark:text-gray-400 mt-0.5 flex items-center gap-1.5 flex-wrap">
-            {metaParts.length > 0 && <span>{metaParts.join(' · ')}</span>}
+            {patient.taj && <span>TAJ {patient.taj}</span>}
             {patient.telefonszam && (
               <a
                 href={`tel:${patient.telefonszam.replace(/\s/g, '')}`}
@@ -244,6 +247,11 @@ export function PatientHeaderBar({
               )
             )}
           </div>
+          {canSeeRegistration && (
+            <div className="mt-2">
+              <PatientRegistrationDetails patient={patient} />
+            </div>
+          )}
 
           {/* Kattintható hiány-checklist: deep-link a betegűrlap megfelelő füléhez */}
           {completeness && checklistOpen && totalMissing > 0 && (

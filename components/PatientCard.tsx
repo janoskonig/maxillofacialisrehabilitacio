@@ -15,9 +15,10 @@ import {
   History,
   User,
 } from "lucide-react";
-import { formatDateForDisplay } from "@/lib/dateUtils";
 import { useRouter } from "next/navigation";
 import { PatientListAvatar } from "./PatientListAvatar";
+import { PatientDemographics } from "./PatientDemographics";
+import { PatientRegistrationDetails } from "./PatientRegistrationDetails";
 
 interface AppointmentInfo {
   id: string;
@@ -187,15 +188,8 @@ function PatientCardComponent({
               {patient.nev || "Név nélküli beteg"}
             </button>
           </h3>
-          {userRole !== "technikus" && patient.szuletesiDatum && (
-            <p className="text-xs text-gray-600 dark:text-gray-400">
-              Szül.: {formatDateForDisplay(patient.szuletesiDatum)}
-            </p>
-          )}
-          {patient.halalDatum && (
-            <p className="text-xs text-gray-600 dark:text-gray-400">
-              Elhunyt · {formatDateForDisplay(patient.halalDatum)}
-            </p>
+          {userRole !== "technikus" && (
+            <PatientDemographics patient={patient} className="text-xs text-gray-600 dark:text-gray-400" />
           )}
         </div>
       </div>
@@ -249,6 +243,10 @@ function PatientCardComponent({
         )}
       </p>
 
+      {userRole !== "technikus" && (
+        <PatientRegistrationDetails patient={patient} />
+      )}
+
       <details className="border-t border-gray-200 pt-1 dark:border-gray-700">
         <summary className="cursor-pointer py-3 text-sm text-gray-700 dark:text-gray-200">
           Részletek és dokumentumok
@@ -285,12 +283,6 @@ function PatientCardComponent({
                   </button>
                 )}
               </div>
-              {patient.createdAt && (
-                <p className="text-xs">
-                  Létrehozva: {formatDateForDisplay(patient.createdAt)}
-                  {patient.createdBy ? ` · ${patient.createdBy}` : ""}
-                </p>
-              )}
             </>
           )}
           <div className="flex flex-wrap gap-2">
