@@ -115,6 +115,7 @@ export interface UpdateStatusParams {
 export interface OperationResult {
   success: boolean;
   error?: string;
+  appointmentId?: string;
 }
 
 const AVAILABLE_CIMS = ['1088 Budapest, Szentkirályi utca 47'];
@@ -350,9 +351,10 @@ export function useAppointmentBooking(
       });
 
       if (response.ok) {
+        const data = await response.json();
         await reloadAll();
         notifyWorkPhasesChanged();
-        return { success: true };
+        return { success: true, appointmentId: data.appointment?.id };
       }
 
       // A visszaadott `error` a szerver valódi üzenetét + a [KÓD · correlationId]
@@ -569,9 +571,10 @@ export function useAppointmentBooking(
       });
 
       if (bookResponse.ok) {
+        const data = await bookResponse.json();
         await reloadAll();
         notifyWorkPhasesChanged();
-        return { success: true };
+        return { success: true, appointmentId: data.appointment?.id };
       }
 
       const errorData = await bookResponse.json();

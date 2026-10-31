@@ -2,7 +2,9 @@ import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler, roleHandler } from '@/lib/api/route-handler';
 import { emitSchedulingEvent } from '@/lib/scheduling-events';
-import { getDefaultTtlDays, isValidBlockKey } from '@/lib/episode-block-taxonomy';
+import { createObstacleSchema, OBSTACLE_COLUMNS } from '@/lib/episode-obstacles';
+
+export const dynamic = 'force-dynamic';
 
 /**
  * GET /api/episodes/:id/blocks
@@ -13,76 +15,52 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   const pool = getDbPool();
 
   const result = await pool.query(
-    `SELECT id, episode_id as "episodeId", key, active, expires_at as "expiresAt",
-            renewal_count as "renewalCount", expected_unblock_date as "expectedUnblockDate",
-            note, created_at as "createdAt", updated_at as "updatedAt"
-     FROM episode_blocks
+    `SELECT ${OBSTACLE_COLUMNS} FROM episode_blocks
      WHERE episode_id = $1
-     ORDER BY active DESC, created_at DESC`,
+     ORDER BY active DESC, waiting_since ASC, id`,
     [episodeId]
   );
 
-  return NextResponse.json({ blocks: result.rows });
+  return NextResponse.json({ blocks: result.rows, serverNow: new Date().toISOString() });
 });
 
 /**
  * POST /api/episodes/:id/blocks
  * Create a new episode block.
- * Body: { key, reason?, expectedUnblockDate?, note? }
+ * Body: { key, waitingOn, waitingSince?, expectedUnblockDate?, note? }
  */
 export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth, params }) => {
   const episodeId = params.id;
-  const body = await req.json().catch(() => ({}));
-  const { key, reason, expectedUnblockDate, note } = body;
-
-  if (!key || typeof key !== 'string') {
-    return NextResponse.json(
-      { error: 'key kötelező (pl. WAIT_LAB, WAIT_HEALING, WAIT_SURGERY, PATIENT_DELAY)' },
-      { status: 400 }
-    );
-  }
-
-  if (!isValidBlockKey(key)) {
-    return NextResponse.json(
-      { error: `Érvénytelen block key: ${key}. Használható: WAIT_LAB, WAIT_HEALING, WAIT_SURGERY, PATIENT_DELAY, WAIT_OR, WAIT_IMPLANT, OTHER` },
-      { status: 400 }
-    );
-  }
-
+  const parsed = createObstacleSchema.safeParse(await req.json().catch(() => null));
+  if (!parsed.success) return NextResponse.json({ error: parsed.error.issues[0].message }, { status: 400 });
+  const { key, waitingOn, waitingSince, expectedUnblockDate, note } = parsed.data;
   const pool = getDbPool();
-
-  const episodeCheck = await pool.query(
-    'SELECT id FROM patient_episodes WHERE id = $1',
-    [episodeId]
-  );
-  if (episodeCheck.rows.length === 0) {
-    return NextResponse.json({ error: 'Epizód nem található' }, { status: 404 });
+  const client = await pool.connect();
+  let block;
+  try {
+    await client.query('BEGIN');
+    const episode = await client.query('SELECT id, status FROM patient_episodes WHERE id = $1 FOR UPDATE', [episodeId]);
+    if (!episode.rows.length || episode.rows[0].status !== 'open') {
+      await client.query('ROLLBACK');
+      return NextResponse.json({ error: episode.rows.length ? 'Akadály csak nyitott kezeléshez rögzíthető' : 'Epizód nem található' }, { status: episode.rows.length ? 409 : 404 });
+    }
+    const result = await client.query(
+      `INSERT INTO episode_blocks
+        (episode_id, key, active, expires_at, waiting_on, waiting_since, expected_unblock_date, note, created_by)
+       VALUES ($1, $2, true, NULL, $3,
+         COALESCE($4::date::timestamp AT TIME ZONE 'Europe/Budapest', CURRENT_TIMESTAMP),
+         $5::date::timestamp AT TIME ZONE 'Europe/Budapest', $6, $7)
+       RETURNING ${OBSTACLE_COLUMNS}`,
+      [episodeId, key, waitingOn, waitingSince ?? null, expectedUnblockDate ?? null, note || null, auth.userId]
+    );
+    block = result.rows[0];
+    await client.query('COMMIT');
+  } catch (error) {
+    await client.query('ROLLBACK');
+    throw error;
+  } finally {
+    client.release();
   }
-
-  const ttlDays = getDefaultTtlDays(key);
-  const expiresAt = new Date();
-  expiresAt.setDate(expiresAt.getDate() + ttlDays);
-
-  const expectedUnblock = expectedUnblockDate
-    ? new Date(expectedUnblockDate)
-    : new Date(expiresAt.getTime() - 2 * 24 * 60 * 60 * 1000);
-
-  const result = await pool.query(
-    `INSERT INTO episode_blocks (episode_id, key, active, expires_at, expected_unblock_date, note)
-     VALUES ($1, $2, true, $3, $4, $5)
-     RETURNING id, episode_id as "episodeId", key, active, expires_at as "expiresAt",
-               renewal_count as "renewalCount", expected_unblock_date as "expectedUnblockDate",
-               note, created_at as "createdAt"`,
-    [episodeId, key, expiresAt, expectedUnblock, note ?? reason ?? null]
-  );
-
-  const block = result.rows[0];
-
-  const taskDue = new Date(expectedUnblock.getTime() - 2 * 24 * 60 * 60 * 1000);
-  await pool.query(
-    `INSERT INTO episode_tasks (episode_id, task_type, due_at) VALUES ($1, 'unblock_check', $2)`,
-    [episodeId, taskDue]
-  );
 
   try {
     await emitSchedulingEvent('block', block.id, 'created');

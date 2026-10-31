@@ -5,6 +5,8 @@ import type { TimelineEpisode, TimelineStep, TimelineViewMode } from './types';
 import { StepBar } from './StepBar';
 import { computeNextTodo } from './episode-utils';
 import { stageDisplay } from './stage-display';
+import { treatmentWorkspaceHref } from '@/lib/treatment-workspace';
+import { blockLabel } from '@/lib/episode-block-taxonomy';
 
 /** Egyesített nézet: a lépés egyetlen pont (nem sáv) — a stádium-sáv adja a
  *  kontextust, a pont a konkrét eseményt jelöli (mint a mockupon). */
@@ -21,6 +23,7 @@ export interface EpisodeRowProps {
   todayPercent: number;
   trackMinWidth: number;
   trackHeight?: number;
+  hideSummary?: boolean;
   /** Nézetmód: stádium-sáv, lépések, vagy egyesített. */
   viewMode?: TimelineViewMode;
   /**
@@ -38,11 +41,13 @@ export const EpisodeRow = memo(function EpisodeRow({
   todayPercent,
   trackMinWidth,
   trackHeight = 56,
+  hideSummary = false,
   viewMode = 'merged',
   onStepSelect,
 }: EpisodeRowProps) {
-  const completed = episode.steps.filter((s) => s.status === 'completed').length;
-  const total = episode.steps.length;
+  const treatmentSteps = episode.steps.filter((s) => !s.stepCode.startsWith('care:'));
+  const completed = treatmentSteps.filter((s) => s.status === 'completed').length;
+  const total = treatmentSteps.length;
   const progressPct = total ? (completed / total) * 100 : 0;
   const next = computeNextTodo(episode, range.nowMs);
 
@@ -62,7 +67,7 @@ export const EpisodeRow = memo(function EpisodeRow({
           const width = right - left;
           if (width <= 0.05) return null;
           const disp = stageDisplay(iv.stageCode);
-          return { key: `${iv.stageCode}-${iv.start}`, left, width, disp, label: iv.label ?? disp.label };
+          return { key: `${iv.stageCode}-${iv.start}`, left, width, disp, label: iv.label && iv.label !== iv.stageCode ? iv.label : disp.label };
         })
         .filter(Boolean as unknown as <T>(v: T | null) => v is T)
     : [];
@@ -105,7 +110,7 @@ export const EpisodeRow = memo(function EpisodeRow({
 
   return (
     <div className="flex border-b border-gray-100 dark:border-gray-800 bg-white dark:bg-gray-900" style={{ minWidth: 0 }}>
-      <div className="flex-shrink-0 sticky left-0 z-10 w-[200px] md:w-[280px] border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-2 py-2 flex flex-col justify-center gap-1.5 shadow-[2px_0_8px_-4px_rgba(0,0,0,0.08)]">
+      {!hideSummary && <div className="flex-shrink-0 sticky left-0 z-10 w-[200px] md:w-[280px] border-r border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 px-2 py-2 flex flex-col justify-center gap-1.5 shadow-[2px_0_8px_-4px_rgba(0,0,0,0.08)]">
         <div className="h-1.5 rounded-full bg-gray-100 dark:bg-gray-800 overflow-hidden shrink-0">
           <div
             className="h-full bg-emerald-500 rounded-full transition-all"
@@ -115,7 +120,7 @@ export const EpisodeRow = memo(function EpisodeRow({
         </div>
         <div className="flex items-center gap-1 min-w-0">
           <Link
-            href={`/patients/${episode.patientId}/view`}
+            href={treatmentWorkspaceHref(episode.patientId, episode.episodeId)}
             className="font-medium text-sm text-medical-primary hover:underline truncate"
           >
             {episode.patientName}
@@ -125,14 +130,23 @@ export const EpisodeRow = memo(function EpisodeRow({
           <div className="min-w-0">
             <span
               className={`inline-block text-[10px] font-medium px-1.5 py-0.5 rounded ${cur.badge} truncate max-w-full`}
-              title={episode.currentStageLabel ?? cur.label}
+              title={episode.currentStageLabel && episode.currentStageLabel !== episode.currentStageCode ? episode.currentStageLabel : cur.label}
             >
-              {episode.currentStageLabel ?? cur.label}
+              {episode.currentStageLabel && episode.currentStageLabel !== episode.currentStageCode ? episode.currentStageLabel : cur.label}
             </span>
           </div>
         )}
         {episode.carePathwayName && (
           <div className="text-[10px] text-gray-500 dark:text-gray-400 truncate hidden sm:block">{episode.carePathwayName}</div>
+        )}
+        {!!episode.obstacles?.length && (
+          <Link
+            href={`/patients/${episode.patientId}/stages?episodeId=${episode.episodeId}#akadalyok`}
+            className="truncate text-[10px] font-medium text-amber-800 dark:text-amber-300 hover:underline"
+            title={episode.obstacles.map((block) => `${blockLabel(block.key)}${block.waitingOn ? ` — ${block.waitingOn}` : ''}`).join('; ')}
+          >
+            Akadály ({episode.obstacles.length}): {blockLabel(episode.obstacles[0].key)}
+          </Link>
         )}
         {next && (
           <div className="text-[10px] text-gray-700 dark:text-gray-300 truncate" title={next.step.label}>
@@ -147,10 +161,10 @@ export const EpisodeRow = memo(function EpisodeRow({
             {new Date(episode.etaHeuristic).toLocaleDateString('hu-HU', { month: 'short', day: 'numeric' })}
           </div>
         )}
-      </div>
+      </div>}
       <div
         className="relative flex-shrink-0 border-l border-gray-100/50 dark:border-gray-800"
-        style={{ width: trackMinWidth, height: trackHeight, minHeight: trackHeight }}
+        style={{ width: hideSummary ? '100%' : trackMinWidth, height: trackHeight, minHeight: trackHeight }}
         role="region"
         aria-label={`Idővonal: ${episode.patientName}`}
       >

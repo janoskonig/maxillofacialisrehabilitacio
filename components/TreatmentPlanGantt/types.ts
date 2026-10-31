@@ -56,6 +56,7 @@ export interface TimelineEpisode {
   stageIntervals?: StageInterval[];
   steps: TimelineStep[];
   etaHeuristic: string | null;
+  obstacles?: Array<{ id: string; key: string; waitingOn: string | null; waitingSince: string }>;
 }
 
 export interface TimelineMetaCounts {

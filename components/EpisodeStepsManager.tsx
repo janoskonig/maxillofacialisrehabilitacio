@@ -59,6 +59,7 @@ import { VisitRow } from './visit-plan/VisitRow';
 import { VisitGap } from './visit-plan/VisitGap';
 import { PhasePill } from './visit-plan/PhasePill';
 import { VisitBookingButton } from './visit-plan/VisitBookingButton';
+import { PlanVisitOverview } from './visit-plan/PlanVisitOverview';
 
 const restrictToVerticalAxis: Modifier = (args) => ({
   ...args.transform,
@@ -112,6 +113,9 @@ export interface EpisodeStepsManagerProps {
   settingsPanel?: React.ReactNode;
   /** Külső frissítő kulcs (pl. beállítás-mentés után) — változásra teljes újratöltés. */
   refreshTrigger?: number;
+  /** Everyday overview, with the detailed plan board available on demand. */
+  presentation?: 'editor' | 'workspace';
+  onManageAppointments?: (appointmentId?: string) => void;
 }
 
 // ─── „Új alkalom" zóna: droppable + kattintható (nem-drag alternatíva) ───────
@@ -159,9 +163,12 @@ export function EpisodeStepsManager({
   onProviderChanged,
   settingsPanel,
   refreshTrigger,
+  presentation = 'editor',
+  onManageAppointments,
 }: EpisodeStepsManagerProps) {
   const { showToast, confirm } = useToast();
   const [expanded, setExpanded] = useState(true);
+  const [editingPlan, setEditingPlan] = useState(false);
   const [settingsOpen, setSettingsOpen] = useState(false);
   const [mounted, setMounted] = useState(false);
   const [activeDragType, setActiveDragType] = useState<'visit' | 'item' | null>(null);
@@ -327,7 +334,7 @@ export function EpisodeStepsManager({
     setPendingBookingAction({ primaryId, action });
   };
 
-  const renderVisitBooking = (group: VisitGroup) => {
+  const renderVisitBooking = (group: VisitGroup, compact = false) => {
     if (!booking.enabled) return null;
     const open = openPrimariesOf(group);
     if (open.length === 0) return null;
@@ -346,6 +353,7 @@ export function EpisodeStepsManager({
       <VisitBookingButton
         state={booking.rowStateFor(item)}
         bookedStartIso={item.bookedAppointmentStartTime ?? null}
+        compact={compact}
         needsMerge={open.length > 1}
         busy={busyVisitId === group.visit.id}
         onBook={() => void runVisitBookingAction(group, (it) => booking.openSlotPicker(it))}
@@ -490,8 +498,87 @@ export function EpisodeStepsManager({
 
   const hasAnyPlanContent = board.visits.length > 0 || board.steps.length > 0;
 
+  const bookingNotices = (
+    booking.enabled && (
+      <div className="mb-3 empty:mb-0 empty:hidden space-y-2">
+        {booking.error && (
+          <div className="flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-3 py-2 text-sm text-red-700 dark:text-red-300">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>Foglalási műveletek betöltése sikertelen.</span>
+            <button type="button" onClick={() => void booking.refresh()} className="underline font-medium">
+              Újra
+            </button>
+          </div>
+        )}
+        {booking.chainBookingRequired && (
+          <div className="flex items-center gap-3 flex-wrap rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-3 py-2 text-sm text-blue-900 dark:text-blue-200">
+            <span>
+              <strong>Több alkalom is foglalható egyszerre</strong> — a láncolást a rendszer számolja.
+            </span>
+            <button
+              type="button"
+              onClick={() => void handleConvertAll()}
+              disabled={booking.convertAllBusy}
+              className="ml-auto inline-flex items-center gap-1.5 px-3 py-1 bg-medical-primary text-white rounded-md text-xs font-semibold hover:bg-medical-primary-dark disabled:opacity-50"
+            >
+              {booking.convertAllBusy && <Loader2 className="w-3 h-3 animate-spin" />}
+              {booking.convertAllBusy ? 'Lefoglalás…' : 'Összes időpont lefoglalása'}
+            </button>
+          </div>
+        )}
+        {booking.convertAllMessage && (
+          <div
+            className={`text-sm px-3 py-2 rounded ${
+              booking.convertAllMessage.type === 'success'
+                ? 'bg-green-50 dark:bg-green-950/40 text-green-800 dark:text-green-300'
+                : 'bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300'
+            }`}
+          >
+            {booking.convertAllMessage.text}
+            <button type="button" onClick={booking.dismissConvertAllMessage} className="ml-2 underline">
+              Elrejt
+            </button>
+          </div>
+        )}
+        {booking.blockedItem?.blockedReason && booking.blockedItem.blockedCode !== 'NO_CARE_PATHWAY' && (
+          <div className="flex items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
+            <AlertTriangle className="w-4 h-4 shrink-0" />
+            <span>Foglalás blokkolva: {booking.blockedItem.blockedReason}</span>
+          </div>
+        )}
+      </div>
+    )
+  );
+
+  if (presentation === 'workspace' && !editingPlan) {
+    return (
+      <section className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900" aria-label="Kezelési terv és időpontok">
+        <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-4 dark:border-gray-800">
+          <h2 className="font-semibold text-gray-900 dark:text-gray-100">Alkalmak és időpontok</h2>
+          <button type="button" onClick={() => { setEditingPlan(true); setExpanded(true); }} className="text-sm font-medium text-medical-primary hover:underline">Terv szerkesztése</button>
+        </div>
+        {board.loading ? <div className="flex items-center gap-2 p-5 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" />Betöltés…</div> : <>
+          <div className="empty:hidden px-4 pt-3">{bookingNotices}</div>
+          <PlanVisitOverview
+            groups={board.groups}
+            unassignedCount={board.unassigned.length}
+            unattachedCount={unattached.length}
+            projectionByPhaseId={board.projectionByPhaseId}
+            getStepLabel={getStepLabel}
+            renderBooking={(group) => renderVisitBooking(group, true)}
+            onEdit={() => { setEditingPlan(true); setExpanded(true); }}
+            onManageAppointments={onManageAppointments}
+          />
+          {showConvertAll && <div className="border-t border-gray-100 px-4 py-3 dark:border-gray-800"><button type="button" onClick={() => void handleConvertAll()} disabled={booking.convertAllBusy} className="text-sm font-medium text-medical-primary hover:underline disabled:opacity-50">{booking.convertAllBusy ? 'Lefoglalás…' : 'Hátralévő alkalmak foglalása egyszerre'}</button></div>}
+        </>}
+        {booking.enabled && <WorkPhaseBookingModals api={booking} />}
+      </section>
+    );
+  }
+
   return (
     <div className="bg-white dark:bg-gray-900 rounded-lg border border-gray-200 dark:border-gray-800">
+      {presentation === 'workspace' && <div className="px-4 pt-3"><button type="button" onClick={() => setEditingPlan(false)} className="text-sm font-medium text-medical-primary hover:underline">← Vissza az alkalmakhoz</button></div>}
       {/* Fejléc: cím (lenyitó) + a felelős orvos feltűnő chipje — a chip az
           epizód tulajdonsága, a sablontól független, lecsukott kártyán is látszik. */}
       <div className="flex items-center gap-3 px-4 py-3 flex-wrap">
@@ -504,7 +591,7 @@ export function EpisodeStepsManager({
           <div className="min-w-0">
             <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">Kezelési lépések</h3>
             <p className="text-sm text-gray-500 dark:text-gray-400 mt-0.5">
-              Az időpontok a váz, a kezelések a tartalom — bal oldalról pakolható, egy alkalom = egy időpont
+              Kezelések hozzáadása, sorrendje és alkalmakba rendezése.
             </p>
           </div>
           <div className="flex items-center gap-2 shrink-0">
@@ -579,55 +666,7 @@ export function EpisodeStepsManager({
               )}
 
               {/* ─── Foglalási állapot: hiba, lánc-ajánlat, üzenet, blokk ── */}
-              {booking.enabled && (
-                <div className="mb-3 empty:mb-0 empty:hidden space-y-2">
-                  {booking.error && (
-                    <div className="flex items-center gap-2 rounded-lg border border-red-200 dark:border-red-800 bg-red-50 dark:bg-red-950/40 px-3 py-2 text-sm text-red-700 dark:text-red-300">
-                      <AlertTriangle className="w-4 h-4 shrink-0" />
-                      <span>Foglalási műveletek betöltése sikertelen.</span>
-                      <button type="button" onClick={() => void booking.refresh()} className="underline font-medium">
-                        Újra
-                      </button>
-                    </div>
-                  )}
-                  {booking.chainBookingRequired && (
-                    <div className="flex items-center gap-3 flex-wrap rounded-lg border border-blue-200 dark:border-blue-800 bg-blue-50 dark:bg-blue-950/40 px-3 py-2 text-sm text-blue-900 dark:text-blue-200">
-                      <span>
-                        <strong>Több alkalom is foglalható egyszerre</strong> — a láncolást a rendszer számolja.
-                      </span>
-                      <button
-                        type="button"
-                        onClick={() => void handleConvertAll()}
-                        disabled={booking.convertAllBusy}
-                        className="ml-auto inline-flex items-center gap-1.5 px-3 py-1 bg-medical-primary text-white rounded-md text-xs font-semibold hover:bg-medical-primary-dark disabled:opacity-50"
-                      >
-                        {booking.convertAllBusy && <Loader2 className="w-3 h-3 animate-spin" />}
-                        {booking.convertAllBusy ? 'Lefoglalás…' : 'Összes időpont lefoglalása'}
-                      </button>
-                    </div>
-                  )}
-                  {booking.convertAllMessage && (
-                    <div
-                      className={`text-sm px-3 py-2 rounded ${
-                        booking.convertAllMessage.type === 'success'
-                          ? 'bg-green-50 dark:bg-green-950/40 text-green-800 dark:text-green-300'
-                          : 'bg-red-50 dark:bg-red-950/40 text-red-800 dark:text-red-300'
-                      }`}
-                    >
-                      {booking.convertAllMessage.text}
-                      <button type="button" onClick={booking.dismissConvertAllMessage} className="ml-2 underline">
-                        Elrejt
-                      </button>
-                    </div>
-                  )}
-                  {booking.blockedItem?.blockedReason && booking.blockedItem.blockedCode !== 'NO_CARE_PATHWAY' && (
-                    <div className="flex items-center gap-2 rounded-lg border border-amber-200 dark:border-amber-800 bg-amber-50 dark:bg-amber-950/40 px-3 py-2 text-sm text-amber-700 dark:text-amber-300">
-                      <AlertTriangle className="w-4 h-4 shrink-0" />
-                      <span>Foglalás blokkolva: {booking.blockedItem.blockedReason}</span>
-                    </div>
-                  )}
-                </div>
-              )}
+              {bookingNotices}
 
               {/* ─── Haladás + becsült befejezés (egy sor) ─────────────── */}
               {board.projectionBlockedReason && (

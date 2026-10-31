@@ -5,6 +5,7 @@ import Link from 'next/link';
 import { X } from 'lucide-react';
 import type { TimelineEpisode, TimelineStep } from './types';
 import { STATUS_CONFIG, STATUS_DOT } from './constants';
+import { treatmentWorkspaceHref } from '@/lib/treatment-workspace';
 import { buildWorklistUrl } from '@/lib/build-worklist-url';
 
 export interface StepPopoverProps {
@@ -13,9 +14,10 @@ export interface StepPopoverProps {
   episode: TimelineEpisode | null;
   isMobile: boolean;
   onClose: () => void;
+  onOpenStep?: (step: TimelineStep) => void;
 }
 
-export function StepPopover({ open, step, episode, isMobile, onClose }: StepPopoverProps) {
+export function StepPopover({ open, step, episode, isMobile, onClose, onOpenStep }: StepPopoverProps) {
   const panelRef = useRef<HTMLDivElement>(null);
 
   useEffect(() => {
@@ -46,7 +48,6 @@ export function StepPopover({ open, step, episode, isMobile, onClose }: StepPopo
 
   const cfg = STATUS_CONFIG[step.status];
   const worklistHref = buildWorklistUrl(episode.episodeId, step.stepCode, step.pool || 'work');
-  const showBook = step.status === 'booked';
   const showBookIntent = step.status === 'planned';
 
   const body = (
@@ -70,7 +71,8 @@ export function StepPopover({ open, step, episode, isMobile, onClose }: StepPopo
       </div>
       <div className="text-xs text-gray-600 dark:text-gray-400 space-y-1 mb-3">
         <div>
-          Pool: <span className="font-medium text-gray-800 dark:text-gray-200">{step.pool}</span> · {step.durationMinutes} perc
+          <span className="font-medium text-gray-800 dark:text-gray-200">{({ consult: 'Konzultáció', work: 'Kezelés', control: 'Kontroll' } as Record<string, string>)[step.pool] || step.pool}</span>
+          {step.durationMinutes > 0 ? ` · ${step.durationMinutes} perc` : ' · Időtartam nincs rögzítve'}
         </div>
         {step.windowStart && (
           <div>
@@ -91,23 +93,14 @@ export function StepPopover({ open, step, episode, isMobile, onClose }: StepPopo
         )}
       </div>
       <div className="flex flex-col gap-2">
-        <Link
-          href={`/patients/${episode.patientId}/view`}
+        {onOpenStep ? <button type="button" className="btn-primary text-sm py-2" onClick={() => { onOpenStep(step); onClose(); }}>Alkalom megnyitása</button> : <Link
+          href={step.stepCode.startsWith('care:') ? treatmentWorkspaceHref(episode.patientId, episode.episodeId, step.appointmentId) : `${treatmentWorkspaceHref(episode.patientId, episode.episodeId)}&view=plan#kezelesi-alkalmak`}
           className="btn-secondary text-center text-sm py-2"
           onClick={onClose}
         >
-          Beteg megnyitása
-        </Link>
-        {showBook && (
-          <Link
-            href={`/patients/${episode.patientId}/view`}
-            className="btn-secondary text-center text-sm py-2"
-            onClick={onClose}
-          >
-            Időpont / epizód megnyitása
-          </Link>
-        )}
-        {showBookIntent && (
+          Kezelés megnyitása
+        </Link>}
+        {showBookIntent && !onOpenStep && (
           <Link href={worklistHref} className="btn-primary text-center text-sm py-2" onClick={onClose}>
             Foglalás ebbe az ablakba (munkalista)
           </Link>

@@ -37,7 +37,7 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
   const pool = getDbPool();
 
   const blockResult = await pool.query(
-    `SELECT id, episode_id, key, renewal_count, active FROM episode_blocks WHERE id = $1`,
+    `SELECT id, episode_id, key, renewal_count, active, expires_at FROM episode_blocks WHERE id = $1`,
     [blockId]
   );
 
@@ -61,7 +61,7 @@ export const POST = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász']
      SET renewal_count = $1, expected_unblock_date = $2, expires_at = $3,
          note = COALESCE(note || E'\n', '') || $4, updated_at = CURRENT_TIMESTAMP
      WHERE id = $5`,
-    [newRenewalCount, expectedUnblock, newExpiresAt, `[${new Date().toISOString()}] Renewal #${newRenewalCount}: ${reason.trim()}`, blockId]
+    [newRenewalCount, expectedUnblock, block.expires_at == null ? null : newExpiresAt, `[${new Date().toISOString()}] Renewal #${newRenewalCount}: ${reason.trim()}`, blockId]
   );
 
   const taskDue = new Date(expectedUnblock.getTime() - 2 * 24 * 60 * 60 * 1000);

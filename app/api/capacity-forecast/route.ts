@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
+import { loadSchedulingRequests } from '@/lib/aftercare/service';
 
 export const dynamic = 'force-dynamic';
 
@@ -10,6 +11,7 @@ interface WeekBucket {
   supply: number;
   hardDemand: number;
   softDemand: number;
+  aftercareDemand: number;
 }
 
 /**
@@ -34,13 +36,13 @@ function weekKey(d: Date | string): string {
 export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth }) => {
   const searchParams = req.nextUrl.searchParams;
   const poolFilter = searchParams.get('pool') ?? 'work';
-  const weeksAhead = Math.min(parseInt(searchParams.get('weeks') ?? '12', 10), 52);
+  const weeksAhead = Math.max(1, Math.min(parseInt(searchParams.get('weeks') ?? '12', 10) || 12, 52));
 
   const dbPool = getDbPool();
 
   const now = new Date();
   const startOfWeek = new Date(now);
-  startOfWeek.setDate(startOfWeek.getDate() - startOfWeek.getDay() + 1);
+  startOfWeek.setDate(startOfWeek.getDate() - (startOfWeek.getDay() + 6) % 7);
   startOfWeek.setHours(0, 0, 0, 0);
 
   const endDate = new Date(startOfWeek);
@@ -82,6 +84,24 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
     [poolFilter, startOfWeek.toISOString(), endDate.toISOString()]
   );
 
+  const aftercareByWeek = new Map<string, number>();
+  if (poolFilter === 'control') {
+    const requests = await loadSchedulingRequests(dbPool);
+    const seen = new Set<string>();
+    for (const request of requests.filter((r) => !r.completed && !r.slotSecured)) {
+      // Same patient's two prostheses can share one return visit. Overdue requests
+      // remain current demand instead of disappearing into a past week.
+      const due = new Date(`${request.dueOn}T12:00:00`);
+      if (due < startOfWeek) due.setTime(startOfWeek.getTime());
+      due.setDate(due.getDate() - (due.getDay() + 6) % 7);
+      const identity = `${request.patientId}:${request.dueOn}`;
+      if (seen.has(identity) || due >= endDate) continue;
+      seen.add(identity);
+      const key = weekKey(due);
+      aftercareByWeek.set(key, (aftercareByWeek.get(key) ?? 0) + 1);
+    }
+  }
+
   const supplyByWeek = new Map<string, number>();
   for (const r of supplyResult.rows) {
     supplyByWeek.set(weekKey(r.week_start), r.cnt);
@@ -109,12 +129,13 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
       supply: supplyByWeek.get(key) ?? 0,
       hardDemand: hardByWeek.get(key) ?? 0,
       softDemand: softByWeek.get(key) ?? 0,
+      aftercareDemand: aftercareByWeek.get(key) ?? 0,
     });
   }
 
   return NextResponse.json({
     pool: poolFilter,
     weeks,
-    note: 'Kereslet a legkorábbi esedékesség hete alapján (window_start)',
+    note: 'Tervezett kereslet: window_start; utógondozás: kért határnap, lejárt kérés az aktuális héten. Azonos beteg és határnap egyszer számít.',
   });
 });

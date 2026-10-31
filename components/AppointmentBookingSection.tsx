@@ -1,6 +1,7 @@
 'use client';
 
-import { useState } from 'react';
+import { useCallback, useEffect, useState } from 'react';
+import Link from 'next/link';
 import {
   Calendar,
   Clock,
@@ -54,7 +55,10 @@ interface AppointmentBookingSectionProps {
   bookingOnly?: boolean;
   fixedAppointmentType?: AppointmentType;
   recallTaskId?: string | null;
-  onBooked?: () => void;
+  onBooked?: (appointmentId?: string) => void;
+  /** Open the existing status dialog from a linked visit, after appointments load. */
+  openStatusAppointmentId?: string | null;
+  onStatusOpened?: () => void;
 }
 
 export function AppointmentBookingSection({
@@ -71,6 +75,8 @@ export function AppointmentBookingSection({
   fixedAppointmentType,
   recallTaskId = null,
   onBooked,
+  openStatusAppointmentId,
+  onStatusOpened,
 }: AppointmentBookingSectionProps) {
   const {
     availableSlots,
@@ -194,7 +200,7 @@ export function AppointmentBookingSection({
       setCustomCim('');
       setCustomTeremszam('');
       setSelectedAppointmentType(fixedAppointmentType ?? null);
-      onBooked?.();
+      onBooked?.(result.appointmentId);
       alert('Időpont sikeresen lefoglalva! A fogpótlástanász értesítést kapott.');
     } else {
       alert(result.error || 'Hiba történt az időpont foglalásakor');
@@ -301,7 +307,7 @@ export function AppointmentBookingSection({
     setCascadeAfterModify(null);
   };
 
-  const handleEditStatus = (appointment: Appointment) => {
+  const handleEditStatus = useCallback((appointment: Appointment) => {
     setEditingStatus(appointment);
     setStatusForm({
       appointmentStatus: appointment.appointmentStatus || null,
@@ -309,7 +315,16 @@ export function AppointmentBookingSection({
       isLate: appointment.isLate || false,
       appointmentType: appointment.appointmentType || null,
     });
-  };
+  }, []);
+
+  useEffect(() => {
+    if (!openStatusAppointmentId || isViewOnly) return;
+    const appointment = appointments.find((a) => a.id === openStatusAppointmentId);
+    if (appointment) {
+      handleEditStatus(appointment);
+      onStatusOpened?.();
+    }
+  }, [openStatusAppointmentId, appointments, isViewOnly, handleEditStatus, onStatusOpened]);
 
   /**
    * „Másik fázisra" modal megnyitása egy meglévő foglalásra. Lekérdezi az
@@ -523,7 +538,7 @@ export function AppointmentBookingSection({
       setNewSlotAppointmentType(fixedAppointmentType ?? null);
       setShowNewSlotForm(false);
       alert('Új időpont sikeresen létrehozva és lefoglalva a betegnek!');
-      onBooked?.();
+      onBooked?.(result.appointmentId);
     } else {
       alert(result.error || 'Hiba történt az időpont létrehozásakor vagy foglalásakor');
     }
@@ -1169,6 +1184,11 @@ export function AppointmentBookingSection({
                         <Edit2 className="w-4 h-4" />
                         Státusz
                       </button>
+                      {(st === 'completed' || st === 'unsuccessful') && <Link
+                        href={`/patients/${appointment.patientId}/stages?view=aftercare&appointmentId=${appointment.id}#gondozas`}
+                        className="px-2 py-1 text-xs text-teal-800 hover:bg-teal-100 rounded dark:text-teal-200 dark:hover:bg-teal-950">
+                        Vizitdokumentáció
+                      </Link>}
                       <button
                         onClick={() => handleCancelAppointment(appointment)}
                         className="text-sm text-red-600 dark:text-red-300 hover:text-red-800 flex items-center gap-1"

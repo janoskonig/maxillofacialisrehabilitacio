@@ -54,6 +54,7 @@ export function TreatmentPlanGantt() {
     [router, pathname, sp]
   );
 
+  const patientId = sp.get('tplan_patient') || undefined;
   const status = parseStatus(sp.get('tplan_status'));
   const setStatus = (v: EpisodeStatusFilter) => mergeParams({ tplan_status: v });
 
@@ -87,10 +88,11 @@ export function TreatmentPlanGantt() {
     }
   }, [searchDebounced, sp, mergeParams]);
 
-  const { episodes, meta, loading, error } = useTimelineData({
+  const { episodes, meta, loading, error, careError } = useTimelineData({
     status,
     providerId,
     searchDebounced,
+    patientId,
   });
 
   const nowMs = meta?.serverNow ? new Date(meta.serverNow).getTime() : Date.now();
@@ -130,7 +132,7 @@ export function TreatmentPlanGantt() {
 
   const serverCounts = meta?.counts ?? fallbackCounts(episodes, nowMs);
   const counts =
-    treatmentType || attentionOnly ? fallbackCounts(filtered, nowMs) : serverCounts;
+    treatmentType || attentionOnly || patientId ? fallbackCounts(filtered, nowMs) : serverCounts;
 
   const [popover, setPopover] = useState<{ episode: TimelineEpisode; step: TimelineStep } | null>(null);
 
@@ -179,6 +181,8 @@ export function TreatmentPlanGantt() {
 
   return (
     <div className="space-y-4">
+      {patientId && <div className="flex items-center justify-between gap-3 rounded-lg bg-blue-50 px-3 py-2 text-sm dark:bg-blue-950/30"><span>{episodes[0]?.patientName || 'Kiválasztott beteg'} · teljes betegút</span><button type="button" onClick={() => mergeParams({ tplan_patient: null })} className="text-medical-primary hover:underline">Minden beteg</button></div>}
+      {careError && <p role="alert" className="text-sm text-amber-700 dark:text-amber-300">{careError}</p>}
       <FiltersBar
         status={status}
         onStatus={setStatus}

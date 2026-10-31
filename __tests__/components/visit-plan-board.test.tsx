@@ -1,3 +1,4 @@
+import '@testing-library/jest-dom/vitest';
 /**
  * Puzzle v2 — kéthasábos, vizit-alapú kezelési terv (EpisodeStepsManager).
  *
@@ -281,7 +282,7 @@ function installFetchMock(opts: {
   return { fetchMock, calls };
 }
 
-function renderManager(extra: { canEditPalette?: boolean } = {}) {
+function renderManager(extra: { canEditPalette?: boolean; presentation?: 'editor' | 'workspace' } = {}) {
   return render(
     <ToastProvider>
       <EpisodeStepsManager episodeId={EPISODE_ID} carePathwayId={null} episodePathways={[]} {...extra} />
@@ -700,5 +701,34 @@ describe('Puzzle v2 — sablonok a palettán (katalógus-karbantartás a táblá
     await screen.findByText('Csonkpreparálás');
     expect(screen.queryByRole('button', { name: 'Csonkpreparálás — sablon beállításai' })).toBeNull();
     expect(screen.queryByLabelText(/Mentés a palettára is/)).toBeNull();
+  });
+});
+
+
+describe('Everyday treatment workspace', () => {
+  it('starts with the visit overview and preserves the plan when switching editor modes', async () => {
+    const { calls } = installFetchMock(TWO_VISITS);
+    renderManager({ presentation: 'workspace' });
+    await screen.findByTestId('plan-visit-overview');
+    expect(screen.queryByTestId('phase-palette')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('plan-validation')).not.toBeInTheDocument();
+    expect(screen.queryByTestId('plan-history')).not.toBeInTheDocument();
+    expect(screen.getByText('Következő alkalom')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Terv szerkesztése' }));
+    await screen.findByTestId('phase-palette');
+    expect(screen.getByTestId('visit-board')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: '← Vissza az alkalmakhoz' }));
+    expect(screen.getByTestId('plan-visit-overview')).toBeInTheDocument();
+    expect(screen.getByText('Előkészítés')).toBeInTheDocument();
+    expect(calls.filter((call) => call.method !== 'GET')).toHaveLength(0);
+  });
+
+  it('keeps existing appointments without treatments visible and opens the editor to assign them', async () => {
+    installFetchMock({ visits: [makeVisit({ id: 'booked', appointmentId: 'a1', appointmentStart: '2026-11-02T09:00:00Z', appointmentStatus: null })] });
+    renderManager({ presentation: 'workspace' });
+    await screen.findByTestId('plan-visit-overview');
+    expect(screen.getByText('Időpont lefoglalva')).toBeInTheDocument();
+    fireEvent.click(screen.getByRole('button', { name: 'Kezelések megadása' }));
+    await screen.findByTestId('phase-palette');
   });
 });

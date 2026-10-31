@@ -24,6 +24,7 @@ import {
 } from '@/lib/active-appointment';
 import { nextAttemptNumber, probeAttemptColumns } from '@/lib/appointment-attempts';
 import { lockPatientKeyShare } from '@/lib/patient-lock-token';
+import { activeObstacleReason } from '@/lib/episode-obstacles-server';
 
 export interface ConvertIntentOptions {
   /** Pre-selected time slot id; if not set, a free slot is found in the window */
@@ -206,6 +207,12 @@ export async function convertIntentToAppointment(
       if (episodeLock.rows.length === 0) {
         await client.query('ROLLBACK');
         return { ok: false, status: 404, error: 'Epizód nem található' };
+      }
+
+      const obstacleReason = await activeObstacleReason(client, intent.episode_id);
+      if (obstacleReason) {
+        await client.query('ROLLBACK');
+        return { ok: false, status: 409, error: obstacleReason, code: 'EPISODE_BLOCKED' };
       }
 
       // WP-4.1b: az identitás elsődleges kulcsa az intent `work_phase_id`-je.

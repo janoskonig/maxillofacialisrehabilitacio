@@ -2,6 +2,7 @@ import { getDbPool } from '@/lib/db';
 import { loadPatientCareTimeline } from '@/lib/consilium-presentation';
 import { normalizeChecklist, type ChecklistEntry } from '@/lib/consilium';
 import { logger } from '@/lib/logger';
+import { INTERVENTIONS, PROBLEMS, RESULTS, type CareLink } from '@/lib/aftercare/model';
 import type {
   CareTimelineEvent,
   CareTimelineEpisodeSummary,
@@ -484,6 +485,28 @@ function groupByEpisode(
   return summaries.filter((s) => s.events.length > 0 || episodes.some((e) => e.id === s.episodeId));
 }
 
+async function loadProsthesisCareEvents(patientId: string): Promise<CareTimelineEvent[]> {
+  const pool = getDbPool();
+  const check = await pool.query("SELECT to_regclass('public.prosthesis_care_encounters') AS table_name");
+  if (!check.rows[0]?.table_name) return [];
+  const result = await pool.query(`SELECT c.id, c.phase, c.occurred_at, c.clinical_minutes, c.links,
+    COALESCE(a.episode_id, (SELECT pr.episode_id FROM prostheses pr WHERE pr.id::text = c.links->0->>'prosthesisId')) AS episode_id,
+    a.appointment_status FROM prosthesis_care_encounters c JOIN appointments a ON a.id = c.appointment_id
+    WHERE c.patient_id = $1 ORDER BY c.occurred_at DESC LIMIT 100`, [patientId]);
+  return result.rows.map((r) => {
+    const links = r.links as CareLink[];
+    const summary = links.map((l) => [
+      l.problems.length ? l.problems.map((p) => PROBLEMS[p]).join(', ') : 'Panasz nélküli kontroll',
+      l.interventions.map((i) => INTERVENTIONS[i]).join(', '), l.result ? RESULTS[l.result] : '',
+    ].filter(Boolean).join(' · ')).join('; ');
+    return { id: `prosthesis_care:${r.id}`, type: 'prosthesis_care' as const,
+      at: iso(r.occurred_at), episodeId: r.episode_id,
+      payload: { label: r.phase === 'construction' ? 'Fogpótlás készítési vizit' : 'Adaptáció és utógondozás',
+        summary: r.phase === 'aftercare' ? summary : 'Strukturált klinikai dokumentáció',
+        href: `/patients/${patientId}/stages?view=aftercare#gondozas` } };
+  });
+}
+
 export async function buildPatientCareTimeline(patientId: string): Promise<PatientCareTimelineResponse> {
   try {
     const episodes = await loadEpisodeRefs(patientId);
@@ -495,6 +518,7 @@ export async function buildPatientCareTimeline(patientId: string): Promise<Patie
       milestoneEvents,
       workPhaseEvents,
       prepLinkEvents,
+      prosthesisCareEvents,
     ] = await Promise.all([
       loadStageChangeEvents(patientId, episodes),
       loadConsiliumEvents(patientId, episodes),
@@ -503,6 +527,7 @@ export async function buildPatientCareTimeline(patientId: string): Promise<Patie
       loadMilestoneEvents(patientId),
       loadWorkPhaseEvents(patientId),
       loadPrepLinkEvents(patientId, episodes),
+      loadProsthesisCareEvents(patientId),
     ]);
 
     const flat = truncateEvents([
@@ -513,6 +538,7 @@ export async function buildPatientCareTimeline(patientId: string): Promise<Patie
       ...milestoneEvents,
       ...workPhaseEvents,
       ...prepLinkEvents,
+      ...prosthesisCareEvents,
     ]);
 
     const grouped = groupByEpisode(episodes, flat);
