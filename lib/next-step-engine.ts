@@ -5,6 +5,7 @@
  */
 
 import { getDbPool } from './db';
+import { describeEpisodeBlocks } from './episode-block-taxonomy';
 import { computeStepWindow } from './step-window';
 import { resolveSchedulingAnchor } from './scheduling-anchor';
 import {
@@ -97,12 +98,13 @@ async function getCurrentStage(pool: Awaited<ReturnType<typeof getDbPool>>, epis
 }
 
 /** Get active episode blocks */
-async function getActiveBlocks(pool: Awaited<ReturnType<typeof getDbPool>>, episodeId: string): Promise<Array<{ key: string; expires_at: Date }>> {
+async function getActiveBlocks(pool: Awaited<ReturnType<typeof getDbPool>>, episodeId: string): Promise<EpisodeBatchData['blocks']> {
   const r = await pool.query(
-    `SELECT key, expires_at FROM episode_blocks WHERE episode_id = $1 AND active = true AND expires_at > CURRENT_TIMESTAMP`,
+    `SELECT key, expires_at, waiting_on FROM episode_blocks WHERE episode_id = $1 AND active = true
+     AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)`,
     [episodeId]
   );
-  return r.rows.map((row: { key: string; expires_at: Date }) => ({ key: row.key, expires_at: row.expires_at }));
+  return r.rows;
 }
 
 /** Get completed appointment stats for episode: count and anchor date.
@@ -356,7 +358,7 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
     return {
       status: 'blocked',
       required_prereq_keys: blocks.map((b) => b.key),
-      reason: `Episode blocked: ${blocks.map((b) => b.key).join(', ')}`,
+      reason: describeEpisodeBlocks(blocks),
       block_keys: blocks.map((b) => b.key),
     };
   }
@@ -521,7 +523,7 @@ export async function allPendingSteps(episodeId: string): Promise<AllPendingStep
     return {
       status: 'blocked',
       required_prereq_keys: blocks.map((b) => b.key),
-      reason: `Episode blocked: ${blocks.map((b) => b.key).join(', ')}`,
+      reason: describeEpisodeBlocks(blocks),
       block_keys: blocks.map((b) => b.key),
     };
   }
@@ -655,7 +657,7 @@ export async function allPendingSteps(episodeId: string): Promise<AllPendingStep
 
 /** Pre-loaded data for batch-optimized allPendingSteps (avoids N+1 queries). */
 export interface EpisodeBatchData {
-  blocks: Array<{ key: string; expires_at: Date }>;
+  blocks: Array<{ key: string; expires_at: Date | null; waiting_on?: string | null }>;
   pathwayWorkPhases: PathwayWorkPhaseTemplate[] | null;
   completedStats: { completedCount: number; lastCompletedAt: Date | null };
   episodeWorkPhases: EpisodeWorkPhaseRow[] | null;
@@ -694,7 +696,7 @@ export function allPendingStepsWithData(
     return {
       status: 'blocked',
       required_prereq_keys: blocks.map((b) => b.key),
-      reason: `Episode blocked: ${blocks.map((b) => b.key).join(', ')}`,
+      reason: describeEpisodeBlocks(blocks),
       block_keys: blocks.map((b) => b.key),
     };
   }

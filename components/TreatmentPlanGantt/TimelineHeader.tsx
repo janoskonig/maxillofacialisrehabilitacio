@@ -29,6 +29,12 @@ export const TimelineHeader = memo(function TimelineHeader({
     let d = new Date(new Date(t0).getFullYear(), new Date(t0).getMonth(), 1);
     let prevYear: number | null = null;
     while (d.getTime() <= t1) {
+      const nextMonth = new Date(d.getFullYear(), d.getMonth() + 1, 1);
+      // A very short leading partial month cannot fit the year label before the next month.
+      if (d.getTime() < t0 && ((nextMonth.getTime() - t0) / Math.max(1, t1 - t0)) * trackMinWidth < 110) {
+        d = nextMonth;
+        continue;
+      }
       const sameYear = prevYear === d.getFullYear();
       months.push({
         left: toPercent(d.getTime()),

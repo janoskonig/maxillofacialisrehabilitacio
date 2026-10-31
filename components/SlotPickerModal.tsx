@@ -168,7 +168,7 @@ export function SlotPickerModal({
         for (const w of data.weeks ?? []) {
           const ws = new Date(w.weekStart);
           const key = `${ws.getFullYear()}-W${String(getISOWeek(ws)).padStart(2, '0')}`;
-          map.set(key, w.softDemand ?? 0);
+          map.set(key, (w.softDemand ?? 0) + (w.aftercareDemand ?? 0));
         }
         setWeeklyDemand(map);
       })

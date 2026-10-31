@@ -174,9 +174,10 @@ export const GET = authedHandler(async (req, { auth }) => {
       [allPatientIds]
     ),
     pool.query(
-      `SELECT episode_id, key, expires_at
+      `SELECT episode_id, key, expires_at, waiting_on
        FROM episode_blocks
-       WHERE episode_id = ANY($1) AND active = true AND expires_at > CURRENT_TIMESTAMP`,
+       WHERE episode_id = ANY($1) AND active = true
+         AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)`,
       [allEpisodeIds]
     ),
     pool.query(
@@ -274,10 +275,10 @@ export const GET = authedHandler(async (req, { auth }) => {
   );
 
   // Blocks grouped by episode
-  const blocksMap = new Map<string, Array<{ key: string; expires_at: Date }>>();
+  const blocksMap = new Map<string, EpisodeBatchData['blocks']>();
   for (const r of blockRows.rows) {
     const arr = blocksMap.get(r.episode_id) ?? [];
-    arr.push({ key: r.key, expires_at: r.expires_at });
+    arr.push({ key: r.key, expires_at: r.expires_at, waiting_on: r.waiting_on });
     blocksMap.set(r.episode_id, arr);
   }
 

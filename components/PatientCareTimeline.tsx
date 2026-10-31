@@ -96,6 +96,7 @@ function eventTypeIcon(type: CareTimelineEvent['type']) {
     case 'milestone':
       return Flag;
     case 'work_phase':
+    case 'prosthesis_care':
       return Stethoscope;
     default:
       return MessageSquare;
@@ -118,6 +119,8 @@ function eventTypeLabel(type: CareTimelineEvent['type']): string {
       return 'Mérföldkő';
     case 'work_phase':
       return 'Munkafázis';
+    case 'prosthesis_care':
+      return 'Klinikai vizit';
     default:
       return 'Esemény';
   }
@@ -331,6 +334,10 @@ function EventRow({
             </p>
           </div>
         )}
+        {event.type === 'prosthesis_care' && <div>
+          <Link href={event.payload.href} className="text-sm font-medium text-teal-800 hover:underline dark:text-teal-200">{event.payload.label}</Link>
+          <p className="mt-1 text-sm text-gray-600 dark:text-gray-400">{event.payload.summary}</p>
+        </div>}
       </div>
     </li>
   );

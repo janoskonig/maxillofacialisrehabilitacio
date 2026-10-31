@@ -13,6 +13,8 @@ import { formatShortDate } from './visit-plan-types';
 export interface VisitBookingButtonProps {
   state: WorklistRowState;
   bookedStartIso?: string | null;
+  /** The overview already displays the appointment date and time. */
+  compact?: boolean;
   /** ≥2 nyitott fázis — a foglalás egy blokkba vonja őket. */
   needsMerge: boolean;
   busy: boolean;
@@ -23,7 +25,7 @@ export interface VisitBookingButtonProps {
 }
 
 export function VisitBookingButton({
-  state, bookedStartIso, needsMerge, busy, onBook, onLink, onMarkDoneRetro, onMarkUnsuccessful,
+  state, bookedStartIso, compact = false, needsMerge, busy, onBook, onLink, onMarkDoneRetro, onMarkUnsuccessful,
 }: VisitBookingButtonProps) {
   if (state === 'BOOKING_IN_PROGRESS' || busy) {
     return (
@@ -89,7 +91,7 @@ export function VisitBookingButton({
         trigger={
           <>
             <CalendarClock className="w-3 h-3" />
-            {bookedStartIso ? formatShortDate(bookedStartIso) : 'Foglalva'}
+            {compact ? 'Módosítás' : bookedStartIso ? formatShortDate(bookedStartIso) : 'Foglalva'}
             <ChevronDown className="w-3 h-3" />
           </>
         }

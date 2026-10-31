@@ -15,6 +15,7 @@ import { probeAppointmentsWorkPhaseIdColumn } from '@/lib/active-appointment';
 import { adoptAppointmentForPhaseVisit } from '@/lib/visit-appointment-sync';
 import { nextAttemptNumber, probeAttemptColumns } from '@/lib/appointment-attempts';
 import { lockPatientKeyShare } from '@/lib/patient-lock-token';
+import { activeObstacleReason } from '@/lib/episode-obstacles-server';
 import {
   linkRecallTaskToAppointment,
   validateRecallTaskForBooking,
@@ -195,6 +196,12 @@ export async function createAppointment(
       if (episodeLock.rows.length === 0) {
         await client.query('ROLLBACK');
         return { ok: false, validationError: { error: 'Epizód nem található', code: 'EPISODE_NOT_FOUND', status: 404 } };
+      }
+
+      const obstacleReason = await activeObstacleReason(client, episodeId);
+      if (obstacleReason) {
+        await client.query('ROLLBACK');
+        return { ok: false, validationError: { error: obstacleReason, code: 'EPISODE_BLOCKED', status: 409 } };
       }
 
       let hasAnyPathway = !!episodeLock.rows[0].care_pathway_id;

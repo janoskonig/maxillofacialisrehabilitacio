@@ -9,6 +9,7 @@ interface WeekBucket {
   supply: number;
   hardDemand: number;
   softDemand: number;
+  aftercareDemand?: number;
 }
 
 type Pool = 'consult' | 'work' | 'control';
@@ -40,11 +41,11 @@ export function CapacityForecastChart() {
 
   const maxVal = useMemo(() => {
     if (weeks.length === 0) return 1;
-    return Math.max(1, ...weeks.map(w => Math.max(w.supply, w.hardDemand + w.softDemand)));
+    return Math.max(1, ...weeks.map(w => Math.max(w.supply, w.hardDemand + w.softDemand + (w.aftercareDemand ?? 0))));
   }, [weeks]);
 
   const overloadedWeeks = useMemo(
-    () => weeks.filter(w => (w.hardDemand + w.softDemand) > w.supply && w.supply > 0).length,
+    () => weeks.filter(w => (w.softDemand + (w.aftercareDemand ?? 0)) > w.supply).length,
     [weeks]
   );
 
@@ -99,16 +100,17 @@ export function CapacityForecastChart() {
               <span className="w-3 h-3 rounded bg-amber-400" />
               Tervezett (soft demand)
             </span>
+            {pool === 'control' && <span className="flex items-center gap-1.5"><span className="w-3 h-3 rounded bg-violet-400" />Utógondozás, még hely nélkül</span>}
           </div>
 
           {/* Chart */}
           <div className="flex items-end gap-1 h-48">
             {weeks.map((w, idx) => {
-              const totalDemand = w.hardDemand + w.softDemand;
               const supplyH = (w.supply / maxVal) * 100;
               const hardH = (w.hardDemand / maxVal) * 100;
               const softH = (w.softDemand / maxVal) * 100;
-              const isOverloaded = totalDemand > w.supply && w.supply > 0;
+              const aftercareH = ((w.aftercareDemand ?? 0) / maxVal) * 100;
+              const isOverloaded = w.softDemand + (w.aftercareDemand ?? 0) > w.supply;
 
               return (
                 <div key={idx} className="flex-1 flex flex-col items-center gap-0.5 group relative min-w-0">
@@ -120,7 +122,8 @@ export function CapacityForecastChart() {
                       style={{ height: `${supplyH}%`, minHeight: w.supply > 0 ? '2px' : '0' }}
                     />
                     {/* Demand stacked */}
-                    <div className="flex-1 flex flex-col justify-end">
+                    <div className="h-full flex-1 flex flex-col justify-end">
+                      <div className="bg-violet-400 rounded-t transition-all" style={{ height: `${aftercareH}%`, minHeight: w.aftercareDemand ? '2px' : '0' }} />
                       <div
                         className="bg-amber-400 rounded-t transition-all"
                         style={{ height: `${softH}%`, minHeight: w.softDemand > 0 ? '2px' : '0' }}
@@ -142,6 +145,7 @@ export function CapacityForecastChart() {
                     <div className="text-emerald-700 dark:text-emerald-300">Supply: {w.supply}</div>
                     <div className="text-blue-700 dark:text-blue-300">Foglalt: {w.hardDemand}</div>
                     <div className="text-amber-700 dark:text-amber-300">Tervezett: {w.softDemand}</div>
+                    {pool === 'control' && <div className="text-violet-700 dark:text-violet-300">Utógondozási kérés: {w.aftercareDemand ?? 0}</div>}
                     {isOverloaded && (
                       <div className="text-red-600 dark:text-red-300 font-medium mt-0.5">Túlterhelt!</div>
                     )}
@@ -152,7 +156,7 @@ export function CapacityForecastChart() {
           </div>
 
           <p className="text-[10px] text-gray-400 dark:text-gray-500 mt-3 text-center">
-            Kereslet a legkorábbi esedékesség hete alapján (window_start)
+            Tervezett munka és hely nélküli utógondozás a kért hétre. A már foglalt időpont nem igényel új szabad helyet.
           </p>
         </div>
       )}

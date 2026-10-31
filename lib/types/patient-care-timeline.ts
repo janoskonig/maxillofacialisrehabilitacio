@@ -7,7 +7,8 @@ export type CareTimelineEventType =
   | 'delegated_task'
   | 'consilium_prep_link'
   | 'milestone'
-  | 'work_phase';
+  | 'work_phase'
+  | 'prosthesis_care';
 
 export type CareTimelineFilterCategory = 'all' | 'stage' | 'consilium' | 'tasks';
 
@@ -80,7 +81,8 @@ export type CareTimelineEvent =
   | (CareTimelineEventBase & { type: 'delegated_task'; payload: CareTimelineDelegatedTaskPayload })
   | (CareTimelineEventBase & { type: 'consilium_prep_link'; payload: CareTimelinePrepLinkPayload })
   | (CareTimelineEventBase & { type: 'milestone'; payload: CareTimelineMilestonePayload })
-  | (CareTimelineEventBase & { type: 'work_phase'; payload: CareTimelineWorkPhasePayload });
+  | (CareTimelineEventBase & { type: 'work_phase'; payload: CareTimelineWorkPhasePayload })
+  | (CareTimelineEventBase & { type: 'prosthesis_care'; payload: { label: string; summary: string; href: string } });
 
 export type CareTimelineEpisodeSummary = {
   episodeId: string;

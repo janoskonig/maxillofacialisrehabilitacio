@@ -10,7 +10,7 @@ const CONSILIUM_TYPES: CareTimelineEventType[] = [
   'consilium_prep',
   'consilium_prep_link',
 ];
-const TASK_TYPES: CareTimelineEventType[] = ['delegated_task', 'work_phase'];
+const TASK_TYPES: CareTimelineEventType[] = ['delegated_task', 'work_phase', 'prosthesis_care'];
 
 export function filterCareTimelineEvents(
   events: CareTimelineEvent[],

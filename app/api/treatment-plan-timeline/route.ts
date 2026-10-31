@@ -8,6 +8,7 @@ import {
 } from '@/lib/pathway-work-phases-for-episode';
 import { isReadPlanItemsEnabled } from '@/lib/plan-items-flags';
 import { loadPlanItemLinksByLegacyEwp } from '@/lib/episode-plan-read-model';
+import type { EpisodeObstacle } from '@/lib/episode-obstacles';
 
 export const dynamic = 'force-dynamic';
 
@@ -61,6 +62,7 @@ interface TimelineEpisode {
   stageIntervals: StageInterval[];
   steps: TimelineStep[];
   etaHeuristic: string | null;
+  obstacles: Pick<EpisodeObstacle, 'id' | 'key' | 'waitingOn' | 'waitingSince'>[];
 }
 
 const PROTETIKAI_STAGE_CODES = ['STAGE_5', 'STAGE_6', 'STAGE_7'] as const;
@@ -68,6 +70,12 @@ const PROTETIKAI_STAGE_CODES = ['STAGE_5', 'STAGE_6', 'STAGE_7'] as const;
 export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'], async (req, { auth }) => {
   const searchParams = req.nextUrl.searchParams;
   const episodeStatus = searchParams.get('status') ?? 'open';
+  const patientId = searchParams.get('patientId');
+  const episodeId = searchParams.get('episodeId');
+  const uuid = /^[0-9a-f]{8}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{4}-[0-9a-f]{12}$/i;
+  if ((patientId && !uuid.test(patientId)) || (episodeId && (!patientId || !uuid.test(episodeId)))) {
+    return NextResponse.json({ error: 'Érvénytelen beteg vagy epizód' }, { status: 400 });
+  }
   const providerId = searchParams.get('providerId');
   const searchRaw = searchParams.get('search')?.trim() ?? '';
   const limit = Math.min(parseInt(searchParams.get('limit') ?? '50', 10), 200);
@@ -83,12 +91,21 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
   const readPlanItems = isReadPlanItemsEnabled();
   const apptPlanItemFilter = readPlanItems ? 'AND a.plan_item_id IS NULL' : '';
 
-  const whereParts: string[] = [
+  // A patient workspace also includes custom plans and aftercare without a template.
+  const whereParts: string[] = patientId ? [] : [
     `(pe.care_pathway_id IS NOT NULL OR EXISTS (SELECT 1 FROM episode_pathways ep2 WHERE ep2.episode_id = pe.id))`,
   ];
   const params: unknown[] = [];
   let pi = 1;
 
+  if (patientId) {
+    whereParts.push(`pe.patient_id = $${pi++}`);
+    params.push(patientId);
+  }
+  if (episodeId) {
+    whereParts.push(`pe.id = $${pi++}`);
+    params.push(episodeId);
+  }
   if (episodeStatus !== 'all') {
     whereParts.push(`pe.status = $${pi}`);
     params.push(episodeStatus);
@@ -185,15 +202,17 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
   let intentsResult;
   let stagesResult;
   let episodeStepsResult;
+  let obstaclesResult;
   try {
     apptsResult = await client.query(
-      `SELECT a.id, a.episode_id, a.step_code,
-              COALESCE(a.step_seq, si.step_seq) as step_seq,
+      `SELECT a.id, a.episode_id, COALESCE(a.step_code, ewp.work_phase_code) as step_code,
+              COALESCE(a.step_seq, si.step_seq, ewp.seq, ewp.pathway_order_index) as step_seq,
               a.start_time, a.appointment_status
        FROM appointments a
        LEFT JOIN slot_intents si ON a.slot_intent_id = si.id
+       LEFT JOIN episode_work_phases ewp ON ewp.id = a.work_phase_id
        WHERE a.episode_id = ANY($1)
-         AND a.step_code IS NOT NULL
+         AND COALESCE(a.step_code, ewp.work_phase_code) IS NOT NULL
          AND a.appointment_status IS DISTINCT FROM 'cancelled_by_doctor'
          AND a.appointment_status IS DISTINCT FROM 'cancelled_by_patient'
          ${apptPlanItemFilter}
@@ -219,11 +238,18 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
     episodeStepsResult = await client.query(
       `SELECT ewp.id as episode_work_phase_id, ewp.episode_id, ewp.work_phase_code as step_code,
               COALESCE(ewp.seq, ewp.pathway_order_index) as step_seq,
-              ewp.pool, ewp.duration_minutes, ewp.custom_label
+              ewp.pool, ewp.duration_minutes, ewp.custom_label, ewp.status, ewp.completed_at
        FROM episode_work_phases ewp
        WHERE ewp.episode_id = ANY($1)
          AND (ewp.merged_into_episode_work_phase_id IS NULL)
        ORDER BY ewp.episode_id, COALESCE(ewp.seq, ewp.pathway_order_index)`,
+      episodeIdsParam
+    );
+    obstaclesResult = await client.query(
+      `SELECT episode_id, id, key, waiting_on as "waitingOn", waiting_since as "waitingSince"
+       FROM episode_blocks WHERE episode_id = ANY($1) AND active = true
+         AND (expires_at IS NULL OR expires_at > CURRENT_TIMESTAMP)
+       ORDER BY waiting_since ASC, id`,
       episodeIdsParam
     );
   } finally {
@@ -233,6 +259,13 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
   const planLinksByLegacyEwp = readPlanItems
     ? await loadPlanItemLinksByLegacyEwp(pool, episodeIds)
     : new Map();
+
+  const obstaclesByEpisode = new Map<string, TimelineEpisode['obstacles']>();
+  for (const row of obstaclesResult.rows) {
+    const group = obstaclesByEpisode.get(row.episode_id) ?? [];
+    group.push({ id: row.id, key: row.key, waitingOn: row.waitingOn, waitingSince: row.waitingSince });
+    obstaclesByEpisode.set(row.episode_id, group);
+  }
 
   const nowIso = now.toISOString();
   const toIso = (v: string | Date | null | undefined): string | null =>
@@ -315,6 +348,8 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
     pool: string;
     durationMinutes: number;
     episodeWorkPhaseId: string;
+    completedAt?: string | null;
+    completed?: boolean;
   }
 
   const episodes: TimelineEpisode[] = [];
@@ -325,20 +360,22 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
     let stepSources: StepSource[];
 
     if (esRows && esRows.length > 0) {
-      stepSources = esRows.map((r: Record<string, unknown>) => ({
+      stepSources = esRows.filter((r) => r.status !== 'skipped').map((r: Record<string, unknown>) => ({
         stepCode: r.step_code as string,
         stepSeq: Number(r.step_seq),
         label: (r.custom_label as string) || stepLabelMap.get(r.step_code as string) || (r.step_code as string),
         pool: r.pool as string,
         durationMinutes: (r.duration_minutes as number) ?? 30,
         episodeWorkPhaseId: r.episode_work_phase_id as string,
+        completedAt: toIso(r.completed_at as string | Date | null),
+        completed: r.status === 'completed',
       }));
     } else {
       const pathwaySteps =
         multiPathwayStepsMap.get(ep.episode_id) ??
         pathwayTemplatesFromCarePathwayRow(ep) ??
         [];
-      if (pathwaySteps.length === 0) continue;
+      if (pathwaySteps.length === 0 && !patientId) continue;
       stepSources = pathwaySteps.map((ps, idx) => ({
         stepCode: ps.work_phase_code,
         stepSeq: idx,
@@ -429,7 +466,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
         const apptStatus = appt.appointment_status;
         if (apptStatus === 'completed') {
           status = 'completed';
-        } else if (apptStatus === 'no_show') {
+        } else if (apptStatus === 'no_show' || apptStatus === 'unsuccessful') {
           status = 'planned';
         } else {
           status = 'booked';
@@ -439,6 +476,8 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
             etaHeuristic = appt.start_time;
           }
         }
+      } else if (src.completed) {
+        status = 'completed';
       } else if (intent && intent.state === 'open' && isProtetikai) {
         status = 'planned';
         windowStart = intent.window_start;
@@ -464,7 +503,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
         windowStart,
         windowEnd,
         appointmentId: appt?.id ?? null,
-        appointmentStart: appt?.start_time ?? null,
+        appointmentStart: appt?.start_time ?? src.completedAt ?? null,
         appointmentStatus: appt?.appointment_status ?? null,
         intentId: intent?.id ?? null,
         intentState: intent?.state ?? null,
@@ -490,6 +529,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
       stageIntervals: stageIntervalsByEpisode.get(ep.episode_id) ?? [],
       steps,
       etaHeuristic,
+      obstacles: obstaclesByEpisode.get(ep.episode_id) ?? [],
     });
   }
 

@@ -75,6 +75,7 @@ export const NAV_GROUPS: NavGroup[] = [
       { id: 'calendar', label: 'Naptár', path: '/calendar', icon: CalendarDays, roles: 'all', match: startsWith('/calendar'), mobilePrimary: true },
       { id: 'time-slots', label: 'Időpontok kezelése', path: '/time-slots', icon: CalendarClock, roles: ['admin', 'fogpótlástanász'], match: startsWith('/time-slots') },
       { id: 'waiting-times', label: 'Várakozás', path: '/waiting-times', icon: Hourglass, roles: 'all', match: startsWith('/waiting-times') },
+      { id: 'aftercare', label: 'Visszarendelések', path: '/aftercare', icon: CalendarClock, roles: ['admin', 'fogpótlástanász', 'beutalo_orvos'], match: startsWith('/aftercare') },
       { id: 'workload', label: 'Leterheltség', path: '/workload', icon: Gauge, roles: ['admin', 'fogpótlástanász', 'beutalo_orvos'], match: startsWith('/workload') },
     ],
   },

@@ -5,16 +5,22 @@ import { useRouter } from 'next/navigation';
 import { getCurrentUser, type AuthUser } from '@/lib/auth';
 import { TreatmentPlanGantt } from '@/components/TreatmentPlanGantt';
 import { CapacityForecastChart } from '@/components/charts/CapacityForecastChart';
+import { ObstacleWaitingList } from '@/components/ObstacleWaitingList';
 import { AppShell } from '@/components/layout/AppShell';
-import { BarChart3, TrendingUp } from 'lucide-react';
+import { BarChart3, ClipboardList, TrendingUp } from 'lucide-react';
 
-type Tab = 'timeline' | 'capacity';
+type Tab = 'waiting' | 'timeline' | 'capacity';
 
 export default function TreatmentPlansPage() {
   const router = useRouter();
   const [user, setUser] = useState<AuthUser | null>(null);
   const [loading, setLoading] = useState(true);
-  const [activeTab, setActiveTab] = useState<Tab>('timeline');
+  const [activeTab, setActiveTab] = useState<Tab>('waiting');
+
+  useEffect(() => {
+    const query = new URLSearchParams(window.location.search);
+    if (Array.from(query.keys()).some((key) => key.startsWith('tplan_'))) setActiveTab('timeline');
+  }, []);
 
   useEffect(() => {
     getCurrentUser()
@@ -45,11 +51,18 @@ export default function TreatmentPlansPage() {
   return (
     <AppShell title="Kezelési tervek" backTo="/" maxWidth="xl">
       <div className="space-y-6">
-      <p className="text-sm text-gray-500 dark:text-gray-400">Idővonal, kapacitás-előrejelzés és demand projection</p>
+      <p className="text-sm text-gray-500 dark:text-gray-400">Várólista, betegút és kapacitás-előrejelzés</p>
 
       {/* Tabs */}
       <div className="border-b border-gray-200 dark:border-gray-800">
         <nav className="flex gap-1" aria-label="Treatment plan tabs">
+          <button
+            onClick={() => setActiveTab('waiting')}
+            className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${activeTab === 'waiting' ? 'text-medical-primary border-medical-primary' : 'text-gray-700 dark:text-gray-300 hover:text-medical-primary border-transparent hover:border-medical-primary'}`}
+          >
+            <ClipboardList className="w-4 h-4" />
+            Várólista
+          </button>
           <button
             onClick={() => setActiveTab('timeline')}
             className={`flex items-center gap-2 px-4 py-3 text-sm font-medium whitespace-nowrap border-b-2 transition-colors ${
@@ -76,6 +89,7 @@ export default function TreatmentPlansPage() {
       </div>
 
       {/* Tab Content */}
+      {activeTab === 'waiting' && <ObstacleWaitingList />}
       {activeTab === 'timeline' && <TreatmentPlanGantt />}
       {activeTab === 'capacity' && <CapacityForecastChart />}
       </div>
