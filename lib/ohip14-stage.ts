@@ -6,6 +6,8 @@ import {
   LEGACY_OHIP_TIMEPOINT_STAGES,
 } from './ohip14-timepoint-stage';
 import { LEGACY_PATIENT_STAGE_TO_CODE } from './legacy-patient-stage-map';
+import { HttpError } from './auth-server';
+import { isValidUUID } from './validation';
 
 export { OHIP_TIMEPOINT_STAGE_CODES, LEGACY_OHIP_TIMEPOINT_STAGES };
 
@@ -71,7 +73,13 @@ export async function getCurrentEpisodeAndStage(
 export async function getOhipPatientContext(
   pool: Pool,
   patientId: string,
+  requestedEpisodeId?:string|null,
 ): Promise<CurrentEpisodeAndStage> {
+  if(requestedEpisodeId){
+    if(!isValidUUID(requestedEpisodeId))throw new HttpError(400,'Érvénytelen epizódazonosító.');
+    if(!(await pool.query('SELECT id FROM patient_episodes WHERE id=$1 AND patient_id=$2',[requestedEpisodeId,patientId])).rows.length)throw new HttpError(404,'Az epizód nem a beteghez tartozik.');
+    return {episodeId:requestedEpisodeId,stageCode:await getCurrentStageCodeForOhip(pool,patientId,requestedEpisodeId),stage:null,useNewModel:true,deliveryDate:await getDeliveryDate(pool,patientId,requestedEpisodeId)};
+  }
   const current = await getCurrentEpisodeAndStage(pool, patientId);
   if (current.episodeId) {
     return current;

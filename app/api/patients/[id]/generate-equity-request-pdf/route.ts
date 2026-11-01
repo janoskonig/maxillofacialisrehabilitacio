@@ -7,6 +7,9 @@ import { patientSelectSql, normalizePatientRow } from '@/lib/patient-select';
 import { uploadFile, isFtpConfigured, generateDocumentFilename } from '@/lib/ftp-client';
 import { logActivity } from '@/lib/activity';
 import { logger } from '@/lib/logger';
+import { patientForEpisodeExport } from '@/lib/episode-clinical/service';
+import { loadNeakTreatmentSources } from '@/lib/neak-treatment-sources';
+import { buildTreatmentExportContent,treatmentContentToText } from '@/lib/neak-treatment-content';
 
 /**
  * Méltányossági kérelem PDF generálása beteg adataiból
@@ -41,12 +44,14 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   const normalizedPatientData = normalizePatientRow(patientData);
 
   // Validáljuk a beteg adatait a schema szerint
-  const patient = patientSchema.parse(normalizedPatientData) as Patient;
+  const resolved=await patientForEpisodeExport(pool,patientSchema.parse(normalizedPatientData) as Patient,patientId,req.nextUrl.searchParams);
+  const patient=resolved.patient;
 
   // PDF generálása
   const treatmentTypes = await pool.query('SELECT code, label_hu AS label FROM treatment_types');
   const treatmentLabels = new Map<string, string>(treatmentTypes.rows.map((row: { code: string; label: string }) => [row.code, row.label]));
-  const pdfBuffer = await generateEquityRequestPDF(patient, { treatmentLabels });
+  const treatmentPlanSummary=resolved.review?treatmentContentToText(patient,buildTreatmentExportContent(patient,await loadNeakTreatmentSources(pool,patientId,resolved.review.episodeId))):undefined;
+  const pdfBuffer = await generateEquityRequestPDF(patient, { treatmentLabels,treatmentPlanSummary });
 
   // Fájlnév generálása
   const patientName = patient.nev || 'Beteg';

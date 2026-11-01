@@ -3,7 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
 import { OHIP14Response, isOhip14Timepoint } from '@/lib/types';
 import { calculateOHIP14Scores } from '@/lib/ohip14-questions';
-import { getCurrentStageCodeForOhip, getCurrentEpisodeAndStage, isTimepointAllowedForStage } from '@/lib/ohip14-stage';
+import { getCurrentStageCodeForOhip, getCurrentEpisodeAndStage, getOhipPatientContext, isTimepointAllowedForStage } from '@/lib/ohip14-stage';
 import { logActivity } from '@/lib/activity';
 
 /**
@@ -27,6 +27,7 @@ export const GET = authedHandler(async (req, { params }) => {
   // Get response (prefer active episode, but allow episode_id in query)
   const searchParams = req.nextUrl.searchParams;
   const episodeId = searchParams.get('episodeId');
+  if(episodeId)await getOhipPatientContext(pool,patientId,episodeId);
 
   let query = `
     SELECT 
@@ -114,7 +115,7 @@ export const POST = authedHandler(async (req, { auth, params }) => {
   const episodeIdParam = body.episodeId || null;
 
   let finalEpisodeId = episodeIdParam;
-  const current = await getCurrentEpisodeAndStage(pool, patientId);
+  const current = episodeIdParam?await getOhipPatientContext(pool,patientId,episodeIdParam):await getCurrentEpisodeAndStage(pool, patientId);
 
   if (!finalEpisodeId) {
     finalEpisodeId = current.episodeId;

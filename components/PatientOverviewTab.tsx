@@ -15,6 +15,7 @@ import { useRemoteData } from "@/hooks/useRemoteData";
 import { RemoteDataState } from "@/components/ui/RemoteDataState";
 import { PatientNextAction } from "@/components/PatientNextAction";
 import { selectPatientNextStep } from "@/lib/patient-next-step";
+import type { EpisodeClinicalWorkspace } from '@/lib/episode-clinical/model';
 
 type CommType = "message" | "phone" | "in_person" | "other";
 const COMM_TYPE_LABELS: Record<CommType, string> = {
@@ -40,6 +41,7 @@ interface TaskRow {
 }
 
 interface PatientOverviewTabProps {
+  episodeId?:string|null;
   patient: Patient;
   /** A beteg ablakai közti navigáció (deep-link más fülre). */
   onGoToTab: (tab: string) => void;
@@ -88,12 +90,15 @@ function CardShell({
  * Főleg olvasható: minden kártya deep-linkel a részletes fülre.
  */
 export function PatientOverviewTab({
+  episodeId,
   patient,
   onGoToTab,
   onGoToScheduling,
   canSeeClinical = true,
 }: PatientOverviewTabProps) {
   const patientId = patient.id;
+  const clinical=useRemoteData<EpisodeClinicalWorkspace>(patientId&&episodeId?`/api/patients/${patientId}/episodes/${episodeId}/clinical`:null);
+  const referral=clinical.data?.current?.content.anamnesis;
   const nextSteps = useRemoteData<{ items: WorklistItemBackend[] }>(
     patientId && canSeeClinical
       ? `/api/worklists/wip-next-appointments?patientId=${encodeURIComponent(patientId)}`
@@ -106,7 +111,7 @@ export function PatientOverviewTab({
     patientId ? `/api/communication-logs?patientId=${patientId}` : null,
   );
   const nextStep = selectPatientNextStep(
-    nextSteps.data?.items ?? [],
+    (nextSteps.data?.items ?? []).filter(item=>!episodeId||item.episodeId===episodeId),
     patientId ?? "",
   );
   const tasks = taskData.data?.tasks ?? [];
@@ -138,6 +143,7 @@ export function PatientOverviewTab({
       {/* Ellátási útvonal — epizód + stádium + idővonal */}
       {patientId && (
         <EpisodeStageCard
+          episodeId={episodeId}
           patientId={patientId}
           patientName={patient.nev}
           patientReason={patient.kezelesreErkezesIndoka}
@@ -152,33 +158,32 @@ export function PatientOverviewTab({
           icon={<ClipboardList className="w-4 h-4" />}
           title="Beutaló"
           action={{
-            label: "Törzsadatok",
-            onClick: () => onGoToTab("torzsadatok"),
+            label: "Epizód anamnézise",
+            onClick: () => onGoToTab("anamnezis"),
           }}
         >
-          {patient.beutaloOrvos ||
-          patient.beutaloIntezmeny ||
-          patient.szovettaniDiagnozis ? (
+          {referral ? (
             <div className="space-y-0.5">
-              {patient.beutaloOrvos && (
+              <p className="text-xs text-gray-500">Az epizód adatfelvétele: {clinical.data?.current?.effectiveOn}</p>
+              {referral.beutaloOrvos && (
                 <p className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                  {patient.beutaloOrvos}
+                  {referral.beutaloOrvos}
                 </p>
               )}
-              {patient.beutaloIntezmeny && (
+              {referral.beutaloIntezmeny && (
                 <p className="text-[13px] text-gray-600 dark:text-gray-400">
-                  {patient.beutaloIntezmeny}
+                  {referral.beutaloIntezmeny}
                 </p>
               )}
-              {patient.szovettaniDiagnozis && (
+              {referral.szovettaniDiagnozis && (
                 <p className="text-[13px] text-gray-600 dark:text-gray-400">
-                  Dg.: {patient.szovettaniDiagnozis}
+                  Dg.: {referral.szovettaniDiagnozis}
                 </p>
               )}
             </div>
           ) : (
             <p className="text-[13px] text-gray-500 dark:text-gray-400">
-              Nincs beutaló adat rögzítve.
+              A beutaló és a klinikai előzmények az adott epizód adatfelvételében tekinthetők át.
             </p>
           )}
         </CardShell>

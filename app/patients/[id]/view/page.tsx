@@ -12,6 +12,7 @@ import { PatientOverviewTab } from '@/components/PatientOverviewTab';
 import { PatientCommunicationTab } from '@/components/PatientCommunicationTab';
 import { treatmentWorkspaceHref } from '@/lib/treatment-workspace';
 import { PatientTabsNav, type PatientProfileTabId } from '@/components/PatientTabsNav';
+import { episodeOverviewHref } from '@/lib/episode-overview';
 
 type TabType = PatientProfileTabId;
 
@@ -47,7 +48,7 @@ const STAGES_REDIRECT_SECTIONS = new Set(['section-idopont', 'section-stadium'])
 const SECTION_TAB_MAP: Record<string, TabType> = {
   'section-alapadatok': 'torzsadatok',
   'section-szemelyes': 'torzsadatok',
-  'section-beutalo': 'torzsadatok',
+  'section-beutalo': 'anamnezis',
   'section-anamnezis': 'anamnezis',
   'section-betegvizsgalat': 'anamnezis',
   'section-ohip14': 'anamnezis',
@@ -153,6 +154,10 @@ export default function PatientViewPage() {
     }
 
     if (!resolved || !VALID_TABS.includes(resolved)) return;
+    if(resolved==='anamnezis'&&userRole!=='technikus'){
+      router.replace(`${episodeOverviewHref(patientId,episodeContextId)}#adatfelulvizsgalat`);
+      return;
+    }
     setActiveTab(resolved);
     setLoadedTabs((prev) => new Set<TabType>([...Array.from(prev), resolved!]));
   }, [authorized, searchParams, router, patientId, userRole,episodeContextId]);
@@ -198,9 +203,10 @@ export default function PatientViewPage() {
   };
 
   const handleTabChange = useCallback((tab: TabType) => {
+    if(tab==='anamnezis'){router.push(`${episodeOverviewHref(patientId,episodeContextId)}#adatfelulvizsgalat`);return;}
     setActiveTab(tab);
     setLoadedTabs((prev) => (prev.has(tab) ? prev : new Set<TabType>([...Array.from(prev), tab])));
-  }, []);
+  }, [router,patientId,episodeContextId]);
 
   const isSchedulingRole =
     userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász';
@@ -261,6 +267,7 @@ export default function PatientViewPage() {
         {activeTab === 'attekintes' && loadedTabs.has('attekintes') && (
           <PatientOverviewTab
             patient={patient}
+            episodeId={episodeContextId}
             onGoToTab={(tab) => handleTabChange(tab as TabType)}
             onGoToScheduling={
               isSchedulingRole ? () => router.push(treatmentWorkspaceHref(patientId,episodeContextId)) : undefined
@@ -276,19 +283,12 @@ export default function PatientViewPage() {
             onSave={handleSavePatient}
             onPatientRefreshed={handleSavePatient}
             onCancel={handleBack}
-            showOnlySections={['alapadatok', 'szemelyes', 'beutalo']}
+            showOnlySections={['alapadatok', 'szemelyes']}
           />
         )}
 
         {activeTab === 'anamnezis' && loadedTabs.has('anamnezis') && (
-          <PatientForm
-            patient={patient}
-            isViewOnly={false}
-            onSave={handleSavePatient}
-            onPatientRefreshed={handleSavePatient}
-            onCancel={handleBack}
-            showOnlySections={['anamnezis', 'betegvizsgalat', 'ohip14']}
-          />
+          <a className="text-sm underline" href={`${episodeOverviewHref(patientId,episodeContextId)}#adatfelulvizsgalat`}>Az epizód anamnézisének és műtéti előzményeinek megnyitása</a>
         )}
 
         {activeTab === 'kommunikacio' && loadedTabs.has('kommunikacio') && patient?.id && (
@@ -308,6 +308,7 @@ export default function PatientViewPage() {
             onPatientRefreshed={handleSavePatient}
             onCancel={handleBack}
             showOnlySections={['adminisztracio']}
+            episodeId={episodeContextId} clinicalReviewId={searchParams.get('clinicalReviewId')}
             highlightDocumentId={highlightDocumentId}
           />
         )}

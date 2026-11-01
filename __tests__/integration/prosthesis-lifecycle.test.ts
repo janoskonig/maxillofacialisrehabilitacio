@@ -10,11 +10,14 @@ import { PATCH as savePlanRoute,GET as getPlanRoute } from '@/app/api/episodes/[
 import { authedRequest } from './helpers/auth';
 import { loadNeakTreatmentSources } from '@/lib/neak-treatment-sources';
 import { buildTreatmentExportContent } from '@/lib/neak-treatment-content';
+import { clinicalTemplate,reviewCommandSchema } from '@/lib/episode-clinical/model';
+import { saveEpisodeReview } from '@/lib/episode-clinical/service';
 const patientIds:string[]=[];
 afterEach(async()=>{
   const db=getDbPool();
   for(const id of patientIds) {
     await db.query('DELETE FROM clinical_document_packages WHERE patient_id=$1',[id]);
+    await db.query('DELETE FROM episode_clinical_reviews WHERE patient_id=$1',[id]);
     await db.query('DELETE FROM clinical_episode_closures WHERE episode_id IN (SELECT id FROM patient_episodes WHERE patient_id=$1)',[id]);
     await db.query('DELETE FROM clinical_followup_tasks WHERE patient_id=$1',[id]);
     await db.query('DELETE FROM prosthesis_plan_versions WHERE patient_id=$1',[id]);
@@ -176,8 +179,13 @@ describe('prosthesis lifecycle with clinical dates',()=>{
     const s=await setup(),p=await s.register(),baseline=await s.baseline();
     const plan=await s.run({action:'plan',episodeId:p.episodeId,baselineStateId:baseline.id,description:'Végleges felső készítése',approved:true,prosthesisIds:[p.id],treatments:[]});
     const input=packageSchema.parse({requestKey:crypto.randomUUID(),episodeId:p.episodeId,planVersionId:plan.id,statusStateId:baseline.id,prosthesisIds:[p.id]});
+    const content=clinicalTemplate({diagnozis:'Kiadáskor dokumentált diagnózis'},'traumás sérülés');
+    const reviewCommand=reviewCommandSchema.parse({requestKey:crypto.randomUUID(),expectedVersion:0,expectedReason:'traumás sérülés',effectiveOn:'2026-01-01',source:'Vizsgálat',note:'',reviewed:true,sourceReviewId:null,content});
+    const firstReview=await saveEpisodeReview(s.patient.id,p.episodeId,s.doctor.id,reviewCommand);
     const issued=await createClinicalPackage(s.patient.id,s.doctor.id,input);
-    const before=await getDbPool().query('SELECT archive,sha256 FROM clinical_document_packages WHERE id=$1',[issued.id]);
+    const before=await getDbPool().query('SELECT archive,sha256,manifest FROM clinical_document_packages WHERE id=$1',[issued.id]);
+    expect(before.rows[0].manifest.clinicalReviewId).toBe(firstReview.review.id);
+    await saveEpisodeReview(s.patient.id,p.episodeId,s.doctor.id,{...reviewCommand,requestKey:crypto.randomUUID(),expectedVersion:1,effectiveOn:'2026-02-01',content:{...content,anamnesis:{...content.anamnesis,diagnozis:'Későbbi diagnózis'}}});
     const edited=await editorSave(s,p.episodeId,{treatmentPlanUpper:'Módosított terv',treatmentPlanLower:null,expectedVersion:1});
     expect(edited.status).toBe(200);
     expect((await edited.json()).plan.clinicalPlan.approved).toBe(false);

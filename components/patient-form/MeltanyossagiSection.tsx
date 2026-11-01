@@ -7,8 +7,12 @@ import { EQUITY_REQUEST_CONFIG } from '@/lib/equity-request-config';
 import { FileText, Download } from 'lucide-react';
 import { ReadField, ReadGrid, SectionShell, isEmptyValue } from './read/ReadView';
 import { FieldErrorText, fieldAriaProps } from './field-a11y';
+import Link from 'next/link';
+import { episodeOverviewHref } from '@/lib/episode-overview';
 
 interface MeltanyossagiSectionProps {
+  episodeId?:string|null;
+  clinicalReviewId?:string|null;
   register: UseFormRegister<Patient>;
   watch: UseFormWatch<Patient>;
   errors: FieldErrors<Patient>;
@@ -19,6 +23,7 @@ interface MeltanyossagiSectionProps {
 }
 
 export function MeltanyossagiSection({
+  episodeId=null,clinicalReviewId=null,
   register,
   watch,
   errors,
@@ -39,7 +44,8 @@ export function MeltanyossagiSection({
     }
     try {
       showToast(progress, 'info');
-      const response = await fetch(`/api/patients/${patientId}/${path}`, { method: 'GET', credentials: 'include' });
+      const query=episodeId?`?episodeId=${encodeURIComponent(episodeId)}${clinicalReviewId?`&clinicalReviewId=${encodeURIComponent(clinicalReviewId)}`:''}`:'';
+      const response = await fetch(`/api/patients/${patientId}/${path}${query}`, { method: 'GET', credentials: 'include' });
       if (!response.ok) {
         const errorData = await response.json();
         throw new Error(errorData.error || 'Dokumentum generálási hiba');
@@ -65,12 +71,12 @@ export function MeltanyossagiSection({
       id="meltanyossagi"
       title="Méltányossági kérelemhez szükséges adatok"
       icon={<FileText className="w-5 h-5" />}
-      missingCount={missingCount}
+      missingCount={episodeId?0:missingCount}
       editing={editing}
       onToggleEdit={() => setEditing(e => !e)}
-      isViewOnly={isViewOnly}
+      isViewOnly={isViewOnly||!!episodeId}
     >
-      {editing ? (
+      {episodeId?<p className="text-sm">A kórtörténeti összefoglaló és a szakorvosi vélemény a kiválasztott epizód megőrzött adatfelvételéből készül. <Link className="underline" href={`${episodeOverviewHref(patientId!,episodeId)}#adatfelulvizsgalat`}>Epizód adatfelülvizsgálata</Link></p>:editing ? (
         <div className="space-y-4">
           <div>
             <label className="form-label">Kórtörténeti összefoglaló (3 hónapnál nem régebbi)</label>

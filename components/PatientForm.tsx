@@ -100,6 +100,8 @@ function normalizeValue(value: any): any {
 
 
 interface PatientFormProps {
+  episodeId?:string|null;
+  clinicalReviewId?:string|null;
   patient?: Patient | null;
   onSave: (patient: Patient, options?: { source: 'auto' | 'manual' }) => void;
   onCancel: () => void;
@@ -118,6 +120,7 @@ interface PatientFormProps {
 }
 
 export function PatientForm({
+  episodeId=null,clinicalReviewId=null,
   patient,
   onSave,
   onCancel,
@@ -1992,6 +1995,7 @@ export function PatientForm({
         {shouldShowSection('adminisztracio') && (
         <div id="section-adminisztracio" className="scroll-mt-20 sm:scroll-mt-24">
           <PatientDocuments
+            episodeId={episodeId} clinicalReviewId={clinicalReviewId}
             patientId={patientId}
             patientName={currentPatient?.nev ?? null}
             isViewOnly={isViewOnly}
@@ -2007,6 +2011,7 @@ export function PatientForm({
         {/* Méltányossági kérelemhez szükséges adatok */}
         {shouldShowSection('adminisztracio') && patientId && (
           <MeltanyossagiSection
+            episodeId={episodeId} clinicalReviewId={clinicalReviewId}
             register={register}
             watch={watch}
             errors={errors}

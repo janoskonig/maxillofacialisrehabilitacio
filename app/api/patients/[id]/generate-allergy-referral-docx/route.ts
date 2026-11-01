@@ -7,6 +7,7 @@ import { patientSelectSql, normalizePatientRow } from '@/lib/patient-select';
 import { uploadFile, isFtpConfigured, generateDocumentFilename } from '@/lib/ftp-client';
 import { logActivity } from '@/lib/activity';
 import { logger } from '@/lib/logger';
+import { patientForEpisodeExport } from '@/lib/episode-clinical/service';
 
 export const dynamic = 'force-dynamic';
 
@@ -27,7 +28,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
   }
 
   const normalizedPatientData = normalizePatientRow(result.rows[0]);
-  const patient = patientSchema.parse(normalizedPatientData) as Patient;
+  const {patient}=await patientForEpisodeExport(pool,patientSchema.parse(normalizedPatientData) as Patient,patientId,req.nextUrl.searchParams);
 
   const docxBuffer = generateAllergyReferralDocx(patient);
 

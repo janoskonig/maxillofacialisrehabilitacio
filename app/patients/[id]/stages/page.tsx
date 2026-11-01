@@ -235,9 +235,9 @@ export default function PatientStagesPage() {
   }, [workView, requestedAppointment]);
   const isDeceased = Boolean(patient?.halalDatum);
   const canEditEpisodeSettings = userRole === 'admin' || userRole === 'fogpótlástanász';
-  const rawReason = patient?.kezelesreErkezesIndoka ?? activeEpisode?.reason ?? null;
+  const rawReason = activeEpisode?.reason ?? patient?.kezelesreErkezesIndoka ?? null;
   const patientReason =
-    rawReason === '' || rawReason == null ? undefined : (rawReason as 'traumás sérülés' | 'veleszületett rendellenesség' | 'onkológiai kezelés utáni állapot');
+    !rawReason ? undefined : (rawReason as 'traumás sérülés' | 'veleszületett rendellenesség' | 'onkológiai kezelés utáni állapot');
   // A PatientHeaderBar a legacy stádium-bejegyzést ismeri (badge) — új modellnél nincs badge, mint a profilon.
   const headerStage = currentStage && 'stage' in currentStage ? currentStage : null;
 

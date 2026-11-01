@@ -5,7 +5,7 @@ import { FINANCING_SELECT } from '@/lib/episode-financing/service';
 import { financingAt,type FinancingEvent } from '@/lib/episode-financing/model';
 import { budapestToday } from '@/lib/aftercare/model';
 
-export async function loadNeakTreatmentSources(pool: Pick<Pool, 'query'>, patientId: string): Promise<NeakTreatmentSources> {
+export async function loadNeakTreatmentSources(pool: Pick<Pool, 'query'>, patientId: string,episodeId?:string|null): Promise<NeakTreatmentSources> {
   const types = await pool.query('SELECT code, label_hu AS label FROM treatment_types');
   const sources: NeakTreatmentSources = {
     labels: new Map(types.rows.map((r: { code: string; label: string }) => [r.code, r.label])),
@@ -28,8 +28,8 @@ export async function loadNeakTreatmentSources(pool: Pick<Pool, 'query'>, patien
               tc.label_hu AS "labelHu", tt.status, tt.notes, tt.completed_at AS "completedAt"
        FROM tooth_treatments tt
        LEFT JOIN tooth_treatment_catalog tc ON tc.code = tt.treatment_code
-       WHERE tt.patient_id = $1
-       ORDER BY tt.tooth_number, tt.created_at, tt.id`, [patientId]
+       WHERE tt.patient_id = $1 ${episodeId?'AND tt.episode_id=$2':''}
+       ORDER BY tt.tooth_number, tt.created_at, tt.id`, episodeId?[patientId,episodeId]:[patientId]
     );
     sources.toothTreatments = result.rows;
   } else {
@@ -38,7 +38,7 @@ export async function loadNeakTreatmentSources(pool: Pick<Pool, 'query'>, patien
   if (availability?.hasEpisodes) {
     const result = await pool.query(
       availability.hasUnifiedPlans ? `${EPISODE_PLAN_SELECT}
-       WHERE pe.patient_id=$1 AND (pe.status IN ('open','paused') OR v.id IS NOT NULL)
+       WHERE pe.patient_id=$1 ${episodeId?'AND pe.id=$2':"AND (pe.status IN ('open','paused') OR v.id IS NOT NULL)"}
        ORDER BY pe.opened_at DESC,pe.id` : `SELECT pe.id, pe.case_title AS "caseTitle", pe.chief_complaint AS "chiefComplaint", pe.status,
               ${availability.hasEpisodeTreatmentPlan ? 'pe.treatment_plan' : 'NULL::text'} AS "treatmentPlan",
               ${availability.hasJawTreatmentPlans ? 'pe.treatment_plan_upper' : 'NULL::text'} AS "treatmentPlanUpper",
@@ -46,8 +46,8 @@ export async function loadNeakTreatmentSources(pool: Pick<Pool, 'query'>, patien
               tt.label_hu AS "treatmentTypeLabel"
        FROM patient_episodes pe
        LEFT JOIN treatment_types tt ON tt.id = pe.treatment_type_id
-       WHERE pe.patient_id = $1 AND pe.status IN ('open', 'paused')
-       ORDER BY pe.opened_at DESC, pe.id`, [patientId]
+       WHERE pe.patient_id = $1 ${episodeId?'AND pe.id=$2':"AND pe.status IN ('open', 'paused')"}
+       ORDER BY pe.opened_at DESC, pe.id`, episodeId?[patientId,episodeId]:[patientId]
     );
     sources.episodes = availability.hasUnifiedPlans ? result.rows.map(row=>{
       const plan=episodePlanFromRow(row);

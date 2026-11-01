@@ -21,6 +21,7 @@ interface OHIP14SectionProps {
   patientId: string;
   isViewOnly?: boolean;
   isPatientPortal?: boolean;
+  episodeId?:string;
 }
 
 /** Kérdés-azonosító → válaszmező (a léptetett mód index-számításához). */
@@ -62,6 +63,7 @@ export function OHIP14Section({
   patientId,
   isViewOnly = false,
   isPatientPortal = false,
+  episodeId,
 }: OHIP14SectionProps) {
   const router = useRouter();
   const { showToast } = useToast();
@@ -93,7 +95,7 @@ export function OHIP14Section({
   const draftRestoredRef = useRef<Set<OHIP14Timepoint>>(new Set());
   const stepAdvanceTimerRef = useRef<number | null>(null);
 
-  const draftKey = (tp: OHIP14Timepoint) => `ohip14-draft-${patientId}-${tp}`;
+  const draftKey = (tp: OHIP14Timepoint) => `ohip14-draft-${patientId}${episodeId?`-${episodeId}`:''}-${tp}`;
 
   // Léptetett mód: timepoint-váltáskor / betöltéskor az első megválaszolatlan
   // kérdésre ugrunk. SZÁNDÉKOSAN a piszkozat-visszatöltő effekt ELŐTT áll:
@@ -145,9 +147,9 @@ export function OHIP14Section({
   }, []);
 
   useEffect(() => {
-    fetchCurrentStage();
+    if(!episodeId)fetchCurrentStage();
     fetchResponses();
-  }, [patientId]);
+  }, [patientId,episodeId]);
 
   // Auto-select timepoint when data is ready
   useEffect(() => {
@@ -235,7 +237,7 @@ export function OHIP14Section({
       setLoading(true);
       const endpoint = isPatientPortal
         ? `/api/patient-portal/ohip14`
-        : `/api/patients/${patientId}/ohip14`;
+        : `/api/patients/${patientId}/ohip14${episodeId?`?episodeId=${episodeId}`:''}`;
 
       const response = await fetch(endpoint, { credentials: 'include' });
 
@@ -258,12 +260,8 @@ export function OHIP14Section({
         setCompletedTimepoints(completed);
         setResponses(responsesMap);
       } else {
-        if (data.context?.stageCode) {
-          setCurrentStageCode(data.context.stageCode);
-        }
-        if (data.context?.deliveryDate) {
-          setDeliveryDate(new Date(data.context.deliveryDate));
-        }
+        setCurrentStageCode(data.context?.stageCode??null);
+        setDeliveryDate(data.context?.deliveryDate?new Date(data.context.deliveryDate):null);
         if (data.responses && Array.isArray(data.responses)) {
           data.responses.forEach((resp: OHIP14Response) => {
             if (isOhip14Timepoint(resp.timepoint)) {
@@ -394,7 +392,7 @@ export function OHIP14Section({
         method,
         headers: { 'Content-Type': 'application/json' },
         credentials: 'include',
-        body: JSON.stringify(response),
+        body: JSON.stringify({...response,...(episodeId?{episodeId}:{})}),
       });
 
       if (!saveResponse.ok) {

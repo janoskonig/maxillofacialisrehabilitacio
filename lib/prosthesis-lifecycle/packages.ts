@@ -12,12 +12,14 @@ import { clinicalPlanPDF, clinicalStatusPDF } from './pdf';
 import { budapestToday } from '@/lib/aftercare/model';
 import { financingForPlan } from '@/lib/episode-financing/model';
 import { loadFinancingHistory } from '@/lib/episode-financing/service';
+import { selectedEpisodeReview } from '@/lib/episode-clinical/service';
 
 export const packageSchema=z.object({
   requestKey:z.string().uuid(),episodeId:z.string().uuid(),planVersionId:z.string().uuid(),statusStateId:z.string().uuid(),
   prosthesisIds:z.array(z.string().uuid()).length(1),documentIds:z.array(z.string().uuid()).max(50).default([]),
   supplementsId:z.string().uuid().nullable().default(null),
   financingEventId:z.string().uuid().nullable().optional(),
+  clinicalReviewId:z.string().uuid().nullable().optional(),
 });
 export async function zipClinicalFiles(files:Array<{name:string;buffer:Buffer}>):Promise<Buffer> {
   const archive=archiver('zip',{zlib:{level:9}}), chunks:Buffer[]=[];
@@ -67,7 +69,8 @@ export async function createClinicalPackage(patientId:string,actor:string,input:
       const previous=await db.query('SELECT id FROM clinical_document_packages WHERE patient_id=$1 AND id=$2',[patientId,input.supplementsId]);
       if (!previous.rows.length) throw new HttpError(404,'Az előző dokumentumcsomag nem található');
     }
-    const evidence={status:selected,states:replay.milestones.map(m=>m.state),layers:replay.layers,plan:plan.rows[0],financing};
+    const clinicalReview=await selectedEpisodeReview(db,patientId,input.episodeId,input.clinicalReviewId);
+    const evidence={status:selected,states:replay.milestones.map(m=>m.state),layers:replay.layers,plan:plan.rows[0],financing,clinicalReview};
     const metadata=`Státusz: ${selected.occurred_on}; rögzítve: ${selected.recorded_at}; rögzítette: ${selected.recorder??selected.recorded_by}; forrás: ${selected.source}; esemény: ${selected.event_id}`;
     const files=[
       {name:'dental_status.pdf',buffer:await clinicalStatusPDF(patient.rows[0],replay.layers,metadata)},
@@ -84,7 +87,7 @@ export async function createClinicalPackage(patientId:string,actor:string,input:
       if (!buffer.length || size>100*1024*1024) throw new HttpError(413,'Üres melléklet vagy túl nagy csomag (legfeljebb 100 MB)');
       files.push({name:`documents/${doc.id}_${safeFilename(doc.filename)}`,buffer});
     }
-    const manifest={selection:input,statusDate:selected.occurred_on,planVersion:plan.rows[0].version,financing,
+    const manifest={selection:input,statusDate:selected.occurred_on,planVersion:plan.rows[0].version,financing,clinicalReviewId:clinicalReview?.id??null,
       files:files.map(f=>({name:f.name,size:f.buffer.length,sha256:createHash('sha256').update(f.buffer).digest('hex')}))};
     files.push({name:'manifest.json',buffer:Buffer.from(JSON.stringify(manifest,null,2))});
     const archive=await zipClinicalFiles(files), sha=createHash('sha256').update(archive).digest('hex');

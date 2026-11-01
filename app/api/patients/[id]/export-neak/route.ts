@@ -18,6 +18,12 @@ import { buildDentalExportContent } from '@/lib/neak-dental-content';
 import { loadNeakTreatmentSources } from '@/lib/neak-treatment-sources';
 import { buildTreatmentExportContent, treatmentContentToText } from '@/lib/neak-treatment-content';
 import { generateTreatmentPlanPDF } from '@/lib/pdf/treatment-plan';
+import { isValidUUID } from '@/lib/validation';
+import { selectedEpisodeReview } from '@/lib/episode-clinical/service';
+import { patientAtReview,clinicalReviewText } from '@/lib/episode-clinical/model';
+import { loadClinicalStates } from '@/lib/prosthesis-lifecycle/states';
+import { emptyLayers,replayStates,type ClinicalLayers } from '@/lib/prosthesis-lifecycle/model';
+import { clinicalStatusPDF } from '@/lib/prosthesis-lifecycle/pdf';
 
 // Force Node.js runtime (required for archiver, pdf-lib, Buffer operations)
 export const runtime = 'nodejs';
@@ -115,6 +121,8 @@ export const GET = authedHandler(async (req, { params, correlationId, auth }) =>
   const patientId = params.id;
   const url = new URL(req.url);
   const isDryRun = url.searchParams.get('dryRun') === '1';
+  const episodeId=url.searchParams.get('episodeId'),reviewId=url.searchParams.get('clinicalReviewId');
+  if((episodeId&&!isValidUUID(episodeId))||(reviewId&&(!episodeId||!isValidUUID(reviewId))))return NextResponse.json({error:'Érvénytelen epizód vagy adatfelvétel.'},{status:400});
 
   if (!patientId) {
       return NextResponse.json(
@@ -143,7 +151,20 @@ export const GET = authedHandler(async (req, { params, correlationId, auth }) =>
       );
     }
 
-    const patient = normalizePatientRow(patientResult.rows[0]) as Patient;
+    let patient = normalizePatientRow(patientResult.rows[0]) as Patient;
+    const clinicalReview=episodeId?await selectedEpisodeReview(pool,patientId,episodeId,reviewId):null;
+    if(episodeId&&!clinicalReview)return NextResponse.json({error:'Előbb végezd el a kiválasztott epizód adatfelülvizsgálatát. A mai közös karton nem helyettesíti az epizód dokumentált állapotát.',code:'EPISODE_CLINICAL_REVIEW_REQUIRED'},{status:409});
+    let scopedLayers:ClinicalLayers|null=null;
+    if(clinicalReview){
+      patient=patientAtReview(patient,clinicalReview);scopedLayers=emptyLayers();
+      if(clinicalReview.content.baselineStateId){
+        const states=await loadClinicalStates(pool,patientId);
+        if(!states.some(s=>s.id===clinicalReview.content.baselineStateId))return NextResponse.json({error:'A rögzített kiindulási státusz nem érhető el.'},{status:409});
+        const replay=replayStates(states,clinicalReview.content.baselineStateId);
+        if(replay.conflicts.length)return NextResponse.json({error:'A kiindulási státusz idővonalát felül kell vizsgálni.'},{status:409});
+        scopedLayers=replay.layers;patient.meglevoFogak=replay.layers.teeth as Patient['meglevoFogak'];
+      }
+    }
 
     // Get lab quote requests (LIMIT 20)
     const quoteRequestsResult = await pool.query(
@@ -169,13 +190,15 @@ export const GET = authedHandler(async (req, { params, correlationId, auth }) =>
 
     const documents = documentsResult.rows;
 
-    const treatmentSources = await loadNeakTreatmentSources(pool, patientId);
+    const treatmentSources = await loadNeakTreatmentSources(pool, patientId,episodeId);
     const treatmentContent = buildTreatmentExportContent(patient, treatmentSources);
     const dentalContent = buildDentalExportContent(patient);
     const basePlan = buildNeakExportPlan(patient, documents);
     const plan = {
       ...basePlan, treatmentContent, dentalContent,
-      warnings: [...basePlan.warnings, ...treatmentSources.warnings],
+      warnings: [...basePlan.warnings, ...treatmentSources.warnings,...(clinicalReview?[`Epizódadatfelvétel: ${clinicalReview.effectiveOn}, ${clinicalReview.version}. változat; rögzítve: ${clinicalReview.recordedAt}`,
+        ...(!clinicalReview.content.baselineStateId?['Az epizód adatfelvételéhez még nincs fogazati státusz kapcsolva; a hiányzó állapot nem igazolt.']:[])]:[])],
+      ...(clinicalReview?{clinicalReview:{id:clinicalReview.id,episodeId:clinicalReview.episodeId,effectiveOn:clinicalReview.effectiveOn,version:clinicalReview.version}}:{}),
     };
     const { includedDocuments, isReady } = plan;
 
@@ -218,6 +241,8 @@ export const GET = authedHandler(async (req, { params, correlationId, auth }) =>
     }
 
     const limiter = new ExportLimiter(NEAK_EXPORT_LIMITS);
+    const clinicalReviewBuffer=clinicalReview?Buffer.from(JSON.stringify(clinicalReview,null,2)):null;
+    if(clinicalReviewBuffer)limiter.addFile(clinicalReviewBuffer.length);
 
     const anamnesisInput = {
       patientId: patient.id || patientId,
@@ -274,7 +299,7 @@ export const GET = authedHandler(async (req, { params, correlationId, auth }) =>
 
     let medicalHistoryBuffer: Buffer;
     try {
-      const medicalHistoryMarkdown = generateMedicalHistoryMarkdown(patient, anamnesisSummary);
+      const medicalHistoryMarkdown = generateMedicalHistoryMarkdown(patient, anamnesisSummary)+(clinicalReview?`\n\n## Az epizód megőrzött klinikai adatfelvétele\n\n${clinicalReviewText(clinicalReview)}`:'');
       medicalHistoryBuffer = await markdownToPDF(medicalHistoryMarkdown, 'Kórtörténet');
       limiter.addFile(medicalHistoryBuffer.length);
     } catch (error) {
@@ -286,7 +311,7 @@ export const GET = authedHandler(async (req, { params, correlationId, auth }) =>
     }
 
     // Every generated PDF must succeed; a placeholder is not an exportable status.
-    const dentalStatusBuffer = await generateDentalStatusPDF(patient);
+    const dentalStatusBuffer = scopedLayers?await clinicalStatusPDF(patient,scopedLayers,`Epizód: ${episodeId}; adatfelvétel: ${clinicalReview!.effectiveOn}; ${clinicalReview!.content.baselineStateId?'Rögzített kiindulási státusz':'Nincs kapcsolt vizsgálati státusz; a hiányzó pozíciók nem ismertek'}`):await generateDentalStatusPDF(patient);
     limiter.addFile(dentalStatusBuffer.length);
 
     // Fogorvosi méltányossági (FNMT.152.K)
@@ -339,6 +364,7 @@ export const GET = authedHandler(async (req, { params, correlationId, auth }) =>
       { name: 'treatment_plan.pdf', size: treatmentPlanPdfBuffer.length },
       { name: 'treatment_plan.txt', size: treatmentPlanBuffer.length },
       { name: 'quote_requests.txt', size: quoteRequestsBuffer.length },
+      ...(clinicalReviewBuffer?[{name:'episode_clinical_review.json',size:clinicalReviewBuffer.length}]:[]),
     ];
 
     // Fetch every selected attachment before starting the archive. A failed or empty
@@ -411,7 +437,8 @@ export const GET = authedHandler(async (req, { params, correlationId, auth }) =>
       {name:'treatment_plan.txt',buffer:treatmentPlanBuffer},
       {name:'quote_requests.txt',buffer:quoteRequestsBuffer},
       {name:'README.txt',buffer:readmeBuffer},...attachments,
-    ],treatmentSources.episodes.map(e=>({episodeId:e.id,planVersionId:e.planVersionId,financing:e.financing})));
+      ...(clinicalReviewBuffer?[{name:'episode_clinical_review.json',buffer:clinicalReviewBuffer}]:[]),
+    ],clinicalReview?{clinicalReview,treatment:treatmentSources.episodes.map(e=>({episodeId:e.id,planVersionId:e.planVersionId,financing:e.financing}))}:treatmentSources.episodes.map(e=>({episodeId:e.id,planVersionId:e.planVersionId,financing:e.financing})));
 
     // Generate filename
     const dateStr = new Date().toISOString().split('T')[0];

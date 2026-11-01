@@ -10,6 +10,8 @@ vi.mock('@/components/PatientHeaderBar',()=>({PatientHeaderBar:()=>null}));
 vi.mock('@/components/EpisodeProviderControl',()=>({EpisodeProviderControl:({assignedProviderName}:any)=><p>{assignedProviderName}</p>}));
 vi.mock('@/components/EpisodePathwayEditor',()=>({EpisodePathwayEditor:()=>null}));
 vi.mock('@/components/PatientEpisodeForm',()=>({PatientEpisodeForm:()=>null}));
+vi.mock('@/components/episode-overview/EpisodeClinicalReviewPanel',()=>({EpisodeClinicalReviewPanel:()=>null}));
+vi.mock('@/components/OHIP14Section',()=>({OHIP14Section:()=>null}));
 vi.mock('@/components/EpisodeTreatmentPlanEditor',()=>({EpisodeTreatmentPlanEditor:({episodeId,unified}:any)=><section data-testid="plan-editor">{episodeId}:{String(unified)}</section>}));
 vi.mock('@/components/prosthesis-lifecycle/ClinicalEntryForm',()=>({ClinicalEntryForm:({initial}:any)=>{mocks.registered(initial);return <p>Fogpótlás rögzítése az epizódhoz</p>;}}));
 const patientId=crypto.randomUUID(),upper=crypto.randomUUID(),lower=crypto.randomUUID(),device=crypto.randomUUID(),planId=crypto.randomUUID();

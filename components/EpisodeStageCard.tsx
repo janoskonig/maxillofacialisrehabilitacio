@@ -10,6 +10,7 @@ import { StageSuggestionModal } from './StageSuggestionModal';
 import { episodeOverviewHref } from '@/lib/episode-overview';
 
 interface EpisodeStageCardProps {
+  episodeId?:string|null;
   patientId: string;
   patientName?: string | null;
   patientReason?: string | null;
@@ -33,6 +34,7 @@ function getStageColor(code: string): string {
 }
 
 export function EpisodeStageCard({
+  episodeId,
   patientId,
   patientName,
   patientReason,
@@ -58,7 +60,7 @@ export function EpisodeStageCard({
       const epData = await epRes.json();
       setEpisodes(epData.episodes ?? []);
 
-      const openEp = (epData.episodes ?? []).find((e: PatientEpisode) => e.status === 'open');
+      const openEp = (epData.episodes ?? []).find((e: PatientEpisode) => episodeId?e.id===episodeId:e.status === 'open');
       if (openEp) {
         const detailRes = await fetch(`/api/episodes/${openEp.id}`, {
           credentials: 'include',
@@ -105,7 +107,7 @@ export function EpisodeStageCard({
     } finally {
       setLoading(false);
     }
-  }, [patientId]);
+  }, [patientId,episodeId]);
 
   useEffect(() => {
     fetchData();

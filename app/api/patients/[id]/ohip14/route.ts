@@ -135,8 +135,9 @@ export const GET = authedHandler(async (req, { params }) => {
     updatedBy: row.updatedBy,
   }));
 
-  const ohipContext = await getOhipPatientContext(pool, patientId);
-  const responses = pickResponsesForEpisode(allResponses, ohipContext.episodeId);
+  const requestedEpisodeId=req.nextUrl.searchParams.get('episodeId');
+  const ohipContext = await getOhipPatientContext(pool, patientId,requestedEpisodeId);
+  const responses = pickResponsesForEpisode(requestedEpisodeId?allResponses.filter(r=>r.episodeId===requestedEpisodeId):allResponses, ohipContext.episodeId);
 
   let reminderEmailLogs: Array<{
     timepoint: string | null;
@@ -159,9 +160,10 @@ export const GET = authedHandler(async (req, { params }) => {
        FROM outbound_email_log
        WHERE email_type = 'ohip_reminder'
          AND metadata->>'patientId' = $1
+         AND ($2::text IS NULL OR metadata->>'episodeId'=$2::text)
        ORDER BY created_at DESC
        LIMIT 20`,
-      [patientId],
+      [patientId,requestedEpisodeId],
     );
     reminderEmailLogs = logRes.rows.map((row) => ({
       timepoint: row.timepoint ?? null,

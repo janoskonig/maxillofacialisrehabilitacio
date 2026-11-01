@@ -54,7 +54,11 @@ interface PatientTabsNavProps {
  * navigációt mutatja, így a két felület egy összefüggő betegkartonként viselkedik.
  */
 export function PatientTabsNav({ patientId, activeTab, onTabChange, showStadiumok = true,episodeId,onNavigate }: PatientTabsNavProps) {
-  const tabs = showStadiumok ? TABS : TABS.filter((t) => t.id !== 'stadiumok' && t.id !== 'aftercare' && t.id!=='epizod');
+  const episodeTabs=new Set<PatientTabId>(['epizod','anamnezis','stadiumok','aftercare']);
+  const groups=[
+    {label:'Beteg',tabs:TABS.filter(t=>!episodeTabs.has(t.id))},
+    {label:'Ellátási epizód',tabs:showStadiumok?['epizod','anamnezis','stadiumok','aftercare'].map(id=>TABS.find(t=>t.id===id)!):[]},
+  ];
 
   const classFor = (id: PatientTabId) =>
     `flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
@@ -66,10 +70,10 @@ export function PatientTabsNav({ patientId, activeTab, onTabChange, showStadiumo
   return (
     <div className="mb-4 sm:mb-6 border-b border-gray-200 dark:border-gray-800 -mx-2 sm:mx-0">
       <nav
-        className="flex gap-0.5 sm:gap-1 overflow-x-auto scrollbar-hide px-2 sm:px-0"
+        className="space-y-2 px-2 sm:px-0"
         aria-label="Betegkarton fülök"
       >
-        {tabs.map((tab) => {
+        {groups.filter(group=>group.tabs.length>0).map(group=><div key={group.label} role="group" aria-label={group.label} className={group.label==='Ellátási epizód'?'rounded-t-xl bg-blue-50/60 px-2 pt-2 dark:bg-blue-950/20':''}><p className="px-2 text-[11px] font-medium uppercase tracking-wide text-slate-500">{group.label}</p><div className="flex gap-0.5 overflow-x-auto scrollbar-hide sm:gap-1">{group.tabs.map((tab) => {
           const { id } = tab;
           const inner = (
             <>
@@ -78,7 +82,7 @@ export function PatientTabsNav({ patientId, activeTab, onTabChange, showStadiumo
               <span className="sm:hidden">{tab.shortLabel}</span>
             </>
           );
-          if (id !== 'stadiumok' && id !== 'aftercare' && id!=='epizod' && onTabChange) {
+          if (id !== 'stadiumok' && id !== 'aftercare' && id!=='epizod' && id!=='anamnezis' && onTabChange) {
             return (
               <button key={id} onClick={() => onTabChange(id)} className={classFor(id)}>
                 {inner}
@@ -86,7 +90,7 @@ export function PatientTabsNav({ patientId, activeTab, onTabChange, showStadiumo
             );
           }
           const href =
-            id==='epizod'?episodeOverviewHref(patientId,episodeId):id === 'stadiumok'
+            id==='anamnezis'?`${episodeOverviewHref(patientId,episodeId)}#adatfelulvizsgalat`:id==='epizod'?episodeOverviewHref(patientId,episodeId):id === 'stadiumok'
               ? `/patients/${patientId}/stages${episodeId?`?episodeId=${encodeURIComponent(episodeId)}`:''}`
               : id === 'aftercare' ? `/patients/${patientId}/prostheses${episodeId?`?episodeId=${encodeURIComponent(episodeId)}`:''}` : `/patients/${patientId}/view?tab=${id}${episodeId?`&episodeId=${encodeURIComponent(episodeId)}`:''}`;
           return (
@@ -100,7 +104,7 @@ export function PatientTabsNav({ patientId, activeTab, onTabChange, showStadiumo
               {inner}
             </Link>
           );
-        })}
+        })}</div></div>)}
       </nav>
     </div>
   );

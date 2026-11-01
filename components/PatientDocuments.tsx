@@ -17,6 +17,8 @@ import type { NeakExportPlan } from '@/lib/neak-export';
 import { tagStringIsPortraitTag } from '@/lib/patient-portrait-tag';
 
 interface PatientDocumentsProps {
+  episodeId?:string|null;
+  clinicalReviewId?:string|null;
   patientId: string | null;
   patientName?: string | null;
   isViewOnly?: boolean;
@@ -29,6 +31,7 @@ interface PatientDocumentsProps {
 }
 
 export function PatientDocuments({ 
+  episodeId=null,clinicalReviewId=null,
   patientId, 
   patientName = null,
   isViewOnly = false, 
@@ -70,7 +73,7 @@ export function PatientDocuments({
 
   useEffect(() => {
     setNeakExportStatus(null);
-  }, [patientId, documents, isPatientDirty]);
+  }, [patientId, documents, isPatientDirty,episodeId,clinicalReviewId]);
 
   useEffect(() => {
     const checkRole = async () => {
@@ -638,7 +641,8 @@ export function PatientDocuments({
       }
 
       // Dry-run: Check if ready
-      const dryRunResponse = await fetch(`/api/patients/${patientId}/export-neak?dryRun=1`, {
+      const exportQuery=episodeId?`episodeId=${encodeURIComponent(episodeId)}${clinicalReviewId?`&clinicalReviewId=${encodeURIComponent(clinicalReviewId)}`:''}`:'';
+      const dryRunResponse = await fetch(`/api/patients/${patientId}/export-neak?dryRun=1${exportQuery?`&${exportQuery}`:''}`, {
         credentials: 'include',
       });
 
@@ -664,7 +668,7 @@ export function PatientDocuments({
       if (!download || !dryRunData.isReady) return;
 
       // Ready: Start export
-      const exportResponse = await fetch(`/api/patients/${patientId}/export-neak`, {
+      const exportResponse = await fetch(`/api/patients/${patientId}/export-neak${exportQuery?`?${exportQuery}`:''}`, {
         credentials: 'include',
       });
 

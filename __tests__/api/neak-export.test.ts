@@ -24,6 +24,7 @@ vi.mock('@/lib/pdf/equity-request-patient', () => ({
 vi.mock('@/lib/pdf/treatment-plan', () => ({ generateTreatmentPlanPDF: vi.fn(async () => Buffer.from('treatment plan pdf')) }));
 
 import { GET } from '@/app/api/patients/[id]/export-neak/route';
+import { clinicalTemplate } from '@/lib/episode-clinical/model';
 
 const patient = {
   id: 'p1', nev: 'Teszt Elek', nem: 'férfi', szuletesiDatum: '1980-01-01', taj: '123456789',
@@ -62,6 +63,20 @@ beforeEach(() => {
 afterEach(() => vi.unstubAllEnvs());
 
 describe('NEAK export endpoint', () => {
+  it('uses the chosen episode observation instead of current chart fields and tooth status',async()=>{
+    const episodeId=crypto.randomUUID(),reviewId=crypto.randomUUID();
+    const content=clinicalTemplate({nev:null,nem:'ferfi',diagnozis:'Régi diagnózis'},'traumás sérülés');
+    const original=mocks.query.getMockImplementation()!;
+    mocks.query.mockImplementation(async(sql:string,...args:unknown[])=>sql.includes('FROM episode_clinical_reviews r')?{rows:[{id:reviewId,episodeId,version:1,effectiveOn:'2026-01-01',recordedAt:'2026-11-01',content}]}:original(sql,...args));
+    const response=await GET(new NextRequest(`http://localhost/api/patients/p1/export-neak?dryRun=1&episodeId=${episodeId}&clinicalReviewId=${reviewId}`),{params:{id:'p1'}});
+    const body=await response.json();expect(response.status).toBe(200);expect(body.clinicalReview.id).toBe(reviewId);expect(body.missingFields).toContainEqual({key:'nev',label:'Név'});expect(body.dentalContent.rows.some((r:{explicit:boolean})=>r.explicit)).toBe(false);
+    expect(mocks.query.mock.calls.some(([sql,params])=>sql.includes('tt.episode_id=$2')&&params[1]===episodeId)).toBe(true);
+  });
+  it('does not replace an unreviewed episode with today\'s chart during export',async()=>{
+    const original=mocks.query.getMockImplementation()!;mocks.query.mockImplementation(async(sql:string,...args:unknown[])=>sql.includes('FROM episode_clinical_reviews r')?{rows:[]}:original(sql,...args));
+    const response=await GET(new NextRequest(`http://localhost/api/patients/p1/export-neak?episodeId=${crypto.randomUUID()}`),{params:{id:'p1'}});
+    expect(response.status).toBe(409);expect((await response.json()).code).toBe('EPISODE_CLINICAL_REVIEW_REQUIRED');expect(mocks.download).not.toHaveBeenCalled();
+  });
   it('honors the feature flag', async () => {
     vi.stubEnv('ENABLE_NEAK_EXPORT', 'false');
     expect((await request()).status).toBe(404);
