@@ -411,7 +411,7 @@ export const GET = authedHandler(async (req, { params, correlationId, auth }) =>
       {name:'treatment_plan.txt',buffer:treatmentPlanBuffer},
       {name:'quote_requests.txt',buffer:quoteRequestsBuffer},
       {name:'README.txt',buffer:readmeBuffer},...attachments,
-    ]);
+    ],treatmentSources.episodes.map(e=>({episodeId:e.id,planVersionId:e.planVersionId,financing:e.financing})));
 
     // Generate filename
     const dateStr = new Date().toISOString().split('T')[0];

@@ -4,6 +4,7 @@ import { ClinicalDocument } from '@/lib/pdf/clinical-document';
 import { LAYOUT } from '@/lib/pdf/layout';
 import { BASE_LABELS, UPPER_ROW, LOWER_ROW } from '@/components/patient-form/odontogram/tooth-conditions';
 import type { ClinicalLayers } from './model';
+import { financingLines,type FinancingSnapshot } from '@/lib/episode-financing/model';
 
 export function describeClinicalValue(v:unknown):string {
   if (v==null) return 'Nincs dokumentált adat';
@@ -40,9 +41,11 @@ export async function clinicalStatusPDF(patient:Partial<Patient>, layers:Clinica
   const doc=await ClinicalDocument.create('Dátumhoz kötött fogazati státusz',patient);
   doc.text(metadata,9);await writeClinicalLayers(doc,layers);return doc.finish();
 }
-export async function clinicalPlanPDF(patient:Partial<Patient>, plan:{version:number;content:any}, metadata:string) {
+export async function clinicalPlanPDF(patient:Partial<Patient>, plan:{version:number;content:any}, metadata:string,financing?:FinancingSnapshot) {
   const doc=await ClinicalDocument.create(`Kezelési terv - ${plan.version}. változat`,patient);
   doc.text(metadata,9);doc.heading('Klinikai terv');doc.text(plan.content.description);
+  doc.heading('Finanszírozási állapot');
+  for(const line of financingLines(financing??plan.content.financing))doc.text(line,9);
   doc.heading('Beavatkozások sorrendben');
   if (!plan.content.treatments.length) doc.text('Nincs külön fogszintű beavatkozás megadva.');
   for (const t of plan.content.treatments) doc.text(`${t.toothNumber}. fog: ${t.treatmentCode}`);

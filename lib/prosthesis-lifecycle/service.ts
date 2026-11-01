@@ -8,6 +8,8 @@ import { canonical, clinicalCommandSchema, emptyLayers, replayStates, type Clini
 
 import { baselineAt, loadClinicalStates } from './states';
 import { EPISODE_PLAN_SELECT, episodePlanFromRow, persistEpisodeTreatmentPlan } from './plans';
+import { FINANCING_SELECT } from '@/lib/episode-financing/service';
+import type { FinancingEvent } from '@/lib/episode-financing/model';
 export { loadClinicalStates } from './states';
 
 type Db = Pick<PoolClient,'query'>;
@@ -392,7 +394,7 @@ async function saveRepairWork(db:PoolClient,patientId:string,actor:string,c:Extr
 export async function loadClinicalWorkspace(patientId:string) {
   const db=getDbPool();
   const p=await one(db,'SELECT nev FROM patients WHERE id=$1',[patientId]);
-  const [episodes,prostheses,events,goals,plans,repairs,work,tasks,states,packages,legacy,documents,pathways,appointments,closures,legacyEncounters,repairWork,episodeLinks,episodePlans]=await Promise.all([
+  const [episodes,prostheses,events,goals,plans,repairs,work,tasks,states,packages,legacy,documents,pathways,appointments,closures,legacyEncounters,repairWork,episodeLinks,episodePlans,financing]=await Promise.all([
     db.query('SELECT id,case_title,reason,status,opened_at,closed_at,parent_episode_id FROM patient_episodes WHERE patient_id=$1 ORDER BY opened_at DESC',[patientId]),
     db.query('SELECT *,delivery_date::text FROM prostheses WHERE patient_id=$1 ORDER BY created_at,id',[patientId]),
     db.query(`SELECT e.*,e.occurred_on::text,u.email AS recorder,NOT EXISTS(SELECT 1 FROM prosthesis_clinical_events n WHERE n.supersedes_id=e.id) AS active
@@ -423,13 +425,14 @@ export async function loadClinicalWorkspace(patientId:string) {
       jsonb_build_array(r.prosthesis_id) AS prosthesis_ids FROM prosthesis_repair_work_phases w JOIN prosthesis_repair_cases r ON r.id=w.repair_case_id WHERE w.patient_id=$1`,[patientId]),
     db.query('SELECT l.* FROM prosthesis_episode_links l JOIN patient_episodes e ON e.id=l.episode_id WHERE e.patient_id=$1',[patientId]),
     db.query(`${EPISODE_PLAN_SELECT} WHERE pe.patient_id=$1 ORDER BY pe.opened_at DESC,pe.id`,[patientId]),
+    db.query<FinancingEvent>(`${FINANCING_SELECT} WHERE f.patient_id=$1 ORDER BY f.effective_on DESC,f.version DESC`,[patientId]),
   ]);
   const replay=replayStates(states);
   const activeEvents=events.rows.filter(e=>e.active);
   const closureReview=closures.rows.filter(c=>(c.acceptance_events as Array<{acceptance_id:string}>).some(a=>!activeEvents.some(e=>e.id===a.acceptance_id))).map(c=>c.episode_id);
   return { patientName:p.nev,episodes:episodes.rows,prostheses:prostheses.rows,events:events.rows,goals:goals.rows,plans:plans.rows,repairs:repairs.rows,
     work:[...work.rows,...repairWork.rows],tasks:tasks.rows,states,actual:replay.layers,conflicts:replay.conflicts,milestones:replay.milestones,
-    packages:packages.rows,episodeLinks:episodeLinks.rows,episodePlans:episodePlans.rows.map(episodePlanFromRow),legacyStates:legacy.rows,legacyEncounters:legacyEncounters.rows,documents:documents.rows,pathways:pathways.rows,appointments:appointments.rows,closureReview };
+    packages:packages.rows,financingEvents:financing.rows,episodeLinks:episodeLinks.rows,episodePlans:episodePlans.rows.map(episodePlanFromRow),legacyStates:legacy.rows,legacyEncounters:legacyEncounters.rows,documents:documents.rows,pathways:pathways.rows,appointments:appointments.rows,closureReview };
 }
 export type ClinicalWorkspace = Awaited<ReturnType<typeof loadClinicalWorkspace>>;
 

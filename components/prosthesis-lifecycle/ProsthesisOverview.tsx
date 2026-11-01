@@ -6,6 +6,8 @@ import { ToothIcon } from '@/components/icons/ToothIcon';
 import type { ClinicalWorkspace } from '@/lib/prosthesis-lifecycle/service';
 import { emptyLayers } from '@/lib/prosthesis-lifecycle/model';
 import { ClinicalArch } from './ClinicalArch';
+import { budapestToday } from '@/lib/aftercare/model';
+import { financingAt,financingSummary,formatFinancingAmount } from '@/lib/episode-financing/model';
 
 const day=(value:unknown)=>String(value??'').slice(0,10);
 
@@ -22,6 +24,7 @@ export function ProsthesisOverview({data,patientId,onAction}:{data:ClinicalWorks
       const footprint=emptyLayers();
       for(const position of p.positions??[])footprint.prostheses[`${p.id}:${position.tooth}:${position.role}`]={prosthesisId:p.id,...position};
       const episode=data.episodes.find(e=>e.id===p.episode_id);
+      const fundingEpisodes=data.episodes.filter(e=>e.id===p.episode_id||(data.episodeLinks??[]).some(l=>l.episode_id===e.id&&l.prosthesis_id===p.id));
       const state=retired?'Használatból kivonva':delivered?'Átadott fogpótlás':accepted?'Klinikailag elfogadva':'Készítés / nyilvántartás';
       const milestones=[{label:'Labor',event:events.find(e=>e.kind==='lab_completed')},{label:'Elfogadás',event:accepted},{label:'Átadás',event:delivered},{label:'Gondozás',event:care}];
       return <article key={p.id} className="min-w-0 overflow-hidden rounded-2xl border border-slate-200 bg-white shadow-sm dark:border-slate-700 dark:bg-slate-950">
@@ -30,6 +33,11 @@ export function ProsthesisOverview({data,patientId,onAction}:{data:ClinicalWorks
           {(p.positions??[]).length>0&&<div className="mb-4 rounded-xl border border-slate-100 p-3 dark:border-slate-800"><p className="mb-2 text-xs font-medium text-slate-500">A készülékhez rögzített pozíciók</p><ClinicalArch jaw={p.jaw} layers={footprint} label={`${p.label} pozíciói`} compact/></div>}
           {p.mapping_review_required&&<button type="button" className="mb-3 block rounded-lg bg-amber-50 p-2 text-left text-xs text-amber-800 dark:bg-amber-950/40 dark:text-amber-200" onClick={()=>onAction({action:'review_mapping',prosthesisId:p.id,episodeId:p.episode_id,jaw:p.jaw,role:p.role,origin:p.origin,label:p.label,prosthesisType:p.prosthesis_type,specification:p.specification,positions:p.positions})}>Korábbi rekord megfeleltetése szükséges</button>}
           {p.delivery_date&&!delivered&&<p className="mb-3 text-xs text-slate-500">Korábbi átadás: {p.delivery_date} · régi gondozási rekord</p>}
+          <div className="mb-4 space-y-2">{fundingEpisodes.map(ep=>{
+            const plan=(data.plans??[]).filter(v=>v.episode_id===ep.id).sort((a,b)=>b.version-a.version)[0];
+            const funding=financingAt((data.financingEvents??[]).filter(f=>f.episode_id===ep.id),budapestToday(),plan?.id??null);
+            return <div key={ep.id} className={`rounded-xl p-3 text-xs ${funding.requiresReview?'bg-amber-50 text-amber-900 dark:bg-amber-950/40 dark:text-amber-200':'bg-slate-50 text-slate-600 dark:bg-slate-900 dark:text-slate-300'}`}>{fundingEpisodes.length>1&&<p className="mb-1 text-slate-500">{ep.case_title||ep.reason}</p>}<p className="font-semibold">{financingSummary(funding)}</p>{funding.event&&<p className="mt-1">Beteg terhe: {formatFinancingAmount(funding.event.patient_amount,funding.event.currency)} · hatályos: {funding.event.effective_on}</p>}<Link className="mt-2 inline-block underline" href={`/patients/${patientId}/stages?episodeId=${ep.id}&view=plan&plan=1#finanszirozas`}>Finanszírozás és változástörténet</Link></div>;
+          })}</div>
           <div className="flex flex-wrap gap-2">{p.episode_id&&<Link aria-label="Kezelési terv szerkesztése" href={`/patients/${patientId}/stages?episodeId=${p.episode_id}&view=plan&plan=1#kezelesi-terv`} className="inline-flex items-center gap-1.5 rounded-lg bg-blue-700 px-3 py-2 text-xs font-medium text-white"><ClipboardList className="h-3.5 w-3.5"/>Kezelési terv<ArrowUpRight className="h-3 w-3"/></Link>}<button type="button" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs dark:border-slate-700" onClick={()=>onAction({action:'milestone',prosthesisId:p.id})}><Flag className="h-3.5 w-3.5"/>Mérföldkő</button><button type="button" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs dark:border-slate-700" onClick={()=>onAction({action:'visit',prosthesisId:p.id,links:[{prosthesisId:p.id,phase:delivered?'aftercare':'construction',activity:'',outcome:'completed',result:'',followups:[],completedTaskIds:[]}]})}><CalendarDays className="h-3.5 w-3.5"/>Vizit</button><button type="button" className="inline-flex items-center gap-1.5 rounded-lg border border-slate-200 px-3 py-2 text-xs dark:border-slate-700" onClick={()=>onAction({action:'repair',prosthesisId:p.id})}><Wrench className="h-3.5 w-3.5"/>Javítás</button></div>
           <details className="mt-4 border-t border-slate-100 pt-3 text-xs text-slate-500 dark:border-slate-800"><summary className="cursor-pointer">Nyilvántartási adatok és újrakészítés</summary><p className="mt-2 break-all">Tartós azonosító: {p.id}</p>{p.replaces_id&&<p className="mt-1 break-all">Előző fogpótlás: {data.prostheses.find(v=>v.id===p.replaces_id)?.label??p.replaces_id}</p>}<button type="button" className="mt-2 underline" onClick={()=>onAction({action:'remake',prosthesisId:p.id})}>Teljes újrakészítés · új fogpótlás és új epizód</button></details>
         </div>

@@ -75,7 +75,8 @@ describe('NEAK treatment content', () => {
     const result = buildTreatmentExportContent({}, { ...sources, toothTreatments: [], episodes: [{ id: 'e1', chiefComplaint: 'Nyitott epizód', status: 'open', treatmentPlan: 'Korábbi közös terv' }] });
     expect(result.sections[0].lines).toEqual(['Nincs rögzített felső kezelési terv.']);
     expect(result.sections[1].lines).toEqual(['Nincs rögzített alsó kezelési terv.']);
-    expect(result.sections[2].lines).toEqual(['Korábbi közös terv']);
+    expect(result.sections.find(s=>s.title.includes('állcsontmegjelölés nélküli'))?.lines).toEqual(['Korábbi közös terv']);
+    expect(result.sections.find(s=>s.title.includes('finanszírozás'))?.lines.join(' ')).toContain('Finanszírozás nincs rögzítve');
   });
   it('does not repeat an older plan when its exact text has been assigned to a jaw', () => {
     const result = buildTreatmentExportContent({}, { ...sources, toothTreatments: [], episodes: [{ id: 'e1', status: 'open', treatmentPlan: 'Régi terv', treatmentPlanUpper: 'Régi terv' }] });

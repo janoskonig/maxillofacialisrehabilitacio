@@ -21,6 +21,7 @@ async function checkSchema() {
     probeColumnExists(pool, 'patient_episodes', 'treatment_plan_upper'),
     probeColumnExists(pool, 'patient_episodes', 'treatment_plan_lower'),
     probeColumnExists(pool, 'prosthesis_plan_versions', 'episode_plan_version'),
+    probeColumnExists(pool, 'episode_financing_events', 'effective_on'),
   ]);
   return available.every(Boolean);
 }

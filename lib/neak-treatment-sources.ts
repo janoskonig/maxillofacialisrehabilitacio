@@ -1,6 +1,9 @@
 import type { Pool } from 'pg';
 import type { NeakTreatmentSources } from '@/lib/neak-treatment-content';
 import { EPISODE_PLAN_SELECT, episodePlanFromRow } from '@/lib/prosthesis-lifecycle/plans';
+import { FINANCING_SELECT } from '@/lib/episode-financing/service';
+import { financingAt,type FinancingEvent } from '@/lib/episode-financing/model';
+import { budapestToday } from '@/lib/aftercare/model';
 
 export async function loadNeakTreatmentSources(pool: Pick<Pool, 'query'>, patientId: string): Promise<NeakTreatmentSources> {
   const types = await pool.query('SELECT code, label_hu AS label FROM treatment_types');
@@ -16,7 +19,8 @@ export async function loadNeakTreatmentSources(pool: Pick<Pool, 'query'>, patien
       WHERE table_schema = 'public' AND table_name = 'patient_episodes' AND column_name = 'treatment_plan') AS "hasEpisodeTreatmentPlan",
     (SELECT COUNT(*) = 2 FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = 'patient_episodes' AND column_name IN ('treatment_plan_upper', 'treatment_plan_lower')) AS "hasJawTreatmentPlans",
-    EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='prosthesis_plan_versions' AND column_name='episode_plan_version') AS "hasUnifiedPlans"`);
+    EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='prosthesis_plan_versions' AND column_name='episode_plan_version') AS "hasUnifiedPlans",
+    to_regclass('public.episode_financing_events') IS NOT NULL AS "hasEpisodeFinancing"`);
   const availability = schema.rows[0];
   if (availability?.hasToothTreatments && availability?.hasToothCatalog) {
     const result = await pool.query(
@@ -53,6 +57,10 @@ export async function loadNeakTreatmentSources(pool: Pick<Pool, 'query'>, patien
     }) : result.rows;
     if (!availability.hasEpisodeTreatmentPlan || !availability.hasJawTreatmentPlans) {
       sources.warnings.push('Az epizódonkénti kezelési terv mezőjéhez az adatbázis frissítése szükséges.');
+    }
+    if(availability.hasEpisodeFinancing){
+      const finance=(await pool.query(`${FINANCING_SELECT} WHERE f.patient_id=$1`,[patientId])).rows as FinancingEvent[];
+      sources.episodes=sources.episodes.map(ep=>({...ep,financing:financingAt(finance.filter(e=>e.episode_id===ep.id),budapestToday(),ep.planVersionId??null)}));
     }
   } else {
     sources.warnings.push('Az ellátási epizódok adatforrása nem érhető el ezen a rendszeren.');

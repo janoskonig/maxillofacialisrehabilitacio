@@ -1,5 +1,6 @@
 import { getUnassignedLegacyPlan, PLAN_TREATMENT_LABELS } from '@/lib/episode-treatment-plan';
 import type { Patient } from '@/lib/types';
+import { financingLines,type FinancingSnapshot } from '@/lib/episode-financing/model';
 
 export interface NeakToothTreatment {
   id: string;
@@ -26,6 +27,7 @@ export interface NeakEpisodeTreatment {
   planApproved?:boolean;
   planDate?:string;
   plannedTreatments?:Array<{toothNumber:number;treatmentCode:string}>;
+  financing?:FinancingSnapshot;
 }
 
 export interface NeakTreatmentSources {
@@ -58,6 +60,7 @@ export function buildTreatmentExportContent(patient: Partial<Patient>, sources: 
     if(ep.jaw!=='also')add(`${title} - felső állcsont kezelési terve`, [ep.treatmentPlanUpper?.trim() || 'Nincs rögzített felső kezelési terv.']);
     if(ep.jaw!=='felso')add(`${title} - alsó állcsont kezelési terve`, [ep.treatmentPlanLower?.trim() || 'Nincs rögzített alsó kezelési terv.']);
     if(ep.planVersionId)add(`${title} - tervváltozat`,[`${ep.planVersion}. változat; ${ep.planApproved?'jóváhagyott':'tervezet'}${ep.planDate?`; terv dátuma: ${formatDate(ep.planDate)}`:''}; azonosító: ${ep.planVersionId}`]);
+    add(`${title} - finanszírozás`,financingLines(ep.financing));
     add(`${title} - tervezett beavatkozások sorrendben`,(ep.plannedTreatments??[]).map((t,i)=>`${i+1}. ${t.toothNumber}. fog: ${PLAN_TREATMENT_LABELS[t.treatmentCode]??t.treatmentCode}`));
     const legacy = getUnassignedLegacyPlan(ep);
     if (legacy) add(`${title} - korábbi, állcsontmegjelölés nélküli terv`, [legacy]);

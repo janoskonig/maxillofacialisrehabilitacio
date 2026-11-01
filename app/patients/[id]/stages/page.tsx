@@ -227,7 +227,7 @@ export default function PatientStagesPage() {
   const aftercareDefault = phase === 'aftercare' || (phase === 'mixed' && ['STAGE_6', 'STAGE_7'].includes(timelineEpisode?.currentStageCode ?? ''));
   const clinicalPlanShown = clinicalPlanOpen ?? phase === 'planning';
   useEffect(() => {
-    if (!loading && clinicalPlanShown && window.location.hash === '#kezelesi-terv') {
+    if (!loading && clinicalPlanShown && ['#kezelesi-terv','#finanszirozas'].includes(window.location.hash)) {
       document.getElementById('kezelesi-terv')?.scrollIntoView?.({ block: 'start' });
     }
   }, [loading, activeEpisode?.id, clinicalPlanShown]);

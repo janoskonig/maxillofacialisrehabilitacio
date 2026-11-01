@@ -5,6 +5,7 @@ import { useToast } from '@/contexts/ToastContext';
 import Link from 'next/link';
 import { Check, ClipboardCheck, FileText, Layers } from 'lucide-react';
 import { EpisodePlanVisual } from '@/components/prosthesis-lifecycle/EpisodePlanVisual';
+import { EpisodeFinancingPanel } from '@/components/prosthesis-lifecycle/EpisodeFinancingPanel';
 import { budapestToday } from '@/lib/aftercare/model';
 import { MAX_EPISODE_TREATMENT_PLAN_LENGTH, PLAN_TREATMENT_LABELS, getUnassignedLegacyPlan, type EpisodeTreatmentPlanRecord } from '@/lib/episode-treatment-plan';
 
@@ -20,6 +21,7 @@ export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange }
   const [draft, setDraft] = useState({ upper: '', lower: '' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [financingState,setFinancingState]=useState({dirty:false,saving:false});
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
   const [details,setDetails]=useState({baselineStateId:null as string|null,treatments:[] as Array<{toothNumber:number;treatmentCode:string}>,occurredOn:budapestToday(),source:'Klinikai dokumentáció'});
@@ -59,14 +61,14 @@ export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange }
     void load(controller.signal);
     return () => controller.abort();
   }, [load]);
-  useEffect(() => { onStateChange?.({ dirty, saving }); }, [dirty, saving, onStateChange]);
+  useEffect(() => { onStateChange?.({ dirty:dirty||financingState.dirty, saving:saving||financingState.saving }); }, [dirty, saving, financingState, onStateChange]);
   useEffect(() => () => onStateChange?.({ dirty: false, saving: false }), [onStateChange]);
   useEffect(() => {
-    if (!dirty) return;
+    if (!dirty&&!financingState.dirty) return;
     const guard = (event: BeforeUnloadEvent) => { event.preventDefault(); event.returnValue = ''; };
     window.addEventListener('beforeunload', guard);
     return () => window.removeEventListener('beforeunload', guard);
-  }, [dirty]);
+  }, [dirty,financingState.dirty]);
 
   const save = async () => {
     if (!plan || !canEdit || !dirty || saving) return;
@@ -104,8 +106,9 @@ export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange }
         {title:'Kiindulási státusz',value:details.baselineStateId?'Kiválasztva':'Nincs kapcsolva',done:!!details.baselineStateId,icon:Layers},
         {title:'Beavatkozások',value:`${details.treatments.length} tervezett lépés`,done:details.treatments.length>0,icon:Layers},
         {title:'Klinikai leírás',value:(plan.jaw==='felso'?draft.upper:plan.jaw==='also'?draft.lower:draft.upper||draft.lower)?'Rögzítve':'Kitöltendő',done:!!(plan.jaw==='felso'?draft.upper:plan.jaw==='also'?draft.lower:draft.upper||draft.lower),icon:FileText},
-        {title:'Jóváhagyás',value:approved?'Mentéskor jóváhagyva':plan.clinicalPlan?.approved&&!dirty?'Jóváhagyott':'Tervezet',done:approved||!!plan.clinicalPlan?.approved&&!dirty,icon:ClipboardCheck},
+        {title:'Klinikai jóváhagyás',value:approved?'Mentéskor jóváhagyva':plan.clinicalPlan?.approved&&!dirty?'Jóváhagyott':'Tervezet',done:approved||!!plan.clinicalPlan?.approved&&!dirty,icon:ClipboardCheck},
       ].map((step,i)=><li key={step.title} className={`rounded-xl border p-3 ${step.done?'border-teal-100 bg-teal-50/60 dark:border-teal-900 dark:bg-teal-950/30':'border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/50'}`}><div className="mb-2 flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{i+1}. {step.title}</span>{step.done?<Check className="h-4 w-4 text-teal-600"/>:<step.icon className="h-4 w-4 text-slate-400"/>}</div><p className="text-sm font-semibold">{step.value}</p></li>)}</ol>}
+      {plan&&!loading&&<EpisodeFinancingPanel key={episodeId} plan={plan} canEdit={canEdit} disabled={dirty||saving} onStateChange={setFinancingState} onChanged={financing=>setPlan(p=>p?{...p,financing}:p)}/>}
       {loading ? <p role="status">Kezelési terv betöltése…</p> : plan ? (
         canEdit ? <>
           <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-950/40">
