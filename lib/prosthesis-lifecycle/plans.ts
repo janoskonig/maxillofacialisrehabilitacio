@@ -2,7 +2,7 @@ import { randomUUID } from 'crypto';
 import type { PoolClient } from 'pg';
 import { HttpError } from '@/lib/auth-server';
 import { getUnassignedLegacyPlan, type EpisodeTreatmentPlanRecord, type JawTreatmentPlans } from '@/lib/episode-treatment-plan';
-import { projectClinicalPlan, type ClinicalCommand } from './model';
+import { projectClinicalPlan, replayStates, type ClinicalCommand } from './model';
 import { baselineAt, loadClinicalStates } from './states';
 
 type Db=Pick<PoolClient,'query'>;
@@ -13,7 +13,7 @@ export const EPISODE_PLAN_SELECT=`SELECT pe.id AS "episodeId",pe.patient_id AS "
   pe.case_title AS "caseTitle",pe.chief_complaint AS "chiefComplaint",pe.status,tt.label_hu AS "treatmentTypeLabel",
   pe.treatment_plan AS "treatmentPlan",pe.treatment_plan_upper AS "treatmentPlanUpper",pe.treatment_plan_lower AS "treatmentPlanLower",
   GREATEST(pe.treatment_plan_version,COALESCE(v.version,0)) AS version,
-  p.jaw,p.id AS "prosthesisId",p.label AS "prosthesisLabel",
+  p.jaw,p.id AS "prosthesisId",p.label AS "prosthesisLabel",p.positions AS "prosthesisPositions",
   v.id AS "planId",v.version AS "clinicalVersion",v.approved,v.baseline_state_id AS "baselineStateId",v.content,
   v.episode_plan_version AS "episodePlanVersion",e.occurred_on::text AS "occurredOn",e.source
   FROM patient_episodes pe
@@ -27,7 +27,9 @@ export function episodePlanFromRow(row:any):EpisodeTreatmentPlanRecord {
   const texts:JawTreatmentPlans=row.episodePlanVersion!=null ? row.content.narratives : row;
   const plan:EpisodeTreatmentPlanRecord={episodeId:row.episodeId,patientId:row.patientId,version:row.version,
     treatmentPlan:texts.treatmentPlan??null,treatmentPlanUpper:texts.treatmentPlanUpper??null,treatmentPlanLower:texts.treatmentPlanLower??null,
-    jaw:row.jaw??null,prosthesisId:row.prosthesisId??null,prosthesisLabel:row.prosthesisLabel??null,unified:row.episodePlanVersion!=null,clinicalPlan:null,legacyClinicalDescription:null};
+    jaw:row.jaw??null,prosthesisId:row.prosthesisId??null,prosthesisLabel:row.prosthesisLabel??null,
+    device:row.prosthesisId?{id:row.prosthesisId,positions:row.prosthesisPositions??[]}:null,
+    unified:row.episodePlanVersion!=null,clinicalPlan:null,legacyClinicalDescription:null};
   if(row.planId){
     plan.clinicalPlan={id:row.planId,version:row.clinicalVersion,approved:row.approved,baselineStateId:row.baselineStateId,
       treatments:row.content.treatments??[],occurredOn:row.occurredOn,source:row.source};
@@ -52,7 +54,7 @@ export async function loadEpisodeTreatmentPlan(db:Db,episodeId:string,details=fa
         JOIN prosthesis_active_events e ON e.id=p.event_id JOIN users u ON u.id=e.recorded_by
         WHERE p.episode_id=$1 ORDER BY p.version DESC`,[episodeId]),
     ]);
-    plan.states=states.map(s=>({id:s.id,occurred_on:s.occurred_on,note:s.note,source:s.source}));
+    plan.states=replayStates(states).milestones.map(({state:s,layers})=>({id:s.id,occurred_on:s.occurred_on,note:s.note,source:s.source,layers}));
     plan.history=history.rows;
   }
   return plan;

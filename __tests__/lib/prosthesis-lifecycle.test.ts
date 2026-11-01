@@ -26,6 +26,14 @@ describe('clinical prosthesis timeline',()=>{
     expect(result.milestones.map(s=>s.state.id)).toEqual(['baseline','late-entry','later']);
     expect(result.layers.teeth['11']).toEqual({base:'filled'});expect(result.conflicts).toHaveLength(1);
   });
+  it('projects explicitly planned artificial teeth into the own appliance layer without manufacturing natural teeth',()=>{
+    const baseline={...emptyLayers(),teeth:{'12':{base:'missing'}}},device={id:'device',positions:[]};
+    const target=projectClinicalPlan(baseline,[{toothNumber:12,treatmentCode:'mufog'}],[device]);
+    expect(target.teeth['12']).toEqual({base:'missing'});
+    expect(target.prostheses['device:12:denture_tooth']).toMatchObject({prosthesisId:'device',tooth:12,role:'denture_tooth',planned:true});
+    expect(device.positions).toEqual([]);expect(baseline.prostheses).toEqual({});
+    expect(projectClinicalPlan(baseline,[{toothNumber:12,treatmentCode:'mufog'}],[]).prostheses).toEqual({});
+  });
   it('never fills in unknown historic teeth from current status',()=>{
     const result=replayStates([evidence('partial','2026-09-01',{...emptyLayers(),teeth:{'11':{base:'missing'}}})]);
     expect(result.layers.teeth['12']).toBeUndefined();

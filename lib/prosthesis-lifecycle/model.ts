@@ -140,7 +140,15 @@ export function projectClinicalPlan(baseline: ClinicalLayers, treatments: Array<
   for (const t of treatments) {
     const key = String(t.toothNumber);
     if (t.treatmentCode==='implantacio') out.implants[key] = { present:true, planned:true };
-    else if (t.treatmentCode==='mufog' || t.treatmentCode==='hezagfog') continue;
+    else if (t.treatmentCode==='mufog' || t.treatmentCode==='hezagfog') {
+      // Explicitly planned artificial teeth occupy the prosthetic layer only.
+      // Existing device-position roles remain authoritative; no jaw-only match.
+      const device=devices.length===1?devices[0]:null;
+      if(device&&!device.positions.some(p=>p.tooth===t.toothNumber)) {
+        const role=t.treatmentCode==='mufog'?'denture_tooth':'pontic';
+        out.prostheses[`${device.id}:${t.toothNumber}:${role}`]={prosthesisId:device.id,tooth:t.toothNumber,role,planned:true};
+      }
+    }
     else {
       const result = applyTreatmentOutcome(out.teeth[key],t.treatmentCode);
       if (result.changed) out.teeth[key] = result.next ?? { base:'sound' };

@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { clinicalDay } from '@/lib/prosthesis-lifecycle/model';
+import type { ClinicalLayers, Position } from '@/lib/prosthesis-lifecycle/model';
 
 export const MAX_EPISODE_TREATMENT_PLAN_LENGTH = 20000;
 export const PLAN_TREATMENT_LABELS:Record<string,string>={huzas:'Eltávolítás',implantacio:'Implantáció',korona:'Korona',tomes:'Tömés',gyokerkezeles:'Gyökérkezelés',hid_pillerkezeles:'Pillérkezelés',csiszolas:'Csiszolás',mufog:'Műfog',hezagfog:'Hídtest'};
@@ -26,10 +27,11 @@ export interface EpisodeTreatmentPlanRecord extends JawTreatmentPlans {
   jaw?:'felso'|'also'|null;
   prosthesisId?:string|null;
   prosthesisLabel?:string|null;
+  device?:{id:string;positions:Position[]}|null;
   unified?:boolean;
   clinicalPlan?:{id:string;version:number;approved:boolean;baselineStateId:string|null;treatments:Array<{toothNumber:number;treatmentCode:string}>;occurredOn:string;source:string}|null;
   legacyClinicalDescription?:string|null;
-  states?:Array<{id:string;occurred_on:string;note?:string;source?:string}>;
+  states?:Array<{id:string;occurred_on:string;note?:string;source?:string;layers?:ClinicalLayers}>;
   history?:Array<{id:string;version:number;approved:boolean;occurredOn:string;source:string;recordedAt:string;recorder:string;description:string;previousNarratives?:JawTreatmentPlans}>;
 }
 

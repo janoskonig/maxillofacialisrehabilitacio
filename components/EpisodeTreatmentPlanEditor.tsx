@@ -3,6 +3,8 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useToast } from '@/contexts/ToastContext';
 import Link from 'next/link';
+import { Check, ClipboardCheck, FileText, Layers } from 'lucide-react';
+import { EpisodePlanVisual } from '@/components/prosthesis-lifecycle/EpisodePlanVisual';
 import { budapestToday } from '@/lib/aftercare/model';
 import { MAX_EPISODE_TREATMENT_PLAN_LENGTH, PLAN_TREATMENT_LABELS, getUnassignedLegacyPlan, type EpisodeTreatmentPlanRecord } from '@/lib/episode-treatment-plan';
 
@@ -93,28 +95,39 @@ export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange }
   };
 
   return (
-    <section aria-label="Epizód kezelési terve" className="rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 p-4">
-      <h3 className="text-base font-semibold text-gray-900 dark:text-gray-100">{plan?.jaw?`${plan.jaw==='felso'?'Felső':'Alsó'} fogpótlás kezelési terve`:'Kezelési tervek állcsontonként'}</h3>
-      <p className="mt-1 mb-3 text-sm text-gray-600 dark:text-gray-400">Az itt mentett tervet használja a Fogpótlások és gondozás nézet, a grafikus összehasonlítás és a dokumentumgenerálás is. Módosításkor új változat készül.</p>
-      {plan?.prosthesisLabel&&<p className="mb-3 text-sm font-medium">Fogpótlás: {plan.prosthesisLabel} · {plan.clinicalPlan?`${plan.clinicalPlan.version}. változat · ${plan.clinicalPlan.approved?'jóváhagyott':'tervezet'}`:'még nincs kiadott tervváltozat'}</p>}
+    <section aria-label="Epizód kezelési terve" className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-5 dark:border-slate-700 dark:bg-slate-900">
+      <div className="flex flex-wrap items-start justify-between gap-3">
+        <div><h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{plan?.jaw?`${plan.jaw==='felso'?'Felső':'Alsó'} fogpótlás kezelési terve`:'Kezelési tervek állcsontonként'}</h3><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{plan?.prosthesisLabel||'Közös terv a kezeléshez, gondozáshoz és mellékletekhez'}</p></div>
+        {plan?.clinicalPlan&&<span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${plan.clinicalPlan.approved&&!dirty?'bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-200':'bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-200'}`}><ClipboardCheck className="h-3.5 w-3.5"/>{plan.clinicalPlan.version}. változat · {dirty?'módosított tervezet':plan.clinicalPlan.approved?'jóváhagyott':'tervezet'}</span>}
+      </div>
+      {plan&&!loading&&<ol aria-label="A kezelési terv áttekintése" className="my-4 grid grid-cols-2 gap-2 lg:grid-cols-4">{[
+        {title:'Kiindulási státusz',value:details.baselineStateId?'Kiválasztva':'Nincs kapcsolva',done:!!details.baselineStateId,icon:Layers},
+        {title:'Beavatkozások',value:`${details.treatments.length} tervezett lépés`,done:details.treatments.length>0,icon:Layers},
+        {title:'Klinikai leírás',value:(plan.jaw==='felso'?draft.upper:plan.jaw==='also'?draft.lower:draft.upper||draft.lower)?'Rögzítve':'Kitöltendő',done:!!(plan.jaw==='felso'?draft.upper:plan.jaw==='also'?draft.lower:draft.upper||draft.lower),icon:FileText},
+        {title:'Jóváhagyás',value:approved?'Mentéskor jóváhagyva':plan.clinicalPlan?.approved&&!dirty?'Jóváhagyott':'Tervezet',done:approved||!!plan.clinicalPlan?.approved&&!dirty,icon:ClipboardCheck},
+      ].map((step,i)=><li key={step.title} className={`rounded-xl border p-3 ${step.done?'border-teal-100 bg-teal-50/60 dark:border-teal-900 dark:bg-teal-950/30':'border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/50'}`}><div className="mb-2 flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{i+1}. {step.title}</span>{step.done?<Check className="h-4 w-4 text-teal-600"/>:<step.icon className="h-4 w-4 text-slate-400"/>}</div><p className="text-sm font-semibold">{step.value}</p></li>)}</ol>}
       {loading ? <p role="status">Kezelési terv betöltése…</p> : plan ? (
         canEdit ? <>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-950/40">
+            <label className="block text-sm font-medium">Ellátás előtti dokumentált státusz<select className="mt-2 block w-full rounded-lg border border-slate-200 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-900" disabled={saving} value={details.baselineStateId??''} onChange={e=>{changed();setDetails(d=>({...d,baselineStateId:e.target.value||null}));}}><option value="">Válassz kiindulási státuszt · nélküle szöveges tervezet menthető</option>{plan.states?.map(s=><option key={s.id} value={s.id}>{s.occurred_on} · {s.note||s.source}</option>)}</select></label>
+            {!plan.states?.length&&plan.patientId&&<Link className="mt-2 block text-xs underline" href={`/patients/${plan.patientId}/prostheses`}>Kiindulási vizsgálat rögzítése</Link>}
+          </div>
+          <EpisodePlanVisual key={episodeId} plan={plan} baselineStateId={details.baselineStateId} treatments={details.treatments} disabled={saving} onChange={treatments=>{changed();setDetails(d=>({...d,treatments}));}}/>
+          <div className="mb-2 mt-5 flex items-center gap-2 text-sm font-semibold"><FileText className="h-4 w-4 text-slate-400"/>Klinikai leírás</div>
           <div className={`grid gap-4 ${jaws.length>1?'md:grid-cols-2':''}`}>
             {jaws.map(({ jaw, label }) => (
               <div key={jaw}>
                 <label htmlFor={`treatment-plan-${episodeId}-${jaw}`} className="block mb-2 text-sm font-semibold">{label}</label>
                 <textarea id={`treatment-plan-${episodeId}-${jaw}`} value={draft[jaw]} onChange={(e) => {changed();setDraft((current) => ({ ...current, [jaw]: e.target.value }));}} disabled={saving}
-                  rows={7} maxLength={MAX_EPISODE_TREATMENT_PLAN_LENGTH}
+                  rows={4} maxLength={MAX_EPISODE_TREATMENT_PLAN_LENGTH}
                   placeholder="Tervezett ellátás, érintett fogak, választott megoldás és indoklás…"
                   className="w-full rounded-md border border-gray-300 dark:border-gray-600 bg-white dark:bg-gray-950 p-3 text-sm text-gray-900 dark:text-gray-100" />
               </div>
             ))}
           </div>
           <details className="mt-4 rounded border p-3">
-            <summary className="cursor-pointer font-medium">Kiindulási státusz, beavatkozások és dokumentálás</summary>
+            <summary className="cursor-pointer font-medium">Dokumentálás és kézi fogszintű szerkesztés</summary>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">A szöveg önmagában is menthető tervezetként. Grafikus célállapothoz és jóváhagyáshoz dokumentált kiindulási státusz szükséges. A tényleges fogazati státuszt a terv mentése nem módosítja.</p>
-            <label className="mt-3 block text-sm">Ellátás előtti dokumentált státusz<select className="mt-1 block w-full rounded border p-2 dark:bg-gray-900" disabled={saving} value={details.baselineStateId??''} onChange={e=>{changed();setDetails(d=>({...d,baselineStateId:e.target.value||null}));}}><option value="">Nincs kiválasztva · szöveges tervezet</option>{plan.states?.map(s=><option key={s.id} value={s.id}>{s.occurred_on} · {s.note||s.source}</option>)}</select></label>
-            {!plan.states?.length&&plan.patientId&&<Link className="mt-2 block text-sm underline" href={`/patients/${plan.patientId}/prostheses`}>Dokumentált státusz rögzítése a Fogpótlások és gondozás fülön</Link>}
             <fieldset className="mt-3 space-y-2"><legend className="text-sm font-medium">Beavatkozások végrehajtási sorrendben</legend>{details.treatments.map((t,i)=><div className="flex flex-wrap gap-2" key={i}>
               <input aria-label={`${i+1}. beavatkozás fogszáma`} type="number" className="w-24 rounded border p-2 dark:bg-gray-900" disabled={saving} value={t.toothNumber} onChange={e=>{changed();setDetails(d=>({...d,treatments:d.treatments.map((x,j)=>i===j?{...x,toothNumber:Number(e.target.value)}:x)}));}}/>
               <select aria-label={`${i+1}. beavatkozás`} className="rounded border p-2 dark:bg-gray-900" disabled={saving} value={t.treatmentCode} onChange={e=>{changed();setDetails(d=>({...d,treatments:d.treatments.map((x,j)=>i===j?{...x,treatmentCode:e.target.value}:x)}));}}>{!PLAN_TREATMENT_LABELS[t.treatmentCode]&&<option value={t.treatmentCode}>{t.treatmentCode}</option>}{Object.entries(PLAN_TREATMENT_LABELS).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select>
@@ -129,7 +142,7 @@ export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange }
             {dirty && <button type="button" disabled={saving} onClick={() => {reset(plan);setConflict(false);setError(null);}} className="text-sm underline">Módosítások elvetése</button>}
             <span className="text-xs text-gray-500 dark:text-gray-400" role="status">{dirty ? 'Nem mentett módosítások' : (plan.treatmentPlanUpper || plan.treatmentPlanLower) ? 'Mentett kezelési terv' : 'Nincs még rögzített kezelési terv'}</span>
           </div>
-        </> : <div className="grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">{jaws.map(j=><div key={j.jaw}><p className="font-semibold">{j.label}</p><p className="mt-1 whitespace-pre-wrap break-words">{(j.jaw==='upper'?plan.treatmentPlanUpper:plan.treatmentPlanLower)||'Nincs rögzített kezelési terv.'}</p></div>)}</div>
+        </> : <><EpisodePlanVisual plan={plan} baselineStateId={plan.clinicalPlan?.baselineStateId??null} treatments={plan.clinicalPlan?.treatments??[]}/><div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">{jaws.map(j=><div key={j.jaw}><p className="font-semibold">{j.label}</p><p className="mt-1 whitespace-pre-wrap break-words">{(j.jaw==='upper'?plan.treatmentPlanUpper:plan.treatmentPlanLower)||'Nincs rögzített kezelési terv.'}</p></div>)}</div></>
       ) : <button type="button" onClick={() => load()} className="text-sm underline">Újrapróbálás</button>}
       {legacy && <div className="mt-3 rounded border border-amber-200 dark:border-amber-700 p-3 text-sm">
         <p className="font-semibold">Korábban rögzített közös terv</p>
