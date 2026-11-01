@@ -349,6 +349,7 @@ export default function PatientStagesPage() {
             {(phase === 'assessment' || phase === 'planning') && <Link href={`/patients/${patientId}/view?tab=anamnezis`} className="text-sm text-medical-primary hover:underline">Vizsgálati adatok</Link>}
           </div>
           {shownView === 'aftercare' ? <div id="gondozas" className="scroll-mt-24 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
+            <Link href={`/patients/${patientId}/prostheses`} className="mb-4 inline-block font-medium text-medical-primary underline">Fogpótlások teljes története, javítások és utólagos dokumentálás</Link>
             {care ? <PatientAftercare key={`aftercare-${activeEpisode.id}`} patientId={patientId} selectedEpisodeId={activeEpisode.id} embedded workspace={care} initialAppointmentId={requestedAppointment} onWorkspaceChanged={handleCareChanged} onRequestScheduling={() => { setRecallOpen(true); openAppointments(); }} />
               : careError ? <p role="alert" className="text-sm text-amber-700 dark:text-amber-300">{careError} <button type="button" className="underline" onClick={() => setCareRetry((v) => v + 1)}>Újrapróbálás</button></p>
                 : <p role="status" className="text-sm text-gray-500">Gondozási adatok betöltése…</p>}

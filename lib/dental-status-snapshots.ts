@@ -1,5 +1,7 @@
 import { getDbPool } from '@/lib/db';
 import { applyTreatmentOutcome, projectFogakWithTreatments } from '@/lib/tooth-treatment-outcome';
+import { budapestToday } from '@/lib/aftercare/model';
+import { HttpError } from '@/lib/auth-server';
 
 /** pg.Pool és pg.PoolClient is megfelel (mindkettőnek van `query`-je). */
 interface Queryable {
@@ -39,8 +41,8 @@ async function getCurrentFogak(db: Queryable, patientId: string): Promise<Fogak>
 
 /**
  * Gondoskodik róla, hogy legyen kiindulási (baseline) felvétel. Ha nincs, a
- * megadott (változás előtti) odontogramot rögzíti felvételkori állapotként, a
- * beteg létrehozási dátumával. A unique index miatt versenyhelyzetben is biztonságos.
+ * megadott mai, változás előtti odontogramot rögzíti a dokumentálás napján.
+ * A beteg regisztrációja nem vizsgálat, abból vizsgálati dátum nem képezhető.
  */
 async function ensureBaselineSnapshot(
   db: Queryable,
@@ -51,8 +53,8 @@ async function ensureBaselineSnapshot(
   await db.query(
     `INSERT INTO dental_status_snapshots (patient_id, kind, effective_date, fogak, note, created_by)
      SELECT $1, 'baseline',
-            COALESCE((SELECT created_at::date FROM patients WHERE id = $1), CURRENT_DATE),
-            $2::jsonb, 'Kiindulási státusz (automatikusan rögzítve)', $3
+            (CURRENT_TIMESTAMP AT TIME ZONE 'Europe/Budapest')::date,
+            $2::jsonb, 'Változás előtti státusz a dokumentálás napján', $3
      WHERE NOT EXISTS (
        SELECT 1 FROM dental_status_snapshots WHERE patient_id = $1 AND kind = 'baseline'
      )`,
@@ -80,29 +82,32 @@ export async function applyCompletedTreatmentToDentalStatus(
     userId: string | null;
   },
 ): Promise<{ updated: boolean }> {
-  const current = await getCurrentFogak(client, args.patientId);
+  const effective = new Date(args.completedAt);
+  if (!Number.isFinite(effective.getTime())) throw new HttpError(400,'Érvénytelen klinikai dátum');
+  const effectiveDate = new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Budapest'}).format(effective);
+  const retrospective = effectiveDate < budapestToday();
+  const prior = retrospective ? await client.query(`SELECT fogak FROM dental_status_snapshots WHERE patient_id=$1 AND effective_date<=$2 ORDER BY effective_date DESC,created_at DESC LIMIT 1`,[args.patientId,effectiveDate]) : null;
+  if (retrospective && !prior?.rows.length) throw new HttpError(409,'Korábbi kezelés státuszváltozásához előbb dokumentált korabeli kiindulási státuszt válasszon a Fogpótlások és gondozás nézetben');
+  const current = retrospective ? prior!.rows[0].fogak as Fogak : await getCurrentFogak(client, args.patientId);
   const key = String(args.toothNumber);
   const { changed, next } = applyTreatmentOutcome(current[key], args.treatmentCode);
   if (!changed) return { updated: false };
 
   // 1) Kiindulási állapot rögzítése a változás ELŐTTI odontogramból.
-  await ensureBaselineSnapshot(client, args.patientId, current, args.userId);
+  if (!retrospective) await ensureBaselineSnapshot(client, args.patientId, current, args.userId);
 
   // 2) Élő odontogram frissítése.
   const updatedFogak: Fogak = { ...current };
   if (next === undefined) delete updatedFogak[key];
   else updatedFogak[key] = next;
 
-  await client.query(
+  // A later recorded examination is never rewritten by a backdated intervention.
+  if (!retrospective) await client.query(
     `UPDATE patient_dental_status SET meglevo_fogak = $2::jsonb WHERE patient_id = $1`,
     [args.patientId, JSON.stringify(updatedFogak)],
   );
 
   // 3) Datált státusz-pillanatfelvétel.
-  const effective = new Date(args.completedAt);
-  const effectiveDate = Number.isNaN(effective.getTime())
-    ? new Date().toISOString().slice(0, 10)
-    : effective.toISOString().slice(0, 10);
   const label = (args.treatmentLabel ?? args.treatmentCode).trim();
   await client.query(
     `INSERT INTO dental_status_snapshots
@@ -112,13 +117,13 @@ export async function applyCompletedTreatmentToDentalStatus(
       args.patientId,
       effectiveDate,
       JSON.stringify(updatedFogak),
-      `${args.toothNumber}. fog — ${label} elkészült`,
+      `${args.toothNumber}. fog — ${label} eredménye megerősítve${retrospective?' (utólag rögzített; későbbi státuszok felülvizsgálata szükséges)':''}`,
       args.treatmentId,
       args.userId,
     ],
   );
 
-  return { updated: true };
+  return { updated: !retrospective };
 }
 
 /**

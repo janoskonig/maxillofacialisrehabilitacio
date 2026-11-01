@@ -18,8 +18,18 @@ afterEach(async () => {
     await db.query('DELETE FROM aftercare_requests WHERE patient_id = ANY($1::uuid[])', [patients]);
     await db.query('DELETE FROM prosthesis_followups WHERE prosthesis_id IN (SELECT id FROM prostheses WHERE patient_id = ANY($1::uuid[]))', [patients]);
     await db.query('DELETE FROM prosthesis_care_encounters WHERE patient_id = ANY($1::uuid[])', [patients]);
+    await db.query('DELETE FROM clinical_followup_tasks WHERE patient_id = ANY($1::uuid[])', [patients]);
+    await db.query('DELETE FROM clinical_episode_closures WHERE episode_id IN (SELECT id FROM patient_episodes WHERE patient_id=ANY($1::uuid[]))',[patients]);
+    await db.query('DELETE FROM prosthesis_repair_work_phases WHERE patient_id=ANY($1::uuid[])',[patients]);
+    await db.query('DELETE FROM episode_prosthesis_goals WHERE patient_id=ANY($1::uuid[])',[patients]);
+    await db.query('DELETE FROM prosthesis_repair_cases WHERE patient_id=ANY($1::uuid[])',[patients]);
+    await db.query('DELETE FROM clinical_dental_states WHERE patient_id=ANY($1::uuid[])',[patients]);
+    await db.query('DELETE FROM prosthesis_clinical_events WHERE patient_id=ANY($1::uuid[])',[patients]);
+    await db.query('DELETE FROM prosthesis_episode_links WHERE episode_id IN (SELECT id FROM patient_episodes WHERE patient_id=ANY($1::uuid[]))',[patients]);
+    await db.query('DELETE FROM episode_work_phases WHERE episode_id IN (SELECT id FROM patient_episodes WHERE patient_id=ANY($1::uuid[]) AND parent_episode_id IS NOT NULL)',[patients]);
     await db.query('DELETE FROM prostheses WHERE patient_id = ANY($1::uuid[])', [patients]);
     await db.query('DELETE FROM prosthesis_workload_history WHERE entity_id = ANY($1::text[]) OR episode_id = ANY($2::uuid[])', [keys.rows.map((r) => r.id), episodes.rows.map((r) => r.id)]);
+    await db.query('DELETE FROM patient_episodes WHERE patient_id=ANY($1::uuid[]) AND parent_episode_id IS NOT NULL',[patients]);
   }
   patients.length = 0;
   await cleanupCreated();
@@ -47,8 +57,11 @@ describe('prosthesis aftercare persistence', () => {
   it('preserves baseline/original plan and subsequent structural changes; creates one review per confirmed delivery without duplicating retries', async () => {
     const s = await setup();
     const p = await s.register('felso');
+    const registered=await getDbPool().query('SELECT episode_id FROM prostheses WHERE id=$1',[p.id]);
+    const prosthesisEpisodeId=registered.rows[0].episode_id;
+    await getDbPool().query('UPDATE episode_work_phases SET episode_id=$2 WHERE id=$1',[s.phase.id,prosthesisEpisodeId]);
     await getDbPool().query('UPDATE episode_work_phases SET duration_minutes = 45 WHERE id = $1', [s.phase.id]);
-    await getDbPool().query('UPDATE patient_episodes SET treatment_plan = $2 WHERE id = $1', [s.episode.id, 'Revised clinical plan']);
+    await getDbPool().query('UPDATE patient_episodes SET treatment_plan = $2 WHERE id = $1', [prosthesisEpisodeId, 'Revised clinical plan']);
     const appointment = await s.appointment('2026-01-31');
     const delivery = deliverySchema.parse({ action: 'deliver', prosthesisId: p.id, appointmentId: appointment.id });
     await deliverProsthesis(s.patient.id, s.doctor.id, delivery);
@@ -57,7 +70,7 @@ describe('prosthesis aftercare persistence', () => {
     expect(data.prostheses[0]).toMatchObject({ deliveryDate: '2026-01-31', originalPlan: { treatmentPlan: 'Original clinical plan' }, baseline: { retrospective: true } });
     expect(data.requests).toHaveLength(1);
     expect(data.requests[0]).toMatchObject({ dueOn: '2026-04-30', slotSecured: false });
-    const history = await getDbPool().query('SELECT entity, old_data, new_data FROM prosthesis_workload_history WHERE episode_id = $1', [s.episode.id]);
+    const history = await getDbPool().query('SELECT entity, old_data, new_data FROM prosthesis_workload_history WHERE episode_id = $1', [prosthesisEpisodeId]);
     expect(history.rows.some((h) => h.entity === 'episode_work_phases' && h.old_data.duration_minutes === 30 && h.new_data.duration_minutes === 45)).toBe(true);
     expect(history.rows.some((h) => h.entity === 'patient_episodes' && h.old_data.treatment_plan === 'Original clinical plan')).toBe(true);
     await amendBaseline(s.patient.id, s.doctor.id, baselineAmendmentSchema.parse({ action: 'amend_baseline', prosthesisId: p.id }));
@@ -159,13 +172,14 @@ it('snapshots both jaw plans and audits later jaw-specific changes without rewri
   const db = getDbPool();
   await db.query('UPDATE patient_episodes SET treatment_plan_upper=$2,treatment_plan_lower=$3 WHERE id=$1', [s.episode.id, 'Original upper plan', 'Original lower plan']);
   const p = await s.register('felso');
-  await db.query('UPDATE patient_episodes SET treatment_plan_upper=$2 WHERE id=$1', [s.episode.id, 'Revised upper plan']);
-  await db.query('UPDATE patient_episodes SET treatment_plan_lower=$2 WHERE id=$1', [s.episode.id, 'Revised lower plan']);
+  const episodeId=(await db.query('SELECT episode_id FROM prostheses WHERE id=$1',[p.id])).rows[0].episode_id;
+  await db.query('UPDATE patient_episodes SET treatment_plan_upper=$2 WHERE id=$1', [episodeId, 'Revised upper plan']);
+  await db.query('UPDATE patient_episodes SET treatment_plan_lower=$2 WHERE id=$1', [episodeId, 'Revised lower plan']);
   const data = await loadAftercareWorkspace(s.patient.id);
   expect(data.prostheses.find((item) => item.id === p.id)?.originalPlan).toMatchObject({
     treatmentPlan: 'Original clinical plan', treatmentPlanUpper: 'Original upper plan', treatmentPlanLower: 'Original lower plan',
   });
-  const audit = await db.query("SELECT old_data,new_data FROM prosthesis_workload_history WHERE episode_id=$1 AND entity='patient_episodes' ORDER BY id", [s.episode.id]);
+  const audit = await db.query("SELECT old_data,new_data FROM prosthesis_workload_history WHERE episode_id=$1 AND entity='patient_episodes' ORDER BY id", [episodeId]);
   expect(audit.rows).toHaveLength(2);
   expect(audit.rows[0].new_data.treatment_plan_upper).toBe('Revised upper plan');
   expect(audit.rows[1].old_data.treatment_plan_lower).toBe('Original lower plan');

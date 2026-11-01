@@ -8,6 +8,7 @@ import { VirtualLane } from './VirtualLane';
 interface Appointment {
   id: string;
   startTime: string;
+  timePrecision?: 'day'|'exact'|null;
   patientName: string | null;
   patientTaj: string | null;
   dentistEmail: string;
@@ -44,6 +45,7 @@ export function DayView({
   // Group appointments by hour
   const appointmentsByHour: Record<number, Appointment[]> = {};
   dayAppointments.forEach((appointment) => {
+    if(appointment.timePrecision==='day')return;
     const hour = new Date(appointment.startTime).getHours();
     if (!appointmentsByHour[hour]) {
       appointmentsByHour[hour] = [];
@@ -78,6 +80,7 @@ export function DayView({
       </div>
 
       {/* Time slots */}
+      {dayAppointments.some(a=>a.timePrecision==='day')&&<div className="p-3 space-y-2 border-b"><p className="text-sm font-medium">Megtörtént, pontos idő nélkül</p>{dayAppointments.filter(a=>a.timePrecision==='day').map(a=><CalendarEvent key={a.id} appointment={a} onClick={()=>onAppointmentClick?.(a)}/>)}</div>}
       <div className="divide-y divide-gray-200 dark:divide-gray-800">
         {hours.map((hour) => {
           const hourAppointments = appointmentsByHour[hour] || [];

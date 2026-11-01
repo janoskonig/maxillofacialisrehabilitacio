@@ -6,6 +6,7 @@ interface CalendarEventProps {
   appointment: {
     id: string;
     startTime: string;
+    timePrecision?: 'day'|'exact'|null;
     patientName: string | null;
     patientTaj: string | null;
     dentistEmail: string;
@@ -23,7 +24,7 @@ export function CalendarEvent({ appointment, onClick, compact = false }: Calenda
   const statusInfo = getAppointmentStatusDisplay(appointment.appointmentStatus, appointment.isLate);
   const StatusIcon = statusInfo.Icon;
   const startTime = new Date(appointment.startTime);
-  const timeString = startTime.toLocaleTimeString('hu-HU', { 
+  const timeString = appointment.timePrecision==='day'?'Pontos idő nem ismert':startTime.toLocaleTimeString('hu-HU', {
     hour: '2-digit', 
     minute: '2-digit' 
   });

@@ -12,6 +12,8 @@ import { FeedbackButtonTrigger } from '@/components/FeedbackButton';
 interface Appointment {
   id: string;
   startTime: string;
+  timePrecision?:'day'|'exact'|null;
+  occurredOn?:string|null;
   patientName: string | null;
   patientTaj: string | null;
   dentistEmail: string;
@@ -215,7 +217,7 @@ export default function CalendarPage() {
               <div>
                 <label className="text-xs font-medium text-gray-500 dark:text-gray-400">Időpont</label>
                 <p className="text-sm text-gray-900 dark:text-gray-100 mt-1">
-                  {new Date(selectedAppointment.startTime).toLocaleString('hu-HU', {
+                  {selectedAppointment.timePrecision==='day'?`${selectedAppointment.occurredOn} · pontos idő nem ismert`:new Date(selectedAppointment.startTime).toLocaleString('hu-HU', {
                     year: 'numeric',
                     month: 'long',
                     day: 'numeric',

@@ -65,6 +65,11 @@ export interface Appointment {
   approvedAt?: string | null;
   createdBy?: string;
   timeSlotSource?: 'manual' | 'google_calendar' | null;
+  timePrecision?: 'day'|'exact'|null;
+  occurredOn?: string|null;
+  recordedAt?: string|null;
+  recordedBy?: string|null;
+  clinicalSource?: string|null;
 }
 
 export interface BookAppointmentParams {
@@ -231,26 +236,25 @@ export function useAppointmentBooking(
   };
 
   const loadAppointments = async (): Promise<{ ok: boolean; error?: string }> => {
-    if (!patientId) return { ok: true };
+    if (!patientId) {setAppointments([]);return { ok: true };}
 
     try {
-      const response = await fetch(`/api/appointments?patientId=${patientId}`, {
-        credentials: 'include',
-      });
-
-      if (response.ok) {
-        const data = await response.json();
-        setAppointments(data.appointments || []);
-        return { ok: true };
+      // The first API page used to contain only the oldest 50 visits, hiding
+      // current bookings. Read every page; the view groups and pages history.
+      const found=new Map<string,Appointment>();
+      let totalPages=1;
+      for(let page=1;page<=totalPages;page++){
+        const query=new URLSearchParams({patientId,limit:'100',page:String(page)});
+        const response=await fetch(`/api/appointments?${query}`,{credentials:'include'});
+        if(!response.ok){
+          return {ok:false,error:response.status===401||response.status===403?'Nincs jogosultság a foglalások megjelenítéséhez.':`Szerverhiba (${response.status}) a foglalások betöltésekor.`};
+        }
+        const data=await response.json();
+        for(const appointment of data.appointments??[])found.set(appointment.id,appointment);
+        if(page===1){const pages=Number(data.pagination?.totalPages);totalPages=Number.isFinite(pages)?Math.max(1,Math.ceil(pages)):1;}
       }
-      console.error('Failed to load appointments', response.status);
-      return {
-        ok: false,
-        error:
-          response.status === 401 || response.status === 403
-            ? 'Nincs jogosultság a foglalások megjelenítéséhez.'
-            : `Szerverhiba (${response.status}) a foglalások betöltésekor.`,
-      };
+      setAppointments(Array.from(found.values()));
+      return {ok:true};
     } catch (error) {
       console.error('Error loading appointments:', error);
       return { ok: false, error: 'Hálózati hiba a foglalások betöltésekor.' };

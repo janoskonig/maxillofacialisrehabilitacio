@@ -6,6 +6,7 @@ export interface AppointmentData {
   startTime: Date;
   surgeonName: string;
   dentistName?: string;
+  dayOnly?: string;
 }
 
 /**
@@ -40,6 +41,11 @@ export async function generateIcsFile(data: AppointmentData): Promise<Buffer> {
       name: data.dentistName || 'Fogpótlástanász',
     },
   };
+  if(data.dayOnly){
+    const [year,month,day]=data.dayOnly.split('-').map(Number),next=new Date(Date.UTC(year,month-1,day+1));
+    event.start=[year,month,day];event.end=[next.getUTCFullYear(),next.getUTCMonth()+1,next.getUTCDate()];
+    event.description+='\nA pontos idő nem ismert; utólag dokumentált ellátás.';
+  }
 
   return new Promise((resolve, reject) => {
     createEvent(event, (error, value) => {

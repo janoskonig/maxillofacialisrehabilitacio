@@ -9,6 +9,7 @@ import { computeStepWindow } from './step-window';
 import { slotPoolForStep, type PathwayWorkPhaseTemplate } from './next-step-engine';
 import { normalizePathwayWorkPhaseArray } from './pathway-work-phases-for-episode';
 import { groupProjectionUnits } from './slot-intent-projection-units';
+import { clinicalDependencyWindows } from './prosthesis-lifecycle/scheduling';
 
 const BUDAPEST_TZ = 'Europe/Budapest';
 
@@ -211,6 +212,8 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       /** Puzzle v2: az alkalom foglalható blokkja (nyitott tagok összperce) / tervezett hossza. */
       visit_block_minutes?: number | null;
       visit_planned_minutes?: number | null;
+      clinical_scope?: string;
+      requires_phase_ids?: string[];
     }
     let episodeWorkPhaseRows: EwpRow[] | null = null;
     await client.query('SAVEPOINT sp_ewp');
@@ -251,6 +254,8 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
           "   WHERE x.visit_id = e.visit_id AND x.status IN ('pending', 'scheduled')) AS visit_block_minutes";
         visitJoin = ' LEFT JOIN episode_visits v ON e.visit_id = v.id';
       }
+      const clinicalCol=await client.query("SELECT 1 FROM information_schema.columns WHERE table_name='episode_work_phases' AND column_name='clinical_scope' LIMIT 1");
+      if(clinicalCol.rows.length) visitCols+=", e.clinical_scope, COALESCE((SELECT json_agg(d.requires_phase_id) FROM clinical_work_dependencies d WHERE d.work_phase_id=e.id),'[]') AS requires_phase_ids";
       const esResult = await client.query(
         `SELECT e.id, e.work_phase_code, COALESCE(e.seq, e.pathway_order_index) as step_seq, e.status, e.completed_at,
                 e.default_days_offset, e.duration_minutes${visitCols}
@@ -400,16 +405,25 @@ export async function projectRemainingSteps(episodeId: string): Promise<Projecti
       return best;
     };
 
+    const clinicalWindows=clinicalDependencyWindows((episodeWorkPhaseRows??[]).map(w=>({
+      rowKey:w.id,workPhaseCode:w.work_phase_code,visitId:w.visit_id,visitDaysOffset:w.visit_days_offset,
+      defaultDaysOffset:w.default_days_offset??14,status:w.status as 'pending'|'scheduled'|'completed'|'skipped',
+      completedAt:w.completed_at?new Date(w.completed_at):null,
+      bookedStart:apptsRow.rows.find(a=>a.work_phase_id===w.id&&a.appointment_status===null)?.start_time?new Date(apptsRow.rows.find(a=>a.work_phase_id===w.id&&a.appointment_status===null)!.start_time):null,
+      clinicalScope:w.clinical_scope,requiresPhaseIds:w.requires_phase_ids,
+    })),planStartDate??openedAt);
     let anchor = lastHardAnchor;
     for (const unit of groupProjectionUnits(stepsToProject)) {
       let { windowStart, windowEnd } = computeStepWindow(anchor, unit.offset);
+      const managed=unit.members.map(m=>m.workPhaseId?clinicalWindows.get(m.workPhaseId):null).find(Boolean);
+      if(managed){windowStart=managed.windowStart;windowEnd=managed.windowEnd;}
 
       // Compute target date (anchor + offset days), then place at the same Budapest local time
-      const rawDate = new Date(anchor);
-      rawDate.setDate(rawDate.getDate() + unit.offset);
+      const rawDate = managed?new Date(managed.expectedDate):new Date(anchor);
+      if(!managed)rawDate.setDate(rawDate.getDate() + unit.offset);
       let dateISO = rawDate.toISOString().slice(0, 10);
 
-      const cap = nextBookedAfter(Math.max(...unit.members.map((m) => m.stepSeq)));
+      const cap = managed?null:nextBookedAfter(Math.max(...unit.members.map((m) => m.stepSeq)));
       if (cap) {
         const capEnd = new Date(cap.getTime() - 24 * 60 * 60 * 1000);
         if (windowEnd > capEnd) windowEnd = capEnd;

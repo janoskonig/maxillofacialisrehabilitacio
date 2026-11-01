@@ -1,6 +1,6 @@
 'use client';
 
-import { useCallback, useEffect, useState } from 'react';
+import { useCallback, useEffect, useId, useState } from 'react';
 import Link from 'next/link';
 import {
   Calendar,
@@ -40,6 +40,9 @@ import { RevertUnsuccessfulModal } from './RevertUnsuccessfulModal';
 import { CancelAppointmentDialog } from './CancelAppointmentDialog';
 import type { WorklistItemBackend } from '@/lib/worklist-types';
 import { APPOINTMENT_TYPE_OPTIONS, getAppointmentTypeLabel } from '@/lib/appointment-constants';
+import { HistoricalAppointmentForm } from './HistoricalAppointmentForm';
+import { appointmentDateLabel } from '@/lib/appointment-date-label';
+import { groupPatientAppointments } from '@/lib/patient-appointment-groups';
 
 interface AppointmentBookingSectionProps {
   patientId: string | null | undefined;
@@ -103,6 +106,11 @@ export function AppointmentBookingSection({
   // UI form state
   const [selectedSlot, setSelectedSlot] = useState<string>('');
   const [showNewSlotForm, setShowNewSlotForm] = useState(false);
+  const [showBookingForm,setShowBookingForm]=useState(bookingOnly);
+  const [expandedLists,setExpandedLists]=useState({undocumented:false,history:false});
+  const [listLimits,setListLimits]=useState({upcoming:5,undocumented:5,history:10});
+  const appointmentListId=useId();
+  const [showHistorical,setShowHistorical]=useState(false);
   const [newSlotDateTime, setNewSlotDateTime] = useState<Date | null>(null);
   const [newSlotTeremszam, setNewSlotTeremszam] = useState<string>('');
   const [newSlotCim, setNewSlotCim] = useState<string>('');
@@ -149,6 +157,12 @@ export function AppointmentBookingSection({
     useState<Appointment | null>(null);
   const [revertModalAppointment, setRevertModalAppointment] =
     useState<Appointment | null>(null);
+  useEffect(()=>{
+    setExpandedLists({undocumented:false,history:false});
+    setListLimits({upcoming:5,undocumented:5,history:10});
+    setShowBookingForm(bookingOnly);
+    setShowHistorical(false);
+  },[patientId,bookingOnly]);
 
   const resolvePatientId = async (actionLabel = 'foglalása'): Promise<string | null> => {
     let currentPatientId = patientId;
@@ -196,6 +210,7 @@ export function AppointmentBookingSection({
     });
 
     if (result.success) {
+      if(!bookingOnly)setShowBookingForm(false);
       setSelectedSlot('');
       setCustomCim('');
       setCustomTeremszam('');
@@ -537,6 +552,7 @@ export function AppointmentBookingSection({
       setNewSlotTeremszam('');
       setNewSlotAppointmentType(fixedAppointmentType ?? null);
       setShowNewSlotForm(false);
+      if(!bookingOnly)setShowBookingForm(false);
       alert('Új időpont sikeresen létrehozva és lefoglalva a betegnek!');
       onBooked?.(result.appointmentId);
     } else {
@@ -553,6 +569,12 @@ export function AppointmentBookingSection({
   }
   
   const availableSlotsOnly = availableSlots.filter(slot => slot.status === 'available');
+  const groupedAppointments=groupPatientAppointments(appointments);
+  const appointmentGroups=[
+    {id:'upcoming' as const,title:'Következő időpontok',items:groupedAppointments.upcoming,open:true},
+    {id:'undocumented' as const,title:'Korábbi, kimenetelre váró időpontok',items:groupedAppointments.undocumented,open:expandedLists.undocumented},
+    {id:'history' as const,title:'Korábbi és lezárt időpontok',items:groupedAppointments.history,open:expandedLists.history},
+  ];
 
   const wrapperClass = standalone ? 'pt-2' : 'border-t pt-6 mt-6';
 
@@ -586,7 +608,7 @@ export function AppointmentBookingSection({
             <div className="space-y-4">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  <strong>Jelenlegi időpont:</strong> {formatDateTime(editingAppointment.startTime)}
+                  <strong>Jelenlegi időpont:</strong> {appointmentDateLabel(editingAppointment)}
                 </p>
               </div>
               <div>
@@ -775,7 +797,7 @@ export function AppointmentBookingSection({
             <div className="space-y-4">
               <div>
                 <p className="text-sm text-gray-600 dark:text-gray-400 mb-2">
-                  <strong>Időpont:</strong> {formatDateTime(editingStatus.startTime)}
+                  <strong>Időpont:</strong> {appointmentDateLabel(editingStatus)}
                 </p>
               </div>
               <div>
@@ -906,310 +928,14 @@ export function AppointmentBookingSection({
         </div>
       )}
 
-      {/* Existing Appointments */}
-      {!bookingOnly && appointments.length > 0 && (
-        <div className="mb-6">
-          <h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">Lefoglalt időpontok</h4>
-          <div className="space-y-2">
-            {appointments.map((appointment) => {
-              const displayCim = appointment.cim || DEFAULT_CIM;
-              const st = appointment.appointmentStatus ?? null;
-              let cardWrap =
-                'flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded-md';
-              let metaBorder = 'border-green-200 dark:border-green-800';
-              let LeadIcon: typeof CheckCircle2 = CheckCircle2;
-              let leadIconClass = 'text-green-600 dark:text-green-300';
-              if (st === 'cancelled_by_doctor' || st === 'cancelled_by_patient') {
-                cardWrap =
-                  'flex items-center justify-between p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-md';
-                metaBorder = 'border-red-200 dark:border-red-800';
-                LeadIcon = XCircle;
-                leadIconClass = 'text-red-600 dark:text-red-300';
-              } else if (st === 'no_show') {
-                cardWrap =
-                  'flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/60 border border-gray-300 dark:border-gray-700 rounded-md';
-                metaBorder = 'border-gray-300 dark:border-gray-700';
-                LeadIcon = AlertCircle;
-                leadIconClass = 'text-gray-700 dark:text-gray-300';
-              } else if (st === 'unsuccessful') {
-                cardWrap =
-                  'flex items-center justify-between p-3 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 rounded-md';
-                metaBorder = 'border-orange-200 dark:border-orange-800';
-                LeadIcon = AlertTriangle;
-                leadIconClass = 'text-orange-600 dark:text-orange-300';
-              } else if (appointment.approvalStatus === 'pending') {
-                // E-mailes ajánlat, a beteg még nem válaszolt — nem végleges foglalás.
-                cardWrap =
-                  'flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-md';
-                metaBorder = 'border-amber-200 dark:border-amber-800';
-                LeadIcon = ClockIcon;
-                leadIconClass = 'text-amber-600 dark:text-amber-300';
-              } else if (appointment.approvalStatus === 'rejected') {
-                cardWrap =
-                  'flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/60 border border-gray-300 dark:border-gray-700 rounded-md';
-                metaBorder = 'border-gray-300 dark:border-gray-700';
-                LeadIcon = XCircle;
-                leadIconClass = 'text-gray-500 dark:text-gray-400';
-              }
-              const canMarkUnsuccessful =
-                !!appointment.episodeId &&
-                st !== 'cancelled_by_doctor' &&
-                st !== 'cancelled_by_patient' &&
-                st !== 'unsuccessful';
-              return (
-              <div key={appointment.id} className={cardWrap}>
-                <div className="flex items-center gap-3">
-                  <LeadIcon className={`w-5 h-5 ${leadIconClass}`} />
-                  <div>
-                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
-                      {formatDateTime(appointment.startTime)}
-                    </div>
-                    <div className="text-xs text-gray-500 dark:text-gray-400">
-                      {(appointment.stepLabel || appointment.stepCode || appointment.pool) && (
-                        <div className="mb-1 flex flex-wrap items-center gap-1.5">
-                          {(appointment.stepLabel || appointment.stepCode) && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 text-xs font-medium">
-                              {appointment.stepLabel || appointment.stepCode}
-                            </span>
-                          )}
-                          {appointment.pool && (
-                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs">
-                              {appointment.pool === 'consult' ? 'Konzultáció' : appointment.pool === 'work' ? 'Munka' : appointment.pool === 'control' ? 'Kontroll' : appointment.pool}
-                            </span>
-                          )}
-                          {appointment.episodeId && (
-                            <span className="text-gray-400 dark:text-gray-500 text-xs" title={appointment.episodeId}>
-                              Epizód #{appointment.episodeId.slice(0, 8)}
-                            </span>
-                          )}
-                        </div>
-                      )}
-                      <div>Cím: {displayCim}</div>
-                      {appointment.teremszam && (
-                        <div>Teremszám: {appointment.teremszam}</div>
-                      )}
-                      <div>Fogpótlástanász: {appointment.dentistEmail || 'Nincs megadva'}</div>
-                      {appointment.appointmentType && (
-                        <div className="mt-1">
-                          <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Típus: </span>
-                          <span className="text-xs text-gray-700 dark:text-gray-300">{getAppointmentTypeLabel(appointment.appointmentType)}</span>
-                        </div>
-                      )}
-                      <div className={`mt-2 pt-2 border-t ${metaBorder} space-y-1`}>
-                        {appointment.createdAt && (
-                          <div>
-                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Létrehozva: </span>
-                            <span className="text-xs text-gray-700 dark:text-gray-300">
-                              {formatDateTime(appointment.createdAt)}
-                            </span>
-                          </div>
-                        )}
-                        {appointment.approvedAt && (
-                          <div>
-                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Elfogadva: </span>
-                            <span className="text-xs text-gray-700 dark:text-gray-300">
-                              {formatDateTime(appointment.approvedAt)}
-                            </span>
-                          </div>
-                        )}
-                        {appointment.createdBy && (
-                          <div>
-                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Foglalta: </span>
-                            <span className="text-xs text-gray-700 dark:text-gray-300">
-                              {appointment.createdBy}
-                            </span>
-                          </div>
-                        )}
-                        {(appointment.timeSlotSource || appointment.createdVia) && (
-                          <div>
-                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Forrás: </span>
-                            <span className="text-xs text-gray-700 dark:text-gray-300">
-                              {appointment.createdVia === 'worklist'
-                                ? 'Munkalista'
-                                : appointment.createdVia === 'patient_form'
-                                  ? 'Beteg űrlap'
-                                  : appointment.createdVia === 'admin_override'
-                                    ? 'Admin felülírás'
-                                    : appointment.createdVia === 'surgeon_override'
-                                      ? 'Orvosi felülírás'
-                                      : appointment.timeSlotSource === 'google_calendar'
-                                        ? 'Google Naptár szinkron'
-                                        : appointment.timeSlotSource === 'manual'
-                                          ? 'Manuális'
-                                          : 'Manuális'}{appointment.timeSlotSource === 'google_calendar' && appointment.createdVia && appointment.createdVia !== 'google_import' ? ' (.ics)' : ''}
-                            </span>
-                          </div>
-                        )}
-                      </div>
-                      {appointment.approvalStatus === 'pending' && !st && (
-                        <div className="flex items-center gap-1 mt-1 text-amber-700 dark:text-amber-300">
-                          <ClockIcon className="w-3 h-3" />
-                          <span>Jóváhagyásra vár — a beteg e-mailben kapta az ajánlatot</span>
-                        </div>
-                      )}
-                      {appointment.approvalStatus === 'rejected' && !st && (
-                        <div className="flex items-center gap-1 mt-1 text-gray-600 dark:text-gray-400">
-                          <XCircle className="w-3 h-3" />
-                          <span>A beteg elvetette az e-mailes ajánlatot</span>
-                        </div>
-                      )}
-                      {(() => {
-                        if (appointment.isLate) {
-                          return (
-                            <div className="flex items-center gap-1 mt-1 text-orange-600 dark:text-orange-300">
-                              <ClockIcon className="w-3 h-3" />
-                              <span>Késett a beteg</span>
-                            </div>
-                          );
-                        }
-                        if (appointment.appointmentStatus === 'cancelled_by_doctor') {
-                          return (
-                            <div className="flex items-center gap-1 mt-1 text-red-600 dark:text-red-300">
-                              <XCircle className="w-3 h-3" />
-                              <span>Lemondta az orvos</span>
-                            </div>
-                          );
-                        }
-                        if (appointment.appointmentStatus === 'cancelled_by_patient') {
-                          return (
-                            <div className="flex items-center gap-1 mt-1 text-red-600 dark:text-red-300">
-                              <XCircle className="w-3 h-3" />
-                              <span>Lemondta a beteg</span>
-                            </div>
-                          );
-                        }
-                        if (appointment.appointmentStatus === 'completed') {
-                          return (
-                            <div className="mt-1">
-                              <div className="flex items-center gap-1 text-green-600 dark:text-green-300">
-                                <CheckCircle2 className="w-3 h-3" />
-                                <span>Sikeresen teljesült</span>
-                              </div>
-                              {appointment.completionNotes && (
-                                <div className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 whitespace-pre-wrap break-words">
-                                  {appointment.completionNotes}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        }
-                        if (appointment.appointmentStatus === 'no_show') {
-                          return (
-                            <div className="flex items-center gap-1 mt-1 text-red-600 dark:text-red-300">
-                              <AlertCircle className="w-3 h-3" />
-                              <span>Nem jelent meg</span>
-                            </div>
-                          );
-                        }
-                        if (appointment.appointmentStatus === 'unsuccessful') {
-                          return (
-                            <div className="mt-1">
-                              <div className="flex items-center gap-1 text-orange-700 dark:text-orange-300">
-                                <AlertTriangle className="w-3 h-3" />
-                                <span>Sikertelen próba — ismétlés szükséges</span>
-                              </div>
-                              {appointment.attemptFailedReason && (
-                                <div className="text-xs text-orange-900 dark:text-orange-200 mt-0.5 whitespace-pre-wrap break-words">
-                                  {appointment.attemptFailedReason}
-                                </div>
-                              )}
-                            </div>
-                          );
-                        }
-                        return null;
-                      })()}
-                    </div>
-                  </div>
-                </div>
-                <div className="flex items-center gap-2">
-                  <button
-                    onClick={() => handleDownloadCalendar(appointment.id)}
-                    className="text-sm text-blue-600 dark:text-blue-300 hover:text-blue-800 flex items-center gap-1"
-                    title="Naptár fájl letöltése"
-                  >
-                    <Download className="w-4 h-4" />
-                    .ics
-                  </button>
-                  {!isViewOnly && (userRole === 'beutalo_orvos' || userRole === 'admin' || userRole === 'fogpótlástanász') && (
-                    <>
-                      <button
-                        onClick={() => handleModifyAppointment(appointment)}
-                        className="text-sm text-blue-600 dark:text-blue-300 hover:text-blue-800 flex items-center gap-1"
-                        title="Időpont módosítása"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                        Módosítás
-                      </button>
-                      {appointment.episodeId && (
-                        <button
-                          onClick={() => handleOpenReassign(appointment)}
-                          disabled={reassignLoading === appointment.id}
-                          className="text-sm text-purple-700 dark:text-purple-300 hover:text-purple-900 flex items-center gap-1 disabled:opacity-50"
-                          title="A foglalás fázis-hovatartozásának módosítása (snapshot átkötése másik munkafázisra)"
-                        >
-                          <Shuffle className="w-4 h-4" />
-                          {reassignLoading === appointment.id
-                            ? 'Betöltés…'
-                            : 'Másik fázisra'}
-                        </button>
-                      )}
-                      {canMarkUnsuccessful && (
-                        <button
-                          type="button"
-                          onClick={() => setUnsuccessfulModalAppointment(appointment)}
-                          className="text-sm text-orange-700 dark:text-orange-300 hover:text-orange-900 flex items-center gap-1"
-                          title="A próba sikertelen volt — új próba szükséges (indok kötelező)"
-                        >
-                          <AlertTriangle className="w-4 h-4" />
-                          Sikertelen próba
-                        </button>
-                      )}
-                      {appointment.episodeId &&
-                        appointment.appointmentStatus === 'unsuccessful' && (
-                          <button
-                            type="button"
-                            onClick={() => setRevertModalAppointment(appointment)}
-                            className="text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 flex items-center gap-1"
-                            title="Sikertelen-jelölés visszavonása (tévedés esetén)"
-                          >
-                            <Undo2 className="w-4 h-4" />
-                            Sikertelen vissza
-                          </button>
-                        )}
-                      <button
-                        onClick={() => handleEditStatus(appointment)}
-                        className="text-sm text-purple-600 dark:text-purple-300 hover:text-purple-800 flex items-center gap-1"
-                        title="Státusz szerkesztése"
-                      >
-                        <Edit2 className="w-4 h-4" />
-                        Státusz
-                      </button>
-                      {(st === 'completed' || st === 'unsuccessful') && <Link
-                        href={`/patients/${appointment.patientId}/stages?view=aftercare&appointmentId=${appointment.id}#gondozas`}
-                        className="px-2 py-1 text-xs text-teal-800 hover:bg-teal-100 rounded dark:text-teal-200 dark:hover:bg-teal-950">
-                        Vizitdokumentáció
-                      </Link>}
-                      <button
-                        onClick={() => handleCancelAppointment(appointment)}
-                        className="text-sm text-red-600 dark:text-red-300 hover:text-red-800 flex items-center gap-1"
-                        title="Időpont lemondása (opcionálisan új ajánlattal)"
-                      >
-                        <X className="w-4 h-4" />
-                        Lemondás
-                      </button>
-                    </>
-                  )}
-                </div>
-              </div>
-            );
-            })}
-          </div>
-        </div>
-      )}
-
+      {/* Appointment entry stays before the full patient history. */}
+      {!isViewOnly&&<div className="mb-4 flex flex-wrap gap-2">
+        {!bookingOnly&&<button type="button" className="btn-primary flex items-center gap-2" aria-expanded={showBookingForm} aria-controls={`${appointmentListId}-booking`} onClick={()=>{setShowBookingForm(v=>!v);setShowHistorical(false);}}><Plus className="w-4 h-4"/>Új időpont foglalása</button>}
+        {patientId&&<button type="button" className="rounded border border-blue-300 px-3 py-2 text-sm text-medical-primary" aria-expanded={showHistorical} onClick={()=>{setShowHistorical(v=>!v);if(!bookingOnly)setShowBookingForm(false);}}>Korábbi megtörtént időpont felvétele</button>}
+      </div>}
       {/* Book New Appointment */}
-      {!isViewOnly && (
-        <div className="space-y-4">
+      {!isViewOnly && showBookingForm && (
+        <div id={`${appointmentListId}-booking`} className="mb-5 space-y-4">
           {/* New slot creation for fogpótlástanász and admin */}
           {(userRole === 'fogpótlástanász' || userRole === 'admin') && (
             <div className="mb-4 p-4 bg-blue-50 dark:bg-blue-950/40 border border-blue-200 dark:border-blue-800 rounded-md">
@@ -1385,7 +1111,6 @@ export function AppointmentBookingSection({
                   );
                 })()}
               </div>
-              
               {/* Cím és teremszám módosítása */}
               <div className="p-3 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 rounded-md">
                 <h5 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-2">Cím és teremszám módosítása (opcionális)</h5>
@@ -1462,6 +1187,317 @@ export function AppointmentBookingSection({
           )}
         </div>
       )}
+
+      {!isViewOnly&&patientId&&<div className="mb-4">
+        {showHistorical&&<HistoricalAppointmentForm patientId={patientId} episodeId={episodeId} onCancel={()=>setShowHistorical(false)} onSaved={async id=>{setShowHistorical(false);await refreshData();onBooked?.(id);}}/>}
+      </div>}
+      {!bookingOnly && appointmentGroups.map(group=>(
+        <section className="mb-4" key={group.id} aria-label={group.title}>
+          {group.id==='upcoming'?<h4 className="text-sm font-medium text-gray-700 dark:text-gray-300 mb-3">{group.title} ({group.items.length})</h4>:
+            group.items.length>0&&<button type="button" className={`mb-3 flex w-full items-center justify-between rounded-lg border px-3 py-2 text-left text-sm font-medium ${group.id==='undocumented'?'border-amber-200 text-amber-800 dark:text-amber-300':'border-gray-200 dark:border-gray-700'}`} aria-expanded={group.open} aria-controls={`${appointmentListId}-${group.id}`} onClick={()=>setExpandedLists(v=>({...v,[group.id]:!v[group.id]}))}><span>{group.title} ({group.items.length})</span><span aria-hidden="true">{group.open?'−':'+'}</span></button>}
+          {group.id==='upcoming'&&!group.items.length&&<p className="text-sm text-gray-500">Nincs következő lefoglalt időpont.</p>}
+          {group.open&&<div id={`${appointmentListId}-${group.id}`}>
+          <div className="space-y-2">
+            {group.items.slice(0,listLimits[group.id]).map((appointment) => {
+              const displayCim = appointment.cim || DEFAULT_CIM;
+              const st = appointment.appointmentStatus ?? null;
+              let cardWrap =
+                'flex items-center justify-between p-3 bg-green-50 dark:bg-green-950/40 border border-green-200 dark:border-green-800 rounded-md';
+              let metaBorder = 'border-green-200 dark:border-green-800';
+              let LeadIcon: typeof CheckCircle2 = CheckCircle2;
+              let leadIconClass = 'text-green-600 dark:text-green-300';
+              if (st === 'cancelled_by_doctor' || st === 'cancelled_by_patient') {
+                cardWrap =
+                  'flex items-center justify-between p-3 bg-red-50 dark:bg-red-950/40 border border-red-200 dark:border-red-800 rounded-md';
+                metaBorder = 'border-red-200 dark:border-red-800';
+                LeadIcon = XCircle;
+                leadIconClass = 'text-red-600 dark:text-red-300';
+              } else if (st === 'no_show') {
+                cardWrap =
+                  'flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/60 border border-gray-300 dark:border-gray-700 rounded-md';
+                metaBorder = 'border-gray-300 dark:border-gray-700';
+                LeadIcon = AlertCircle;
+                leadIconClass = 'text-gray-700 dark:text-gray-300';
+              } else if (st === 'unsuccessful') {
+                cardWrap =
+                  'flex items-center justify-between p-3 bg-orange-50 dark:bg-orange-950/40 border border-orange-200 dark:border-orange-800 rounded-md';
+                metaBorder = 'border-orange-200 dark:border-orange-800';
+                LeadIcon = AlertTriangle;
+                leadIconClass = 'text-orange-600 dark:text-orange-300';
+              } else if (appointment.approvalStatus === 'pending') {
+                // E-mailes ajánlat, a beteg még nem válaszolt — nem végleges foglalás.
+                cardWrap =
+                  'flex items-center justify-between p-3 bg-amber-50 dark:bg-amber-950/40 border border-amber-200 dark:border-amber-800 rounded-md';
+                metaBorder = 'border-amber-200 dark:border-amber-800';
+                LeadIcon = ClockIcon;
+                leadIconClass = 'text-amber-600 dark:text-amber-300';
+              } else if (appointment.approvalStatus === 'rejected') {
+                cardWrap =
+                  'flex items-center justify-between p-3 bg-gray-50 dark:bg-gray-800/60 border border-gray-300 dark:border-gray-700 rounded-md';
+                metaBorder = 'border-gray-300 dark:border-gray-700';
+                LeadIcon = XCircle;
+                leadIconClass = 'text-gray-500 dark:text-gray-400';
+              }
+              const canMarkUnsuccessful =
+                !!appointment.episodeId &&
+                st !== 'cancelled_by_doctor' &&
+                st !== 'cancelled_by_patient' &&
+                st !== 'unsuccessful';
+              return (
+              <div key={appointment.id} className={`${cardWrap} flex-wrap gap-3`}>
+                <div className="flex min-w-0 flex-1 items-start gap-3">
+                  <LeadIcon className={`w-5 h-5 ${leadIconClass}`} />
+                  <div className="min-w-0 break-words">
+                    <div className="text-sm font-medium text-gray-900 dark:text-gray-100">
+                      {appointmentDateLabel(appointment)}
+                    </div>
+                    <div className="text-xs text-gray-500 dark:text-gray-400">
+                      {appointment.recordedAt&&<p>Utólag rögzítve: {formatDateTime(appointment.recordedAt)} · {appointment.recordedBy} · {appointment.clinicalSource}</p>}
+                      {(appointment.stepLabel || appointment.stepCode || appointment.pool) && (
+                        <div className="mb-1 flex flex-wrap items-center gap-1.5">
+                          {(appointment.stepLabel || appointment.stepCode) && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-indigo-100 dark:bg-indigo-950/50 text-indigo-800 dark:text-indigo-300 text-xs font-medium">
+                              {appointment.stepLabel || appointment.stepCode}
+                            </span>
+                          )}
+                          {appointment.pool && (
+                            <span className="inline-flex items-center px-1.5 py-0.5 rounded bg-gray-100 dark:bg-gray-800 text-gray-700 dark:text-gray-300 text-xs">
+                              {appointment.pool === 'consult' ? 'Konzultáció' : appointment.pool === 'work' ? 'Munka' : appointment.pool === 'control' ? 'Kontroll' : appointment.pool}
+                            </span>
+                          )}
+                          {appointment.episodeId && (
+                            <span className="text-gray-400 dark:text-gray-500 text-xs" title={appointment.episodeId}>
+                              Epizód #{appointment.episodeId.slice(0, 8)}
+                            </span>
+                          )}
+                        </div>
+                      )}
+                      <div>Cím: {displayCim}</div>
+                      {appointment.teremszam && (
+                        <div>Teremszám: {appointment.teremszam}</div>
+                      )}
+                      <div>Fogpótlástanász: {appointment.dentistEmail || 'Nincs megadva'}</div>
+                      {appointment.appointmentType && (
+                        <div className="mt-1">
+                          <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Típus: </span>
+                          <span className="text-xs text-gray-700 dark:text-gray-300">{getAppointmentTypeLabel(appointment.appointmentType)}</span>
+                        </div>
+                      )}
+                      <div className={`mt-2 pt-2 border-t ${metaBorder} space-y-1`}>
+                        {appointment.createdAt && (
+                          <div>
+                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Létrehozva: </span>
+                            <span className="text-xs text-gray-700 dark:text-gray-300">
+                              {formatDateTime(appointment.createdAt)}
+                            </span>
+                          </div>
+                        )}
+                        {appointment.approvedAt && (
+                          <div>
+                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Elfogadva: </span>
+                            <span className="text-xs text-gray-700 dark:text-gray-300">
+                              {formatDateTime(appointment.approvedAt)}
+                            </span>
+                          </div>
+                        )}
+                        {appointment.createdBy && (
+                          <div>
+                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Foglalta: </span>
+                            <span className="text-xs text-gray-700 dark:text-gray-300">
+                              {appointment.createdBy}
+                            </span>
+                          </div>
+                        )}
+                        {(appointment.timeSlotSource || appointment.createdVia) && (
+                          <div>
+                            <span className="text-xs font-medium text-gray-600 dark:text-gray-400">Forrás: </span>
+                            <span className="text-xs text-gray-700 dark:text-gray-300">
+                              {appointment.createdVia === 'worklist'
+                                ? 'Munkalista'
+                                : appointment.createdVia === 'patient_form'
+                                  ? 'Beteg űrlap'
+                                  : appointment.createdVia === 'admin_override'
+                                    ? 'Admin felülírás'
+                                    : appointment.createdVia === 'surgeon_override'
+                                      ? 'Orvosi felülírás'
+                                      : appointment.timeSlotSource === 'google_calendar'
+                                        ? 'Google Naptár szinkron'
+                                        : appointment.timeSlotSource === 'manual'
+                                          ? 'Manuális'
+                                          : 'Manuális'}{appointment.timeSlotSource === 'google_calendar' && appointment.createdVia && appointment.createdVia !== 'google_import' ? ' (.ics)' : ''}
+                            </span>
+                          </div>
+                        )}
+                      </div>
+                      {appointment.approvalStatus === 'pending' && !st && (
+                        <div className="flex items-center gap-1 mt-1 text-amber-700 dark:text-amber-300">
+                          <ClockIcon className="w-3 h-3" />
+                          <span>Jóváhagyásra vár — a beteg e-mailben kapta az ajánlatot</span>
+                        </div>
+                      )}
+                      {appointment.approvalStatus === 'rejected' && !st && (
+                        <div className="flex items-center gap-1 mt-1 text-gray-600 dark:text-gray-400">
+                          <XCircle className="w-3 h-3" />
+                          <span>A beteg elvetette az e-mailes ajánlatot</span>
+                        </div>
+                      )}
+                      {(() => {
+                        if (appointment.isLate) {
+                          return (
+                            <div className="flex items-center gap-1 mt-1 text-orange-600 dark:text-orange-300">
+                              <ClockIcon className="w-3 h-3" />
+                              <span>Késett a beteg</span>
+                            </div>
+                          );
+                        }
+                        if (appointment.appointmentStatus === 'cancelled_by_doctor') {
+                          return (
+                            <div className="flex items-center gap-1 mt-1 text-red-600 dark:text-red-300">
+                              <XCircle className="w-3 h-3" />
+                              <span>Lemondta az orvos</span>
+                            </div>
+                          );
+                        }
+                        if (appointment.appointmentStatus === 'cancelled_by_patient') {
+                          return (
+                            <div className="flex items-center gap-1 mt-1 text-red-600 dark:text-red-300">
+                              <XCircle className="w-3 h-3" />
+                              <span>Lemondta a beteg</span>
+                            </div>
+                          );
+                        }
+                        if (appointment.appointmentStatus === 'completed') {
+                          return (
+                            <div className="mt-1">
+                              <div className="flex items-center gap-1 text-green-600 dark:text-green-300">
+                                <CheckCircle2 className="w-3 h-3" />
+                                <span>Sikeresen teljesült</span>
+                              </div>
+                              {appointment.completionNotes && (
+                                <div className="text-xs text-gray-600 dark:text-gray-400 mt-0.5 whitespace-pre-wrap break-words">
+                                  {appointment.completionNotes}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+                        if (appointment.appointmentStatus === 'no_show') {
+                          return (
+                            <div className="flex items-center gap-1 mt-1 text-red-600 dark:text-red-300">
+                              <AlertCircle className="w-3 h-3" />
+                              <span>Nem jelent meg</span>
+                            </div>
+                          );
+                        }
+                        if (appointment.appointmentStatus === 'unsuccessful') {
+                          return (
+                            <div className="mt-1">
+                              <div className="flex items-center gap-1 text-orange-700 dark:text-orange-300">
+                                <AlertTriangle className="w-3 h-3" />
+                                <span>Sikertelen próba — ismétlés szükséges</span>
+                              </div>
+                              {appointment.attemptFailedReason && (
+                                <div className="text-xs text-orange-900 dark:text-orange-200 mt-0.5 whitespace-pre-wrap break-words">
+                                  {appointment.attemptFailedReason}
+                                </div>
+                              )}
+                            </div>
+                          );
+                        }
+                        return null;
+                      })()}
+                    </div>
+                  </div>
+                </div>
+                <div className="flex w-full flex-wrap items-center gap-2 sm:w-auto sm:justify-end">
+                  <button
+                    onClick={() => handleDownloadCalendar(appointment.id)}
+                    className="text-sm text-blue-600 dark:text-blue-300 hover:text-blue-800 flex items-center gap-1"
+                    title="Naptár fájl letöltése"
+                  >
+                    <Download className="w-4 h-4" />
+                    .ics
+                  </button>
+                  {!isViewOnly && (userRole === 'beutalo_orvos' || userRole === 'admin' || userRole === 'fogpótlástanász') && (
+                    <>
+                      <button
+                        onClick={() => handleModifyAppointment(appointment)}
+                        className="text-sm text-blue-600 dark:text-blue-300 hover:text-blue-800 flex items-center gap-1"
+                        title="Időpont módosítása"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        Módosítás
+                      </button>
+                      {appointment.episodeId && (
+                        <button
+                          onClick={() => handleOpenReassign(appointment)}
+                          disabled={reassignLoading === appointment.id}
+                          className="text-sm text-purple-700 dark:text-purple-300 hover:text-purple-900 flex items-center gap-1 disabled:opacity-50"
+                          title="A foglalás fázis-hovatartozásának módosítása (snapshot átkötése másik munkafázisra)"
+                        >
+                          <Shuffle className="w-4 h-4" />
+                          {reassignLoading === appointment.id
+                            ? 'Betöltés…'
+                            : 'Másik fázisra'}
+                        </button>
+                      )}
+                      {canMarkUnsuccessful && (
+                        <button
+                          type="button"
+                          onClick={() => setUnsuccessfulModalAppointment(appointment)}
+                          className="text-sm text-orange-700 dark:text-orange-300 hover:text-orange-900 flex items-center gap-1"
+                          title="A próba sikertelen volt — új próba szükséges (indok kötelező)"
+                        >
+                          <AlertTriangle className="w-4 h-4" />
+                          Sikertelen próba
+                        </button>
+                      )}
+                      {appointment.episodeId &&
+                        appointment.appointmentStatus === 'unsuccessful' && (
+                          <button
+                            type="button"
+                            onClick={() => setRevertModalAppointment(appointment)}
+                            className="text-sm text-gray-700 dark:text-gray-300 hover:text-gray-900 dark:hover:text-gray-100 flex items-center gap-1"
+                            title="Sikertelen-jelölés visszavonása (tévedés esetén)"
+                          >
+                            <Undo2 className="w-4 h-4" />
+                            Sikertelen vissza
+                          </button>
+                        )}
+                      <button
+                        onClick={() => handleEditStatus(appointment)}
+                        className="text-sm text-purple-600 dark:text-purple-300 hover:text-purple-800 flex items-center gap-1"
+                        title="Státusz szerkesztése"
+                      >
+                        <Edit2 className="w-4 h-4" />
+                        Státusz
+                      </button>
+                      {(st === 'completed' || st === 'unsuccessful') && <Link
+                        href={`/patients/${appointment.patientId}/stages?view=aftercare&appointmentId=${appointment.id}#gondozas`}
+                        className="px-2 py-1 text-xs text-teal-800 hover:bg-teal-100 rounded dark:text-teal-200 dark:hover:bg-teal-950">
+                        Vizitdokumentáció
+                      </Link>}
+                      <button
+                        onClick={() => handleCancelAppointment(appointment)}
+                        className="text-sm text-red-600 dark:text-red-300 hover:text-red-800 flex items-center gap-1"
+                        title="Időpont lemondása (opcionálisan új ajánlattal)"
+                      >
+                        <X className="w-4 h-4" />
+                        Lemondás
+                      </button>
+                    </>
+                  )}
+                </div>
+              </div>
+            );
+            })}
+          </div>
+          {group.items.length>listLimits[group.id]&&<button type="button" className="mt-3 text-sm text-medical-primary underline" onClick={()=>setListLimits(v=>({...v,[group.id]:v[group.id]+10}))}>További időpontok ({group.items.length-listLimits[group.id]})</button>}
+          </div>}
+        </section>
+      ))}
+
+
     </div>
   );
 }

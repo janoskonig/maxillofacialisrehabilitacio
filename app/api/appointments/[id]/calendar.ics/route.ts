@@ -17,11 +17,13 @@ export const GET = authedHandler(async (req, { auth, params }) => {
       a.created_by,
       a.dentist_email,
       ats.start_time,
+      hr.time_precision,hr.occurred_on::text AS occurred_on,
       p.nev as patient_name,
       p.taj as patient_taj
     FROM appointments a
     JOIN available_time_slots ats ON a.time_slot_id = ats.id
     JOIN patients p ON a.patient_id = p.id
+    LEFT JOIN retrospective_appointment_records hr ON hr.appointment_id=a.id
     WHERE a.id = $1`,
     [id]
   );
@@ -41,6 +43,7 @@ export const GET = authedHandler(async (req, { auth, params }) => {
     startTime: new Date(appointment.start_time),
     surgeonName: appointment.created_by,
     dentistName: appointment.dentist_email || 'Fogpótlástanász',
+    dayOnly: appointment.time_precision==='day'?appointment.occurred_on:undefined,
   });
 
   return new NextResponse(icsFile.toString('utf-8'), {

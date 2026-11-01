@@ -47,6 +47,8 @@ export const GET = authedHandler(async (req, { auth }) => {
       a.created_by as "createdBy",
       a.dentist_email as "dentistEmail",
       a.created_at as "createdAt",
+      hr.time_precision AS "timePrecision",hr.occurred_on::text AS "occurredOn",
+      hr.recorded_at AS "recordedAt",hr.source AS "clinicalSource",recorder.email AS "recordedBy",
       a.approved_at as "approvedAt",
       a.approval_status as "approvalStatus",
       a.approval_token as "approvalToken",
@@ -75,6 +77,8 @@ export const GET = authedHandler(async (req, { auth }) => {
     JOIN available_time_slots ats ON a.time_slot_id = ats.id
     JOIN patients p ON a.patient_id = p.id
     LEFT JOIN users u ON a.dentist_email = u.email
+    LEFT JOIN retrospective_appointment_records hr ON hr.appointment_id=a.id
+    LEFT JOIN users recorder ON recorder.id=hr.recorded_by
     LEFT JOIN work_phase_catalog sc ON a.step_code = sc.work_phase_code AND sc.is_active = true
     ${whereClause}
     ORDER BY ats.start_time ASC

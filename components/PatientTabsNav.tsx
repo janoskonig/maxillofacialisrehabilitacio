@@ -27,6 +27,7 @@ const TABS: Array<{ id: PatientTabId; label: string; shortLabel: string; icon: R
   { id: 'torzsadatok', label: 'Törzsadatok', shortLabel: 'Törzs', icon: <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'anamnezis', label: 'Anamnézis & vizsgálat', shortLabel: 'Anamnézis', icon: <Stethoscope className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'stadiumok', label: 'Kezelés', shortLabel: 'Kezelés', icon: <CalendarClock className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
+  { id: 'aftercare', label: 'Fogpótlások és gondozás', shortLabel: 'Fogpótlások', icon: <Stethoscope className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'kommunikacio', label: 'Kommunikáció', shortLabel: 'Üzenet', icon: <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'adminisztracio', label: 'Dokumentumok és adminisztráció', shortLabel: 'Dok. és admin', icon: <FolderOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
 ];
@@ -52,7 +53,7 @@ export function PatientTabsNav({ patientId, activeTab, onTabChange, showStadiumo
 
   const classFor = (id: PatientTabId) =>
     `flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
-      (activeTab === id || (activeTab === 'aftercare' && id === 'stadiumok'))
+      (activeTab === id)
         ? 'text-medical-primary border-medical-primary'
         : 'text-gray-700 dark:text-gray-300 hover:text-medical-primary border-transparent hover:border-medical-primary'
     }`;
@@ -82,7 +83,7 @@ export function PatientTabsNav({ patientId, activeTab, onTabChange, showStadiumo
           const href =
             id === 'stadiumok'
               ? `/patients/${patientId}/stages`
-              : id === 'aftercare' ? `/patients/${patientId}/aftercare` : `/patients/${patientId}/view?tab=${id}`;
+              : id === 'aftercare' ? `/patients/${patientId}/prostheses` : `/patients/${patientId}/view?tab=${id}`;
           return (
             <Link
               key={id}

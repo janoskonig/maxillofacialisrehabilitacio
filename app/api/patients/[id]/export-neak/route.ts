@@ -5,8 +5,7 @@ import { REQUIRED_DOC_RULES, getChecklistStatus, requiredFieldSeverity } from '@
 import { Patient, LabQuoteRequest } from '@/lib/types';
 import { patientSelectSql, normalizePatientRow } from '@/lib/patient-select';
 import { downloadFile } from '@/lib/ftp-client';
-import archiver from 'archiver';
-import { Readable } from 'stream';
+import { preserveNeakExport } from '@/lib/prosthesis-lifecycle/packages';
 import { buildStructuredAnamnesisSummary } from '@/lib/anamnesis-summary';
 import { normalizeTags, safeFilename, ExportLimiter } from '@/lib/utils';
 import { buildNeakExportPlan, NEAK_EXPORT_LIMITS, withNeakDownloadTimeout } from '@/lib/neak-export';
@@ -99,7 +98,7 @@ function generateReadme(
  */
 export const dynamic = 'force-dynamic';
 
-export const GET = authedHandler(async (req, { params, correlationId }) => {
+export const GET = authedHandler(async (req, { params, correlationId, auth }) => {
   // Feature flag check
   if (process.env.ENABLE_NEAK_EXPORT !== 'true') {
     return NextResponse.json(
@@ -402,39 +401,31 @@ export const GET = authedHandler(async (req, { params, correlationId }) => {
       }, { status: 413 });
     }
 
-    const archive = archiver('zip', { zlib: { level: 9 } });
-    // Attach the consumer before finalizing; propagate archive failures to the download.
-    const stream = Readable.toWeb(archive);
-    archive.on('error', (error) => {
-      logger.error('[NEAK Export] Archive error:', error);
-      archive.destroy(error);
-    });
-    archive.append(patientSummaryBuffer, { name: 'patient_summary.pdf' });
-    archive.append(medicalHistoryBuffer, { name: 'medical_history.pdf' });
-    archive.append(dentalStatusBuffer, { name: 'dental_status.pdf' });
-    archive.append(equityDentalBuffer, { name: 'equity_request_dental.pdf' });
-    archive.append(equityPatientBuffer, { name: 'equity_request_patient_data.pdf' });
-    archive.append(treatmentPlanPdfBuffer, { name: 'treatment_plan.pdf' });
-    archive.append(treatmentPlanBuffer, { name: 'treatment_plan.txt' });
-    archive.append(quoteRequestsBuffer, { name: 'quote_requests.txt' });
-    archive.append(readmeBuffer, { name: 'README.txt' });
-    for (const attachment of attachments) {
-      archive.append(attachment.buffer, { name: attachment.name });
-    }
-    void archive.finalize().catch((error: Error) => archive.destroy(error));
+    const preserved = await preserveNeakExport(patientId, auth.userId, [
+      {name:'patient_summary.pdf',buffer:patientSummaryBuffer},
+      {name:'medical_history.pdf',buffer:medicalHistoryBuffer},
+      {name:'dental_status.pdf',buffer:dentalStatusBuffer},
+      {name:'equity_request_dental.pdf',buffer:equityDentalBuffer},
+      {name:'equity_request_patient_data.pdf',buffer:equityPatientBuffer},
+      {name:'treatment_plan.pdf',buffer:treatmentPlanPdfBuffer},
+      {name:'treatment_plan.txt',buffer:treatmentPlanBuffer},
+      {name:'quote_requests.txt',buffer:quoteRequestsBuffer},
+      {name:'README.txt',buffer:readmeBuffer},...attachments,
+    ]);
 
     // Generate filename
     const dateStr = new Date().toISOString().split('T')[0];
     const filename = `NEAK_${patientId}_${dateStr}.zip`;
 
     // Create response with proper error handling
-    const response = new NextResponse(stream as ReadableStream<Uint8Array>, {
+    const response = new NextResponse(new Uint8Array(preserved.archive), {
       status: 200,
       headers: {
         'Content-Type': 'application/zip',
         'Cache-Control': 'private, no-store',
         'Content-Disposition': `attachment; filename="${filename}"`,
         'x-correlation-id': correlationId,
+        'x-clinical-package-id': preserved.id,
       },
     });
 
