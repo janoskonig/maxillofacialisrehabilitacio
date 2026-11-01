@@ -120,6 +120,7 @@ export default function PatientStagesPage() {
     if (episodeId) setSelectedEpisodeId(episodeId);
     if (query.get('view') === 'aftercare') setWorkView('aftercare');
     if (query.get('view') === 'plan') setWorkView('plan');
+    if (query.get('plan') === '1') {setClinicalPlanOpen(true);setWorkView('plan');}
     if (query.get('appointmentId')) { setRequestedAppointment(query.get('appointmentId')!); setWorkView('aftercare'); }
   }, []);
 
@@ -225,6 +226,11 @@ export default function PatientStagesPage() {
   const phase = treatmentWorkspacePhase(timelineEpisode, care, activeEpisode?.id ?? '');
   const aftercareDefault = phase === 'aftercare' || (phase === 'mixed' && ['STAGE_6', 'STAGE_7'].includes(timelineEpisode?.currentStageCode ?? ''));
   const clinicalPlanShown = clinicalPlanOpen ?? phase === 'planning';
+  useEffect(() => {
+    if (!loading && clinicalPlanShown && window.location.hash === '#kezelesi-terv') {
+      document.getElementById('kezelesi-terv')?.scrollIntoView?.({ block: 'start' });
+    }
+  }, [loading, activeEpisode?.id, clinicalPlanShown]);
   const shownView = workView ?? (aftercareDefault ? 'aftercare' : 'plan');
   const currentStageDisplay = stageDisplay(timelineEpisode?.currentStageCode);
   useEffect(() => {
@@ -354,9 +360,9 @@ export default function PatientStagesPage() {
               : careError ? <p role="alert" className="text-sm text-amber-700 dark:text-amber-300">{careError} <button type="button" className="underline" onClick={() => setCareRetry((v) => v + 1)}>Újrapróbálás</button></p>
                 : <p role="status" className="text-sm text-gray-500">Gondozási adatok betöltése…</p>}
           </div> : <div id="kezelesi-alkalmak" className="scroll-mt-24 space-y-3">
-            <WorkspaceSection title="Klinikai kezelési terv · felső és alsó állcsont" open={clinicalPlanShown} onToggle={async () => { if (clinicalPlanShown && !await canLeaveTreatmentPlan()) return; setClinicalPlanOpen(!clinicalPlanShown); }}>
+            <div id="kezelesi-terv" className="scroll-mt-24"><WorkspaceSection title="Klinikai kezelési terv" open={clinicalPlanShown} onToggle={async () => { if (clinicalPlanShown && !await canLeaveTreatmentPlan()) return; setClinicalPlanOpen(!clinicalPlanShown); }}>
               <EpisodeTreatmentPlanEditor key={`treatment-description-${activeEpisode.id}`} episodeId={activeEpisode.id} canEdit={canEditEpisodeSettings} onStateChange={setTreatmentPlanState} />
-            </WorkspaceSection>
+            </WorkspaceSection></div>
           {activeEpisode?.status === 'open' ? (
             <EpisodeStepsManager
               // Egyedi kulcs: a testvér EpisodeRecallPanel ugyanezt az epizód-id-t

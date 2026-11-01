@@ -68,35 +68,25 @@ export function AppShell({ title, backTo, actions, maxWidth = 'lg', children }: 
     </main>
   );
 
-  // Auth betöltése alatt: fejléc + tartalom keret, de oldalsáv nélkül (a user kell hozzá).
-  if (!user) {
-    return (
-      <div className="min-h-screen bg-gray-50 dark:bg-gray-950 flex flex-col">
-        <SkipLink />
-        <PageHeader title={title} backTo={backTo} actions={actions} />
-        {content}
-        <MobileBottomNav />
-      </div>
-    );
-  }
-
+  // Keep the content in the same React tree while auth resolves. Reparenting
+  // it here remounts forms and can discard an edit or an in-flight save.
   return (
     <div className="min-h-screen bg-gray-50 dark:bg-gray-950 md:flex">
       <SkipLink />
-      <CommandPalette role={user.role as Role} />
-      <Sidebar
+      {user && <CommandPalette role={user.role as Role} />}
+      {user && <Sidebar
         user={user}
         taskSummary={taskSummary}
         inboxSummary={inboxSummary}
         onLogout={handleLogout}
         onFeedback={openFeedback}
-      />
+      />}
       <div className="flex-1 min-w-0 flex flex-col">
         <PageHeader title={title} backTo={backTo} actions={actions} />
         {content}
       </div>
       <MobileBottomNav
-        user={user}
+        user={user ?? undefined}
         taskSummary={taskSummary}
         inboxSummary={inboxSummary}
       />

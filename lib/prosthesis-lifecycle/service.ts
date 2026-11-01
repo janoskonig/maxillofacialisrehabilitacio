@@ -4,7 +4,11 @@ import { getDbPool } from '@/lib/db';
 import { HttpError } from '@/lib/auth-server';
 import { addDays, budapestToday, observationEnd } from '@/lib/aftercare/model';
 import { createEpisodeVisit } from '@/lib/episode-visits';
-import { canonical, clinicalCommandSchema, emptyLayers, projectClinicalPlan, replayStates, type ClinicalCommand, type StateEvidence } from './model';
+import { canonical, clinicalCommandSchema, emptyLayers, replayStates, type ClinicalCommand } from './model';
+
+import { baselineAt, loadClinicalStates } from './states';
+import { EPISODE_PLAN_SELECT, episodePlanFromRow, persistEpisodeTreatmentPlan } from './plans';
+export { loadClinicalStates } from './states';
 
 type Db = Pick<PoolClient,'query'>;
 const fail = (message:string, status=409):never => { throw new HttpError(status,message); };
@@ -38,20 +42,6 @@ async function clinicalWork(db:Db,patientId:string,id:string) {
 async function state(db:Db, patientId:string, id:string) {
   return one(db,`SELECT s.*,e.occurred_on::text,e.occurred_at,e.recorded_at FROM clinical_dental_states s
     JOIN prosthesis_active_events e ON e.id=s.event_id WHERE s.patient_id=$1 AND s.id=$2`,[patientId,id]);
-}
-export async function loadClinicalStates(db:Db, patientId:string):Promise<StateEvidence[]> {
-  const r = await db.query(`SELECT s.*,e.occurred_on::text,e.occurred_at::text,e.recorded_at::text,e.source,e.note,e.supersedes_id,e.recorded_by,u.email AS recorder
-    FROM clinical_dental_states s JOIN prosthesis_active_events e ON e.id=s.event_id
-    JOIN users u ON u.id=e.recorded_by
-    WHERE s.patient_id=$1 ORDER BY e.occurred_on,e.occurred_at NULLS FIRST,e.recorded_at,e.id`,[patientId]);
-  return r.rows;
-}
-async function baselineAt(db:Db, patientId:string, id:string, day:string) {
-  const s = await state(db,patientId,id);
-  if (s.occurred_on > day) fail('A kiindulási státusz későbbi, mint az ellátás');
-  const replay = replayStates(await loadClinicalStates(db,patientId),id);
-  if (replay.conflicts.length) fail('A kiindulási státusz idővonalán felülvizsgálandó eltérés van');
-  return replay.layers;
 }
 async function append(db:Db, patientId:string, actor:string, c:ClinicalCommand, kind:string,
   context:{ episodeId?:string|null; prosthesisId?:string|null; entityId?:string; extra?:Record<string,unknown> } = {}) {
@@ -209,26 +199,7 @@ async function perform(db:PoolClient, patientId:string, actor:string, c:Clinical
       await db.query(`INSERT INTO clinical_dental_states(id,patient_id,event_id,mode,layers,expected_before,legacy_snapshot_id) VALUES($1,$2,$3,$4,$5,$6,$7)`,[id,patientId,ev.eventId,c.mode,JSON.stringify(c.layers),c.expectedBefore?JSON.stringify(c.expectedBefore):null,c.legacySnapshotId??null]);
       return ev;
     }
-    case 'plan': {
-      await episode(db,patientId,c.episodeId);
-      const baseline=await baselineAt(db,patientId,c.baselineStateId,c.occurredOn);
-      if(c.prosthesisIds.length!==1)fail('Egy epizód tervéhez egy fogpótlás tartozhat');
-      const devices=[];
-      for (const id of c.prosthesisIds) {
-        const p=await device(db,patientId,id);
-        const link=await db.query('SELECT 1 FROM prosthesis_episode_links WHERE episode_id=$1 AND prosthesis_id=$2',[c.episodeId,id]);
-        if (!link.rows.length) fail('A terv az epizód saját fogpótlásához tartozzon');
-        devices.push(p);
-      }
-      const phases=await db.query(`SELECT w.*,COALESCE((SELECT jsonb_agg(prosthesis_id) FROM work_phase_prostheses WHERE work_phase_id=w.id),'[]') AS prosthesis_ids
-        FROM episode_work_phases w WHERE w.episode_id=$1 ORDER BY COALESCE(w.seq,w.pathway_order_index),w.id`,[c.episodeId]);
-      const version=await db.query('SELECT COALESCE(MAX(version),0)+1 AS v FROM prosthesis_plan_versions WHERE episode_id=$1',[c.episodeId]);
-      const id=randomUUID(), content={description:c.description,treatments:c.treatments,devices,workPhases:phases.rows,baseline,
-        target:projectClinicalPlan(baseline,c.treatments,devices)};
-      const ev=await append(db,patientId,actor,c,c.approved?'plan_approved':'plan_draft',{episodeId:c.episodeId,entityId:id});
-      await db.query(`INSERT INTO prosthesis_plan_versions(id,patient_id,episode_id,baseline_state_id,version,event_id,content,approved) VALUES($1,$2,$3,$4,$5,$6,$7,$8)`,[id,patientId,c.episodeId,c.baselineStateId,version.rows[0].v,ev.eventId,JSON.stringify(content),c.approved]);
-      return ev;
-    }
+    case 'plan': return persistEpisodeTreatmentPlan(db,patientId,actor,c);
     case 'visit': {
       if (c.appointmentId) {
         const a=await one(db,`SELECT a.*,COALESCE(a.start_time,s.start_time)::timestamptz AS clinical_start FROM appointments a
@@ -421,13 +392,14 @@ async function saveRepairWork(db:PoolClient,patientId:string,actor:string,c:Extr
 export async function loadClinicalWorkspace(patientId:string) {
   const db=getDbPool();
   const p=await one(db,'SELECT nev FROM patients WHERE id=$1',[patientId]);
-  const [episodes,prostheses,events,goals,plans,repairs,work,tasks,states,packages,legacy,documents,pathways,appointments,closures,legacyEncounters,repairWork,episodeLinks]=await Promise.all([
+  const [episodes,prostheses,events,goals,plans,repairs,work,tasks,states,packages,legacy,documents,pathways,appointments,closures,legacyEncounters,repairWork,episodeLinks,episodePlans]=await Promise.all([
     db.query('SELECT id,case_title,reason,status,opened_at,closed_at,parent_episode_id FROM patient_episodes WHERE patient_id=$1 ORDER BY opened_at DESC',[patientId]),
     db.query('SELECT *,delivery_date::text FROM prostheses WHERE patient_id=$1 ORDER BY created_at,id',[patientId]),
     db.query(`SELECT e.*,e.occurred_on::text,u.email AS recorder,NOT EXISTS(SELECT 1 FROM prosthesis_clinical_events n WHERE n.supersedes_id=e.id) AS active
       FROM prosthesis_clinical_events e JOIN users u ON u.id=e.recorded_by WHERE e.patient_id=$1 ORDER BY e.occurred_on,e.occurred_at NULLS FIRST,e.recorded_at,e.id`,[patientId]),
     db.query('SELECT * FROM episode_prosthesis_goals WHERE patient_id=$1',[patientId]),
-    db.query('SELECT * FROM prosthesis_plan_versions WHERE patient_id=$1 ORDER BY version DESC',[patientId]),
+    db.query(`SELECT p.*,e.occurred_on::text,e.recorded_at FROM prosthesis_plan_versions p JOIN prosthesis_active_events e ON e.id=p.event_id
+      WHERE p.patient_id=$1 ORDER BY e.recorded_at DESC,p.version DESC`,[patientId]),
     db.query('SELECT * FROM prosthesis_repair_cases WHERE patient_id=$1',[patientId]),
     db.query(`SELECT w.*,COALESCE((SELECT jsonb_agg(prosthesis_id) FROM work_phase_prostheses WHERE work_phase_id=w.id),'[]') AS prosthesis_ids,
       COALESCE((SELECT jsonb_agg(requires_phase_id) FROM clinical_work_dependencies WHERE work_phase_id=w.id),'[]') AS requires_phase_ids
@@ -450,13 +422,14 @@ export async function loadClinicalWorkspace(patientId:string) {
     db.query(`SELECT w.*,w.label AS custom_label,'repair' AS work_phase_code,'prosthesis' AS clinical_scope,r.episode_id,
       jsonb_build_array(r.prosthesis_id) AS prosthesis_ids FROM prosthesis_repair_work_phases w JOIN prosthesis_repair_cases r ON r.id=w.repair_case_id WHERE w.patient_id=$1`,[patientId]),
     db.query('SELECT l.* FROM prosthesis_episode_links l JOIN patient_episodes e ON e.id=l.episode_id WHERE e.patient_id=$1',[patientId]),
+    db.query(`${EPISODE_PLAN_SELECT} WHERE pe.patient_id=$1 ORDER BY pe.opened_at DESC,pe.id`,[patientId]),
   ]);
   const replay=replayStates(states);
   const activeEvents=events.rows.filter(e=>e.active);
   const closureReview=closures.rows.filter(c=>(c.acceptance_events as Array<{acceptance_id:string}>).some(a=>!activeEvents.some(e=>e.id===a.acceptance_id))).map(c=>c.episode_id);
   return { patientName:p.nev,episodes:episodes.rows,prostheses:prostheses.rows,events:events.rows,goals:goals.rows,plans:plans.rows,repairs:repairs.rows,
     work:[...work.rows,...repairWork.rows],tasks:tasks.rows,states,actual:replay.layers,conflicts:replay.conflicts,milestones:replay.milestones,
-    packages:packages.rows,episodeLinks:episodeLinks.rows,legacyStates:legacy.rows,legacyEncounters:legacyEncounters.rows,documents:documents.rows,pathways:pathways.rows,appointments:appointments.rows,closureReview };
+    packages:packages.rows,episodeLinks:episodeLinks.rows,episodePlans:episodePlans.rows.map(episodePlanFromRow),legacyStates:legacy.rows,legacyEncounters:legacyEncounters.rows,documents:documents.rows,pathways:pathways.rows,appointments:appointments.rows,closureReview };
 }
 export type ClinicalWorkspace = Awaited<ReturnType<typeof loadClinicalWorkspace>>;
 

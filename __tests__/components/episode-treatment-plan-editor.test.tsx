@@ -3,11 +3,11 @@ import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/re
 import { EpisodeTreatmentPlanEditor, EpisodeTreatmentPlanDisclosure } from '@/components/EpisodeTreatmentPlanEditor';
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 const saved = { episodeId: 'ep1', treatmentPlan: null as string | null, treatmentPlanUpper: 'Eredeti terv', treatmentPlanLower: 'Alsó terv', version: 3 };
-const response = (plan = saved, status = 200, code?: string) => new Response(JSON.stringify({ plan, code }), { status, headers: { 'Content-Type': 'application/json' } });
+const response = (plan:any = saved, status = 200, code?: string) => new Response(JSON.stringify({ plan, code }), { status, headers: { 'Content-Type': 'application/json' } });
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
 async function mount(canEdit = true) {
   render(<EpisodeTreatmentPlanEditor episodeId="ep1" canEdit={canEdit} />);
-  await screen.findByText(canEdit ? 'Mentett kezelési tervek' : 'Eredeti terv');
+  await screen.findByText(canEdit ? 'Mentett kezelési terv' : 'Eredeti terv');
 }
 describe('Episode treatment plan editor', () => {
   it('loads and explicitly saves the ep-specific draft with its version', async () => {
@@ -16,17 +16,17 @@ describe('Episode treatment plan editor', () => {
     await mount();
     fireEvent.change(screen.getByLabelText('Felső állcsont kezelési terve'), { target: { value: 'Új terv' } });
     expect(screen.getByText('Nem mentett módosítások')).toBeTruthy();
-    fireEvent.click(screen.getByRole('button', { name: 'Kezelési tervek mentése' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kezelési terv mentése' }));
     await waitFor(() => expect(fetch).toHaveBeenCalledTimes(2));
     expect(fetch.mock.calls[1][0]).toBe('/api/episodes/ep1/treatment-plan');
-    expect(JSON.parse(fetch.mock.calls[1][1].body)).toEqual({ treatmentPlanUpper: 'Új terv', treatmentPlanLower: 'Alsó terv', expectedVersion: 3 });
-    await screen.findByText('Mentett kezelési tervek');
+    expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject({ treatmentPlanUpper: 'Új terv', treatmentPlanLower: 'Alsó terv', expectedVersion: 3,clinical:{baselineStateId:null,treatments:[],approved:false,source:'Klinikai dokumentáció'} });
+    await screen.findByText('Mentett kezelési terv');
   });
   it('preserves a failed draft for retry', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response()).mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Mentési hiba' }), { status: 500 })));
     await mount();
     fireEvent.change(screen.getByLabelText('Felső állcsont kezelési terve'), { target: { value: 'Saját terv' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Kezelési tervek mentése' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kezelési terv mentése' }));
     expect(await screen.findByRole('alert')).toBeTruthy();
     expect((screen.getByLabelText('Felső állcsont kezelési terve') as HTMLTextAreaElement).value).toBe('Saját terv');
   });
@@ -36,7 +36,7 @@ describe('Episode treatment plan editor', () => {
     await mount();
     const input = screen.getByLabelText('Felső állcsont kezelési terve') as HTMLTextAreaElement;
     fireEvent.change(input, { target: { value: 'Saját terv' } });
-    fireEvent.click(screen.getByRole('button', { name: 'Kezelési tervek mentése' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Kezelési terv mentése' }));
     await screen.findByText('Másik orvos terve');
     expect(input.value).toBe('Saját terv');
     fireEvent.change(input, { target: { value: 'Áttekintett közös terv' } });
@@ -48,7 +48,7 @@ describe('Episode treatment plan editor', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response()));
     await mount(false);
     expect(screen.queryByRole('textbox')).toBeNull();
-    expect(screen.queryByText('Kezelési tervek mentése')).toBeNull();
+    expect(screen.queryByText('Kezelési terv mentése')).toBeNull();
   });
   it('loads a previous episode plan only when requested', async () => {
     const fetch = vi.fn().mockResolvedValue(response());
@@ -62,7 +62,7 @@ describe('Episode treatment plan editor', () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValue(response()));
     const onStateChange = vi.fn();
     render(<EpisodeTreatmentPlanEditor episodeId="ep1" canEdit onStateChange={onStateChange} />);
-    await screen.findByText('Mentett kezelési tervek');
+    await screen.findByText('Mentett kezelési terv');
     fireEvent.change(screen.getByLabelText('Felső állcsont kezelési terve'), { target: { value: 'Módosított terv' } });
     await waitFor(() => expect(onStateChange).toHaveBeenLastCalledWith({ dirty: true, saving: false }));
     fireEvent.click(screen.getByRole('button', { name: 'Módosítások elvetése' }));
@@ -81,6 +81,32 @@ describe('Episode treatment plan editor', () => {
     fireEvent.click(screen.getByRole('button', { name: 'Hozzáadás az alsó tervhez' }));
     expect(lower.value).toBe('Új alsó terv\n\nRégi közös szöveg');
     expect(upper.value).toBe('');
+  });
+  it('edits only the appliance jaw and sends clinical details and approval with the same text save',async()=>{
+    const plan={...saved,jaw:'also',prosthesisId:'device1',prosthesisLabel:'Alsó végleges',states:[{id:'baseline1',occurred_on:'2026-01-01',source:'Vizsgálat'}],clinicalPlan:{id:'plan1',version:3,baselineStateId:null,treatments:[],approved:false}};
+    const fetch=vi.fn().mockResolvedValue(response(plan));vi.stubGlobal('fetch',fetch);
+    await mount();
+    expect(screen.queryByLabelText('Felső állcsont kezelési terve')).toBeNull();
+    fireEvent.change(screen.getByLabelText('Alsó állcsont kezelési terve'),{target:{value:'Új alsó közös terv'}});
+    fireEvent.change(screen.getByLabelText('Ellátás előtti dokumentált státusz'),{target:{value:'baseline1'}});
+    fireEvent.click(screen.getByRole('button',{name:'Beavatkozás hozzáadása'}));
+    expect((screen.getByLabelText('1. beavatkozás fogszáma') as HTMLInputElement).value).toBe('31');
+    fireEvent.click(screen.getByLabelText('Ezt a tervváltozatot jóváhagyom'));
+    fireEvent.click(screen.getByRole('button',{name:'Kezelési terv mentése'}));
+    await waitFor(()=>expect(fetch).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject({expectedVersion:3,treatmentPlanUpper:'Eredeti terv',treatmentPlanLower:'Új alsó közös terv',clinical:{baselineStateId:'baseline1',approved:true,treatments:[{toothNumber:31,treatmentCode:'huzas'}]}});
+  });
+  it('requires explicit approval of a changed version and reuses the save key on a transport retry',async()=>{
+    const plan={...saved,prosthesisId:'p',clinicalPlan:{id:'plan',version:3,baselineStateId:'b',treatments:[],approved:true}};
+    const fetch=vi.fn().mockResolvedValueOnce(response(plan)).mockRejectedValueOnce(new Error('Kapcsolati hiba')).mockResolvedValue(response(plan));vi.stubGlobal('fetch',fetch);
+    await mount();expect((screen.getByLabelText('Ezt a tervváltozatot jóváhagyom') as HTMLInputElement).checked).toBe(false);
+    fireEvent.change(screen.getByLabelText('Felső állcsont kezelési terve'),{target:{value:'Módosítás'}});
+    fireEvent.click(screen.getByRole('button',{name:'Kezelési terv mentése'}));
+    await screen.findByRole('alert');
+    fireEvent.click(screen.getByRole('button',{name:'Kezelési terv mentése'}));
+    await waitFor(()=>expect(fetch).toHaveBeenCalledTimes(3));
+    const first=JSON.parse(fetch.mock.calls[1][1].body),retry=JSON.parse(fetch.mock.calls[2][1].body);
+    expect(first.clinical.approved).toBe(false);expect(retry).toEqual(first);
   });
 
 });

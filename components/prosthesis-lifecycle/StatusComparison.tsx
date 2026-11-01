@@ -27,14 +27,14 @@ export function StatusComparison({data}:{data:ClinicalWorkspace}) {
         <option value="before_plan">Előtte ↔ tervezett utána</option><option value="before_actual">Előtte ↔ tényleges utána</option><option value="plan_actual">Terv ↔ megvalósult</option>
       </select></label>
       <label className="min-w-0 max-w-full text-sm">Tervverzió<select className="block max-w-full rounded border p-2 dark:bg-gray-900" value={plan?.id??''} onChange={e=>setPlanId(e.target.value)}>
-        {!data.plans.length&&<option value="">Nincs dokumentált terv</option>}{data.plans.map(p=><option key={p.id} value={p.id}>{p.version}. változat · {p.content.description.slice(0,50)} {p.approved?'(jóváhagyott)':'(tervezet)'}</option>)}
+        {!data.plans.length&&<option value="">Nincs dokumentált terv</option>}{data.plans.map(p=><option key={p.id} value={p.id}>{p.version}. változat · {p.content.description.slice(0,50)} {p.approved?'(jóváhagyott)':p.baseline_state_id?'(tervezet)':'(szöveges tervezet, nincs kiindulási státusz)'}</option>)}
       </select></label>
       <label className="min-w-0 max-w-full text-sm">Tényleges köztes állapot<select className="block max-w-full rounded border p-2 dark:bg-gray-900" value={stateId} onChange={e=>setStateId(e.target.value)}>
         <option value="">Legutóbbi dokumentált állapot</option>{data.milestones.map(m=><option key={m.state.id} value={m.state.id}>{m.state.occurred_on} · {m.state.note||m.state.source}</option>)}
       </select></label>
     </div>
     <p className="text-sm text-gray-600 dark:text-gray-300">A sárga jelölés eltérést mutat. A kérdőjel hiányzó adatot jelent. Kattintson egy fogpozícióra a rétegek és a forrás megtekintéséhez.</p>
-    {(!plan || !data.states.length)&&<p className="text-amber-700">Az összehasonlítás hiányos: rögzített kiindulási státusz, terv és tényleges vizsgálat szükséges.</p>}
+    {(!plan?.content.baseline || !data.states.length)&&<p className="text-amber-700">Az összehasonlítás hiányos: rögzített kiindulási státusz, terv és tényleges vizsgálat szükséges. A tervet a Kezelés fülön egészítheti ki.</p>}
     <div className="overflow-x-auto"><div className="grid grid-cols-2 gap-5 min-w-[1120px]">
       {[{title:mode==='plan_actual'?'Tervezett':'Kiindulási',layers:left},{title:mode==='before_plan'?'Tervezett':'Tényleges',layers:right}].map((side,i)=><div key={i}>
         <h3 className="font-medium mb-3">{side.title}</h3>
