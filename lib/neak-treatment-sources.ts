@@ -1,5 +1,6 @@
 import type { Pool } from 'pg';
 import type { NeakTreatmentSources } from '@/lib/neak-treatment-content';
+import { EPISODE_PLAN_SELECT, episodePlanFromRow } from '@/lib/prosthesis-lifecycle/plans';
 
 export async function loadNeakTreatmentSources(pool: Pick<Pool, 'query'>, patientId: string): Promise<NeakTreatmentSources> {
   const types = await pool.query('SELECT code, label_hu AS label FROM treatment_types');
@@ -14,7 +15,8 @@ export async function loadNeakTreatmentSources(pool: Pick<Pool, 'query'>, patien
     EXISTS (SELECT 1 FROM information_schema.columns
       WHERE table_schema = 'public' AND table_name = 'patient_episodes' AND column_name = 'treatment_plan') AS "hasEpisodeTreatmentPlan",
     (SELECT COUNT(*) = 2 FROM information_schema.columns
-      WHERE table_schema = 'public' AND table_name = 'patient_episodes' AND column_name IN ('treatment_plan_upper', 'treatment_plan_lower')) AS "hasJawTreatmentPlans"`);
+      WHERE table_schema = 'public' AND table_name = 'patient_episodes' AND column_name IN ('treatment_plan_upper', 'treatment_plan_lower')) AS "hasJawTreatmentPlans",
+    EXISTS (SELECT 1 FROM information_schema.columns WHERE table_schema='public' AND table_name='prosthesis_plan_versions' AND column_name='episode_plan_version') AS "hasUnifiedPlans"`);
   const availability = schema.rows[0];
   if (availability?.hasToothTreatments && availability?.hasToothCatalog) {
     const result = await pool.query(
@@ -31,7 +33,9 @@ export async function loadNeakTreatmentSources(pool: Pick<Pool, 'query'>, patien
   }
   if (availability?.hasEpisodes) {
     const result = await pool.query(
-      `SELECT pe.id, pe.case_title AS "caseTitle", pe.chief_complaint AS "chiefComplaint", pe.status,
+      availability.hasUnifiedPlans ? `${EPISODE_PLAN_SELECT}
+       WHERE pe.patient_id=$1 AND (pe.status IN ('open','paused') OR v.id IS NOT NULL)
+       ORDER BY pe.opened_at DESC,pe.id` : `SELECT pe.id, pe.case_title AS "caseTitle", pe.chief_complaint AS "chiefComplaint", pe.status,
               ${availability.hasEpisodeTreatmentPlan ? 'pe.treatment_plan' : 'NULL::text'} AS "treatmentPlan",
               ${availability.hasJawTreatmentPlans ? 'pe.treatment_plan_upper' : 'NULL::text'} AS "treatmentPlanUpper",
               ${availability.hasJawTreatmentPlans ? 'pe.treatment_plan_lower' : 'NULL::text'} AS "treatmentPlanLower",
@@ -41,7 +45,12 @@ export async function loadNeakTreatmentSources(pool: Pick<Pool, 'query'>, patien
        WHERE pe.patient_id = $1 AND pe.status IN ('open', 'paused')
        ORDER BY pe.opened_at DESC, pe.id`, [patientId]
     );
-    sources.episodes = result.rows;
+    sources.episodes = availability.hasUnifiedPlans ? result.rows.map(row=>{
+      const plan=episodePlanFromRow(row);
+      if(plan.legacyClinicalDescription)sources.warnings.push(`${row.caseTitle||'Ellátási epizód'}: a korábbi külön klinikai terv eltér a szöveges tervtől; a Kezelés fülön összevezetést igényel.`);
+      return {...row,...plan,id:row.episodeId??row.id,planVersionId:plan.legacyClinicalDescription?undefined:plan.clinicalPlan?.id,planVersion:plan.clinicalPlan?.version,
+        planApproved:plan.clinicalPlan?.approved,planDate:plan.clinicalPlan?.occurredOn,plannedTreatments:plan.clinicalPlan?.treatments};
+    }) : result.rows;
     if (!availability.hasEpisodeTreatmentPlan || !availability.hasJawTreatmentPlans) {
       sources.warnings.push('Az epizódonkénti kezelési terv mezőjéhez az adatbázis frissítése szükséges.');
     }

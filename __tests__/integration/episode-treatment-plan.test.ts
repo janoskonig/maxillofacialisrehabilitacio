@@ -5,13 +5,20 @@ import { loadNeakTreatmentSources } from '@/lib/neak-treatment-sources';
 import { buildTreatmentExportContent } from '@/lib/neak-treatment-content';
 import { cleanupCreated, createTestEpisode, createTestPatient, createTestUser } from './helpers/factories';
 import { authedRequest, type TestAuthUser } from './helpers/auth';
-afterEach(cleanupCreated);
+const episodeIds:string[]=[];
+afterEach(async()=>{
+  await getDbPool().query('DELETE FROM prosthesis_plan_versions WHERE episode_id=ANY($1::uuid[])',[episodeIds]);
+  await getDbPool().query("DELETE FROM prosthesis_clinical_events WHERE episode_id=ANY($1::uuid[]) AND kind IN ('plan_draft','plan_approved')",[episodeIds]);
+  episodeIds.length=0;
+  await cleanupCreated();
+});
 
 async function fixture() {
   const u = await createTestUser(undefined, { role: 'admin' });
   const patient = await createTestPatient();
   const a = await createTestEpisode(undefined, patient.id);
   const b = await createTestEpisode(undefined, patient.id);
+  episodeIds.push(a.id,b.id);
   return { user: { id: u.id, email: u.email, role: 'admin' } as TestAuthUser, patient, a, b };
 }
 async function save(id: string, user: TestAuthUser, treatmentPlan: string | null, expectedVersion: number) {

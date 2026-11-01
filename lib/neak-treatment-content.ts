@@ -1,4 +1,4 @@
-import { getUnassignedLegacyPlan } from '@/lib/episode-treatment-plan';
+import { getUnassignedLegacyPlan, PLAN_TREATMENT_LABELS } from '@/lib/episode-treatment-plan';
 import type { Patient } from '@/lib/types';
 
 export interface NeakToothTreatment {
@@ -20,6 +20,12 @@ export interface NeakEpisodeTreatment {
   treatmentPlan?: string | null;
   treatmentPlanUpper?: string | null;
   treatmentPlanLower?: string | null;
+  jaw?:'felso'|'also'|null;
+  planVersionId?:string;
+  planVersion?:number;
+  planApproved?:boolean;
+  planDate?:string;
+  plannedTreatments?:Array<{toothNumber:number;treatmentCode:string}>;
 }
 
 export interface NeakTreatmentSources {
@@ -47,10 +53,12 @@ function formatDate(value?: Date | string | null): string {
 export function buildTreatmentExportContent(patient: Partial<Patient>, sources: NeakTreatmentSources) {
   const sections: NeakTreatmentSection[] = [];
   const add = (title: string, lines: string[]) => { if (lines.length) sections.push({ title, lines }); };
-  for (const ep of sources.episodes.filter((episode) => episode.status !== 'closed')) {
+  for (const ep of sources.episodes.filter((episode) => episode.status !== 'closed'||episode.planVersionId)) {
     const title = ep.caseTitle?.trim() || ep.chiefComplaint?.trim() || 'Ellátási epizód';
-    add(`${title} - felső állcsont kezelési terve`, [ep.treatmentPlanUpper?.trim() || 'Nincs rögzített felső kezelési terv.']);
-    add(`${title} - alsó állcsont kezelési terve`, [ep.treatmentPlanLower?.trim() || 'Nincs rögzített alsó kezelési terv.']);
+    if(ep.jaw!=='also')add(`${title} - felső állcsont kezelési terve`, [ep.treatmentPlanUpper?.trim() || 'Nincs rögzített felső kezelési terv.']);
+    if(ep.jaw!=='felso')add(`${title} - alsó állcsont kezelési terve`, [ep.treatmentPlanLower?.trim() || 'Nincs rögzített alsó kezelési terv.']);
+    if(ep.planVersionId)add(`${title} - tervváltozat`,[`${ep.planVersion}. változat; ${ep.planApproved?'jóváhagyott':'tervezet'}${ep.planDate?`; terv dátuma: ${formatDate(ep.planDate)}`:''}; azonosító: ${ep.planVersionId}`]);
+    add(`${title} - tervezett beavatkozások sorrendben`,(ep.plannedTreatments??[]).map((t,i)=>`${i+1}. ${t.toothNumber}. fog: ${PLAN_TREATMENT_LABELS[t.treatmentCode]??t.treatmentCode}`));
     const legacy = getUnassignedLegacyPlan(ep);
     if (legacy) add(`${title} - korábbi, állcsontmegjelölés nélküli terv`, [legacy]);
   }

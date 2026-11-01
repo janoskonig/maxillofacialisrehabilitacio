@@ -5,12 +5,13 @@ import { probeColumnExists } from '@/lib/schema-probe';
 import { isValidUUID } from '@/lib/validation';
 import { logActivity } from '@/lib/activity';
 import { parseEpisodeTreatmentPlanUpdate } from '@/lib/episode-treatment-plan';
+import { randomUUID } from 'crypto';
+import { budapestToday } from '@/lib/aftercare/model';
+import { clinicalCommandSchema } from '@/lib/prosthesis-lifecycle/model';
+import { executeClinicalCommand } from '@/lib/prosthesis-lifecycle/service';
+import { loadEpisodeTreatmentPlan, TreatmentPlanConflict } from '@/lib/prosthesis-lifecycle/plans';
 
 export const dynamic = 'force-dynamic';
-
-const SELECT_PLAN = `SELECT id AS "episodeId", treatment_plan AS "treatmentPlan",
-  treatment_plan_upper AS "treatmentPlanUpper", treatment_plan_lower AS "treatmentPlanLower",
-  treatment_plan_version AS version FROM patient_episodes WHERE id = $1`;
 
 async function checkSchema() {
   const pool = getDbPool();
@@ -19,6 +20,7 @@ async function checkSchema() {
     probeColumnExists(pool, 'patient_episodes', 'treatment_plan_version'),
     probeColumnExists(pool, 'patient_episodes', 'treatment_plan_upper'),
     probeColumnExists(pool, 'patient_episodes', 'treatment_plan_lower'),
+    probeColumnExists(pool, 'prosthesis_plan_versions', 'episode_plan_version'),
   ]);
   return available.every(Boolean);
 }
@@ -30,9 +32,9 @@ function unavailable() {
 export const GET = authedHandler(async (_req, { params }) => {
   if (!isValidUUID(params.id)) return NextResponse.json({ error: 'Érvénytelen epizódazonosító.' }, { status: 400 });
   if (!await checkSchema()) return unavailable();
-  const result = await getDbPool().query(SELECT_PLAN, [params.id]);
-  if (!result.rows.length) return NextResponse.json({ error: 'Epizód nem található.' }, { status: 404 });
-  return NextResponse.json({ plan: result.rows[0] }, { headers: { 'Cache-Control': 'private, no-store' } });
+  const plan = await loadEpisodeTreatmentPlan(getDbPool(), params.id, true);
+  if (!plan) return NextResponse.json({ error: 'Epizód nem található.' }, { status: 404 });
+  return NextResponse.json({ plan }, { headers: { 'Cache-Control': 'private, no-store' } });
 });
 
 // Saving a clinical description never regenerates steps, bookings or scheduling intents.
@@ -42,29 +44,25 @@ export const PATCH = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'
   if ('error' in update) return NextResponse.json({ error: update.error }, { status: 400 });
   if (!await checkSchema()) return unavailable();
   const pool = getDbPool();
-  const isJawUpdate = update.mode === 'jaws';
-  const setPlan = isJawUpdate ? 'treatment_plan_upper = $2, treatment_plan_lower = $3' : 'treatment_plan = $2';
-  const versionIndex = isJawUpdate ? 4 : 3;
-  const values = update.mode === 'jaws'
-    ? [params.id, update.treatmentPlanUpper, update.treatmentPlanLower, update.expectedVersion]
-    : [params.id, update.treatmentPlan, update.expectedVersion];
-  const result = await pool.query(
-    `UPDATE patient_episodes
-       SET ${setPlan}, treatment_plan_version = treatment_plan_version + 1
-     WHERE id = $1 AND treatment_plan_version = $${versionIndex}
-     RETURNING id AS "episodeId", treatment_plan AS "treatmentPlan",
-       treatment_plan_upper AS "treatmentPlanUpper", treatment_plan_lower AS "treatmentPlanLower", treatment_plan_version AS version`,
-    values
-  );
-  if (!result.rows.length) {
-    const current = await pool.query(SELECT_PLAN, [params.id]);
-    if (!current.rows.length) return NextResponse.json({ error: 'Epizód nem található.' }, { status: 404 });
-    return NextResponse.json({
-      error: 'A kezelési tervet közben más módosította. Tekintse át a friss változatot.',
-      code: 'TREATMENT_PLAN_CONFLICT', plan: current.rows[0],
-    }, { status: 409 });
+  const current=await loadEpisodeTreatmentPlan(pool,params.id);
+  if(!current)return NextResponse.json({error:'Epizód nem található.'},{status:404});
+  const clinical=update.clinical;
+  const command=clinicalCommandSchema.parse({action:'plan',episodeId:params.id,
+    requestKey:clinical?.requestKey??randomUUID(),occurredOn:clinical?.occurredOn??budapestToday(),
+    source:clinical?.source??'Kezelés fül – kezelési terv',approved:clinical?.approved??false,
+    expectedVersion:update.expectedVersion,
+    ...(clinical?{baselineStateId:clinical.baselineStateId,treatments:clinical.treatments}:{}),
+    narratives:update.mode==='jaws'?{treatmentPlanUpper:update.treatmentPlanUpper,treatmentPlanLower:update.treatmentPlanLower}:{treatmentPlan:update.treatmentPlan},
+  });
+  try {
+    await executeClinicalCommand(current.patientId!,auth.userId,command);
+  } catch(error) {
+    if(error instanceof TreatmentPlanConflict){
+      return NextResponse.json({error:error.message,code:'TREATMENT_PLAN_CONFLICT',plan:await loadEpisodeTreatmentPlan(pool,params.id,true)},{status:409});
+    }
+    throw error;
   }
-  const plan = result.rows[0];
+  const plan=(await loadEpisodeTreatmentPlan(pool,params.id,true))!;
   await logActivity(req, auth.email, 'episode_treatment_plan_updated', JSON.stringify({ episodeId: params.id, version: plan.version }), { skipAdminNotificationQueue: true });
   return NextResponse.json({ plan }, { headers: { 'Cache-Control': 'private, no-store' } });
 });

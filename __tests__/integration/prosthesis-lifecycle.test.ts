@@ -6,6 +6,10 @@ import { executeClinicalCommand,loadClinicalWorkspace } from '@/lib/prosthesis-l
 import { createClinicalPackage,packageSchema } from '@/lib/prosthesis-lifecycle/packages';
 import { createOpenEpisodeWithInitialStageZero } from '@/lib/patient-episode-create';
 import { createTestEpisode,createTestPatient,createTestUser,createTestSlot,createTestAppointment,cleanupCreated } from './helpers/factories';
+import { PATCH as savePlanRoute,GET as getPlanRoute } from '@/app/api/episodes/[id]/treatment-plan/route';
+import { authedRequest } from './helpers/auth';
+import { loadNeakTreatmentSources } from '@/lib/neak-treatment-sources';
+import { buildTreatmentExportContent } from '@/lib/neak-treatment-content';
 const patientIds:string[]=[];
 afterEach(async()=>{
   const db=getDbPool();
@@ -37,6 +41,11 @@ async function setup(){
   const baseline=()=>run({action:'status',episodeId:episode.id,mode:'assessment',layers:{...emptyLayers(),teeth:{'11':{base:'missing'},'31':{base:'missing'}}}});
   const milestone=(id:string,milestone:string,occurredOn='2026-02-01')=>run({action:'milestone',prosthesisId:id,milestone,occurredOn});
   return {doctor,patient,episode,run,register,baseline,milestone,load:()=>loadClinicalWorkspace(patient.id)};
+}
+async function editorSave(s:Awaited<ReturnType<typeof setup>>,episodeId:string,body:unknown){
+  return savePlanRoute(await authedRequest(`http://test.local/api/episodes/${episodeId}/treatment-plan`,{
+    user:{id:s.doctor.id,email:s.doctor.email,role:'fogpótlástanász'},method:'PATCH',body,
+  }),{params:{id:episodeId}});
 }
 describe('prosthesis lifecycle with clinical dates',()=>{
   it('does not close existing appliance episodes when another episode starts and forbids a second appliance in one episode',async()=>{
@@ -149,12 +158,67 @@ describe('prosthesis lifecycle with clinical dates',()=>{
     const input=packageSchema.parse({requestKey:crypto.randomUUID(),episodeId:p.episodeId,planVersionId:plan.id,statusStateId:baseline.id,prosthesisIds:[p.id]});
     const issued=await createClinicalPackage(s.patient.id,s.doctor.id,input);
     const before=await getDbPool().query('SELECT archive,sha256 FROM clinical_document_packages WHERE id=$1',[issued.id]);
-    await s.run({action:'plan',episodeId:p.episodeId,baselineStateId:baseline.id,description:'Módosított terv',approved:true,prosthesisIds:[p.id],treatments:[]});
+    const edited=await editorSave(s,p.episodeId,{treatmentPlanUpper:'Módosított terv',treatmentPlanLower:null,expectedVersion:1});
+    expect(edited.status).toBe(200);
+    expect((await edited.json()).plan.clinicalPlan.approved).toBe(false);
     await s.run({action:'status',episodeId:s.episode.id,mode:'assessment',layers:{...emptyLayers(),teeth:{'11':{base:'sound'}}},occurredOn:'2026-01-10'});
     expect(await createClinicalPackage(s.patient.id,s.doctor.id,input)).toEqual(issued);
     const after=await getDbPool().query('SELECT archive,sha256 FROM clinical_document_packages WHERE id=$1',[issued.id]);
     expect(after.rows[0].archive.equals(before.rows[0].archive)).toBe(true);
     expect(createHash('sha256').update(after.rows[0].archive).digest('hex')).toBe(after.rows[0].sha256);
     expect((await s.load()).actual.teeth['11']).toEqual({base:'sound'});
+  });
+});
+
+describe('one shared episode treatment plan',()=>{
+  it('uses the same approved version in the editor, lifecycle, projection and export; retries do not duplicate it',async()=>{
+    const s=await setup(),p=await s.register(),base=await s.baseline();
+    const body={treatmentPlanUpper:'Felső pótlás és a 12-es eltávolítása.',treatmentPlanLower:null,expectedVersion:0,
+      clinical:{baselineStateId:base.id,treatments:[{toothNumber:12,treatmentCode:'huzas'}],approved:true,occurredOn:'2026-01-05',source:'Korabeli kezelési terv',requestKey:crypto.randomUUID()}};
+    const first=await editorSave(s,p.episodeId,body);expect(first.status).toBe(200);
+    const record=(await first.json()).plan;
+    const retry=await editorSave(s,p.episodeId,body);expect(retry.status).toBe(200);
+    expect((await retry.json()).plan.clinicalPlan.id).toBe(record.clinicalPlan.id);
+    const workspace=await s.load();expect(workspace.plans).toHaveLength(1);
+    expect(workspace.plans[0]).toMatchObject({id:record.clinicalPlan.id,version:1,episode_plan_version:1,approved:true,content:{description:body.treatmentPlanUpper,narratives:{treatmentPlanUpper:body.treatmentPlanUpper}}});
+    expect(workspace.plans[0].content.target.teeth['12']).toMatchObject({base:'missing'});
+    expect(workspace.actual.teeth['12']).toBeUndefined();
+    const mirror=(await getDbPool().query('SELECT treatment_plan_upper,treatment_plan_version FROM patient_episodes WHERE id=$1',[p.episodeId])).rows[0];
+    expect(mirror).toEqual({treatment_plan_upper:body.treatmentPlanUpper,treatment_plan_version:1});
+    const sources=await loadNeakTreatmentSources(getDbPool(),s.patient.id);
+    expect(sources.episodes.find(e=>e.id===p.episodeId)).toMatchObject({planVersionId:record.clinicalPlan.id,treatmentPlanUpper:body.treatmentPlanUpper,planApproved:true});
+    const content=buildTreatmentExportContent({},sources);
+    expect(content.sections.flatMap(section=>section.lines).join('\n')).toContain(body.treatmentPlanUpper);
+    expect(content.sections.some(section=>section.title.includes('tervezett beavatkozások')&&section.lines[0].includes('12. fog: Eltávolítás'))).toBe(true);
+    expect(content.sections.some(section=>section.title.startsWith('Felső fogpótlás')&&section.title.includes('alsó állcsont'))).toBe(false);
+  });
+  it('keeps old texts, saves incomplete drafts, rejects the other jaw and does not resurrect cleared mirror text',async()=>{
+    const s=await setup(),p=await s.register();
+    await getDbPool().query("UPDATE patient_episodes SET treatment_plan='Régi közös terv',treatment_plan_upper='Régi felső terv',treatment_plan_lower='Megőrzendő alsó terv' WHERE id=$1",[p.episodeId]);
+    const draft=await editorSave(s,p.episodeId,{treatmentPlanUpper:'Új felső terv',treatmentPlanLower:'Megőrzendő alsó terv',expectedVersion:0});
+    expect(draft.status).toBe(200);expect((await draft.json()).plan.clinicalPlan).toMatchObject({approved:false,baselineStateId:null});
+    let workspace=await s.load();expect(workspace.plans[0].content.target).toBeNull();
+    expect(workspace.plans[0].content.previousNarratives).toEqual({treatmentPlan:'Régi közös terv',treatmentPlanUpper:'Régi felső terv',treatmentPlanLower:'Megőrzendő alsó terv'});
+    const wrong=await editorSave(s,p.episodeId,{treatmentPlanUpper:'Új felső terv',treatmentPlanLower:'Másik állcsont átírása',expectedVersion:1});
+    expect(wrong.status).toBe(400);expect((await s.load()).plans).toHaveLength(1);
+    const approved=await editorSave(s,p.episodeId,{treatmentPlanUpper:'Új felső terv',treatmentPlanLower:'Megőrzendő alsó terv',expectedVersion:1,clinical:{baselineStateId:null,treatments:[],approved:true,occurredOn:'2026-01-05',source:'Vizsgálat',requestKey:crypto.randomUUID()}});
+    expect(approved.status).toBe(409);
+    expect((await editorSave(s,p.episodeId,{treatmentPlanUpper:null,treatmentPlanLower:'Megőrzendő alsó terv',expectedVersion:1})).status).toBe(200);
+    await getDbPool().query("UPDATE patient_episodes SET treatment_plan_upper='Elavult tükörszöveg' WHERE id=$1",[p.episodeId]);
+    const res=await getPlanRoute(await authedRequest(`http://test.local/api/episodes/${p.episodeId}/treatment-plan`,{user:{id:s.doctor.id,email:s.doctor.email,role:'fogpótlástanász'}}),{params:{id:p.episodeId}});
+    const current=(await res.json()).plan;expect(current.treatmentPlanUpper).toBeNull();expect(current.history).toHaveLength(2);
+    const sources=await loadNeakTreatmentSources(getDbPool(),s.patient.id);expect(sources.episodes.find(e=>e.id===p.episodeId)?.treatmentPlanUpper).toBeNull();
+    workspace=await s.load();expect(workspace.plans[1].content.description).toBe('Új felső terv');
+  });
+  it('includes closed appliance episodes in document sources and keeps compatibility writers in the same version history',async()=>{
+    const s=await setup(),p=await s.register('also'),base=await s.baseline();
+    await s.run({action:'plan',episodeId:p.episodeId,baselineStateId:base.id,description:'Alsó terv a korábbi kliensből',approved:true,prosthesisIds:[p.id],treatments:[]});
+    const saved=await editorSave(s,p.episodeId,{treatmentPlanUpper:null,treatmentPlanLower:'Friss közös alsó terv',expectedVersion:1});
+    expect(saved.status).toBe(200);expect((await saved.json()).plan.clinicalPlan.version).toBe(2);
+    await s.milestone(p.id,'accepted');
+    const sources=await loadNeakTreatmentSources(getDbPool(),s.patient.id);
+    const ep=sources.episodes.find(e=>e.id===p.episodeId);expect(ep).toMatchObject({status:'closed',treatmentPlanLower:'Friss közös alsó terv',planVersion:2});
+    expect(buildTreatmentExportContent({},sources).sections.flatMap(section=>section.lines)).toContain('Friss közös alsó terv');
+    expect((await s.load()).plans).toHaveLength(2);
   });
 });
