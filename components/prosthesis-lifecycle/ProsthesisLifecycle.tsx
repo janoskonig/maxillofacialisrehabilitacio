@@ -1,15 +1,16 @@
 'use client';
 import { useCallback, useEffect, useState } from 'react';
 import Link from 'next/link';
-import { CalendarCheck, ClipboardList, FileText, History, Layers, LayoutGrid, Plus, Wrench } from 'lucide-react';
+import { CalendarCheck, Layers, Plus, Wrench } from 'lucide-react';
 import { ProsthesisOverview } from './ProsthesisOverview';
 import { budapestToday } from '@/lib/aftercare/model';
 import type { ClinicalWorkspace } from '@/lib/prosthesis-lifecycle/service';
 import { ACTION_LABELS, ClinicalEntryForm } from './ClinicalEntryForm';
 import { StatusComparison } from './StatusComparison';
+import { FormModeSwitch, useClinicalFormMode } from './FormMode';
+import { useToast } from '@/contexts/ToastContext';
 import { HistoricalAppointmentForm } from '@/components/HistoricalAppointmentForm';
 import { FINANCING_MODES,FINANCING_STATUSES } from '@/lib/episode-financing/model';
-const viewIcons:Record<string,typeof LayoutGrid>={devices:LayoutGrid,plans:ClipboardList,visits:CalendarCheck,repairs:Wrench,tasks:CalendarCheck,status:Layers,events:History,packages:FileText};
 const control='rounded border px-3 py-2 text-sm hover:bg-blue-50 dark:hover:bg-gray-800';
 const kindLabels:Record<string,string>={financing_changed:'Finanszírozási döntés',registered:'Nyilvántartásba vétel',mapping_reviewed:'Megfeleltetés',goal_set:'Pótlási cél',lab_completed:'Labor elkészült',accepted:'Klinikailag elfogadva',delivered:'Átadás',in_use:'Használatban',retired:'Használat megszűnt',visit:'Vizit',status:'Státusz',plan_approved:'Jóváhagyott terv',plan_draft:'Tervtervezet',repair_opened:'Javítás indítása',repair_completed:'Javítás lezárása',remake_decided:'Újrakészítés',work_linked:'Munka kapcsolása',episode_closed:'Elkészítési epizód lezárása',followup_booked:'Kontroll foglalása'};
 const day=(v:unknown)=>v && String(v).includes('T')?new Intl.DateTimeFormat('sv-SE',{timeZone:'Europe/Budapest'}).format(new Date(String(v))):String(v??'').slice(0,10);
@@ -18,6 +19,9 @@ async function request(url:string,body?:unknown) {
   const value=await res.json();if(!res.ok)throw new Error(value.error||'A művelet nem sikerült');return value;
 }
 export function ProsthesisLifecycle({patientId,initialAppointmentId}:{patientId:string;initialAppointmentId?:string}) {
+  const {confirm}=useToast();
+  const {expert}=useClinicalFormMode();
+  const [entryDirty,setEntryDirty]=useState(false),[nextDeviceId,setNextDeviceId]=useState<string|null>(null);
   const [data,setData]=useState<ClinicalWorkspace|null>(null),[error,setError]=useState(''),[message,setMessage]=useState(''),[busy,setBusy]=useState(false);
   const [entry,setEntry]=useState<Record<string,any>|null>(initialAppointmentId?{action:'visit',appointmentId:initialAppointmentId}:null),[view,setView]=useState('devices');
   const [historical,setHistorical]=useState(false);
@@ -26,24 +30,33 @@ export function ProsthesisLifecycle({patientId,initialAppointmentId}:{patientId:
   useEffect(()=>{load().catch(e=>setError(e.message));},[load]);
   async function save(body:unknown) {
     setBusy(true);setError('');setMessage('');
-    try {await request(url,body);await load();setEntry(null);setMessage('Klinikai esemény mentve.');}
+    try {const result=await request(url,body);await load();setEntry(null);setEntryDirty(false);setNextDeviceId((body as any).action==='register'?result.id:null);setMessage((body as any).action==='register'?'A fogpótlást felvettük a nyilvántartásba. Következhet a vizsgálat és a kezelési terv.':'Az ellátási adatokat elmentettük.');}
     catch(e){setError((e as Error).message);}finally{setBusy(false);}
   }
-  function open(value:Record<string,any>) {setEntry(value);setError('');setMessage('');}
-  if (!data) return <div role={error?'alert':'status'}>{error||'Klinikai nyilvántartás betöltése…'}{error&&<button className="ml-3 underline" onClick={()=>load().catch(e=>setError(e.message))}>Újrapróbálás</button>}</div>;
+  async function closeEntry(){if(busy)return false;if(entryDirty&&!await confirm('A kitöltött adatok még nincsenek mentve. Elveted őket?'))return false;setEntry(null);setEntryDirty(false);return true;}
+  async function open(value:Record<string,any>) {if(!await closeEntry())return;setHistorical(false);setEntry(value);setError('');setMessage('');setNextDeviceId(null);requestAnimationFrame(()=>document.getElementById('clinical-entry')?.scrollIntoView({block:'start',behavior:'smooth'}));}
+  if (!data) return <div role={error?'alert':'status'}>{error||'Fogpótlások betöltése…'}{error&&<button className="ml-3 underline" onClick={()=>load().catch(e=>setError(e.message))}>Újrapróbálás</button>}</div>;
   const active=data.events.filter(e=>e.active), today=budapestToday();
   const pName=(id:string)=>data.prostheses.find(p=>p.id===id)?.label??id;
   const repairDone=(id:string)=>active.some(e=>['repair_completed','remake_decided'].includes(e.kind)&&e.payload.command.repairCaseId===id);
   return <div className="min-w-0 w-full space-y-5">
     <div className="flex flex-wrap items-start justify-between gap-4"><div><h1 className="text-2xl font-semibold tracking-tight">Fogpótlások és gondozás</h1><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{data.patientName} · a tervezéstől az átadáson át a későbbi gondozásig</p></div><button type="button" onClick={()=>open({action:'register'})} className="inline-flex items-center gap-2 rounded-xl bg-blue-700 px-4 py-2.5 text-sm font-medium text-white"><Plus className="h-4 w-4"/>Fogpótlás felvétele</button></div>
-    <div className="grid grid-cols-3 gap-2 sm:gap-3">{[{label:'Nyilvántartott fogpótlás',value:data.prostheses.length,icon:Layers,color:'text-blue-700 bg-blue-50 dark:text-blue-200 dark:bg-blue-950/50'},{label:'Nyitott javítás',value:(data.repairs??[]).filter(r=>!repairDone(r.id)).length,icon:Wrench,color:'text-violet-700 bg-violet-50 dark:text-violet-200 dark:bg-violet-950/50'},{label:'Hátralévő kontroll',value:(data.tasks??[]).filter(t=>!t.completed).length,icon:CalendarCheck,color:'text-teal-700 bg-teal-50 dark:text-teal-200 dark:bg-teal-950/50'}].map(item=><div key={item.label} className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-4 dark:border-slate-700 dark:bg-slate-950"><div className="mb-2 flex items-center justify-between"><span className="text-2xl font-semibold">{item.value}</span><span className={`rounded-lg p-1.5 ${item.color}`}><item.icon className="h-4 w-4"/></span></div><p className="text-[11px] text-slate-500 sm:text-xs">{item.label}</p></div>)}</div>
+    <FormModeSwitch/>
+    {!entry&&<section aria-label="Gyakori feladatok" className="rounded-2xl border border-slate-200 bg-white p-4 dark:border-slate-700 dark:bg-slate-950"><h2 className="text-sm font-semibold">Mit szeretnél rögzíteni?</h2><div className="mt-3 grid gap-2 sm:grid-cols-3">{[
+      {action:'visit',title:'Megtörtént ellátás',hint:'Próba, elkészítés vagy kontroll.',icon:CalendarCheck,needsDevice:true},
+      {action:'status',title:'Vizsgálati állapot',hint:'A ténylegesen megfigyelt fogazat.',icon:Layers,needsDevice:false},
+      {action:'repair',title:'Javítás',hint:'Új kezelés a meglévő készülékhez.',icon:Wrench,needsDevice:true},
+    ].map(item=><button key={item.action} type="button" disabled={item.needsDevice&&!data.prostheses.length} onClick={()=>open({action:item.action})} className="flex gap-3 rounded-xl border border-slate-200 p-3 text-left hover:border-blue-400 disabled:opacity-40 dark:border-slate-700"><item.icon className="mt-0.5 h-5 w-5 shrink-0 text-blue-700"/><span><span className="block text-sm font-semibold">{item.title}</span><span className="mt-1 block text-xs text-slate-500">{item.hint}</span></span></button>)}</div>{!data.prostheses.length&&<p className="mt-3 text-xs text-slate-500">Ellátáshoz és javításhoz először vedd fel az érintett fogpótlást.</p>}</section>}
     {error&&<div role="alert" className="rounded border border-red-300 bg-red-50 text-red-800 p-3">{error}</div>}
-    {message&&<p role="status" className="text-green-700">{message}</p>}
+    {message&&<div role="status" className="rounded-xl bg-teal-50 p-4 text-sm text-teal-900 dark:bg-teal-950 dark:text-teal-200"><p>{message}</p>{nextDeviceId&&<div className="mt-3 flex flex-wrap gap-3"><button type="button" className="font-semibold underline" onClick={()=>open({action:'status',episodeId:data.prostheses.find(p=>p.id===nextDeviceId)?.episode_id})}>Vizsgálat rögzítése</button><Link className="font-semibold underline" href={`/patients/${patientId}/stages?episodeId=${data.prostheses.find(p=>p.id===nextDeviceId)?.episode_id}&view=plan&plan=1#kezelesi-terv`}>Kezelési terv kitöltése</Link></div>}</div>}
     {(data.conflicts.length>0||data.closureReview.length>0)&&<div className="rounded border border-amber-300 bg-amber-50 text-amber-900 p-3"><strong>Felülvizsgálat szükséges</strong>{data.conflicts.map((c,i)=><p key={i}>Státuszeltérés: {c.position}, {c.layer}; státusz: {c.stateId}. Dokumentáljon megerősített vizsgálatot vagy forráskorrekciót.</p>)}{data.closureReview.map(id=><p key={id}>Az epizód lezárása korábban elfogadott eseményváltozatot tartalmaz: {id}. A lezárási történet megmaradt.</p>)}</div>}
-    <details className="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-950"><summary className="cursor-pointer text-sm font-medium text-slate-600 dark:text-slate-300">További dokumentálási műveletek</summary><div className="mt-3 flex flex-wrap gap-2">{['visit','status','milestone','set_goal','work','repair','remake'].map(action=><button className={control} key={action} onClick={()=>open({action})}>{ACTION_LABELS[action]}</button>)}<button className={control} type="button" onClick={()=>setHistorical(v=>!v)}>Korábbi megtörtént időpont felvétele</button></div></details>
+    <details className="rounded-xl border border-slate-200 bg-white px-4 py-3 dark:border-slate-700 dark:bg-slate-950"><summary className="cursor-pointer text-sm font-medium text-slate-600 dark:text-slate-300">További dokumentálási műveletek</summary><div className="mt-3 flex flex-wrap gap-2">{['milestone','set_goal','work','remake'].map(action=><button className={control} key={action} onClick={()=>open({action})}>{ACTION_LABELS[action]}</button>)}<button className={control} type="button" onClick={async()=>{if(await closeEntry())setHistorical(v=>!v);}}>Korábbi megtörtént időpont felvétele</button></div></details>
     {historical&&<HistoricalAppointmentForm patientId={patientId} onCancel={()=>setHistorical(false)} onSaved={async id=>{await load();setHistorical(false);open({action:'visit',appointmentId:id});setMessage('A korábbi időpont elkészült. Az elvégzett munkát alább kapcsolhatja hozzá.');}}/>}
-    {entry&&<ClinicalEntryForm key={JSON.stringify(entry)} data={data} initial={entry} onSave={save} onCancel={()=>setEntry(null)} busy={busy}/>}
-    <nav className="grid grid-cols-2 gap-2 sm:grid-cols-4 xl:grid-cols-8" aria-label="Fogpótlás nézetek">{Object.entries({devices:'Fogpótlások és epizódok',plans:'Kezelési tervek',visits:'Vizitek és munkák',repairs:'Javítási epizódok',tasks:'Kontrollfeladatok',status:'Grafikus státusz',events:'Klinikai idővonal',packages:'Méltányossági mellékletek'}).map(([id,label])=>{const Icon=viewIcons[id];return <button key={id} onClick={()=>setView(id)} className={`flex items-center gap-2 rounded-xl border p-3 text-left text-xs transition-colors xl:flex-col xl:items-start ${view===id?'border-blue-600 bg-blue-700 font-semibold text-white shadow-sm':'border-slate-200 bg-white text-slate-500 hover:border-blue-300 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-300'}`} aria-current={view===id?'page':undefined}><Icon className="h-4 w-4 shrink-0"/><span>{label}</span></button>;})}</nav>
+    {entry&&<div id="clinical-entry" className="scroll-mt-24"><ClinicalEntryForm key={JSON.stringify(entry)} data={data} initial={entry} onSave={save} onCancel={()=>{void closeEntry();}} onDirtyChange={setEntryDirty} busy={busy}/></div>}
+    <nav aria-label="Fogpótlás nézetek" className="space-y-2">
+      <div className="flex flex-wrap gap-1 rounded-xl bg-slate-100 p-1 dark:bg-slate-900">{Object.entries({devices:'Fogpótlások',plans:'Kezelési tervek',visits:'Ellátások',repairs:'Javítások',tasks:'Kontrollok'}).map(([id,label])=><button key={id} type="button" onClick={()=>setView(id)} aria-current={view===id?'page':undefined} className={`rounded-lg px-3 py-2 text-sm ${view===id?'bg-white font-semibold text-blue-800 shadow-sm dark:bg-slate-700 dark:text-blue-100':'text-slate-500'}`}>{label}</button>)}</div>
+      <details className="text-sm" open={expert||['status','events','packages'].includes(view)}><summary className="cursor-pointer text-slate-500">Státusz, előzmények és dokumentumok</summary><div className="mt-2 flex flex-wrap gap-2">{Object.entries({status:'Grafikus státusz',events:'Klinikai idővonal',packages:'Méltányossági mellékletek'}).map(([id,label])=><button key={id} type="button" onClick={()=>setView(id)} aria-current={view===id?'page':undefined} className={`${control} ${view===id?'bg-blue-50 font-semibold text-blue-800 dark:bg-blue-950 dark:text-blue-100':''}`}>{label}</button>)}</div></details>
+    </nav>
     {view==='devices'&&<ProsthesisOverview data={data} patientId={patientId} onAction={open}/>}
     {view==='plans'&&<section className="space-y-3"><h2 className="text-lg font-semibold">Közös kezelési tervek</h2><p className="text-sm">A szöveges leírás és a részletes terv egy változathoz tartozik. Új vagy módosított tervet a Kezelés fülön menthet.</p>{data.episodes.map(ep=>{
       const versions=data.plans.filter(p=>p.episode_id===ep.id),latest=versions[0],summary=data.episodePlans.find(p=>p.episodeId===ep.id);

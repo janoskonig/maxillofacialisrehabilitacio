@@ -3,10 +3,12 @@
 import { useCallback, useEffect, useState } from 'react';
 import { useToast } from '@/contexts/ToastContext';
 import Link from 'next/link';
-import { Check, ClipboardCheck, FileText, Layers } from 'lucide-react';
+import { ClipboardCheck, FileText } from 'lucide-react';
 import { EpisodePlanVisual } from '@/components/prosthesis-lifecycle/EpisodePlanVisual';
+import { FormModeSwitch, useClinicalFormMode } from '@/components/prosthesis-lifecycle/FormMode';
 import { EpisodeFinancingPanel } from '@/components/prosthesis-lifecycle/EpisodeFinancingPanel';
 import { budapestToday } from '@/lib/aftercare/model';
+import { clinicalDay } from '@/lib/prosthesis-lifecycle/model';
 import { MAX_EPISODE_TREATMENT_PLAN_LENGTH, PLAN_TREATMENT_LABELS, getUnassignedLegacyPlan, type EpisodeTreatmentPlanRecord } from '@/lib/episode-treatment-plan';
 
 interface Props {
@@ -17,10 +19,12 @@ interface Props {
 
 export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange }: Props) {
   const { showToast } = useToast();
+  const {expert}=useClinicalFormMode();
   const [plan, setPlan] = useState<EpisodeTreatmentPlanRecord | null>(null);
   const [draft, setDraft] = useState({ upper: '', lower: '' });
   const [loading, setLoading] = useState(true);
   const [saving, setSaving] = useState(false);
+  const [section,setSection]=useState<'plan'|'financing'>('plan');
   const [financingState,setFinancingState]=useState({dirty:false,saving:false});
   const [error, setError] = useState<string | null>(null);
   const [conflict, setConflict] = useState(false);
@@ -56,6 +60,8 @@ export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange }
     }
   }, [episodeId]);
 
+  useEffect(()=>{const sync=()=>setSection(window.location.hash==='#finanszirozas'?'financing':'plan');sync();window.addEventListener('hashchange',sync);return()=>window.removeEventListener('hashchange',sync);},[]);
+
   useEffect(() => {
     const controller = new AbortController();
     void load(controller.signal);
@@ -72,6 +78,9 @@ export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange }
 
   const save = async () => {
     if (!plan || !canEdit || !dirty || saving) return;
+    if(!clinicalDay.safeParse(details.occurredOn).success||details.occurredOn>budapestToday()){setError('A terv tényleges napját add meg: érvényes, mai vagy korábbi dátum szükséges.');return;}
+    if(!details.source.trim()){setError('Add meg a terv dokumentálásának forrását, például saját kezelési terv vagy korabeli karton.');return;}
+    if(details.treatments.some(t=>!Number.isInteger(t.toothNumber)||!/^[1-4][1-8]$/.test(String(t.toothNumber)))){setError('Ellenőrizd a kézzel megadott fogszámokat. A fogív érvényes, kétjegyű fogszámai használhatók.');return;}
     setSaving(true);
     setError(null);
     try {
@@ -90,7 +99,8 @@ export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange }
       setPlan(data.plan);
       reset(data.plan);
       setConflict(false);
-      showToast('Közös tervváltozat mentve.', 'success');
+      showToast('Kezelési terv mentve.', 'success');
+      if(!expert&&!plan.financing?.current.event)setSection('financing');
     } catch (e) {
       setError(e instanceof Error ? e.message : 'Mentési hiba.');
     } finally { setSaving(false); }
@@ -99,24 +109,22 @@ export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange }
   return (
     <section aria-label="Epizód kezelési terve" className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-5 dark:border-slate-700 dark:bg-slate-900">
       <div className="flex flex-wrap items-start justify-between gap-3">
-        <div><h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{plan?.jaw?`${plan.jaw==='felso'?'Felső':'Alsó'} fogpótlás kezelési terve`:'Kezelési tervek állcsontonként'}</h3><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{plan?.prosthesisLabel||'Közös terv a kezeléshez, gondozáshoz és mellékletekhez'}</p></div>
+        <div><h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{plan?.jaw?`${plan.jaw==='felso'?'Felső':'Alsó'} fogpótlás kezelési terve`:'Kezelési tervek állcsontonként'}</h3><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{plan?.prosthesisLabel||'Írd le a tervezett ellátást, majd add meg a finanszírozást.'}</p></div>
         {plan?.clinicalPlan&&<span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${plan.clinicalPlan.approved&&!dirty?'bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-200':'bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-200'}`}><ClipboardCheck className="h-3.5 w-3.5"/>{plan.clinicalPlan.version}. változat · {dirty?'módosított tervezet':plan.clinicalPlan.approved?'jóváhagyott':'tervezet'}</span>}
       </div>
-      {plan&&!loading&&<ol aria-label="A kezelési terv áttekintése" className="my-4 grid grid-cols-2 gap-2 lg:grid-cols-4">{[
-        {title:'Kiindulási státusz',value:details.baselineStateId?'Kiválasztva':'Nincs kapcsolva',done:!!details.baselineStateId,icon:Layers},
-        {title:'Beavatkozások',value:`${details.treatments.length} tervezett lépés`,done:details.treatments.length>0,icon:Layers},
-        {title:'Klinikai leírás',value:(plan.jaw==='felso'?draft.upper:plan.jaw==='also'?draft.lower:draft.upper||draft.lower)?'Rögzítve':'Kitöltendő',done:!!(plan.jaw==='felso'?draft.upper:plan.jaw==='also'?draft.lower:draft.upper||draft.lower),icon:FileText},
-        {title:'Klinikai jóváhagyás',value:approved?'Mentéskor jóváhagyva':plan.clinicalPlan?.approved&&!dirty?'Jóváhagyott':'Tervezet',done:approved||!!plan.clinicalPlan?.approved&&!dirty,icon:ClipboardCheck},
-      ].map((step,i)=><li key={step.title} className={`rounded-xl border p-3 ${step.done?'border-teal-100 bg-teal-50/60 dark:border-teal-900 dark:bg-teal-950/30':'border-slate-100 bg-slate-50 dark:border-slate-800 dark:bg-slate-950/50'}`}><div className="mb-2 flex items-center justify-between"><span className="text-[10px] font-bold uppercase tracking-wider text-slate-400">{i+1}. {step.title}</span>{step.done?<Check className="h-4 w-4 text-teal-600"/>:<step.icon className="h-4 w-4 text-slate-400"/>}</div><p className="text-sm font-semibold">{step.value}</p></li>)}</ol>}
-      {plan&&!loading&&<EpisodeFinancingPanel key={episodeId} plan={plan} canEdit={canEdit} disabled={dirty||saving} onStateChange={setFinancingState} onChanged={financing=>setPlan(p=>p?{...p,financing}:p)}/>}
+      <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><FormModeSwitch/><p className="text-xs text-slate-500">{expert?'Minden mező egy oldalon. A tervet és a finanszírozást külön mentheted.':'Lépésenként, a szükséges mezőkkel.'}</p></div>
+      {plan&&!loading&&<>
+        <div hidden={expert} role="group" aria-label="Terv és finanszírozás" className={expert?'hidden':'my-4 grid grid-cols-2 gap-2'}>
+          <button type="button" aria-pressed={section==='plan'} disabled={financingState.dirty||financingState.saving} onClick={()=>setSection('plan')} className={`rounded-xl border p-3 text-left text-sm disabled:opacity-50 ${section==='plan'?'border-blue-600 bg-blue-50 dark:bg-blue-950':'border-slate-200 dark:border-slate-700'}`}><span className="font-semibold">1. Kezelési terv</span><span className="mt-1 block text-xs text-slate-500">{dirty?'Módosítások mentésre várnak':plan.clinicalPlan?.approved?'Klinikailag jóváhagyott':plan.clinicalPlan?'Mentett tervezet':'Kitöltendő'}</span></button>
+          <button type="button" aria-pressed={section==='financing'} disabled={dirty||saving} onClick={()=>setSection('financing')} className={`rounded-xl border p-3 text-left text-sm disabled:opacity-50 ${section==='financing'?'border-blue-600 bg-blue-50 dark:bg-blue-950':'border-slate-200 dark:border-slate-700'}`}><span className="font-semibold">2. Finanszírozás</span><span className="mt-1 block text-xs text-slate-500">{plan.financing?.current.requiresReview?'A terv változása miatt ellenőrizendő':plan.financing?.current.event?'Rögzítve':'Még nincs megadva'}</span></button>
+        </div>
+        {dirty&&!expert&&<p className="mb-3 text-xs text-slate-500">Előbb mentsd a tervet; utána annak finanszírozását töltheted ki.</p>}
+        {financingState.dirty&&!expert&&<p className="mb-3 text-xs text-slate-500">A finanszírozásnál a Mentés vagy a Mégse gombbal fejezd be a kitöltést, mielőtt visszatérsz a tervhez.</p>}
+      </>}
+      <div hidden={!expert&&section!=='plan'}>
       {loading ? <p role="status">Kezelési terv betöltése…</p> : plan ? (
         canEdit ? <>
-          <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-950/40">
-            <label className="block text-sm font-medium">Ellátás előtti dokumentált státusz<select className="mt-2 block w-full rounded-lg border border-slate-200 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-900" disabled={saving} value={details.baselineStateId??''} onChange={e=>{changed();setDetails(d=>({...d,baselineStateId:e.target.value||null}));}}><option value="">Válassz kiindulási státuszt · nélküle szöveges tervezet menthető</option>{plan.states?.map(s=><option key={s.id} value={s.id}>{s.occurred_on} · {s.note||s.source}</option>)}</select></label>
-            {!plan.states?.length&&plan.patientId&&<Link className="mt-2 block text-xs underline" href={`/patients/${plan.patientId}/prostheses`}>Kiindulási vizsgálat rögzítése</Link>}
-          </div>
-          <EpisodePlanVisual key={episodeId} plan={plan} baselineStateId={details.baselineStateId} treatments={details.treatments} disabled={saving} onChange={treatments=>{changed();setDetails(d=>({...d,treatments}));}}/>
-          <div className="mb-2 mt-5 flex items-center gap-2 text-sm font-semibold"><FileText className="h-4 w-4 text-slate-400"/>Klinikai leírás</div>
+          <div className="mb-2 mt-5 flex items-center gap-2 text-sm font-semibold"><FileText className="h-4 w-4 text-slate-400"/>Milyen ellátást tervezünk?</div>
           <div className={`grid gap-4 ${jaws.length>1?'md:grid-cols-2':''}`}>
             {jaws.map(({ jaw, label }) => (
               <div key={jaw}>
@@ -128,25 +136,38 @@ export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange }
               </div>
             ))}
           </div>
-          <details className="mt-4 rounded border p-3">
-            <summary className="cursor-pointer font-medium">Dokumentálás és kézi fogszintű szerkesztés</summary>
+          <div className="rounded-xl border border-slate-200 bg-slate-50/60 p-3 dark:border-slate-700 dark:bg-slate-950/40">
+            <label className="block text-sm font-medium">Ellátás előtti dokumentált státusz<select className="mt-2 block w-full rounded-lg border border-slate-200 bg-white p-2.5 text-sm dark:border-slate-700 dark:bg-slate-900" disabled={saving} value={details.baselineStateId??''} onChange={e=>{changed();setDetails(d=>({...d,baselineStateId:e.target.value||null}));}}><option value="">Válassz kiindulási státuszt · nélküle szöveges tervezet menthető</option>{plan.states?.map(s=><option key={s.id} value={s.id}>{s.occurred_on} · {s.note||s.source}</option>)}</select></label>
+            {!plan.states?.length&&plan.patientId&&<Link className="mt-2 block text-xs underline" href={`/patients/${plan.patientId}/prostheses`}>Kiindulási vizsgálat rögzítése</Link>}
+          </div>
+          <details className="mt-4 rounded-xl border border-slate-200 p-3 dark:border-slate-700" open={expert||details.treatments.length>0}><summary className="cursor-pointer text-sm font-medium">Fogankénti beavatkozások megadása · opcionális</summary><p className="mt-2 text-xs text-slate-500">Ha külön fogat érintő beavatkozást is tervezel, itt jelöld ki a fogat és a kezelést.</p>
+          <EpisodePlanVisual key={episodeId} plan={plan} baselineStateId={details.baselineStateId} treatments={details.treatments} disabled={saving} onChange={treatments=>{changed();setDetails(d=>({...d,treatments}));}}/>
+          </details>
+          <details className="mt-4 rounded border p-3" open={expert}>
+            <summary className="cursor-pointer font-medium">Fogszámok kézi szerkesztése · haladó</summary>
             <p className="mt-2 text-sm text-gray-600 dark:text-gray-400">A szöveg önmagában is menthető tervezetként. Grafikus célállapothoz és jóváhagyáshoz dokumentált kiindulási státusz szükséges. A tényleges fogazati státuszt a terv mentése nem módosítja.</p>
             <fieldset className="mt-3 space-y-2"><legend className="text-sm font-medium">Beavatkozások végrehajtási sorrendben</legend>{details.treatments.map((t,i)=><div className="flex flex-wrap gap-2" key={i}>
               <input aria-label={`${i+1}. beavatkozás fogszáma`} type="number" className="w-24 rounded border p-2 dark:bg-gray-900" disabled={saving} value={t.toothNumber} onChange={e=>{changed();setDetails(d=>({...d,treatments:d.treatments.map((x,j)=>i===j?{...x,toothNumber:Number(e.target.value)}:x)}));}}/>
               <select aria-label={`${i+1}. beavatkozás`} className="rounded border p-2 dark:bg-gray-900" disabled={saving} value={t.treatmentCode} onChange={e=>{changed();setDetails(d=>({...d,treatments:d.treatments.map((x,j)=>i===j?{...x,treatmentCode:e.target.value}:x)}));}}>{!PLAN_TREATMENT_LABELS[t.treatmentCode]&&<option value={t.treatmentCode}>{t.treatmentCode}</option>}{Object.entries(PLAN_TREATMENT_LABELS).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select>
               <button type="button" className="text-sm underline" disabled={saving} onClick={()=>{changed();setDetails(d=>({...d,treatments:d.treatments.filter((_,j)=>i!==j)}));}}>Eltávolítás</button>
             </div>)}<button type="button" className="text-sm underline" disabled={saving} onClick={()=>{changed();setDetails(d=>({...d,treatments:[...d.treatments,{toothNumber:plan.jaw==='also'?31:11,treatmentCode:'huzas'}]}));}}>Beavatkozás hozzáadása</button></fieldset>
-            <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-sm">Terv dátuma<input type="date" max={budapestToday()} className="mt-1 block w-full rounded border p-2 dark:bg-gray-900" value={details.occurredOn} disabled={saving} onChange={e=>{changed();setDetails(d=>({...d,occurredOn:e.target.value}));}}/></label><label className="text-sm">Dokumentálás forrása<input className="mt-1 block w-full rounded border p-2 dark:bg-gray-900" maxLength={500} value={details.source} disabled={saving} onChange={e=>{changed();setDetails(d=>({...d,source:e.target.value}));}}/></label></div>
+
           </details>
+            <div className="mt-3 grid gap-3 sm:grid-cols-2"><label className="text-sm">Terv dátuma<input type="date" max={budapestToday()} className="mt-1 block w-full rounded border p-2 dark:bg-gray-900" value={details.occurredOn} disabled={saving} onChange={e=>{changed();setDetails(d=>({...d,occurredOn:e.target.value}));}}/></label><label className="text-sm">Dokumentálás forrása<input className="mt-1 block w-full rounded border p-2 dark:bg-gray-900" maxLength={500} value={details.source} disabled={saving} onChange={e=>{changed();setDetails(d=>({...d,source:e.target.value}));}}/></label></div>
+          <p className="mt-2 text-xs text-slate-500">A terv készítésének tényleges napját add meg. A mostani rögzítés idejét a rendszer külön megőrzi.</p>
+          <div className="mt-4 rounded-xl bg-slate-50 p-3 dark:bg-slate-950"><p className="text-sm font-semibold">Mentés előtt</p><p className="mt-1 text-xs text-slate-500">Jóváhagyás nélkül tervezetet mentesz. Akkor hagyd jóvá, ha a leírást és a kiindulási vizsgálatot ellenőrizted.</p>
           <label className="mt-3 flex gap-2 text-sm"><input type="checkbox" disabled={saving||!plan.prosthesisId||!details.baselineStateId} checked={approved} onChange={e=>{setRequestKey(crypto.randomUUID());setApproved(e.target.checked);}}/>Ezt a tervváltozatot jóváhagyom</label>
-          <p className="mt-1 text-xs text-gray-500">Módosítás után ismételt jóváhagyás szükséges. A korábban jóváhagyott változatok és a kiadott mellékletek megmaradnak.</p>
+          <p className="mt-1 text-xs text-gray-500">Módosítás után ismételt jóváhagyás szükséges. A korábbi változatok megmaradnak.</p></div>
+          {(!plan.prosthesisId||!details.baselineStateId)&&<p className="mt-2 text-xs text-amber-700 dark:text-amber-300">Jóváhagyáshoz fogpótlás és ellátás előtti dokumentált státusz szükséges. Tervezetet már most is menthetsz.</p>}
           <div className="mt-2 flex flex-wrap items-center gap-3">
-            <button type="button" onClick={save} disabled={!dirty || saving} className="btn-primary text-sm disabled:opacity-50">{saving ? 'Mentés…' : conflict ? 'Áttekintett terv mentése' : 'Kezelési terv mentése'}</button>
+            <button type="button" onClick={save} disabled={!dirty || saving || financingState.saving} className="btn-primary text-sm disabled:opacity-50">{saving ? 'Mentés…' : conflict ? 'Áttekintett terv mentése' : 'Kezelési terv mentése'}</button>
             {dirty && <button type="button" disabled={saving} onClick={() => {reset(plan);setConflict(false);setError(null);}} className="text-sm underline">Módosítások elvetése</button>}
             <span className="text-xs text-gray-500 dark:text-gray-400" role="status">{dirty ? 'Nem mentett módosítások' : (plan.treatmentPlanUpper || plan.treatmentPlanLower) ? 'Mentett kezelési terv' : 'Nincs még rögzített kezelési terv'}</span>
           </div>
         </> : <><EpisodePlanVisual plan={plan} baselineStateId={plan.clinicalPlan?.baselineStateId??null} treatments={plan.clinicalPlan?.treatments??[]}/><div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">{jaws.map(j=><div key={j.jaw}><p className="font-semibold">{j.label}</p><p className="mt-1 whitespace-pre-wrap break-words">{(j.jaw==='upper'?plan.treatmentPlanUpper:plan.treatmentPlanLower)||'Nincs rögzített kezelési terv.'}</p></div>)}</div></>
       ) : <button type="button" onClick={() => load()} className="text-sm underline">Újrapróbálás</button>}
+      </div>
+      {plan&&!loading&&<div hidden={!expert&&section!=='financing'}><EpisodeFinancingPanel key={episodeId} plan={plan} canEdit={canEdit} disabled={saving} planUnsaved={dirty} onStateChange={setFinancingState} onChanged={financing=>setPlan(p=>p?{...p,financing}:p)}/></div>}
       {legacy && <div className="mt-3 rounded border border-amber-200 dark:border-amber-700 p-3 text-sm">
         <p className="font-semibold">Korábban rögzített közös terv</p>
         <p className="mt-1">A korábbi szöveg megmaradt. Az állcsont szerinti besorolását Ön adhatja meg.</p>

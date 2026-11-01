@@ -1,6 +1,7 @@
 import { afterEach,expect,it,vi } from 'vitest';
 import { cleanup,fireEvent,render,screen } from '@testing-library/react';
 import { ProsthesisLifecycle } from '@/components/prosthesis-lifecycle/ProsthesisLifecycle';
+vi.mock('@/contexts/ToastContext',()=>({useToast:()=>({confirm:vi.fn().mockResolvedValue(true)})}));
 afterEach(()=>{cleanup();vi.unstubAllGlobals();});
 
 it('offers the single treatment editor and shows old text without a second plan creation form',async()=>{

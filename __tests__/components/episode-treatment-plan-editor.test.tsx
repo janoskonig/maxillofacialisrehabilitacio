@@ -4,7 +4,7 @@ import { EpisodeTreatmentPlanEditor, EpisodeTreatmentPlanDisclosure } from '@/co
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: vi.fn() }) }));
 const saved = { episodeId: 'ep1', treatmentPlan: null as string | null, treatmentPlanUpper: 'Eredeti terv', treatmentPlanLower: 'Alsó terv', version: 3 };
 const response = (plan:any = saved, status = 200, code?: string) => new Response(JSON.stringify({ plan, code }), { status, headers: { 'Content-Type': 'application/json' } });
-afterEach(() => { cleanup(); vi.unstubAllGlobals(); });
+afterEach(() => { cleanup(); vi.unstubAllGlobals(); window.localStorage.clear(); });
 async function mount(canEdit = true) {
   render(<EpisodeTreatmentPlanEditor episodeId="ep1" canEdit={canEdit} />);
   await screen.findByText(canEdit ? 'Mentett kezelési terv' : 'Eredeti terv');
@@ -107,6 +107,31 @@ describe('Episode treatment plan editor', () => {
     await waitFor(()=>expect(fetch).toHaveBeenCalledTimes(3));
     const first=JSON.parse(fetch.mock.calls[1][1].body),retry=JSON.parse(fetch.mock.calls[2][1].body);
     expect(first.clinical.approved).toBe(false);expect(retry).toEqual(first);
+  });
+
+  it('edits plan and financing together in expert mode and binds funding to the new saved plan without losing the draft',async()=>{
+    const id=crypto.randomUUID(),oldId=crypto.randomUUID(),newId=crypto.randomUUID();
+    const initial={...saved,episodeId:id,jaw:'felso',clinicalPlan:{id:oldId,version:3,approved:false,baselineStateId:null,treatments:[]},history:[],financing:{revision:0,current:{event:null,requiresReview:false},history:[],upcoming:[]}};
+    const changed={...initial,version:4,treatmentPlanUpper:'Módosított felső terv',clinicalPlan:{...initial.clinicalPlan,id:newId,version:4}};
+    const fetch=vi.fn().mockResolvedValueOnce(response(initial)).mockResolvedValueOnce(response(changed))
+      .mockResolvedValueOnce(new Response(JSON.stringify({financing:{...initial.financing,revision:1}}),{status:200}));vi.stubGlobal('fetch',fetch);
+    render(<EpisodeTreatmentPlanEditor episodeId={id} canEdit/>);await screen.findByText('Mentett kezelési terv');
+    fireEvent.click(screen.getByRole('button',{name:'Szakértői'}));
+    fireEvent.change(screen.getByLabelText('Felső állcsont kezelési terve'),{target:{value:'Módosított felső terv'}});
+    fireEvent.click(screen.getByRole('button',{name:'Finanszírozás megadása'}));
+    fireEvent.click(screen.getByRole('radio',{name:'Önköltséges'}));
+    fireEvent.change(screen.getByLabelText('Hol tart a finanszírozás eldöntése?'),{target:{value:'pending'}});
+    fireEvent.click(screen.getByRole('radio',{name:'Még nem ismert'}));
+    fireEvent.change(screen.getByLabelText('Mi a rögzítés vagy a változás oka?'),{target:{value:'Az új terv finanszírozása'}});
+    fireEvent.change(screen.getByLabelText('Honnan származik az információ?'),{target:{value:'Beteggel egyeztetés'}});
+    fireEvent.click(screen.getByRole('button',{name:'Finanszírozás mentése'}));expect(fetch).toHaveBeenCalledTimes(1);
+    fireEvent.click(screen.getByRole('button',{name:'Kezelési terv mentése'}));
+    await waitFor(()=>expect((screen.getByLabelText('Hol tart a finanszírozás eldöntése?') as HTMLSelectElement).value).toBe(''));
+    expect((screen.getByLabelText('Mi a rögzítés vagy a változás oka?') as HTMLTextAreaElement).value).toBe('Az új terv finanszírozása');
+    fireEvent.change(screen.getByLabelText('Hol tart a finanszírozás eldöntése?'),{target:{value:'pending'}});
+    fireEvent.click(screen.getByRole('button',{name:'Finanszírozás mentése'}));await waitFor(()=>expect(fetch).toHaveBeenCalledTimes(3));
+    expect(fetch.mock.calls[1][0]).toBe(`/api/episodes/${id}/treatment-plan`);
+    expect(JSON.parse(fetch.mock.calls[2][1].body)).toMatchObject({planVersionId:newId,mode:'self_pay',reason:'Az új terv finanszírozása'});
   });
 
 });
