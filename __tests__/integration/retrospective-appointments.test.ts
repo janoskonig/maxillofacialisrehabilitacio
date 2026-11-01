@@ -30,8 +30,10 @@ describe('retrospective appointments',()=>{
     expect(r.rows[0]).toMatchObject({appointment_status:'completed',is_future:false,episode_id:s.episode.id,occurred_on:'2026-09-10',occurred_at:null,source:'Korabeli papírkarton',status:'booked',state:'booked'});
     const list=await listAppointments(await authedRequest(`http://localhost/api/appointments?patientId=${s.patient.id}`,{user:s.user}));
     expect((await list.json()).appointments).toContainEqual(expect.objectContaining({id:saved.appointmentId,timePrecision:'day',occurredOn:'2026-09-10',recordedBy:s.doctor.email}));
+    for(const occurredOn of ['2026-09-09','2026-09-11'])await s.record(s.input({occurredOn}));
     const calendar=await calendarAppointments(await authedRequest('http://localhost/api/appointments/calendar?startDate=2026-09-10&endDate=2026-09-11',{user:s.user}));
     const body=await calendar.json();expect(body.appointments).toContainEqual(expect.objectContaining({id:saved.appointmentId,timePrecision:'day',occurredOn:'2026-09-10'}));
+    expect(body.appointments.filter((a:{patientId:string})=>a.patientId===s.patient.id)).toHaveLength(1);
   });
   it('is idempotent and rejects another creation for the same historical encounter',async()=>{
     const s=await setup(),input=s.input(),first=await s.record(input),retry=await s.record(input);

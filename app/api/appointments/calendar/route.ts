@@ -5,6 +5,13 @@ import { fetchVirtualAppointments } from '@/lib/virtual-appointments-service';
 
 export const dynamic = 'force-dynamic';
 
+/** Date-only filters describe Budapest calendar days, regardless of DB timezone. */
+function rangeBoundary(index:number,value:string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? `($${index}::date::timestamp AT TIME ZONE 'Europe/Budapest')`
+    : `$${index}::timestamptz`;
+}
+
 /** Extract YYYY-MM-DD in Europe/Budapest from ISO string (avoids UTC date shift) */
 function toDateOnlyBudapest(s: string | null): string | null {
   if (!s) return null;
@@ -31,12 +38,12 @@ export const GET = authedHandler(async (req, { auth }) => {
   let paramIndex = 1;
 
   if (startDate) {
-    whereConditions.push(`ats.start_time >= $${paramIndex}`);
+    whereConditions.push(`ats.start_time >= ${rangeBoundary(paramIndex,startDate)}`);
     queryParams.push(startDate);
     paramIndex++;
   }
   if (endDate) {
-    whereConditions.push(`ats.start_time < $${paramIndex}`);
+    whereConditions.push(`ats.start_time < ${rangeBoundary(paramIndex,endDate)}`);
     queryParams.push(endDate);
     paramIndex++;
   }
@@ -102,12 +109,12 @@ export const GET = authedHandler(async (req, { auth }) => {
     let slotsParamIndex = 1;
 
     if (startDate) {
-      slotsWhereConditions.push(`ats.start_time >= $${slotsParamIndex}`);
+      slotsWhereConditions.push(`ats.start_time >= ${rangeBoundary(slotsParamIndex,startDate)}`);
       slotsQueryParams.push(startDate);
       slotsParamIndex++;
     }
     if (endDate) {
-      slotsWhereConditions.push(`ats.start_time < $${slotsParamIndex}`);
+      slotsWhereConditions.push(`ats.start_time < ${rangeBoundary(slotsParamIndex,endDate)}`);
       slotsQueryParams.push(endDate);
       slotsParamIndex++;
     }
