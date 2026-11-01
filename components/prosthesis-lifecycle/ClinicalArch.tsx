@@ -22,7 +22,16 @@ export function positionDescription(layers:ClinicalLayers,tooth:number) {
 }
 
 export function archDifferences(before:ClinicalLayers,after:ClinicalLayers) {
-  return [...UPPER_ROW,...LOWER_ROW].filter(n=>canonical(clinicalPosition(before,n))!==canonical(clinicalPosition(after,n)));
+  const clinicalValue=(value:unknown)=>{
+    if(!value||typeof value!=='object'||Array.isArray(value))return value;
+    const {planned,...clinical}=value as Record<string,unknown>;
+    return clinical;
+  };
+  const comparable=(layers:ClinicalLayers,n:number)=>{
+    const p=clinicalPosition(layers,n);
+    return {...p,implant:clinicalValue(p.implant),prostheses:p.prostheses.map(clinicalValue).sort((a,b)=>canonical(a).localeCompare(canonical(b)))};
+  };
+  return [...UPPER_ROW,...LOWER_ROW].filter(n=>canonical(comparable(before,n))!==canonical(comparable(after,n)));
 }
 
 export function ClinicalArch({layers,jaw,selected=[],changed=[],marked=[],onSelect,label,compact=false}:{

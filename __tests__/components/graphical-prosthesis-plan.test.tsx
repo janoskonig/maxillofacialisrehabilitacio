@@ -1,7 +1,7 @@
 import { afterEach,describe,expect,it,vi } from 'vitest';
 import { useState } from 'react';
 import { cleanup,fireEvent,render,screen,within } from '@testing-library/react';
-import { ClinicalArch } from '@/components/prosthesis-lifecycle/ClinicalArch';
+import { ClinicalArch,archDifferences } from '@/components/prosthesis-lifecycle/ClinicalArch';
 import { EpisodePlanVisual } from '@/components/prosthesis-lifecycle/EpisodePlanVisual';
 import { ProsthesisOverview } from '@/components/prosthesis-lifecycle/ProsthesisOverview';
 import { StatusComparison } from '@/components/prosthesis-lifecycle/StatusComparison';
@@ -11,6 +11,13 @@ import type { ClinicalWorkspace } from '@/lib/prosthesis-lifecycle/service';
 afterEach(cleanup);
 
 describe('graphical prosthesis planning',()=>{
+  it('compares clinical findings without treating the planned flag or prosthesis insertion order as a clinical difference',()=>{
+    const first={prosthesisId:'p',tooth:11,role:'denture_tooth'},second={prosthesisId:'p',tooth:11,role:'clasp'};
+    const target={...emptyLayers(),teeth:{11:{base:'missing'}},implants:{11:{present:true,planned:true}},prostheses:{a:{...first,planned:true},b:{...second,planned:true}}};
+    const actual={...emptyLayers(),teeth:{11:{base:'missing'}},implants:{11:{present:true}},prostheses:{b:second,a:first}};
+    expect(archDifferences(target,actual)).toEqual([]);
+    expect(archDifferences(target,{...actual,teeth:{11:{base:'sound'}}})).toEqual([11]);
+  });
   it('keeps unknown teeth unknown and shows a missing natural tooth alongside implant and prosthesis layers',()=>{
     const layers={...emptyLayers(),teeth:{11:{base:'missing'},13:{status:'M'},14:{},15:'Korabeli leírás'},implants:{11:{present:true}},prostheses:{a:{tooth:11,role:'denture_tooth',prosthesisId:'p'}}};
     render(<ClinicalArch jaw="felso" layers={layers} label="Vizsgálati státusz"/>);
