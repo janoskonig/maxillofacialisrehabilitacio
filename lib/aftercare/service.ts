@@ -18,7 +18,8 @@ const BASELINE_SQL = `jsonb_build_object('nem', p.nem, 'ageBandStart', (EXTRACT(
 const PROSTHESIS_SELECT = `SELECT pr.id, pr.patient_id AS "patientId", pr.episode_id AS "episodeId", pr.jaw,
   pr.prosthesis_type AS "prosthesisType", pr.label, pr.baseline, pr.original_plan AS "originalPlan",
   pr.delivery_date::text AS "deliveryDate", pr.delivery_appointment_id AS "deliveryAppointmentId", pr.created_at AS "createdAt",
-  CASE WHEN pr.delivery_date IS NOT NULL THEN da.appointment_status IS NOT DISTINCT FROM 'completed' END AS "deliveryConfirmed",
+  CASE WHEN pr.delivery_date IS NOT NULL THEN da.appointment_status IS NOT DISTINCT FROM 'completed'
+    OR EXISTS(SELECT 1 FROM prosthesis_active_events e WHERE e.prosthesis_id=pr.id AND e.kind='delivered') END AS "deliveryConfirmed",
   CASE WHEN f.prosthesis_id IS NOT NULL THEN json_build_object(
     'assessedOn', f.assessed_on::text, 'status', f.status, 'contactMethod', f.contact_method,
     'unresolved', f.unresolved, 'functionScore', f.function_score, 'comfortScore', f.comfort_score) END AS followup
@@ -118,21 +119,15 @@ function assertAttended(appointment: CareAppointment) {
 }
 
 export async function registerProsthesis(patientId: string, actor: string, input: z.infer<typeof prosthesisSchema>) {
+  const { executeClinicalCommand }=await import('@/lib/prosthesis-lifecycle/service');
+  const { clinicalCommandSchema }=await import('@/lib/prosthesis-lifecycle/model');
+  const result=await executeClinicalCommand(patientId,actor,clinicalCommandSchema.parse({
+    ...input,requestKey:crypto.randomUUID(),occurredOn:budapestToday(),source:'Fogpótlás-nyilvántartás',origin:'local',role:'unknown',
+  }));
   return transaction(actor, async (db) => {
-    await patientForWrite(db, patientId);
-    const ep = await db.query('SELECT id, status FROM patient_episodes WHERE id = $1 AND patient_id = $2 FOR UPDATE', [input.episodeId, patientId]);
-    if (!ep.rows.length) throw new HttpError(404, 'A beteg epizódja nem található');
-    if (ep.rows[0].status !== 'open') throw new HttpError(409, 'Új fogpótlás nyitott epizódhoz vehető fel');
-    const r = await db.query(`INSERT INTO prostheses(patient_id, episode_id, jaw, prosthesis_type, label, baseline, original_plan, created_by)
-      SELECT $1, pe.id, $3, $4, $5,
-        ${BASELINE_SQL},
-        jsonb_build_object('treatmentPlan', pe.treatment_plan, 'treatmentPlanUpper', pe.treatment_plan_upper,
-          'treatmentPlanLower', pe.treatment_plan_lower, 'capturedAt', now(), 'workPhases',
-          COALESCE((SELECT jsonb_agg(to_jsonb(w) ORDER BY COALESCE(w.seq, w.pathway_order_index), w.id)
-            FROM episode_work_phases w WHERE w.episode_id = pe.id), '[]'::jsonb)), $6
-      FROM patient_episodes pe JOIN patients_full p ON p.id = pe.patient_id
-      WHERE pe.id = $2 RETURNING id`, [patientId, input.episodeId, input.jaw, input.prosthesisType, input.label, actor]);
-    return r.rows[0];
+    await db.query(`UPDATE prostheses pr SET mapping_review_required=true,baseline=${BASELINE_SQL}||'{"unassessed":true}'::jsonb
+      FROM patients_full p WHERE pr.id=$1 AND p.id=$2`,[result.id,patientId]);
+    return {id:result.id};
   });
 }
 
@@ -148,7 +143,7 @@ export async function deliverProsthesis(patientId: string, actor: string, input:
       if (p.deliveryAppointmentId === appointment.id) return { id: p.id }; // safe retry
       throw new HttpError(409, 'Az átadás már rögzítve van');
     }
-    if (appointment.episodeId && appointment.episodeId !== p.episodeId) throw new HttpError(409, 'Az átadás másik epizódhoz tartozik');
+    // One attended appointment may document appliances from several episodes.
     if (new Intl.DateTimeFormat('sv-SE', { timeZone: 'Europe/Budapest' }).format(new Date(p.createdAt)) > appointment.occurredOn) {
       // Retrospective registration is supported, but its snapshot must be explicitly labelled.
       // Do not silently manufacture historical baseline data.
@@ -210,6 +205,10 @@ export async function recordCareEncounter(patientId: string, actor: string, inpu
         version = prosthesis_care_encounters.version + 1, updated_at = now()
       RETURNING id, version`, values);
     const encounterId = result.rows[0].id;
+    if(input.phase==='aftercare') {
+      const { recordLegacyRepairEpisodes }=await import('@/lib/prosthesis-lifecycle/service');
+      await recordLegacyRepairEpisodes(db,patientId,actor,encounterId,appointment.occurredOn,input.links);
+    }
     const request = await db.query('SELECT *, due_on::text AS due_on FROM aftercare_requests WHERE encounter_id = $1 FOR UPDATE', [encounterId]);
     if (request.rows.length && (request.rows[0].appointment_id || request.rows[0].delay_reason !== 'none')
       && (request.rows[0].interval_days !== input.returnAfterDays || addDays(appointment.occurredOn, input.returnAfterDays ?? 0) !== request.rows[0].due_on)) {

@@ -16,6 +16,7 @@ type ViewType = 'month' | 'week' | 'day';
 interface Appointment {
   id: string;
   startTime: string;
+  timePrecision?:'day'|'exact'|null;
   patientName: string | null;
   patientTaj: string | null;
   dentistEmail: string;

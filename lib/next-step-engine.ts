@@ -152,6 +152,8 @@ export interface EpisodeWorkPhaseRow {
   visit_block_minutes?: number | null;
   /** Puzzle v2: az alkalom tervezett hossza (felülírás), ha van. */
   visit_planned_minutes?: number | null;
+  clinical_scope?: string;
+  requires_phase_ids?: string[];
 }
 
 /** Get episode_work_phases if they've been generated. Returns null when no rows exist.
@@ -164,15 +166,17 @@ async function getEpisodeWorkPhases(
   // A schema-probe modulszintű cache-ből szolgálja ki ezeket az ellenőrzéseket
   // (lib/schema-probe.ts) — egy request-en belül több hívásra is csak az
   // első jár DB-vel, a többi a cache-ből megy.
-  const [mergedFilter, hasDefaultDaysOffset, hasCustomLabel, hasVisitId] = await Promise.all([
+  const [mergedFilter, hasDefaultDaysOffset, hasCustomLabel, hasVisitId, hasClinicalScope] = await Promise.all([
     getMergedFilterFragment(pool, 'ewp'),
     probeColumnExists(pool, 'episode_work_phases', 'default_days_offset'),
     probeColumnExists(pool, 'episode_work_phases', 'custom_label'),
     probeColumnExists(pool, 'episode_work_phases', 'visit_id'),
+    probeColumnExists(pool, 'episode_work_phases', 'clinical_scope'),
   ]);
   let optionalCols = '';
   if (hasDefaultDaysOffset) optionalCols += ', ewp.default_days_offset';
   if (hasCustomLabel) optionalCols += ', ewp.custom_label';
+  if (hasClinicalScope) optionalCols += ", ewp.clinical_scope, COALESCE((SELECT json_agg(d.requires_phase_id) FROM clinical_work_dependencies d WHERE d.work_phase_id=ewp.id),'[]') AS requires_phase_ids";
   // WP-4.2: vizit-tagság + vizit-szintű days_offset a forecast-lánchoz
   // ("egy vizit fázisai egy alkalom"). A 089 előtti sémán elmarad — a sorok
   // egyfős egységként viselkednek, a mai működés szerint.
@@ -315,6 +319,8 @@ function buildVisitAwareChainRows(
       bookedStart: bookedStartForRow(row, bookedMaps),
       visitId: row.visit_id ?? null,
       visitDaysOffset: row.visit_days_offset ?? null,
+      clinicalScope: row.clinical_scope,
+      requiresPhaseIds: row.requires_phase_ids,
     };
   });
 }
@@ -419,7 +425,9 @@ export async function nextRequiredStep(episodeId: string): Promise<NextRequiredS
     // alkalom után"); NULL vizit-offsetnél a fázis offsetje a fallback.
     const daysOffset =
       pendingStep.visit_days_offset ?? pendingStep.default_days_offset ?? matchingStep.default_days_offset ?? 14;
-    const { windowStart, windowEnd } = computeStepWindow(anchorDate, daysOffset);
+    const managedWindows = computeVisitAwareWindowChain(buildVisitAwareChainRows(episodeWorkPhases,pathwayWorkPhases,bookedMaps),anchorDate,fallback.planStartDate??fallback.openedAt);
+    const managed=pendingStep.clinical_scope&&pendingStep.clinical_scope!=='review'?managedWindows.get(pendingStep.id??''):null;
+    const { windowStart, windowEnd } = managed??computeStepWindow(anchorDate, daysOffset);
 
     return {
       work_phase_code: matchingStep.work_phase_code,
@@ -557,7 +565,7 @@ export async function allPendingSteps(episodeId: string): Promise<AllPendingStep
     // WP-4.2: vizit-tudatos lánc — egy vizit fázisai EGY alkalom (közös ablak),
     // a vizitek között a cél-vizit days_offset-je a lépésköz.
     const chainRows = buildVisitAwareChainRows(episodeWorkPhases, pathwayWorkPhases, bookedMaps);
-    const chainWindows = computeVisitAwareWindowChain(chainRows, initialAnchor);
+    const chainWindows = computeVisitAwareWindowChain(chainRows, initialAnchor, fallback.planStartDate??fallback.openedAt);
     const rowKeyByPhase = new Map(episodeWorkPhases.map((row, i) => [row, chainRowKey(row, i)]));
 
     const results: PendingStep[] = [];
@@ -727,7 +735,7 @@ export function allPendingStepsWithData(
     // WP-4.2: vizit-tudatos lánc — egy vizit fázisai EGY alkalom (közös ablak),
     // a vizitek között a cél-vizit days_offset-je a lépésköz.
     const chainRows = buildVisitAwareChainRows(episodeWorkPhases, pathwayWorkPhases, bookedMaps);
-    const chainWindows = computeVisitAwareWindowChain(chainRows, initialAnchor);
+    const chainWindows = computeVisitAwareWindowChain(chainRows, initialAnchor, planStartDate??openedAt);
     const rowKeyByPhase = new Map(episodeWorkPhases.map((row, i) => [row, chainRowKey(row, i)]));
 
     const results: PendingStep[] = [];

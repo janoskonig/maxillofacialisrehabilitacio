@@ -30,7 +30,10 @@ export const PATCH = authedHandler(async (req, { auth, params }) => {
     updates.push(`status = $${idx++}`);
     values.push(body.status);
     if (body.status === 'completed') {
-      updates.push(`completed_at = CURRENT_TIMESTAMP`);
+      const completedAt=body.completedAt ? new Date(body.completedAt) : new Date();
+      if (!Number.isFinite(completedAt.getTime()) || completedAt.getTime()>Date.now()) return NextResponse.json({error:'Érvénytelen vagy jövőbeli eseménydátum'},{status:400});
+      updates.push(`completed_at = $${idx++}`);
+      values.push(completedAt.toISOString());
     }
   }
   if (body.notes !== undefined) {
@@ -89,7 +92,7 @@ export const PATCH = authedHandler(async (req, { auth, params }) => {
     const row = result.rows[0];
 
     let dentalStatusUpdated = false;
-    if (body.status === 'completed' && prevStatus !== 'completed') {
+    if (body.status === 'completed' && prevStatus !== 'completed' && body.confirmOutcome === true) {
       const labelRes = await client.query(
         'SELECT label_hu AS "labelHu" FROM tooth_treatment_catalog WHERE code = $1',
         [row.treatmentCode]

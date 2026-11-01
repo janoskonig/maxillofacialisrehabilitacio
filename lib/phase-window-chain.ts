@@ -5,6 +5,7 @@
  */
 
 import { computeStepWindow } from './step-window';
+import { clinicalDependencyWindows } from './prosthesis-lifecycle/scheduling';
 
 const MS_PER_DAY = 24 * 60 * 60 * 1000;
 
@@ -27,6 +28,8 @@ export interface PhaseWindowChainResult {
 
 /** WP-4.2: vizit-tudatos lánc-sor — a rowKey a konkrét EWP sor azonosítója. */
 export interface VisitAwareChainRow extends PhaseWindowChainRow {
+  clinicalScope?: string;
+  requiresPhaseIds?: string[];
   /** Sor-szintű kulcs (episode_work_phases.id, vagy determinisztikus fallback). */
   rowKey: string;
   /** A sor vizitje; NULL/undefined = a sor önálló (egyfős) láncegység. */
@@ -54,7 +57,8 @@ export interface VisitAwareChainRow extends PhaseWindowChainRow {
  */
 export function computeVisitAwareWindowChain(
   rows: VisitAwareChainRow[],
-  initialAnchor: Date
+  initialAnchor: Date,
+  clinicalAnchor: Date = initialAnchor
 ): Map<string, PhaseWindowChainResult> {
   // 1) Egységekbe csoportosítás: vizit szerint, az első tag pozíciójának
   //    sorrendjében; vizit nélküli sor önálló egység.
@@ -146,6 +150,7 @@ export function computeVisitAwareWindowChain(
     }
   });
 
+  clinicalDependencyWindows(rows,clinicalAnchor,out).forEach((value,key)=>out.set(key,value));
   return out;
 }
 

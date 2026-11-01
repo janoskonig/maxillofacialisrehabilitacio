@@ -45,6 +45,7 @@ beforeEach(() => {
   currentPatient = { ...patient };
   documents = [{ ...op }];
   mocks.query.mockImplementation(async (sql: string) => {
+    if (sql.includes('INSERT INTO clinical_document_packages')) return {rows:[{id:'preserved-package'}]};
     if (sql.includes('FROM patients_full')) return { rows: [currentPatient] };
     if (sql.includes('FROM lab_quote_requests')) return { rows: [] };
     if (sql.includes('FROM patient_documents')) return { rows: documents };

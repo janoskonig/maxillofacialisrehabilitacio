@@ -5,6 +5,13 @@ import { fetchVirtualAppointments } from '@/lib/virtual-appointments-service';
 
 export const dynamic = 'force-dynamic';
 
+/** Date-only filters describe Budapest calendar days, regardless of DB timezone. */
+function rangeBoundary(index:number,value:string) {
+  return /^\d{4}-\d{2}-\d{2}$/.test(value)
+    ? `($${index}::date::timestamp AT TIME ZONE 'Europe/Budapest')`
+    : `$${index}::timestamptz`;
+}
+
 /** Extract YYYY-MM-DD in Europe/Budapest from ISO string (avoids UTC date shift) */
 function toDateOnlyBudapest(s: string | null): string | null {
   if (!s) return null;
@@ -31,12 +38,12 @@ export const GET = authedHandler(async (req, { auth }) => {
   let paramIndex = 1;
 
   if (startDate) {
-    whereConditions.push(`ats.start_time >= $${paramIndex}`);
+    whereConditions.push(`ats.start_time >= ${rangeBoundary(paramIndex,startDate)}`);
     queryParams.push(startDate);
     paramIndex++;
   }
   if (endDate) {
-    whereConditions.push(`ats.start_time < $${paramIndex}`);
+    whereConditions.push(`ats.start_time < ${rangeBoundary(paramIndex,endDate)}`);
     queryParams.push(endDate);
     paramIndex++;
   }
@@ -73,6 +80,8 @@ export const GET = authedHandler(async (req, { auth }) => {
       a.appointment_status as "appointmentStatus",
       a.completion_notes as "completionNotes",
       a.is_late as "isLate",
+      hr.time_precision AS "timePrecision",hr.occurred_on::text AS "occurredOn",
+      hr.recorded_at AS "recordedAt",hr.source AS "clinicalSource",
       a.appointment_type as "appointmentType",
       ats.start_time as "startTime",
       ats.status as "slotStatus",
@@ -86,6 +95,7 @@ export const GET = authedHandler(async (req, { auth }) => {
     JOIN available_time_slots ats ON a.time_slot_id = ats.id
     JOIN patients p ON a.patient_id = p.id
     LEFT JOIN users u ON a.dentist_email = u.email
+    LEFT JOIN retrospective_appointment_records hr ON hr.appointment_id=a.id
     ${whereClause}
     ORDER BY ats.start_time ASC
   `;
@@ -99,12 +109,12 @@ export const GET = authedHandler(async (req, { auth }) => {
     let slotsParamIndex = 1;
 
     if (startDate) {
-      slotsWhereConditions.push(`ats.start_time >= $${slotsParamIndex}`);
+      slotsWhereConditions.push(`ats.start_time >= ${rangeBoundary(slotsParamIndex,startDate)}`);
       slotsQueryParams.push(startDate);
       slotsParamIndex++;
     }
     if (endDate) {
-      slotsWhereConditions.push(`ats.start_time < $${slotsParamIndex}`);
+      slotsWhereConditions.push(`ats.start_time < ${rangeBoundary(slotsParamIndex,endDate)}`);
       slotsQueryParams.push(endDate);
       slotsParamIndex++;
     }

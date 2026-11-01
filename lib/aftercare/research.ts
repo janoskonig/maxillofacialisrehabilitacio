@@ -34,7 +34,7 @@ export function buildWorkloadResearchRows(patientId: string, data: AftercareWork
     const construction = data.encounters.filter((v) => v.phase === 'construction' && v.occurredOn <= asOf && attended(v.appointmentStatus)
       && v.links.some((l) => l.prosthesisId === p.id));
     rows.push({ recordKey: `prosthesis:${prosthesisKey}`, recordType: 'prosthesis', subjectKey, prosthesisKey,
-      episodeKey: researchKey(p.episodeId, 'episode'), jaw: p.jaw, prosthesisType: p.prosthesisType,
+      episodeKey: p.episodeId ? researchKey(p.episodeId, 'episode') : null, jaw: p.jaw, prosthesisType: p.prosthesisType,
       delivered: p.deliveryDate !== null, deliveryConfirmed: p.deliveryDate ? p.deliveryConfirmed !== false : null,
       daysObserved: p.deliveryDate ? Math.max(0, daysBetween(p.deliveryDate, asOf < observationEnd(p.deliveryDate) ? asOf : observationEnd(p.deliveryDate))) : null,
       ...metrics,

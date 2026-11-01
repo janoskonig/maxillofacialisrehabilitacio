@@ -80,7 +80,9 @@ export async function createOpenEpisodeWithInitialStageZero(
     }
 
     const closingResult = await client.query(
-      `SELECT id FROM patient_episodes WHERE patient_id = $1 AND status = 'open'`,
+      `SELECT id FROM patient_episodes pe WHERE patient_id = $1 AND status = 'open'
+       AND NOT EXISTS(SELECT 1 FROM prosthesis_episode_links l WHERE l.episode_id=pe.id)
+       AND NOT EXISTS(SELECT 1 FROM prostheses p WHERE p.episode_id=pe.id)`,
       [input.patientId],
     );
     const closingIds = closingResult.rows.map((r: { id: string }) => r.id);
@@ -93,7 +95,9 @@ export async function createOpenEpisodeWithInitialStageZero(
       }
     }
     await client.query(
-      `UPDATE patient_episodes SET status = 'closed', closed_at = CURRENT_TIMESTAMP WHERE patient_id = $1 AND status = 'open'`,
+      `UPDATE patient_episodes pe SET status = 'closed', closed_at = CURRENT_TIMESTAMP WHERE patient_id = $1 AND status = 'open'
+       AND NOT EXISTS(SELECT 1 FROM prosthesis_episode_links l WHERE l.episode_id=pe.id)
+       AND NOT EXISTS(SELECT 1 FROM prostheses p WHERE p.episode_id=pe.id)`,
       [input.patientId],
     );
 

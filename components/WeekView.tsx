@@ -8,6 +8,7 @@ import { VirtualLane } from './VirtualLane';
 interface Appointment {
   id: string;
   startTime: string;
+  timePrecision?: 'day'|'exact'|null;
   patientName: string | null;
   patientTaj: string | null;
   dentistEmail: string;
@@ -65,6 +66,7 @@ export function WeekView({
   const getAppointmentsForHour = (date: Date, hour: number): Appointment[] => {
     const dayAppointments = getAppointmentsForDate(date);
     return dayAppointments.filter((apt) => {
+      if(apt.timePrecision==='day')return false;
       const aptDate = new Date(apt.startTime);
       return aptDate.getHours() === hour;
     });
@@ -111,6 +113,7 @@ export function WeekView({
         </div>
 
         {/* Time slots */}
+        {days.some(d=>getAppointmentsForDate(d).some(a=>a.timePrecision==='day'))&&<div className="grid grid-cols-8 border-b"><div className="p-2 text-xs">Pontos idő nélkül</div>{days.map(d=><div key={d.toISOString()} className="p-1 space-y-1 border-l">{getAppointmentsForDate(d).filter(a=>a.timePrecision==='day').map(a=><CalendarEvent key={a.id} appointment={a} compact onClick={()=>onAppointmentClick?.(a)}/>)}</div>)}</div>}
         <div className="grid grid-cols-8">
           {/* Hour labels */}
           <div className="border-r border-gray-200 dark:border-gray-800">

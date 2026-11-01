@@ -354,6 +354,7 @@ export function BetegvizsgalatSection({
           {patientId && (
             <div className="mt-4">
               <DentalStatusTimeline patientId={patientId} />
+              <a className="text-sm text-medical-primary underline" href={`/patients/${patientId}/prostheses`}>Epizódhoz kötött kiindulási, tervezett és tényleges státusz összehasonlítása</a>
             </div>
           )}
 
@@ -394,6 +395,7 @@ export function BetegvizsgalatSection({
               <ToothTreatmentProvider
                 patientId={patientId}
                 onTreatmentCompleted={(toothNumber, treatmentCode, result) => {
+                  if (!result?.dentalStatusUpdated) return;
                   // Egy kezelés "Kész"-re állításakor a szerver már frissítette a
                   // tárolt állapotot; itt a helyi (autosave-elt) odontogramot is
                   // átvezetjük, hogy a két oldal ne kerüljön ellentmondásba.
