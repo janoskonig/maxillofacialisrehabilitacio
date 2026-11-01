@@ -24,12 +24,12 @@ async function device(db:Db, patientId:string, id:string) {
 async function episode(db:Db, patientId:string, id:string) {
   return one(db,'SELECT * FROM patient_episodes WHERE patient_id=$1 AND id=$2',[patientId,id]);
 }
-async function newEpisode(db:Db,patientId:string,actor:string,parentId:string|null,label:string,day:string) {
+async function newEpisode(db:Db,patientId:string,actor:string,parentId:string|null,label:string,day:string,chiefComplaint?:string) {
   const parent=parentId?await episode(db,patientId,parentId):null;
   const context=parent??(await db.query('SELECT * FROM patient_episodes WHERE patient_id=$1 ORDER BY opened_at DESC LIMIT 1',[patientId])).rows[0];
   if(!context)fail('Az ellátás indokához válasszon előzményepizódot');
   const r=await db.query(`INSERT INTO patient_episodes(patient_id,reason,chief_complaint,case_title,status,opened_at,parent_episode_id,trigger_type,created_by,treatment_plan,treatment_plan_upper,treatment_plan_lower)
-    VALUES($1,$2,$3,$3,'open',$4::date::timestamp AT TIME ZONE 'Europe/Budapest',$5,'egyeb',$6,$7,$8,$9) RETURNING id`,[patientId,context.reason,label,day,parentId,actor,context.treatment_plan??null,context.treatment_plan_upper??null,context.treatment_plan_lower??null]);
+    VALUES($1,$2,$3,$4,'open',$5::date::timestamp AT TIME ZONE 'Europe/Budapest',$6,'egyeb',$7,$8,$9,$10) RETURNING id`,[patientId,context.reason,chiefComplaint?.trim()||context.chief_complaint||'',label,day,parentId,actor,context.treatment_plan??null,context.treatment_plan_upper??null,context.treatment_plan_lower??null]);
   return r.rows[0].id as string;
 }
 async function clinicalWork(db:Db,patientId:string,id:string) {
@@ -66,7 +66,14 @@ async function insertDevice(db:Db, patientId:string, actor:string, c:Extract<Cli
   if (c.positions.some(p => upper !== (p.tooth<30))) fail('A pozíció nem a kiválasztott állcsonthoz tartozik',400);
   // The selected episode is provenance, never a container for another appliance.
   const ownLink=c.action==='review_mapping'&&c.episodeId ? await db.query("SELECT 1 FROM prosthesis_episode_links WHERE episode_id=$1 AND prosthesis_id=$2 AND purpose='construction'",[c.episodeId,c.prosthesisId]):{rows:[]};
-  const actualEpisodeId=c.origin==='local'?(ownLink.rows.length?c.episodeId:await newEpisode(db,patientId,actor,c.episodeId,`${c.jaw==='felso'?'Felső':'Alsó'} ${c.role==='provisional'?'ideiglenes':'fogpótlás'} – ${c.label}`,c.occurredOn)):null;
+  let actualEpisodeId:string|null=null;
+  if(c.episodeMode==='existing'){
+    if(c.action!=='register'||c.origin!=='local'||!c.episodeId)fail('Az epizódhoz helyben készülő, új fogpótlás kapcsolható.',400);
+    const ep=await episode(db,patientId,c.episodeId!);
+    if(ep.status!=='open')fail('Ehhez nyitott, még fogpótlás nélküli epizód szükséges.');
+    if((await db.query('SELECT 1 FROM prosthesis_episode_links WHERE episode_id=$1 UNION ALL SELECT 1 FROM prostheses WHERE episode_id=$1',[ep.id])).rows.length)fail('Az epizódnak már van fogpótlása. Másik készülékhez új epizód szükséges.');
+    actualEpisodeId=ep.id;
+  }else if(c.origin==='local')actualEpisodeId=ownLink.rows.length?c.episodeId:await newEpisode(db,patientId,actor,c.episodeId,`${c.jaw==='felso'?'Felső':'Alsó'} ${c.role==='provisional'?'ideiglenes':'fogpótlás'} – ${c.label}`,c.occurredOn,c.episodeReason);
   const values = [patientId,actualEpisodeId,c.jaw,c.prosthesisType,c.label,actor,c.origin,c.role,JSON.stringify(c.specification),JSON.stringify(c.positions)];
   if (c.action==='review_mapping') {
     const p = await device(db,patientId,c.prosthesisId);
@@ -273,7 +280,7 @@ async function perform(db:PoolClient, patientId:string, actor:string, c:Clinical
       if (!p.delivery_date || p.delivery_date>c.occurredOn) fail('Javítási ügyhöz dokumentált korábbi átadás szükséges');
       await baselineAt(db,patientId,c.baselineStateId,c.occurredOn);
       await assertDocuments(db,patientId,c.documentIds);
-      const repairEpisodeId=await newEpisode(db,patientId,actor,p.episode_id,`Javítás – ${p.label}: ${c.reason.slice(0,120)}`,c.occurredOn);
+      const repairEpisodeId=await newEpisode(db,patientId,actor,p.episode_id,`Javítás – ${p.label}: ${c.reason.slice(0,120)}`,c.occurredOn,c.reason);
       await db.query("INSERT INTO prosthesis_episode_links(episode_id,prosthesis_id,purpose) VALUES($1,$2,'repair')",[repairEpisodeId,p.id]);
       const id=randomUUID(), ev=await append(db,patientId,actor,c,'repair_opened',{prosthesisId:p.id,episodeId:repairEpisodeId,entityId:id});
       await db.query(`INSERT INTO prosthesis_repair_cases(id,patient_id,prosthesis_id,baseline_state_id,opened_event_id,reason,plan,documents,laboratory_tasks,episode_id) VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10)`,[id,patientId,p.id,c.baselineStateId,ev.eventId,c.reason,c.plan,JSON.stringify(c.documentIds),JSON.stringify(c.laboratoryTasks),repairEpisodeId]);

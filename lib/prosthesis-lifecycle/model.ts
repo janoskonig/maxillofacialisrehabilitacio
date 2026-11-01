@@ -23,6 +23,7 @@ const meta = {
 };
 const device = {
   episodeId: uuid.nullable(), jaw: z.enum(['felso','also']), origin: z.enum(['local','external','unknown']),
+  episodeMode:z.enum(['new','existing']).optional(),episodeReason:z.string().trim().max(10000).optional(),
   role: z.enum(['provisional','definitive','unknown']), label: text.max(160),
   prosthesisType: z.enum(['removable','fixed','combined_fixed_removable','screw_retained_implant_bridge','obturator','other']),
   specification: map.default({}), positions: positionsSchema.default([]),

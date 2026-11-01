@@ -78,8 +78,8 @@ export function PlanVisitOverview({
       ) : (
         <div className="px-4 py-7 text-center">
           <CalendarDays className="mx-auto mb-2 h-6 w-6 text-gray-400" />
-          <p className="text-sm text-gray-600 dark:text-gray-400">{groups.length ? 'Nincs hátralévő tervezett alkalom.' : 'Még nincs összeállítva az alkalmak terve.'}</p>
-          <button type="button" onClick={onEdit} className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-medical-primary hover:underline"><Pencil className="h-3.5 w-3.5" />{groups.length ? 'Terv kiegészítése' : 'Terv összeállítása'}</button>
+          <p className="text-sm text-gray-600 dark:text-gray-400">{groups.length ? 'Nincs hátralévő tervezett alkalom.' : 'Még nincsenek összeállítva az elkészítési munkafázisok.'}</p>
+          <button type="button" onClick={onEdit} className="mt-3 inline-flex items-center gap-1.5 text-sm font-medium text-medical-primary hover:underline"><Pencil className="h-3.5 w-3.5" />{groups.length ? 'Munkafázisok kiegészítése' : 'Munkafázisok összeállítása'}</button>
         </div>
       )}
       {(unassignedCount > 0 || unattachedCount > 0) && <div className="mx-4 my-3 rounded-lg bg-amber-50 dark:bg-amber-950/30 px-3 py-2 text-sm text-amber-800 dark:text-amber-300">

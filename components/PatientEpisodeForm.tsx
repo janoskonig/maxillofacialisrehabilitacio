@@ -1,6 +1,6 @@
 'use client';
 
-import { useState } from 'react';
+import { useEffect,useId,useState } from 'react';
 import type { PatientEpisode, ReasonType, TriggerType } from '@/lib/types';
 import { REASON_VALUES, TRIGGER_TYPE_VALUES } from '@/lib/types';
 import { useToast } from '@/contexts/ToastContext';
@@ -14,6 +14,7 @@ interface PatientEpisodeFormProps {
   embedded?: boolean;
   /** Beágyazott módban hívódik Mégse-re és sikeres létrehozás után. */
   onClose?: () => void;
+  onStateChange?:(state:{dirty:boolean;saving:boolean})=>void;
 }
 
 const TRIGGER_LABELS: Record<TriggerType, string> = {
@@ -30,13 +31,20 @@ export function PatientEpisodeForm({
   onEpisodeCreated,
   embedded = false,
   onClose,
+  onStateChange,
 }: PatientEpisodeFormProps) {
   const { showToast } = useToast();
+  const fieldId=useId();
   const [open, setOpen] = useState(embedded);
-  const [reason, setReason] = useState<ReasonType>(patientReason || 'onkológiai kezelés utáni állapot');
+  const [reason, setReason] = useState<ReasonType|''>(patientReason || '');
   const [chiefComplaint, setChiefComplaint] = useState('');
+  const [caseTitle,setCaseTitle]=useState('');
   const [triggerType, setTriggerType] = useState<TriggerType | ''>('');
   const [saving, setSaving] = useState(false);
+
+  const dirty=!!(chiefComplaint||caseTitle||triggerType||reason!==(patientReason||''));
+  useEffect(()=>{onStateChange?.({dirty,saving});},[dirty,saving,onStateChange]);
+  useEffect(()=>()=>onStateChange?.({dirty:false,saving:false}),[onStateChange]);
 
   const submit = async () => {
     setSaving(true);
@@ -47,7 +55,7 @@ export function PatientEpisodeForm({
         credentials: 'include',
         body: JSON.stringify({
           reason,
-          chiefComplaint: chiefComplaint.trim(),
+          chiefComplaint: chiefComplaint.trim(),caseTitle:caseTitle.trim()||null,
           triggerType: triggerType || undefined,
         }),
       });
@@ -59,7 +67,7 @@ export function PatientEpisodeForm({
       }
 
       showToast('Új ellátási epizód sikeresen indítva', 'success');
-      setChiefComplaint('');
+      setChiefComplaint('');setCaseTitle('');
       setTriggerType('');
       setOpen(embedded);
       if (embedded) onClose?.();
@@ -74,7 +82,7 @@ export function PatientEpisodeForm({
   const handleSubmit = async (e: React.FormEvent) => {
     e.preventDefault();
     if (!chiefComplaint.trim()) {
-      showToast('Cím / ok megadása kötelező', 'error');
+      showToast('Az epizód indításának oka kötelező', 'error');
       return;
     }
     await submit();
@@ -94,16 +102,17 @@ export function PatientEpisodeForm({
       ) : (
         <form onSubmit={handleSubmit} className="space-y-4">
           <h4 className="font-semibold text-gray-900 dark:text-gray-100">Új ellátási epizód</h4>
-          <p className="text-sm text-gray-500 dark:text-gray-400 -mt-2">Indítson új kezelési ciklust — pl. külön epizód a felső és alsó állcsonthoz</p>
+          <p className="text-sm text-gray-500 dark:text-gray-400 -mt-2">Először az ellátás konkrét okát add meg. A tervezett fogpótlást és annak finanszírozását az epizódhoz kapcsolhatod.</p>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Etiológia (kötelező)</label>
+            <label htmlFor={`${fieldId}-reason`} className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Az ellátás alapjául szolgáló állapot</label>
             <select
-              value={reason}
+              id={`${fieldId}-reason`} value={reason}
               onChange={(e) => setReason(e.target.value as ReasonType)}
               className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm"
               required
             >
+              <option value="" disabled>Válassz állapotot…</option>
               {REASON_VALUES.map((r) => (
                 <option key={r} value={r}>{r}</option>
               ))}
@@ -111,21 +120,23 @@ export function PatientEpisodeForm({
           </div>
 
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Cím / ok (kötelező)</label>
-            <input
-              type="text"
-              value={chiefComplaint}
+            <label htmlFor={`${fieldId}-complaint`} className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Miért indul ez az epizód?</label>
+            <textarea
+              rows={3}
+              maxLength={10000}
+              id={`${fieldId}-complaint`} value={chiefComplaint}
               onChange={(e) => setChiefComplaint(e.target.value)}
-              placeholder="pl. Obturátor remake, Recidíva 2027"
+              placeholder="Például: felső foghiány rehabilitációja vagy eltört pótlás javítása"
               className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm"
               required
             />
           </div>
 
+          <div><label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Rövid megnevezés · opcionális<input type="text" maxLength={500} value={caseTitle} onChange={e=>setCaseTitle(e.target.value)} className="mt-1 w-full rounded-md border border-gray-300 px-3 py-2 text-sm dark:border-gray-700 dark:bg-gray-900" placeholder="Például: felső végleges fogpótlás"/></label></div>
           <div>
-            <label className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Indító esemény (opcionális)</label>
+            <label htmlFor={`${fieldId}-trigger`} className="block text-sm font-medium text-gray-700 dark:text-gray-300 mb-1">Indító esemény (opcionális)</label>
             <select
-              value={triggerType}
+              id={`${fieldId}-trigger`} value={triggerType}
               onChange={(e) => setTriggerType((e.target.value || '') as TriggerType | '')}
               className="w-full rounded-md border border-gray-300 dark:border-gray-700 px-3 py-2 text-sm"
             >
@@ -148,7 +159,7 @@ export function PatientEpisodeForm({
             <button
               type="button"
               onClick={() => {
-                setChiefComplaint('');
+                setChiefComplaint('');setCaseTitle('');
                 setTriggerType('');
                 if (embedded) onClose?.();
                 else setOpen(false);

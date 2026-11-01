@@ -714,7 +714,7 @@ describe('Everyday treatment workspace', () => {
     expect(screen.queryByTestId('plan-validation')).not.toBeInTheDocument();
     expect(screen.queryByTestId('plan-history')).not.toBeInTheDocument();
     expect(screen.getByText('Következő alkalom')).toBeInTheDocument();
-    fireEvent.click(screen.getByRole('button', { name: 'Terv szerkesztése' }));
+    fireEvent.click(screen.getByRole('button', { name: 'Munkafázisok szerkesztése' }));
     await screen.findByTestId('phase-palette');
     expect(screen.getByTestId('visit-board')).toBeInTheDocument();
     fireEvent.click(screen.getByRole('button', { name: '← Vissza az alkalmakhoz' }));

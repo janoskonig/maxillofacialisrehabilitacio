@@ -7,6 +7,7 @@ import { Calendar, ArrowRight, ChevronRight, Clock, AlertTriangle, ChevronDown, 
 import { format } from 'date-fns';
 import { hu } from 'date-fns/locale';
 import { StageSuggestionModal } from './StageSuggestionModal';
+import { episodeOverviewHref } from '@/lib/episode-overview';
 
 interface EpisodeStageCardProps {
   patientId: string;
@@ -163,7 +164,7 @@ export function EpisodeStageCard({
               A betegnek nincs nyitott ellátási epizódja. Az ellátás strukturált követéséhez indítson egy újat.
             </p>
             <a
-              href={`/patients/${patientId}/stages`}
+              href={`${episodeOverviewHref(patientId)}?new=1`}
               className="inline-flex items-center gap-2 mt-3 px-4 py-2 bg-amber-600 text-white rounded-md text-sm font-medium hover:bg-amber-700 transition-colors"
             >
               <Plus className="w-4 h-4" />
@@ -330,10 +331,10 @@ export function EpisodeStageCard({
 
         {/* Primary action — always visible */}
         <a
-          href={`/patients/${patientId}/stages`}
+          href={episodeOverviewHref(patientId,activeEpisode?.id)}
           className="inline-flex items-center gap-1.5 mt-1 text-sm font-medium text-medical-primary hover:text-medical-primary-dark"
         >
-          Teljes stádium kezelés
+          Epizód és terv áttekintése
           <ArrowRight className="w-3.5 h-3.5" />
         </a>
 

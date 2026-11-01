@@ -15,11 +15,14 @@ interface Props {
   episodeId: string;
   canEdit: boolean;
   onStateChange?: (state: { dirty: boolean; saving: boolean }) => void;
+  onRecordChange?: (plan: EpisodeTreatmentPlanRecord) => void;
+  unified?: boolean;
 }
 
-export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange }: Props) {
+export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange, onRecordChange, unified=false }: Props) {
   const { showToast } = useToast();
   const {expert}=useClinicalFormMode();
+  const allSections=expert||unified;
   const [plan, setPlan] = useState<EpisodeTreatmentPlanRecord | null>(null);
   const [draft, setDraft] = useState({ upper: '', lower: '' });
   const [loading, setLoading] = useState(true);
@@ -67,6 +70,9 @@ export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange }
     void load(controller.signal);
     return () => controller.abort();
   }, [load]);
+  useEffect(()=>{if(plan)onRecordChange?.(plan);},[plan,onRecordChange]);
+  const loadedPlanEpisodeId=plan?.episodeId;
+  useEffect(()=>{if(loading||!loadedPlanEpisodeId)return;const id=window.location.hash.slice(1);if(id==='kezelesi-terv'||id==='finanszirozas')requestAnimationFrame(()=>document.getElementById(id)?.scrollIntoView?.({block:'start'}));},[loading,loadedPlanEpisodeId]);
   useEffect(() => { onStateChange?.({ dirty:dirty||financingState.dirty, saving:saving||financingState.saving }); }, [dirty, saving, financingState, onStateChange]);
   useEffect(() => () => onStateChange?.({ dirty: false, saving: false }), [onStateChange]);
   useEffect(() => {
@@ -112,16 +118,16 @@ export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange }
         <div><h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{plan?.jaw?`${plan.jaw==='felso'?'Felső':'Alsó'} fogpótlás kezelési terve`:'Kezelési tervek állcsontonként'}</h3><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{plan?.prosthesisLabel||'Írd le a tervezett ellátást, majd add meg a finanszírozást.'}</p></div>
         {plan?.clinicalPlan&&<span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${plan.clinicalPlan.approved&&!dirty?'bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-200':'bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-200'}`}><ClipboardCheck className="h-3.5 w-3.5"/>{plan.clinicalPlan.version}. változat · {dirty?'módosított tervezet':plan.clinicalPlan.approved?'jóváhagyott':'tervezet'}</span>}
       </div>
-      <div className="mt-3 flex flex-wrap items-center justify-between gap-2"><FormModeSwitch/><p className="text-xs text-slate-500">{expert?'Minden mező egy oldalon. A tervet és a finanszírozást külön mentheted.':'Lépésenként, a szükséges mezőkkel.'}</p></div>
+      {!unified&&<div className="mt-3 flex flex-wrap items-center justify-between gap-2"><FormModeSwitch/><p className="text-xs text-slate-500">{expert?'Minden mező egy oldalon. A tervet és a finanszírozást külön mentheted.':'Lépésenként, a szükséges mezőkkel.'}</p></div>}
       {plan&&!loading&&<>
-        <div hidden={expert} role="group" aria-label="Terv és finanszírozás" className={expert?'hidden':'my-4 grid grid-cols-2 gap-2'}>
+        <div hidden={allSections} role="group" aria-label="Terv és finanszírozás" className={allSections?'hidden':'my-4 grid grid-cols-2 gap-2'}>
           <button type="button" aria-pressed={section==='plan'} disabled={financingState.dirty||financingState.saving} onClick={()=>setSection('plan')} className={`rounded-xl border p-3 text-left text-sm disabled:opacity-50 ${section==='plan'?'border-blue-600 bg-blue-50 dark:bg-blue-950':'border-slate-200 dark:border-slate-700'}`}><span className="font-semibold">1. Kezelési terv</span><span className="mt-1 block text-xs text-slate-500">{dirty?'Módosítások mentésre várnak':plan.clinicalPlan?.approved?'Klinikailag jóváhagyott':plan.clinicalPlan?'Mentett tervezet':'Kitöltendő'}</span></button>
           <button type="button" aria-pressed={section==='financing'} disabled={dirty||saving} onClick={()=>setSection('financing')} className={`rounded-xl border p-3 text-left text-sm disabled:opacity-50 ${section==='financing'?'border-blue-600 bg-blue-50 dark:bg-blue-950':'border-slate-200 dark:border-slate-700'}`}><span className="font-semibold">2. Finanszírozás</span><span className="mt-1 block text-xs text-slate-500">{plan.financing?.current.requiresReview?'A terv változása miatt ellenőrizendő':plan.financing?.current.event?'Rögzítve':'Még nincs megadva'}</span></button>
         </div>
-        {dirty&&!expert&&<p className="mb-3 text-xs text-slate-500">Előbb mentsd a tervet; utána annak finanszírozását töltheted ki.</p>}
-        {financingState.dirty&&!expert&&<p className="mb-3 text-xs text-slate-500">A finanszírozásnál a Mentés vagy a Mégse gombbal fejezd be a kitöltést, mielőtt visszatérsz a tervhez.</p>}
+        {dirty&&!allSections&&<p className="mb-3 text-xs text-slate-500">Előbb mentsd a tervet; utána annak finanszírozását töltheted ki.</p>}
+        {financingState.dirty&&!allSections&&<p className="mb-3 text-xs text-slate-500">A finanszírozásnál a Mentés vagy a Mégse gombbal fejezd be a kitöltést, mielőtt visszatérsz a tervhez.</p>}
       </>}
-      <div hidden={!expert&&section!=='plan'}>
+      <div hidden={!allSections&&section!=='plan'}>
       {loading ? <p role="status">Kezelési terv betöltése…</p> : plan ? (
         canEdit ? <>
           <div className="mb-2 mt-5 flex items-center gap-2 text-sm font-semibold"><FileText className="h-4 w-4 text-slate-400"/>Milyen ellátást tervezünk?</div>
@@ -167,7 +173,7 @@ export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange }
         </> : <><EpisodePlanVisual plan={plan} baselineStateId={plan.clinicalPlan?.baselineStateId??null} treatments={plan.clinicalPlan?.treatments??[]}/><div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">{jaws.map(j=><div key={j.jaw}><p className="font-semibold">{j.label}</p><p className="mt-1 whitespace-pre-wrap break-words">{(j.jaw==='upper'?plan.treatmentPlanUpper:plan.treatmentPlanLower)||'Nincs rögzített kezelési terv.'}</p></div>)}</div></>
       ) : <button type="button" onClick={() => load()} className="text-sm underline">Újrapróbálás</button>}
       </div>
-      {plan&&!loading&&<div hidden={!expert&&section!=='financing'}><EpisodeFinancingPanel key={episodeId} plan={plan} canEdit={canEdit} disabled={saving} planUnsaved={dirty} onStateChange={setFinancingState} onChanged={financing=>setPlan(p=>p?{...p,financing}:p)}/></div>}
+      {plan&&!loading&&<div hidden={!allSections&&section!=='financing'}><EpisodeFinancingPanel key={episodeId} plan={plan} canEdit={canEdit} disabled={saving} planUnsaved={dirty} onStateChange={setFinancingState} onChanged={financing=>setPlan(p=>p?{...p,financing}:p)}/></div>}
       {legacy && <div className="mt-3 rounded border border-amber-200 dark:border-amber-700 p-3 text-sm">
         <p className="font-semibold">Korábban rögzített közös terv</p>
         <p className="mt-1">A korábbi szöveg megmaradt. Az állcsont szerinti besorolását Ön adhatja meg.</p>

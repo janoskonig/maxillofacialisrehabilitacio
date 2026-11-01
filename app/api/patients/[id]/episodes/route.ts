@@ -185,6 +185,7 @@ export const POST = roleHandler(
         { status: 400 }
       );
     }
+    if(chiefComplaint.length>10000||caseTitle&&caseTitle.length>500)return NextResponse.json({error:'Az indok legfeljebb 10000, a megnevezés legfeljebb 500 karakter lehet.'},{status:400});
 
     let episode: PatientEpisode;
     try {

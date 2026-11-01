@@ -10,6 +10,7 @@ import { AppShell } from '@/components/layout/AppShell';
 import { PatientHeaderBar } from '@/components/PatientHeaderBar';
 import { PatientOverviewTab } from '@/components/PatientOverviewTab';
 import { PatientCommunicationTab } from '@/components/PatientCommunicationTab';
+import { treatmentWorkspaceHref } from '@/lib/treatment-workspace';
 import { PatientTabsNav, type PatientProfileTabId } from '@/components/PatientTabsNav';
 
 type TabType = PatientProfileTabId;
@@ -59,6 +60,7 @@ export default function PatientViewPage() {
   const params = useParams();
   const searchParams = useSearchParams();
   const patientId = params.id as string;
+  const episodeContextId=searchParams.get('episodeId');
   const highlightDocumentId = searchParams.get('documentId');
   const [authorized, setAuthorized] = useState(false);
   const [patient, setPatient] = useState<Patient | null>(null);
@@ -140,7 +142,7 @@ export default function PatientViewPage() {
       const canOpenHub =
         userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász';
       if (canOpenHub) {
-        router.replace(`/patients/${patientId}/stages`);
+        router.replace(treatmentWorkspaceHref(patientId,episodeContextId));
       }
       return;
     }
@@ -153,7 +155,7 @@ export default function PatientViewPage() {
     if (!resolved || !VALID_TABS.includes(resolved)) return;
     setActiveTab(resolved);
     setLoadedTabs((prev) => new Set<TabType>([...Array.from(prev), resolved!]));
-  }, [authorized, searchParams, router, patientId, userRole]);
+  }, [authorized, searchParams, router, patientId, userRole,episodeContextId]);
 
   // #section-… → görgetés a szekcióhoz a fül betöltése után.
   useEffect(() => {
@@ -241,7 +243,7 @@ export default function PatientViewPage() {
         canSeeNextStep
         canAssignDoctor={userRole === 'admin' || userRole === 'fogpótlástanász'}
         onGoToScheduling={
-          isSchedulingRole ? () => router.push(`/patients/${patientId}/stages`) : undefined
+          isSchedulingRole ? () => router.push(treatmentWorkspaceHref(patientId,episodeContextId)) : undefined
         }
       />
 
@@ -249,6 +251,7 @@ export default function PatientViewPage() {
       <PatientTabsNav
         patientId={patientId}
         activeTab={activeTab}
+        episodeId={episodeContextId}
         onTabChange={handleTabChange}
         showStadiumok={isSchedulingRole}
       />
@@ -260,7 +263,7 @@ export default function PatientViewPage() {
             patient={patient}
             onGoToTab={(tab) => handleTabChange(tab as TabType)}
             onGoToScheduling={
-              isSchedulingRole ? () => router.push(`/patients/${patientId}/stages`) : undefined
+              isSchedulingRole ? () => router.push(treatmentWorkspaceHref(patientId,episodeContextId)) : undefined
             }
             canSeeClinical
           />

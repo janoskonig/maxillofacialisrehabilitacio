@@ -23,7 +23,7 @@ describe('Guided clinical documentation',()=>{
     render(<ClinicalEntryForm data={data} initial={{action:'register'}} onSave={save} onCancel={vi.fn()} busy={false}/>);
     expect((screen.getByLabelText('Állcsont') as HTMLSelectElement).value).toBe('');
     evidence();review();expect(screen.getByRole('alert').textContent).toContain('Állcsont');expect(save).not.toHaveBeenCalled();
-    for(const [label,value] of [['Megnevezés','Felső lemezes'],['Állcsont','felso'],['Eredet','local'],['Ideiglenes vagy végleges?','definitive'],['Típus','removable']])input(label,value);
+    for(const [label,value] of [['Megnevezés','Felső lemezes'],['Állcsont','felso'],['Eredet','local'],['Ideiglenes vagy végleges?','definitive'],['Típus','removable'],['Miért indul az új elkészítési epizód?','Felső foghiány rehabilitációja']])input(label,value);
     fireEvent.click(screen.getByText(/A pótlás helye a fogíven/));
     fireEvent.click(screen.getByRole('button',{name:/^11. fog ·/}));
     review();expect(screen.getByRole('region',{name:'Mentés előtti összefoglaló'}).textContent).toContain('11: Műfog');expect(save).not.toHaveBeenCalled();

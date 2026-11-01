@@ -48,6 +48,26 @@ async function editorSave(s:Awaited<ReturnType<typeof setup>>,episodeId:string,b
   }),{params:{id:episodeId}});
 }
 describe('prosthesis lifecycle with clinical dates',()=>{
+  it('attaches exactly one appliance to an explicitly selected empty episode without creating a second episode',async()=>{
+    const s=await setup(),requestKey=crypto.randomUUID();
+    const input={action:'register',episodeId:s.episode.id,episodeMode:'existing',requestKey,jaw:'felso',role:'definitive',origin:'local',prosthesisType:'removable',label:'Tervezett felső fogpótlás'};
+    const first=await s.run(input);expect(await s.run(input)).toEqual(first);
+    const workspace=await s.load();expect(workspace.episodes).toHaveLength(1);expect(workspace.prostheses[0]).toMatchObject({id:first.id,episode_id:s.episode.id});
+    await expect(s.run({...input,requestKey:crypto.randomUUID(),jaw:'also',label:'Másik készülék'})).rejects.toMatchObject({status:409});
+    expect((await s.load()).prostheses).toHaveLength(1);
+  });
+  it('keeps an episode indication distinct from its appliance name and preserves a long repair reason',async()=>{
+    const s=await setup();
+    await getDbPool().query('UPDATE patient_episodes SET chief_complaint=$2 WHERE id=$1',[s.episode.id,'Felső foghiány rehabilitációja']);
+    const p=await s.register();
+    const construction=(await getDbPool().query('SELECT chief_complaint,case_title FROM patient_episodes WHERE id=$1',[p.episodeId])).rows[0];
+    expect(construction.chief_complaint).toBe('Felső foghiány rehabilitációja');expect(construction.case_title).not.toBe(construction.chief_complaint);
+    const base=await s.baseline();await s.milestone(p.id,'delivered','2026-02-01');
+    const reason='A lemez törése és illeszkedési panasza. '.repeat(30);
+    const repair=await s.run({action:'repair',prosthesisId:p.id,baselineStateId:base.id,reason,plan:'Javítás',occurredOn:'2026-02-05'});
+    const row=(await getDbPool().query('SELECT e.chief_complaint FROM patient_episodes e JOIN prosthesis_repair_cases r ON r.episode_id=e.id WHERE r.id=$1',[repair.id])).rows[0];
+    expect(row.chief_complaint).toBe(reason.trim());
+  });
   it('does not close existing appliance episodes when another episode starts and forbids a second appliance in one episode',async()=>{
     const s=await setup(),p=await s.register();
     await createOpenEpisodeWithInitialStageZero(getDbPool(),{patientId:s.patient.id,reason:'traumás sérülés',chiefComplaint:'Új, külön ellátás',caseTitle:null,parentEpisodeId:null,triggerType:'egyeb',treatmentTypeId:null,createdBy:s.doctor.id});

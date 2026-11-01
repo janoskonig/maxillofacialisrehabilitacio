@@ -9,7 +9,9 @@ import {
   CalendarClock,
   MessageCircle,
   FolderOpen,
+  ClipboardList,
 } from 'lucide-react';
+import { episodeOverviewHref } from '@/lib/episode-overview';
 
 /** A betegkarton fülei, amik a profil oldalon (/patients/[id]/view) élnek. */
 export type PatientProfileTabId =
@@ -20,12 +22,13 @@ export type PatientProfileTabId =
   | 'adminisztracio';
 
 /** A „Kezelési terv & időpont" hub saját útvonalon él (/patients/[id]/stages), de a fülsor része. */
-export type PatientTabId = PatientProfileTabId | 'stadiumok' | 'aftercare';
+export type PatientTabId = PatientProfileTabId | 'stadiumok' | 'aftercare' | 'epizod';
 
 const TABS: Array<{ id: PatientTabId; label: string; shortLabel: string; icon: ReactNode }> = [
   { id: 'attekintes', label: 'Áttekintés', shortLabel: 'Áttekintés', icon: <LayoutDashboard className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'torzsadatok', label: 'Törzsadatok', shortLabel: 'Törzs', icon: <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'anamnezis', label: 'Anamnézis & vizsgálat', shortLabel: 'Anamnézis', icon: <Stethoscope className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
+  { id: 'epizod', label: 'Epizód és terv', shortLabel: 'Epizód', icon: <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'stadiumok', label: 'Kezelés', shortLabel: 'Kezelés', icon: <CalendarClock className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'aftercare', label: 'Fogpótlások és gondozás', shortLabel: 'Fogpótlások', icon: <Stethoscope className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'kommunikacio', label: 'Kommunikáció', shortLabel: 'Üzenet', icon: <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
@@ -42,14 +45,16 @@ interface PatientTabsNavProps {
   onTabChange?: (tab: PatientProfileTabId) => void;
   /** Technikus nem éri el a terv-hub oldalt — a fül számára elrejthető. */
   showStadiumok?: boolean;
+  episodeId?:string|null;
+  onNavigate?:(href:string)=>void|Promise<void>;
 }
 
 /**
  * A betegkarton közös fülsora — a profil oldal és a stádium oldal ugyanazt a
  * navigációt mutatja, így a két felület egy összefüggő betegkartonként viselkedik.
  */
-export function PatientTabsNav({ patientId, activeTab, onTabChange, showStadiumok = true }: PatientTabsNavProps) {
-  const tabs = showStadiumok ? TABS : TABS.filter((t) => t.id !== 'stadiumok' && t.id !== 'aftercare');
+export function PatientTabsNav({ patientId, activeTab, onTabChange, showStadiumok = true,episodeId,onNavigate }: PatientTabsNavProps) {
+  const tabs = showStadiumok ? TABS : TABS.filter((t) => t.id !== 'stadiumok' && t.id !== 'aftercare' && t.id!=='epizod');
 
   const classFor = (id: PatientTabId) =>
     `flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
@@ -73,7 +78,7 @@ export function PatientTabsNav({ patientId, activeTab, onTabChange, showStadiumo
               <span className="sm:hidden">{tab.shortLabel}</span>
             </>
           );
-          if (id !== 'stadiumok' && id !== 'aftercare' && onTabChange) {
+          if (id !== 'stadiumok' && id !== 'aftercare' && id!=='epizod' && onTabChange) {
             return (
               <button key={id} onClick={() => onTabChange(id)} className={classFor(id)}>
                 {inner}
@@ -81,15 +86,16 @@ export function PatientTabsNav({ patientId, activeTab, onTabChange, showStadiumo
             );
           }
           const href =
-            id === 'stadiumok'
-              ? `/patients/${patientId}/stages`
-              : id === 'aftercare' ? `/patients/${patientId}/prostheses` : `/patients/${patientId}/view?tab=${id}`;
+            id==='epizod'?episodeOverviewHref(patientId,episodeId):id === 'stadiumok'
+              ? `/patients/${patientId}/stages${episodeId?`?episodeId=${encodeURIComponent(episodeId)}`:''}`
+              : id === 'aftercare' ? `/patients/${patientId}/prostheses${episodeId?`?episodeId=${encodeURIComponent(episodeId)}`:''}` : `/patients/${patientId}/view?tab=${id}${episodeId?`&episodeId=${encodeURIComponent(episodeId)}`:''}`;
           return (
             <Link
               key={id}
               href={href}
               className={classFor(id)}
               aria-current={activeTab === id ? 'page' : undefined}
+              onClick={onNavigate?e=>{if(e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;e.preventDefault();void onNavigate(href);}:undefined}
             >
               {inner}
             </Link>

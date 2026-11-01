@@ -190,6 +190,9 @@ export async function syncAutoCreatedIntakeEpisode(
       WHERE pe.patient_id = $1
         AND pe.status = 'open'
         AND pe.auto_created = TRUE
+        AND NOT EXISTS (SELECT 1 FROM prosthesis_episode_links l WHERE l.episode_id = pe.id)
+        AND NOT EXISTS (SELECT 1 FROM prostheses p WHERE p.episode_id = pe.id)
+        AND NOT EXISTS (SELECT 1 FROM prosthesis_clinical_events e WHERE e.episode_id = pe.id)
         AND NOT EXISTS (
               SELECT 1 FROM stage_events se
                WHERE se.episode_id = pe.id AND se.stage_code <> 'STAGE_0'

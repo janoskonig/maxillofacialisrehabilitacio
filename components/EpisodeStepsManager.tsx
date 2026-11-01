@@ -555,7 +555,7 @@ export function EpisodeStepsManager({
       <section className="overflow-hidden rounded-xl border border-gray-200 bg-white dark:border-gray-800 dark:bg-gray-900" aria-label="Kezelési terv és időpontok">
         <div className="flex items-center justify-between gap-3 border-b border-gray-100 px-4 py-4 dark:border-gray-800">
           <h2 className="font-semibold text-gray-900 dark:text-gray-100">Alkalmak és időpontok</h2>
-          <button type="button" onClick={() => { setEditingPlan(true); setExpanded(true); }} className="text-sm font-medium text-medical-primary hover:underline">Terv szerkesztése</button>
+          <button type="button" onClick={() => { setEditingPlan(true); setExpanded(true); }} className="text-sm font-medium text-medical-primary hover:underline">Munkafázisok szerkesztése</button>
         </div>
         {board.loading ? <div className="flex items-center gap-2 p-5 text-sm text-gray-500"><Loader2 className="h-4 w-4 animate-spin" />Betöltés…</div> : <>
           <div className="empty:hidden px-4 pt-3">{bookingNotices}</div>

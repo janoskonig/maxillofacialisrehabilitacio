@@ -7,7 +7,7 @@ import type { TimelineEpisode } from '@/components/TreatmentPlanGantt/types';
 import { careWorkspace, prosthesis, timelineEpisode, timelineStep } from '../fixtures/treatment-workspace';
 import PatientStagesPage from '@/app/patients/[id]/stages/page';
 
-const mocks = vi.hoisted(() => ({ router: { push: vi.fn() }, toast: vi.fn(), confirm: vi.fn(), user: vi.fn(), timeline: [] as TimelineEpisode[] }));
+const mocks = vi.hoisted(() => ({ router: { push: vi.fn(),replace:vi.fn() }, toast: vi.fn(), confirm: vi.fn(), user: vi.fn(), timeline: [] as TimelineEpisode[] }));
 vi.mock('next/navigation', () => ({ useRouter: () => mocks.router, useParams: () => ({ id: 'patient' }) }));
 vi.mock('@/components/TreatmentPlanGantt/useTimelineData', () => ({ useTimelineData: () => ({ episodes: mocks.timeline, meta: null, error: null }) }));
 vi.mock('@/components/PatientTreatmentJourney', () => ({ PatientTreatmentJourney: ({ episode }: { episode: TimelineEpisode }) => <div data-testid="journey">{episode.episodeId}</div> }));
@@ -61,7 +61,7 @@ describe('Treatment plan and appointments page', () => {
   it('keeps plan, booking and follow-up on the selected active episode', async () => {
     await setup();
     await screen.findByTestId('plan');
-    await act(async () => { fireEvent.change(screen.getByLabelText('Aktív kezelés'), { target: { value: 'lower' } }); });
+    await act(async () => { fireEvent.change(screen.getByLabelText('Epizód kiválasztása'), { target: { value: 'lower' } }); });
     expect(screen.getByTestId('plan')).toHaveTextContent('lower:workspace');
     expect(screen.getByTestId('obstacles')).toHaveTextContent('lower');
     await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Státusz megnyitása' })); });
@@ -86,16 +86,16 @@ describe('Treatment plan and appointments page', () => {
   it('opens stage changes and a new episode only when requested', async () => {
     await setup();
     await screen.findByTestId('plan');
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Kezelés adatai' })); });
+    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Stádium módosítása' })); });
     expect(screen.getByTestId('stage')).toHaveTextContent('upper');
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Új kezelési epizód' })); });
-    expect(screen.getByTestId('new-episode')).toBeInTheDocument();
+    expect(screen.getByRole('link',{name:'Epizód és terv megnyitása'}).getAttribute('href')).toBe('/patients/patient/episodes?episodeId=upper');
+    expect(screen.queryByTestId('new-episode')).not.toBeInTheDocument();
   });
 
   it('offers a clear start when there is no active treatment', async () => {
     await setup({ episodes: [] });
-    await act(async () => { fireEvent.click(await screen.findByRole('button', { name: 'Új kezelés' })); });
-    expect(screen.getByTestId('new-episode')).toBeInTheDocument();
+    expect((await screen.findByRole('link',{name:'Új epizód indítása'})).getAttribute('href')).toBe('/patients/patient/episodes?new=1');
+    expect(screen.queryByTestId('new-episode')).not.toBeInTheDocument();
     expect(screen.queryByTestId('plan')).not.toBeInTheDocument();
   });
 
@@ -103,8 +103,7 @@ describe('Treatment plan and appointments page', () => {
     await setup({ deceased: true, episodes: [] });
     await screen.findByText('Az ellátás lezárult.');
     expect(screen.queryByRole('button', { name: 'Új kezelés' })).not.toBeInTheDocument();
-    await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Kezelés adatai' })); });
-    expect(screen.queryByRole('button', { name: 'Új kezelési epizód' })).not.toBeInTheDocument();
+    expect(screen.queryByRole('link',{name:'Új epizód indítása'})).not.toBeInTheDocument();
   });
 });
 
@@ -150,7 +149,7 @@ it('keeps a generic old care link usable when every episode is closed', async ()
   window.history.replaceState(null, '', '/?view=aftercare');
   await setup({ stage: 'STAGE_7', episodes: [{ id: 'closed', caseTitle: 'Korábbi fogpótlás', status: 'closed' }] });
   expect(screen.getByTestId('aftercare')).toHaveTextContent('closed');
-  expect(screen.getByText('Korábbi kezelés')).toBeInTheDocument();
+  expect(screen.getByText('Korábbi epizód')).toBeInTheDocument();
 });
 
 
@@ -159,29 +158,23 @@ it('allows switching between closed episodes for subsequent care', async () => {
     { id: 'recent', caseTitle: 'Újabb fogpótlás', status: 'closed' },
     { id: 'older', caseTitle: 'Korábbi fogpótlás', status: 'closed' },
   ] });
-  await act(async () => { fireEvent.change(screen.getByLabelText('Kezelés kiválasztása'), { target: { value: 'older' } }); });
+  await act(async () => { fireEvent.change(screen.getByLabelText('Epizód kiválasztása'), { target: { value: 'older' } }); });
   expect(screen.getByTestId('aftercare')).toHaveTextContent('older');
   expect(screen.getByTestId('journey')).toHaveTextContent('older');
-  expect(screen.getByRole('button', { name: 'Új kezelés' })).toBeInTheDocument();
+  expect(screen.getByRole('link', { name: 'Epizód és terv megnyitása' })).toBeInTheDocument();
 });
 
 
-it('opens the upper/lower clinical plan by default during planning', async () => {
-  await setup({ stage: 'STAGE_2' });
-  expect(screen.getByTestId('clinical-plan')).toHaveTextContent('upper');
+it('keeps the clinical goal editor on the episode page and the work plan on Treatment',async()=>{
+  await setup({stage:'STAGE_2'});
+  expect(screen.queryByTestId('clinical-plan')).not.toBeInTheDocument();
+  expect(screen.getByTestId('plan')).toHaveTextContent('upper:workspace');
+  expect(screen.getByRole('link',{name:'Epizód és terv megnyitása'}).getAttribute('href')).toBe('/patients/patient/episodes?episodeId=upper');
 });
 
-it('retains upstream unsaved-plan protection when changing episode or daily view', async () => {
-  await setup({ stage: 'STAGE_2' });
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Mark plan unsaved' })); });
-  mocks.confirm.mockResolvedValue(false);
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Gondozás / igazítás' })); });
-  expect(screen.getByTestId('clinical-plan')).toHaveTextContent('upper');
-  expect(screen.queryByTestId('aftercare')).not.toBeInTheDocument();
-  await act(async () => { fireEvent.change(screen.getByLabelText('Aktív kezelés'), { target: { value: 'lower' } }); });
-  expect(screen.getByTestId('clinical-plan')).toHaveTextContent('upper');
-  expect(mocks.confirm).toHaveBeenCalledTimes(2);
-  mocks.confirm.mockResolvedValue(true);
-  await act(async () => { fireEvent.click(screen.getByRole('button', { name: 'Gondozás / igazítás' })); });
-  expect(screen.getByTestId('aftercare')).toHaveTextContent('upper');
+it('redirects an old clinical plan link with its exact episode and financing section',async()=>{
+  window.history.replaceState(null,'','/?episodeId=lower&plan=1#finanszirozas');
+  await setup();
+  expect(mocks.router.replace).toHaveBeenCalledWith('/patients/patient/episodes?episodeId=lower#finanszirozas');
+  expect(screen.queryByTestId('clinical-plan')).not.toBeInTheDocument();
 });

@@ -59,7 +59,8 @@ export type CreateOpenEpisodeInput = {
 };
 
 /**
- * Egy nyitott epizód létrehozása: meglévő nyitottak lezárása, INSERT patient_episodes, opcionálisan STAGE_0 stage_events.
+ * Új epizód indítása. Csak a még érintetlen, automatikus felvételi
+ * helyőrző váltható le; a kézzel indított tervezés párhuzamosan nyitva marad.
  */
 export async function createOpenEpisodeWithInitialStageZero(
   pool: Pool,
@@ -79,12 +80,21 @@ export async function createOpenEpisodeWithInitialStageZero(
       throw new DeceasedPatientEpisodeError();
     }
 
-    const closingResult = await client.query(
+    const hasAutoCreatedCol = await probeColumnExists(client, 'patient_episodes', 'auto_created');
+    const closingResult = hasAutoCreatedCol ? await client.query(
       `SELECT id FROM patient_episodes pe WHERE patient_id = $1 AND status = 'open'
+       AND auto_created = TRUE
+       AND NULLIF(trim(treatment_plan_upper),'') IS NULL
+       AND NULLIF(trim(treatment_plan_lower),'') IS NULL
+       AND treatment_plan IS NULL
        AND NOT EXISTS(SELECT 1 FROM prosthesis_episode_links l WHERE l.episode_id=pe.id)
-       AND NOT EXISTS(SELECT 1 FROM prostheses p WHERE p.episode_id=pe.id)`,
+       AND NOT EXISTS(SELECT 1 FROM prostheses p WHERE p.episode_id=pe.id)
+       AND NOT EXISTS(SELECT 1 FROM prosthesis_clinical_events e WHERE e.episode_id=pe.id)
+       AND NOT EXISTS(SELECT 1 FROM episode_work_phases w WHERE w.episode_id=pe.id)
+       AND NOT EXISTS(SELECT 1 FROM appointments a WHERE a.episode_id=pe.id)
+       AND NOT EXISTS(SELECT 1 FROM stage_events s WHERE s.episode_id=pe.id AND s.stage_code<>'STAGE_0')`,
       [input.patientId],
-    );
+    ) : { rows: [] };
     const closingIds = closingResult.rows.map((r: { id: string }) => r.id);
     if (closingIds.length > 0) {
       try {
@@ -94,14 +104,11 @@ export async function createOpenEpisodeWithInitialStageZero(
         logger.error('Failed to invalidate intents for closed episodes:', e);
       }
     }
-    await client.query(
-      `UPDATE patient_episodes pe SET status = 'closed', closed_at = CURRENT_TIMESTAMP WHERE patient_id = $1 AND status = 'open'
-       AND NOT EXISTS(SELECT 1 FROM prosthesis_episode_links l WHERE l.episode_id=pe.id)
-       AND NOT EXISTS(SELECT 1 FROM prostheses p WHERE p.episode_id=pe.id)`,
-      [input.patientId],
+    if (closingIds.length > 0) await client.query(
+      `UPDATE patient_episodes SET status = 'closed', closed_at = CURRENT_TIMESTAMP WHERE id = ANY($1::uuid[])`,
+      [closingIds],
     );
 
-    const hasAutoCreatedCol = await probeColumnExists(client, 'patient_episodes', 'auto_created');
     const autoCreatedColumn = hasAutoCreatedCol ? ', auto_created' : '';
     const autoCreatedValue = hasAutoCreatedCol ? ', $9' : '';
     const insertParams: unknown[] = [
@@ -165,7 +172,7 @@ export async function createOpenEpisodeWithInitialStageZero(
 
     await client.query('COMMIT');
 
-    // Új epizód létrehozása lezárja a korábbi nyitottakat → a `kezeleoorvos`
+    // Az érintetlen felvételi helyőrző lezárása után a `kezeleoorvos`
     // korábban érvényes B-eset jelölése elavulhatott. Az új epizódhoz
     // még nincs `assigned_provider_id` (PATCH /api/episodes/:id-vel állítható
     // be később), úgyhogy a recompute jó eséllyel A-esetre vagy „ne vonja

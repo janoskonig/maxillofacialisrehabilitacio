@@ -4,17 +4,17 @@ import { ProsthesisLifecycle } from '@/components/prosthesis-lifecycle/Prosthesi
 vi.mock('@/contexts/ToastContext',()=>({useToast:()=>({confirm:vi.fn().mockResolvedValue(true)})}));
 afterEach(()=>{cleanup();vi.unstubAllGlobals();});
 
-it('offers the single treatment editor and shows old text without a second plan creation form',async()=>{
+it('routes episode planning to its dedicated page without duplicating the plan in the appliance registry',async()=>{
   const data={patientName:'Tesztbeteg',episodes:[{id:'ep',case_title:'Felső epizód',status:'open'}],
     prostheses:[{id:'p',episode_id:'ep',label:'Felső végleges',jaw:'felso',role:'definitive',origin:'local'}],
     episodePlans:[{episodeId:'ep',jaw:'felso',treatmentPlanUpper:'Korábban mentett klinikai terv'}],
     events:[],conflicts:[],closureReview:[],episodeLinks:[{episode_id:'ep',prosthesis_id:'p',purpose:'construction'}],plans:[]};
   vi.stubGlobal('fetch',vi.fn().mockResolvedValue(new Response(JSON.stringify(data),{headers:{'Content-Type':'application/json'}})));
   render(<ProsthesisLifecycle patientId="patient"/>);
-  const link=await screen.findByRole('link',{name:'Kezelési terv szerkesztése'});
-  expect(link.getAttribute('href')).toBe('/patients/patient/stages?episodeId=ep&view=plan&plan=1#kezelesi-terv');
+  const link=await screen.findByRole('link',{name:'Epizód és terv megnyitása'});
+  expect(link.getAttribute('href')).toBe('/patients/patient/episodes?episodeId=ep');
   expect(screen.queryByRole('button',{name:'Új tervverzió'})).toBeNull();
-  fireEvent.click(screen.getByRole('button',{name:/^Kezelési tervek$/}));
-  expect(await screen.findByText('Korábban mentett klinikai terv')).toBeTruthy();
+  expect(screen.queryByRole('button',{name:/^Kezelési tervek$/})).toBeNull();
+  expect(screen.queryByText('Korábban mentett klinikai terv')).toBeNull();
   expect(screen.queryByRole('textbox')).toBeNull();
 });
