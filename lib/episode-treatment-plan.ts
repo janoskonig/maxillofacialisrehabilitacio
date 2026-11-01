@@ -29,6 +29,8 @@ export interface EpisodeTreatmentPlanRecord extends JawTreatmentPlans {
   prosthesisId?:string|null;
   prosthesisLabel?:string|null;
   device?:{id:string;positions:Position[]}|null;
+  devices?:Array<{id:string;jaw:'felso'|'also';label:string;positions:Position[];role?:string}>;
+  requiresDeviceReview?:boolean;
   unified?:boolean;
   financing?:EpisodeFinancing;
   documents?:Array<{id:string;filename:string}>;

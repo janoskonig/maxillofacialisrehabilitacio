@@ -46,7 +46,7 @@ export const clinicalCommandSchema = z.discriminatedUnion('action', [
     mode: z.enum(['assessment','change']), layers: layersSchema, expectedBefore: layersSchema.optional(),
     sourceEventId: uuid.optional(), legacySnapshotId: uuid.optional() }),
   z.object({ action: z.literal('plan'), ...meta, episodeId: uuid, baselineStateId: uuid.nullable().optional(),
-    description: z.string().trim().max(60000).optional(), approved: z.boolean(), prosthesisIds: z.array(uuid).max(1).optional(),
+    description: z.string().trim().max(60000).optional(), approved: z.boolean(), prosthesisIds: z.array(uuid).max(2).refine(ids=>new Set(ids).size===ids.length,'Ismétlődő fogpótlás').optional(),
     treatments: z.array(z.object({ toothNumber: z.number().int().refine(n => /^[1-4][1-8]$/.test(String(n))), treatmentCode: text.max(100) })).max(200).optional(),
     expectedVersion:z.number().int().min(0).optional(),
     narratives:z.object({treatmentPlan:z.string().max(20000).nullable().optional(),treatmentPlanUpper:z.string().max(20000).nullable().optional(),treatmentPlanLower:z.string().max(20000).nullable().optional()}).optional(),
@@ -60,7 +60,7 @@ export const clinicalCommandSchema = z.discriminatedUnion('action', [
     outcome: z.enum(['completed','remake']), }),
   z.object({ action: z.literal('remake'), ...meta, prosthesisId: uuid, repairCaseId: uuid.optional(), label: text.max(160), reason: text }),
   z.object({ action: z.literal('work'), ...meta, episodeId: uuid.nullable(), workPhaseId: uuid.optional(),
-    label: text.max(200), scope: z.enum(['episode','prosthesis']), prosthesisIds: z.array(uuid).max(1),
+    label: text.max(200), scope: z.enum(['episode','prosthesis']), prosthesisIds: z.array(uuid).max(2).refine(ids=>new Set(ids).size===ids.length,'Ismétlődő fogpótlás'),
     repairCaseId: uuid.optional(), requiresPhaseIds: z.array(uuid).max(50).default([]), pathwayId: uuid.optional() }),
   z.object({ action: z.literal('book_task'), ...meta, taskId: uuid, appointmentId: uuid.nullable() }),
 ]).superRefine((c,ctx) => {
@@ -136,7 +136,7 @@ export function replayStates(states: StateEvidence[], untilId?: string) {
   return { layers, conflicts, milestones };
 }
 /** A prosthetic role never erases natural tooth loss. */
-export function projectClinicalPlan(baseline: ClinicalLayers, treatments: Array<{ toothNumber: number; treatmentCode: string }>, devices: Array<{ id:string; positions:Position[] }>): ClinicalLayers {
+export function projectClinicalPlan(baseline: ClinicalLayers, treatments: Array<{ toothNumber: number; treatmentCode: string }>, devices: Array<{ id:string; positions:Position[];jaw?:'felso'|'also' }>): ClinicalLayers {
   const out = structuredClone(baseline);
   for (const t of treatments) {
     const key = String(t.toothNumber);
@@ -144,7 +144,8 @@ export function projectClinicalPlan(baseline: ClinicalLayers, treatments: Array<
     else if (t.treatmentCode==='mufog' || t.treatmentCode==='hezagfog') {
       // Explicitly planned artificial teeth occupy the prosthetic layer only.
       // Existing device-position roles remain authoritative; no jaw-only match.
-      const device=devices.length===1?devices[0]:null;
+      const candidates=devices.filter(d=>d.jaw?d.jaw===(t.toothNumber<30?'felso':'also'):devices.length===1);
+      const device=candidates.length===1?candidates[0]:null;
       if(device&&!device.positions.some(p=>p.tooth===t.toothNumber)) {
         const role=t.treatmentCode==='mufog'?'denture_tooth':'pontic';
         out.prostheses[`${device.id}:${t.toothNumber}:${role}`]={prosthesisId:device.id,tooth:t.toothNumber,role,planned:true};

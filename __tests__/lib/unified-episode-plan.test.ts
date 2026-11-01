@@ -4,6 +4,12 @@ import { episodePlanFromRow } from '@/lib/prosthesis-lifecycle/plans';
 
 describe('reading the shared episode plan',()=>{
   const row={episodeId:'ep',patientId:'patient',version:4,jaw:'felso',prosthesisId:'p',treatmentPlan:'Korábbi közös',treatmentPlanUpper:'Régi felső',treatmentPlanLower:'Régi alsó',planId:'version4',clinicalVersion:4,approved:true,baselineStateId:'baseline',occurredOn:'2026-01-01',source:'Karton'};
+  it('represents a two-jaw plan once and flags an old one-device version for review',()=>{
+    const devices=[{id:'upper',jaw:'felso',label:'Felső',positions:[]},{id:'lower',jaw:'also',label:'Alsó',positions:[]}];
+    const result=episodePlanFromRow({...row,devices,episodePlanVersion:4,content:{narratives:{treatmentPlanUpper:'Felső',treatmentPlanLower:'Alsó'},devices:[devices[0]],treatments:[]}});
+    expect(result).toMatchObject({jaw:null,prosthesisId:null,devices,requiresDeviceReview:true,treatmentPlanUpper:'Felső',treatmentPlanLower:'Alsó'});
+    expect(episodePlanFromRow({...row,devices,episodePlanVersion:4,content:{narratives:{},devices}}).requiresDeviceReview).toBe(false);
+  });
   it('honours explicit clears in the immutable version instead of falling back to stale mirrors',()=>{
     expect(episodePlanFromRow({...row,episodePlanVersion:4,content:{narratives:{treatmentPlan:null,treatmentPlanUpper:null,treatmentPlanLower:null},description:'',treatments:[]}})).toMatchObject({unified:true,treatmentPlan:null,treatmentPlanUpper:null,treatmentPlanLower:null,legacyClinicalDescription:null});
   });

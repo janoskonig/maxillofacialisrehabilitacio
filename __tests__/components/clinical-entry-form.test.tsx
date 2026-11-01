@@ -30,6 +30,16 @@ describe('Guided clinical documentation',()=>{
     fireEvent.click(screen.getByRole('button',{name:'Mentés a kartonba'}));await waitFor(()=>expect(save).toHaveBeenCalledTimes(1));
     expect(save.mock.calls[0][0]).toMatchObject({action:'register',episodeId,jaw:'felso',role:'definitive',origin:'local',occurredOn:'2026-09-10',positions:[{tooth:11,role:'denture_tooth'}]});
   });
+  it('can select an existing episode, preselects its free jaw and blocks the occupied jaw',async()=>{
+    const save=vi.fn().mockResolvedValue(undefined);
+    render(<ClinicalEntryForm data={data} initial={{action:'register'}} onSave={save} onCancel={vi.fn()} busy={false}/>);
+    evidence();input('Eredet','local');input('Hogyan kapcsolódjon az epizódhoz?','existing');
+    expect((screen.getByLabelText('Állcsont') as HTMLSelectElement).value).toBe('also');
+    expect((screen.getByRole('option',{name:'Felső'}) as HTMLOptionElement).disabled).toBe(true);
+    input('Megnevezés','Új alsó');input('Ideiglenes vagy végleges?','definitive');input('Típus','removable');
+    review();fireEvent.click(screen.getByRole('button',{name:'Mentés a kartonba'}));await waitFor(()=>expect(save).toHaveBeenCalledTimes(1));
+    expect(save.mock.calls[0][0]).toMatchObject({episodeMode:'existing',episodeId,jaw:'also'});
+  });
   it('records independent outcomes for two appliances and one shared duration without a preselected appliance or result',async()=>{
     const save=vi.fn().mockResolvedValue(undefined);
     render(<ClinicalEntryForm data={data} initial={{action:'visit'}} onSave={save} onCancel={vi.fn()} busy={false}/>);

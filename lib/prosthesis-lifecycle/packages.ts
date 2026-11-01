@@ -16,7 +16,7 @@ import { selectedEpisodeReview } from '@/lib/episode-clinical/service';
 
 export const packageSchema=z.object({
   requestKey:z.string().uuid(),episodeId:z.string().uuid(),planVersionId:z.string().uuid(),statusStateId:z.string().uuid(),
-  prosthesisIds:z.array(z.string().uuid()).length(1),documentIds:z.array(z.string().uuid()).max(50).default([]),
+  prosthesisIds:z.array(z.string().uuid()).min(1).max(2).refine(ids=>new Set(ids).size===ids.length,'Ismétlődő fogpótlás'),documentIds:z.array(z.string().uuid()).max(50).default([]),
   supplementsId:z.string().uuid().nullable().default(null),
   financingEventId:z.string().uuid().nullable().optional(),
   clinicalReviewId:z.string().uuid().nullable().optional(),

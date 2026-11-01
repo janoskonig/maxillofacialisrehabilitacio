@@ -51,16 +51,17 @@ export async function loadNeakTreatmentSources(pool: Pick<Pool, 'query'>, patien
     );
     sources.episodes = availability.hasUnifiedPlans ? result.rows.map(row=>{
       const plan=episodePlanFromRow(row);
+      if(plan.requiresDeviceReview)sources.warnings.push(`${row.caseTitle||'Ellátási epizód'}: a fogpótlások köre megváltozott; új, ellenőrzött tervváltozat szükséges.`);
       if(plan.legacyClinicalDescription)sources.warnings.push(`${row.caseTitle||'Ellátási epizód'}: a korábbi külön klinikai terv eltér a szöveges tervtől; a Kezelés fülön összevezetést igényel.`);
       return {...row,...plan,id:row.episodeId??row.id,planVersionId:plan.legacyClinicalDescription?undefined:plan.clinicalPlan?.id,planVersion:plan.clinicalPlan?.version,
-        planApproved:plan.clinicalPlan?.approved,planDate:plan.clinicalPlan?.occurredOn,plannedTreatments:plan.clinicalPlan?.treatments};
+        planApproved:!!plan.clinicalPlan?.approved&&!plan.requiresDeviceReview,planDate:plan.clinicalPlan?.occurredOn,plannedTreatments:plan.clinicalPlan?.treatments};
     }) : result.rows;
     if (!availability.hasEpisodeTreatmentPlan || !availability.hasJawTreatmentPlans) {
       sources.warnings.push('Az epizódonkénti kezelési terv mezőjéhez az adatbázis frissítése szükséges.');
     }
     if(availability.hasEpisodeFinancing){
       const finance=(await pool.query(`${FINANCING_SELECT} WHERE f.patient_id=$1`,[patientId])).rows as FinancingEvent[];
-      sources.episodes=sources.episodes.map(ep=>({...ep,financing:financingAt(finance.filter(e=>e.episode_id===ep.id),budapestToday(),ep.planVersionId??null)}));
+      sources.episodes=sources.episodes.map(ep=>({...ep,financing:{...financingAt(finance.filter(e=>e.episode_id===ep.id),budapestToday(),ep.planVersionId??null),...(ep.requiresDeviceReview?{requiresReview:true}:{})}}));
     }
   } else {
     sources.warnings.push('Az ellátási epizódok adatforrása nem érhető el ezen a rendszeren.');

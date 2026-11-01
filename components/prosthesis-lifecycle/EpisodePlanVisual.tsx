@@ -17,7 +17,7 @@ export function EpisodePlanVisual({plan,baselineStateId,treatments,onChange,disa
   const [code,setCode]=useState('huzas');
   const [preview,setPreview]=useState(false);
   const baseline=plan.states?.find(s=>s.id===baselineStateId)?.layers;
-  const target=baseline?projectClinicalPlan(baseline,treatments,plan.device?[plan.device]:[]):null;
+  const target=baseline?projectClinicalPlan(baseline,treatments,plan.devices??(plan.device?[plan.device]:[])):null;
   const diff=baseline&&target?archDifferences(baseline,target):[];
   const selected=selection.filter(n=>!plan.jaw||(n<30)===(plan.jaw==='felso'));
   const editable=!!onChange&&!disabled;

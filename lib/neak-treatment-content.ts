@@ -25,6 +25,7 @@ export interface NeakEpisodeTreatment {
   planVersionId?:string;
   planVersion?:number;
   planApproved?:boolean;
+  requiresDeviceReview?:boolean;
   planDate?:string;
   plannedTreatments?:Array<{toothNumber:number;treatmentCode:string}>;
   financing?:FinancingSnapshot;

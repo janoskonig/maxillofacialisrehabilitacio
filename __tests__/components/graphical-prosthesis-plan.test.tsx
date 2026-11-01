@@ -44,6 +44,14 @@ describe('graphical prosthesis planning',()=>{
     expect(screen.getByRole('img',{name:/^12. fog · Saját fog: Hiányzó/})).toBeTruthy();
     expect(baseline.teeth[12]).toEqual({base:'sound'});
   });
+  it('previews both selected appliances in one episode without changing natural tooth loss',()=>{
+    const baseline={...emptyLayers(),teeth:{11:{base:'missing'},31:{base:'missing'}}};
+    const plan:EpisodeTreatmentPlanRecord={episodeId:'ep',version:1,treatmentPlan:null,treatmentPlanUpper:'Felső',treatmentPlanLower:'Alsó',jaw:null,devices:[{id:'upper',jaw:'felso',label:'Felső',positions:[{tooth:11,role:'denture_tooth'}]},{id:'lower',jaw:'also',label:'Alsó',positions:[{tooth:31,role:'denture_tooth'}]}],states:[{id:'b',occurred_on:'2026-01-01',layers:baseline}]};
+    render(<EpisodePlanVisual plan={plan} baselineStateId="b" treatments={[]}/>);fireEvent.click(screen.getByRole('button',{name:'Célállapot előnézete'}));
+    expect(screen.getByRole('img',{name:/^11. fog · Saját fog: Hiányzó;.*fogpótlás: Műfog/})).toBeTruthy();
+    expect(screen.getByRole('img',{name:/^31. fog · Saját fog: Hiányzó;.*fogpótlás: Műfog/})).toBeTruthy();
+    expect(baseline.prostheses).toEqual({});
+  });
   it('compares the selected tooth on both sides and switches between planned and actual states',()=>{
     const before={...emptyLayers(),teeth:{12:{base:'sound'}}},target={...emptyLayers(),teeth:{12:{base:'missing'}}};
     const data={plans:[{id:'plan',version:1,content:{description:'Terv',baseline:before,target},approved:true}],actual:before,milestones:[],states:[{id:'s'}],events:[]} as unknown as ClinicalWorkspace;

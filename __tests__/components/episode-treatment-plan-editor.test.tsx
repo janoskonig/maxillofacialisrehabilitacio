@@ -22,6 +22,20 @@ describe('Episode treatment plan editor', () => {
     expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject({ treatmentPlanUpper: 'Új terv', treatmentPlanLower: 'Alsó terv', expectedVersion: 3,clinical:{baselineStateId:null,treatments:[],approved:false,source:'Klinikai dokumentáció'} });
     await screen.findByText('Mentett kezelési terv');
   });
+  it('reviews both devices without treating the server warning as an unsaved user edit',async()=>{
+    const pending={...saved,jaw:null,requiresDeviceReview:true,devices:[{id:'u',jaw:'felso',label:'Felső',positions:[]},{id:'l',jaw:'also',label:'Alsó',positions:[]}],clinicalPlan:{id:'v3',version:3,approved:true,baselineStateId:'baseline',treatments:[]}};
+    const fetch=vi.fn().mockResolvedValueOnce(response(pending)).mockResolvedValueOnce(response({...pending,version:4,requiresDeviceReview:false,clinicalPlan:{...pending.clinicalPlan,version:4,approved:true}}));
+    vi.stubGlobal('fetch',fetch);const state=vi.fn();
+    render(<EpisodeTreatmentPlanEditor episodeId="ep1" canEdit unified onStateChange={state}/>);
+    await screen.findByText(/A fogpótlások köre megváltozott/);
+    expect(screen.getByLabelText('Felső állcsont kezelési terve')).toBeTruthy();expect(screen.getByLabelText('Alsó állcsont kezelési terve')).toBeTruthy();
+    expect(state).toHaveBeenLastCalledWith({dirty:false,saving:false});
+    expect((screen.getByRole('button',{name:'Kezelési terv mentése'}) as HTMLButtonElement).disabled).toBe(false);
+    expect((screen.getByLabelText('Ezt a tervváltozatot jóváhagyom') as HTMLInputElement).disabled).toBe(false);
+    fireEvent.click(screen.getByLabelText('Ezt a tervváltozatot jóváhagyom'));
+    fireEvent.click(screen.getByRole('button',{name:'Kezelési terv mentése'}));await waitFor(()=>expect(fetch).toHaveBeenCalledTimes(2));
+    expect(JSON.parse(fetch.mock.calls[1][1].body)).toMatchObject({treatmentPlanUpper:'Eredeti terv',treatmentPlanLower:'Alsó terv',clinical:{approved:true}});
+  });
   it('preserves a failed draft for retry', async () => {
     vi.stubGlobal('fetch', vi.fn().mockResolvedValueOnce(response()).mockResolvedValueOnce(new Response(JSON.stringify({ error: 'Mentési hiba' }), { status: 500 })));
     await mount();

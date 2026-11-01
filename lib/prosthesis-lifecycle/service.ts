@@ -64,14 +64,19 @@ async function insertDevice(db:Db, patientId:string, actor:string, c:Extract<Cli
   if (c.episodeId) await episode(db,patientId,c.episodeId);
   const upper = c.jaw==='felso';
   if (c.positions.some(p => upper !== (p.tooth<30))) fail('A pozíció nem a kiválasztott állcsonthoz tartozik',400);
-  // The selected episode is provenance, never a container for another appliance.
+  // A construction episode has one appliance per jaw. The explicit existing
+  // mode adds the other jaw; the default keeps separate-episode provenance.
   const ownLink=c.action==='review_mapping'&&c.episodeId ? await db.query("SELECT 1 FROM prosthesis_episode_links WHERE episode_id=$1 AND prosthesis_id=$2 AND purpose='construction'",[c.episodeId,c.prosthesisId]):{rows:[]};
   let actualEpisodeId:string|null=null;
   if(c.episodeMode==='existing'){
     if(c.action!=='register'||c.origin!=='local'||!c.episodeId)fail('Az epizódhoz helyben készülő, új fogpótlás kapcsolható.',400);
     const ep=await episode(db,patientId,c.episodeId!);
-    if(ep.status!=='open')fail('Ehhez nyitott, még fogpótlás nélküli epizód szükséges.');
-    if((await db.query('SELECT 1 FROM prosthesis_episode_links WHERE episode_id=$1 UNION ALL SELECT 1 FROM prostheses WHERE episode_id=$1',[ep.id])).rows.length)fail('Az epizódnak már van fogpótlása. Másik készülékhez új epizód szükséges.');
+    if(ep.status!=='open')fail('Fogpótlás nyitott elkészítési epizódhoz kapcsolható.');
+    const assigned=await db.query(`SELECT DISTINCT p.id,p.jaw,l.purpose FROM prostheses p
+      LEFT JOIN prosthesis_episode_links l ON l.prosthesis_id=p.id AND l.episode_id=$1
+      WHERE p.episode_id=$1 OR l.episode_id=$1`,[ep.id]);
+    if(assigned.rows.some(p=>p.purpose==='repair'))fail('A javítás saját epizódhoz tartozik; új készülékhez elkészítési epizód szükséges.');
+    if(assigned.rows.some(p=>p.jaw===c.jaw)||assigned.rows.length>=2)fail('Egy epizódban állcsontonként legfeljebb egy fogpótlás lehet: egy felső és egy alsó.');
     actualEpisodeId=ep.id;
   }else if(c.origin==='local')actualEpisodeId=ownLink.rows.length?c.episodeId:await newEpisode(db,patientId,actor,c.episodeId,`${c.jaw==='felso'?'Felső':'Alsó'} ${c.role==='provisional'?'ideiglenes':'fogpótlás'} – ${c.label}`,c.occurredOn,c.episodeReason);
   const values = [patientId,actualEpisodeId,c.jaw,c.prosthesisType,c.label,actor,c.origin,c.role,JSON.stringify(c.specification),JSON.stringify(c.positions)];
@@ -109,9 +114,10 @@ async function validateMilestoneChronology(db:Db, p:any) {
 }
 async function closeIfAccepted(db:Db, patientId:string, actor:string, c:ClinicalCommand, episodeId:string) {
   const ep=await episode(db,patientId,episodeId);
-  const goals=await db.query(`SELECT l.*,e.id AS acceptance_id,e.occurred_on::text AS accepted_on
-    FROM prosthesis_episode_links l LEFT JOIN prosthesis_active_events e
-      ON e.prosthesis_id=l.prosthesis_id AND e.kind='accepted' WHERE l.episode_id=$1 AND l.purpose='construction'`,[episodeId]);
+  const goals=await db.query(`SELECT d.prosthesis_id,e.id AS acceptance_id,e.occurred_on::text AS accepted_on
+    FROM (SELECT prosthesis_id FROM prosthesis_episode_links WHERE episode_id=$1 AND purpose='construction'
+      UNION SELECT id FROM prostheses WHERE episode_id=$1 AND origin='local') d
+    LEFT JOIN prosthesis_active_events e ON e.prosthesis_id=d.prosthesis_id AND e.kind='accepted'`,[episodeId]);
   if (!goals.rows.length || goals.rows.some(g=>!g.acceptance_id) || ep.status==='closed') return;
   const day=goals.rows.map(g=>g.accepted_on).sort().at(-1)!;
   // Closure is separately audited, with the exact acceptance versions and actors.
