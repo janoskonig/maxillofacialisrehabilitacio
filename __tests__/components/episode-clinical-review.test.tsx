@@ -58,4 +58,36 @@ describe('Episode clinical review workflow',()=>{
   it('opens all sections together in expert mode',async()=>{
     localStorage.setItem('clinical-form-mode','expert');setup([record(1,'2026-01-01','Már kitöltött diagnózis')]);await screen.findByLabelText('Név');expect(screen.getByLabelText('Diagnózis')).toBeTruthy();expect(screen.getByLabelText('Műtéti előzmények ismertsége')).toBeTruthy();expect(screen.queryByRole('group',{name:'Adatfelülvizsgálat lépései'})).toBeNull();
   });
+  it.each(['guided','expert'])('shows only the selected reason’s fields in %s mode and preserves hidden values',async(mode)=>{
+    localStorage.setItem('clinical-form-mode',mode);
+    const template=clinicalTemplate({
+      balesetEtiologiaja:'Mintabaleset',szovettaniDiagnozis:'Mintaszövettan',
+      veleszuletettMutetekLeirasa:'Korábbi mintaműtét',radioterapia:true,radioterapiaDozis:'60 Gy',
+    },'traumás sérülés');
+    setup([],template);await screen.findByLabelText('Név');
+    if(mode==='guided')fireEvent.click(screen.getByRole('button',{name:'2. Anamnézis és állapot'}));
+    const chart=screen.getByLabelText('Epizód klinikai kartonja');
+    await waitFor(()=>expect(within(chart).getByRole('combobox',{name:'BNO-kód keresése'}).getAttribute('aria-busy')).toBe('false'));
+    const reason=within(chart).getByDisplayValue('traumás sérülés');
+    expect(within(chart).getByDisplayValue('Mintabaleset')).toBeTruthy();
+    expect(within(chart).queryByText('Tumor szövettani típusa')).toBeNull();
+    expect(within(chart).queryByText('Milyen rendellenesség(ek) áll(nak) fenn?')).toBeNull();
+    fireEvent.change(reason,{target:{value:'onkológiai kezelés utáni állapot'}});
+    expect(within(chart).getByDisplayValue('Mintaszövettan')).toBeTruthy();
+    expect(within(chart).getByDisplayValue('60 Gy')).toBeTruthy();
+    expect(within(chart).queryByText('Baleset etiológiája')).toBeNull();
+    expect(within(chart).queryByText('Milyen rendellenesség(ek) áll(nak) fenn?')).toBeNull();
+    fireEvent.click(chart.querySelector('input[name="radioterapia"]')!);
+    expect(within(chart).queryByText('Dózis (n Gy)')).toBeNull();
+    fireEvent.change(reason,{target:{value:'veleszületett rendellenesség'}});
+    expect(within(chart).getByDisplayValue('Korábbi mintaműtét')).toBeTruthy();
+    expect(within(chart).queryByText('Tumor szövettani típusa')).toBeNull();
+    expect(within(chart).queryByText('Baleset etiológiája')).toBeNull();
+    fireEvent.change(reason,{target:{value:'traumás sérülés'}});
+    expect(within(chart).getByDisplayValue('Mintabaleset')).toBeTruthy();
+    fireEvent.change(reason,{target:{value:'onkológiai kezelés utáni állapot'}});
+    expect(within(chart).getByDisplayValue('Mintaszövettan')).toBeTruthy();
+    fireEvent.click(chart.querySelector('input[name="radioterapia"]')!);
+    expect(within(chart).getByDisplayValue('60 Gy')).toBeTruthy();
+  });
 });

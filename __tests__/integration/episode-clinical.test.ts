@@ -1,7 +1,8 @@
 import { afterEach,describe,expect,it } from 'vitest';
 import { getDbPool } from '@/lib/db';
 import { reviewCommandSchema,clinicalTemplate,type EpisodeClinicalContent } from '@/lib/episode-clinical/model';
-import { loadClinicalWorkspace } from '@/lib/prosthesis-lifecycle/service';
+import { executeClinicalCommand,loadClinicalWorkspace } from '@/lib/prosthesis-lifecycle/service';
+import { clinicalCommandSchema,emptyLayers } from '@/lib/prosthesis-lifecycle/model';
 import { patientForEpisodeExport } from '@/lib/episode-clinical/service';
 import { loadEpisodeClinical,saveEpisodeReview } from '@/lib/episode-clinical/service';
 import { GET,POST } from '@/app/api/patients/[id]/episodes/[episodeId]/clinical/route';
@@ -72,6 +73,23 @@ describe('Episode as the clinical observation unit',()=>{
     expect((await GET(await request('GET'),{params:{id:s.patient.id,episodeId:s.episode.id}})).status).toBe(200);
     expect((await POST(await request('POST',s.command()),{params:{id:s.patient.id,episodeId:s.episode.id}})).status).toBe(200);
     expect((await s.load()).history).toHaveLength(1);
+  });
+  it('keeps the documented dental state when a later review only records anamnesis or unpositioned notes',async()=>{
+    const s=await setup();
+    const layers={...emptyLayers(),teeth:{'11':{base:'sound'}},implants:{'21':{present:true,description:'Korábban vizsgált implantátum'}}};
+    const baseline=await executeClinicalCommand(s.patient.id,s.user.id,clinicalCommandSchema.parse({
+      action:'status',requestKey:crypto.randomUUID(),episodeId:s.episode.id,mode:'assessment',layers,
+      occurredOn:'2026-01-01',source:'Fogazati vizsgálat',
+    }));
+    const first=await s.save(s.command());
+    expect(first.review.content.baselineStateId).toBeNull();
+    const dental={...s.content.dental!,nemIsmertPoziciokbanImplantatumRészletek:'Korábbi szabadszavas megjegyzés',felsoFogpotlasVan:true};
+    const second=await s.save(s.command({expectedVersion:1,effectiveOn:'2026-02-01',content:{...s.content,dental}}));
+    expect(second.review.content.dental).toMatchObject(dental);
+    expect(second.review.content.baselineStateId).toBeNull();
+    const workspace=await loadClinicalWorkspace(s.patient.id);
+    expect(workspace.states.map(state=>state.id)).toEqual([baseline.id]);
+    expect(workspace.actual).toEqual(layers);
   });
   it('brings the full legacy dental chart through review, a real clinical state and the episode export without changing shared data',async()=>{
     const s=await setup();

@@ -65,13 +65,15 @@ export async function saveEpisodeReview(patientId:string,episodeId:string,actor:
       if(!state||state.day>command.effectiveOn)throw new HttpError(400,'A kiindulási státusz nem a beteghez vagy nem az adatfelvétel előtti időponthoz tartozik.');
     }
     const id=randomUUID(),eventId=randomUUID();
-    const dentalStateId=command.content.dental?randomUUID():null;
+    const layers=command.content.dental?dentalLayers(command.content.dental):null;
+    // An anamnesis-only review must not erase a documented dental examination.
+    const dentalStateId=layers&&Object.values(layers).some(layer=>Object.keys(layer).length>0)?randomUUID():null;
     const content=dentalStateId?{...command.content,baselineStateId:dentalStateId}:command.content;
     await db.query(`INSERT INTO prosthesis_clinical_events(id,patient_id,episode_id,kind,occurred_on,time_precision,source,note,payload,recorded_by,request_key)
       VALUES($1,$2,$3,'episode_clinical_reviewed',$4,'day',$5,$6,$7::jsonb,$8,$9)`,[eventId,patientId,episodeId,command.effectiveOn,command.source,command.note,JSON.stringify({command,entityId:id}),actor,command.requestKey]);
-    if(dentalStateId&&command.content.dental)await db.query(
+    if(dentalStateId)await db.query(
       `INSERT INTO clinical_dental_states(id,patient_id,event_id,mode,layers) VALUES($1,$2,$3,'assessment',$4::jsonb)`,
-      [dentalStateId,patientId,eventId,JSON.stringify(dentalLayers(command.content.dental))]);
+      [dentalStateId,patientId,eventId,JSON.stringify(layers)]);
     await db.query(`INSERT INTO episode_clinical_reviews(id,patient_id,episode_id,version,event_id,effective_on,source,note,content,source_review_id,recorded_by)
       VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11)`,[id,patientId,episodeId,version+1,eventId,command.effectiveOn,command.source,command.note,JSON.stringify(content),command.sourceReviewId,actor]);
     // The clinical timeline determines the current etiology, not the order of entry.
