@@ -9,9 +9,9 @@ vi.mock('@/components/patient-form/DefectRaster',()=>({DefectRaster:()=>null}));
 const patientId=crypto.randomUUID(),episodeId=crypto.randomUUID();
 const content=clinicalTemplate({nev:'Előzményből származó név'},'traumás sérülés');
 function record(version:number,date:string,diagnosis:string):EpisodeClinicalReview{return{id:crypto.randomUUID(),patientId,episodeId,version,effectiveOn:date,source:'Vizsgálati lap',note:'',recordedAt:'2026-11-01T09:00:00Z',recordedBy:crypto.randomUUID(),recorder:'Dr. Vizsgáló',sourceReviewId:null,content:{...content,anamnesis:{...content.anamnesis,diagnozis:diagnosis}}};}
-function setup(reviews:EpisodeClinicalReview[]=[]){
-  let data:EpisodeClinicalWorkspace={episode:{id:episodeId,reason:'traumás sérülés',chiefComplaint:'Baleset után',status:'open'},current:reviews[0]??null,history:reviews,latestVersion:reviews.length,template:reviews[0]?.content??content,templateProvenance:reviews.length?'review':'legacy_unreviewed',availableReviews:[]};
-  const fetch=vi.fn(async(_url:string,init?:RequestInit)=>{if(init?.method==='POST'){const command=JSON.parse(init.body as string);const review={...record(data.latestVersion+1,command.effectiveOn,''),content:command.content};data={...data,current:review,history:[review,...data.history],latestVersion:review.version,template:review.content,templateProvenance:'review'};return new Response(JSON.stringify({review}));}return new Response(JSON.stringify(data));});
+function setup(reviews:EpisodeClinicalReview[]=[],template=content){
+  let data:EpisodeClinicalWorkspace={episode:{id:episodeId,reason:'traumás sérülés',chiefComplaint:'Baleset után',status:'open'},current:reviews[0]??null,history:reviews,latestVersion:reviews.length,template:reviews[0]?.content??template,templateProvenance:reviews.length?'review':'legacy_unreviewed',availableReviews:[]};
+  const fetch=vi.fn(async(_url:string,init?:RequestInit)=>{if(_url==='/api/bno-codes')return new Response(JSON.stringify([{kod:'K0000',nev:'Anodontia'},{kod:'K0810',nev:'A fogak elvesztése'}]));if(init?.method==='POST'){const command=JSON.parse(init.body as string);const review={...record(data.latestVersion+1,command.effectiveOn,''),content:command.content};data={...data,current:review,history:[review,...data.history],latestVersion:review.version,template:review.content,templateProvenance:'review'};return new Response(JSON.stringify({review}));}return new Response(JSON.stringify(data));});
   vi.stubGlobal('fetch',fetch);render(<EpisodeClinicalReviewPanel patientId={patientId} episodeId={episodeId} canEdit states={[]} onSaved={mocks.saved} onStateChange={mocks.state}/>);return fetch;
 }
 afterEach(()=>{cleanup();vi.unstubAllGlobals();vi.clearAllMocks();localStorage.clear();});
@@ -34,6 +34,26 @@ describe('Episode clinical review workflow',()=>{
     const current=record(2,'2026-10-01','Traumás sérülés'),old=record(1,'2026-02-01','Korábbi daganat');setup([current,old]);
     await screen.findAllByText('Traumás sérülés');fireEvent.change(screen.getByLabelText('Megőrzött adatfelvételek'),{target:{value:old.id}});await screen.findAllByText('Korábbi daganat');expect(screen.queryAllByText('Traumás sérülés')).toHaveLength(0);
     expect(screen.getByRole('link',{name:'Dokumentumok és méltányossági export ezzel az adatfelvétellel'}).getAttribute('href')).toContain(`clinicalReviewId=${old.id}`);
+  });
+
+  it('shows every legacy implant in the original fields and sends the full descriptions when explicitly reviewed',async()=>{
+    const positions=['12','15','22','23','24','34','35','44','45'];
+    const implants=Object.fromEntries(positions.map(position=>[position,`Implantátum ${position}\nREF: ref-${position} LOT: lot-${position}`]));
+    const template=clinicalTemplate({bno:'K0000',diagnozis:'Foghiány',meglevoFogak:{'12':{status:'M'}},meglevoImplantatumok:implants,nemIsmertPoziciokbanImplantatumRészletek:'Régi szabadszavas megjegyzés'},'traumás sérülés');
+    const fetch=setup([],template);await screen.findByLabelText('Név');
+    fireEvent.click(screen.getByRole('button',{name:'2. Anamnézis és állapot'}));
+    for(const position of positions)expect((screen.getByRole('textbox',{name:`${position}. pozíció`}) as HTMLTextAreaElement).value).toBe(implants[position]);
+    const bno=screen.getByRole('combobox',{name:'BNO-kód keresése'});await waitFor(()=>expect(bno.getAttribute('aria-busy')).toBe('false'));
+    fireEvent.change(bno,{target:{value:'fogak elvesztese'}});fireEvent.mouseDown(screen.getByRole('option',{name:/K0810/}));
+    fireEvent.change(screen.getByRole('textbox',{name:'12. pozíció'}),{target:{value:''}});
+    expect((screen.getByRole('checkbox',{name:'Implantátum: 12. pozíció'}) as HTMLInputElement).checked).toBe(true);
+    fireEvent.click(screen.getByRole('button',{name:'3. Műtétek és jóváhagyás'}));
+    fireEvent.click(screen.getByRole('checkbox'));fireEvent.click(screen.getByRole('button',{name:'Felülvizsgált epizódadatok mentése'}));
+    await waitFor(()=>expect(mocks.saved).toHaveBeenCalledOnce());
+    const command=JSON.parse(fetch.mock.calls.find(call=>call[1]?.method==='POST')![1]!.body as string);
+    expect(command.content.dental.meglevoImplantatumok).toEqual({...implants,'12':''});
+    expect(command.content.dental.nemIsmertPoziciokbanImplantatumRészletek).toBe('Régi szabadszavas megjegyzés');
+    expect(command.content.anamnesis).toMatchObject({bno:'K0810',diagnozis:'A fogak elvesztése',radioterapia:null,chemoterapia:null});
   });
   it('opens all sections together in expert mode',async()=>{
     localStorage.setItem('clinical-form-mode','expert');setup([record(1,'2026-01-01','Már kitöltött diagnózis')]);await screen.findByLabelText('Név');expect(screen.getByLabelText('Diagnózis')).toBeTruthy();expect(screen.getByLabelText('Műtéti előzmények ismertsége')).toBeTruthy();expect(screen.queryByRole('group',{name:'Adatfelülvizsgálat lépései'})).toBeNull();

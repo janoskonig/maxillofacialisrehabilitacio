@@ -1,7 +1,8 @@
 import { z } from 'zod';
-import { REASON_VALUES, type Patient } from '@/lib/types';
+import { REASON_VALUES, patientSchema, type Patient } from '@/lib/types';
 import { budapestToday } from '@/lib/aftercare/model';
 import { normalizeDefectRaster } from '@/lib/defect-raster';
+import { emptyLayers, type ClinicalLayers } from '@/lib/prosthesis-lifecycle/model';
 
 export const reviewDate = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(s => {
   const date = new Date(`${s}T00:00:00Z`);
@@ -39,6 +40,36 @@ export const surgerySchema=z.object({
   indication:z.string().trim().max(10000),institution:z.string().trim().max(500),
   source:z.string().trim().min(1,'A műtéti adat forrása szükséges.').max(1000),
 }).refine(s=>!s.occurredOn||!s.approximateDate,'Pontos nap vagy hozzávetőleges időszak adható meg.');
+/** Kept in the review JSON, so later edits to the shared chart cannot alter an episode. */
+export const DENTAL_FIELDS = [
+  'meglevoFogak','meglevoImplantatumok','nemIsmertPoziciokbanImplantatum','nemIsmertPoziciokbanImplantatumRészletek',
+  'felsoFogpotlasVan','felsoFogpotlasMikor','felsoFogpotlasKeszito','felsoFogpotlasElegedett','felsoFogpotlasProblema','felsoFogpotlasTipus',
+  'alsoFogpotlasVan','alsoFogpotlasMikor','alsoFogpotlasKeszito','alsoFogpotlasElegedett','alsoFogpotlasProblema','alsoFogpotlasTipus',
+] as const;
+export const episodeDentalSchema = patientSchema.pick({
+  meglevoFogak:true,meglevoImplantatumok:true,nemIsmertPoziciokbanImplantatum:true,nemIsmertPoziciokbanImplantatumRészletek:true,
+  felsoFogpotlasVan:true,felsoFogpotlasMikor:true,felsoFogpotlasKeszito:true,felsoFogpotlasElegedett:true,felsoFogpotlasProblema:true,felsoFogpotlasTipus:true,
+  alsoFogpotlasVan:true,alsoFogpotlasMikor:true,alsoFogpotlasKeszito:true,alsoFogpotlasElegedett:true,alsoFogpotlasProblema:true,alsoFogpotlasTipus:true,
+});
+export type EpisodeDentalStatus = z.infer<typeof episodeDentalSchema>;
+export function dentalFromPatient(patient:Partial<Patient>):EpisodeDentalStatus {
+  return episodeDentalSchema.parse({...patient,meglevoFogak:patient.meglevoFogak??{},meglevoImplantatumok:patient.meglevoImplantatumok??{}});
+}
+/** Preserve the legacy own-tooth markers exactly; an empty marker must not become a claimed healthy tooth. */
+export function dentalLayers(dental:EpisodeDentalStatus):ClinicalLayers {
+  const layers=emptyLayers();
+  layers.teeth=structuredClone(dental.meglevoFogak??{});
+  for(const [position,description] of Object.entries(dental.meglevoImplantatumok??{})) {
+    layers.implants[position]={present:true,description};
+  }
+  return layers;
+}
+export function hasDentalData(dental:EpisodeDentalStatus|undefined):boolean {
+  return !!dental && (Object.keys(dental.meglevoFogak??{}).length>0 || Object.keys(dental.meglevoImplantatumok??{}).length>0
+    || !!dental.nemIsmertPoziciokbanImplantatum || !!dental.nemIsmertPoziciokbanImplantatumRészletek?.trim()
+    || dental.felsoFogpotlasVan===true || dental.alsoFogpotlasVan===true);
+}
+
 export const clinicalContentSchema=z.object({
   reason:z.enum(REASON_VALUES),basics:z.object({...basicsShape,nem:z.enum(['ferfi','no']).nullable(),szuletesiDatum:reviewDate.nullable(),taj:z.string().trim().max(20).nullable().refine(v=>!v||/^\d{9}$/.test(v.replace(/-/g,'')),'A TAJ 9 számjegyből állhat.')}),
   anamnesis:z.object({...textShape,...booleanShape,
@@ -48,6 +79,7 @@ export const clinicalContentSchema=z.object({
   }),
   surgicalHistory:z.enum(['unknown','none','documented']),surgeries:z.array(surgerySchema).max(100),
   baselineStateId:z.string().uuid().nullable(),
+  dental:episodeDentalSchema.optional(),
 }).superRefine((c,ctx)=>{
   if((c.surgicalHistory==='documented')!==(c.surgeries.length>0))ctx.addIssue({code:'custom',message:'Rögzített műtéti előzményhez legalább egy műtét szükséges; a nemleges vagy ismeretlen állapothoz ne maradjon műtéti sor.'});
   if(new Set(c.surgeries.map(s=>s.id)).size!==c.surgeries.length)ctx.addIssue({code:'custom',message:'Egy műtét azonosítója csak egyszer szerepelhet.'});
@@ -74,6 +106,7 @@ export interface EpisodeClinicalWorkspace {
   episode:{id:string;reason:EpisodeClinicalContent['reason'];chiefComplaint:string;status:string};
   current:EpisodeClinicalReview|null;history:EpisodeClinicalReview[];latestVersion:number;
   template:EpisodeClinicalContent;templateProvenance:'legacy_unreviewed'|'review';
+  legacyDental?:EpisodeDentalStatus;
   availableReviews:Array<Pick<EpisodeClinicalReview,'id'|'episodeId'|'effectiveOn'|'version'|'recordedAt'>&{caseTitle:string|null}>;
 }
 export function clinicalTemplate(patient:Partial<Patient>,reason:EpisodeClinicalContent['reason']):EpisodeClinicalContent {
@@ -83,7 +116,7 @@ export function clinicalTemplate(patient:Partial<Patient>,reason:EpisodeClinical
     anamnesis:{...Object.fromEntries(CLINICAL_TEXT_FIELDS.map(([key])=>[key,stringValue(key)])),
       ...Object.fromEntries(CLINICAL_BOOLEAN_FIELDS.map(([key])=>[key,typeof value[key]==='boolean'?value[key]:null])),
       veleszuletettRendellenessegek:patient.veleszuletettRendellenessegek??[],maxillaDefektusRaszter:patient.maxillaDefektusRaszter??[],mandibulaDefektusRaszter:patient.mandibulaDefektusRaszter??[],
-    } as EpisodeClinicalContent['anamnesis'],surgicalHistory:'unknown',surgeries:[],baselineStateId:null};
+    } as EpisodeClinicalContent['anamnesis'],surgicalHistory:'unknown',surgeries:[],baselineStateId:null,dental:dentalFromPatient(patient)};
 }
 /** Clear every episode-owned field first: absent historical data must never reveal today's chart. */
 export function patientAtReview(patient:Patient,review:EpisodeClinicalReview):Patient {
@@ -92,6 +125,7 @@ export function patientAtReview(patient:Patient,review:EpisodeClinicalReview):Pa
     meglevoFogak:{},meglevoImplantatumok:{},nemIsmertPoziciokbanImplantatum:false,nemIsmertPoziciokbanImplantatumRészletek:null,
     felsoFogpotlasVan:null,felsoFogpotlasMikor:null,felsoFogpotlasKeszito:null,felsoFogpotlasElegedett:null,felsoFogpotlasProblema:null,felsoFogpotlasTipus:null,
     alsoFogpotlasVan:null,alsoFogpotlasMikor:null,alsoFogpotlasKeszito:null,alsoFogpotlasElegedett:null,alsoFogpotlasProblema:null,alsoFogpotlasTipus:null,
+    ...review.content.dental,
   } as Patient;
 }
 export function clinicalReviewText(review:EpisodeClinicalReview):string{
@@ -102,5 +136,7 @@ export function clinicalReviewText(review:EpisodeClinicalReview):string{
     ...CLINICAL_TEXT_FIELDS.filter(([key])=>c.anamnesis[key]).map(([key,label])=>`${label}: ${c.anamnesis[key]}`),
     ...CLINICAL_BOOLEAN_FIELDS.map(([key,label])=>`${label}: ${c.anamnesis[key]===null?'Nem ismert':c.anamnesis[key]?'Igen':'Nem'}`),
     ...c.surgeries.map(s=>`Műtét: ${s.occurredOn||s.approximateDate||'Időpontja nem ismert'}; ${s.procedure}; indok: ${s.indication||'Nincs adat'}; ${s.institution}; forrás: ${s.source}`),
+    ...Object.entries(c.dental?.meglevoImplantatumok??{}).sort(([a],[b])=>a.localeCompare(b)).map(([position,description])=>`Implantátum ${position}: ${description||'Részletek nincsenek megadva.'}`),
+    ...(c.dental?.nemIsmertPoziciokbanImplantatumRészletek?[`Implantátum ismeretlen pozícióban: ${c.dental.nemIsmertPoziciokbanImplantatumRészletek}`]:[]),
     ...(c.surgeries.length?[]:[c.surgicalHistory==='none'?'Műtéti előzmény: felülvizsgálva, nem jeleztek.':'Műtéti előzmény: nem ismert.']),review.note].filter(Boolean).join('\n\n');
 }

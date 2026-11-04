@@ -2,6 +2,8 @@ import { randomUUID } from 'crypto';
 import type { PoolClient } from 'pg';
 import { getDbPool } from '@/lib/db';
 import { HttpError } from '@/lib/auth-server';
+import { PATIENT_SELECT_FIELDS } from '@/lib/queries/patient-fields';
+import { dentalFromPatient } from '@/lib/episode-clinical/model';
 import { addDays, budapestToday, observationEnd } from '@/lib/aftercare/model';
 import { createEpisodeVisit } from '@/lib/episode-visits';
 import { canonical, clinicalCommandSchema, emptyLayers, replayStates, type ClinicalCommand } from './model';
@@ -404,9 +406,8 @@ async function saveRepairWork(db:PoolClient,patientId:string,actor:string,c:Extr
   return ev;
 }
 
-export async function loadClinicalWorkspace(patientId:string) {
-  const db=getDbPool();
-  const p=await one(db,'SELECT nev FROM patients WHERE id=$1',[patientId]);
+export async function loadClinicalWorkspace(patientId:string, db:Db=getDbPool()) {
+  const p=await one(db,`SELECT ${PATIENT_SELECT_FIELDS} FROM patients_full WHERE id=$1`,[patientId]);
   const [episodes,prostheses,events,goals,plans,repairs,work,tasks,states,packages,legacy,documents,pathways,appointments,closures,legacyEncounters,repairWork,episodeLinks,episodePlans,financing]=await Promise.all([
     db.query('SELECT id,case_title,reason,status,opened_at,closed_at,parent_episode_id FROM patient_episodes WHERE patient_id=$1 ORDER BY opened_at DESC',[patientId]),
     db.query('SELECT *,delivery_date::text FROM prostheses WHERE patient_id=$1 ORDER BY created_at,id',[patientId]),
@@ -443,7 +444,7 @@ export async function loadClinicalWorkspace(patientId:string) {
   const replay=replayStates(states);
   const activeEvents=events.rows.filter(e=>e.active);
   const closureReview=closures.rows.filter(c=>(c.acceptance_events as Array<{acceptance_id:string}>).some(a=>!activeEvents.some(e=>e.id===a.acceptance_id))).map(c=>c.episode_id);
-  return { patientName:p.nev,episodes:episodes.rows,prostheses:prostheses.rows,events:events.rows,goals:goals.rows,plans:plans.rows,repairs:repairs.rows,
+  return { patientName:p.nev,legacyDental:dentalFromPatient(p),episodes:episodes.rows,prostheses:prostheses.rows,events:events.rows,goals:goals.rows,plans:plans.rows,repairs:repairs.rows,
     work:[...work.rows,...repairWork.rows],tasks:tasks.rows,states,actual:replay.layers,conflicts:replay.conflicts,milestones:replay.milestones,
     packages:packages.rows,financingEvents:financing.rows,episodeLinks:episodeLinks.rows,episodePlans:episodePlans.rows.map(episodePlanFromRow),legacyStates:legacy.rows,legacyEncounters:legacyEncounters.rows,documents:documents.rows,pathways:pathways.rows,appointments:appointments.rows,closureReview };
 }

@@ -4,7 +4,7 @@ import { getDbPool } from '@/lib/db';
 import { HttpError } from '@/lib/auth-server';
 import { PATIENT_SELECT_FIELDS } from '@/lib/queries/patient-fields';
 import { canonical } from '@/lib/prosthesis-lifecycle/model';
-import { clinicalTemplate,patientAtReview,type EpisodeClinicalReview,type EpisodeClinicalWorkspace,type EpisodeReviewCommand } from './model';
+import { clinicalTemplate,dentalFromPatient,dentalLayers,patientAtReview,type EpisodeClinicalReview,type EpisodeClinicalWorkspace,type EpisodeReviewCommand } from './model';
 import type { Patient } from '@/lib/types';
 import { isValidUUID } from '@/lib/validation';
 
@@ -39,7 +39,7 @@ export async function loadEpisodeClinical(patientId:string,episodeId:string,db:D
     FROM episode_clinical_reviews r JOIN patient_episodes e ON e.id=r.episode_id
     WHERE r.patient_id=$1 AND r.episode_id<>$2 ORDER BY r.episode_id,r.effective_on DESC,r.version DESC`,[patientId,episodeId])).rows;
   return {episode,current,history,latestVersion:Math.max(0,...history.map(r=>r.version)),
-    template:current?.content??clinicalTemplate(patient,episode.reason),templateProvenance:current?'review':'legacy_unreviewed',availableReviews};
+    template:current?.content??clinicalTemplate(patient,episode.reason),templateProvenance:current?'review':'legacy_unreviewed',legacyDental:dentalFromPatient(patient),availableReviews};
 }
 
 export async function saveEpisodeReview(patientId:string,episodeId:string,actor:string,command:EpisodeReviewCommand){
@@ -65,10 +65,15 @@ export async function saveEpisodeReview(patientId:string,episodeId:string,actor:
       if(!state||state.day>command.effectiveOn)throw new HttpError(400,'A kiindulási státusz nem a beteghez vagy nem az adatfelvétel előtti időponthoz tartozik.');
     }
     const id=randomUUID(),eventId=randomUUID();
+    const dentalStateId=command.content.dental?randomUUID():null;
+    const content=dentalStateId?{...command.content,baselineStateId:dentalStateId}:command.content;
     await db.query(`INSERT INTO prosthesis_clinical_events(id,patient_id,episode_id,kind,occurred_on,time_precision,source,note,payload,recorded_by,request_key)
       VALUES($1,$2,$3,'episode_clinical_reviewed',$4,'day',$5,$6,$7::jsonb,$8,$9)`,[eventId,patientId,episodeId,command.effectiveOn,command.source,command.note,JSON.stringify({command,entityId:id}),actor,command.requestKey]);
+    if(dentalStateId&&command.content.dental)await db.query(
+      `INSERT INTO clinical_dental_states(id,patient_id,event_id,mode,layers) VALUES($1,$2,$3,'assessment',$4::jsonb)`,
+      [dentalStateId,patientId,eventId,JSON.stringify(dentalLayers(command.content.dental))]);
     await db.query(`INSERT INTO episode_clinical_reviews(id,patient_id,episode_id,version,event_id,effective_on,source,note,content,source_review_id,recorded_by)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11)`,[id,patientId,episodeId,version+1,eventId,command.effectiveOn,command.source,command.note,JSON.stringify(command.content),command.sourceReviewId,actor]);
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9::jsonb,$10,$11)`,[id,patientId,episodeId,version+1,eventId,command.effectiveOn,command.source,command.note,JSON.stringify(content),command.sourceReviewId,actor]);
     // The clinical timeline determines the current etiology, not the order of entry.
     const current=await selectedEpisodeReview(db,patientId,episodeId);
     await db.query('UPDATE patient_episodes SET reason=$3,auto_created=FALSE,snapshot_version=snapshot_version+1 WHERE id=$1 AND patient_id=$2',[episodeId,patientId,current!.content.reason]);

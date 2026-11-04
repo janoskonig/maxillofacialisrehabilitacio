@@ -17,8 +17,10 @@ export function positionDescription(layers:ClinicalLayers,tooth:number) {
   const legacy=value?.status&&['D','F','M'].includes(value.status)?readConditions(p.tooth as ToothStatus):null;
   const natural=legacy?BASE_LABELS[legacy.base]:value?.base?BASE_LABELS[value.base as keyof typeof BASE_LABELS]??value.base:p.tooth?'Dokumentált, alapállapota nem ismert':'Ismeretlen';
   const implant=p.implant===undefined?'nem ismert':(p.implant as {present?:boolean})?.present===false?'nincs':'jelen';
+  const implantDescription=(p.implant as {description?:unknown})?.description;
+  const detail=typeof implantDescription==='string'&&implantDescription?`; ${implantDescription}`:'';
   const roles=p.prostheses.map((v:any)=>POSITION_ROLES[v.role]??v.role).join(', ');
-  return `Saját fog: ${natural}; implantátum: ${implant}${roles?`; fogpótlás: ${roles}`:''}`;
+  return `Saját fog: ${natural}; implantátum: ${implant}${detail}${roles?`; fogpótlás: ${roles}`:''}`;
 }
 
 export function archDifferences(before:ClinicalLayers,after:ClinicalLayers) {

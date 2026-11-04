@@ -18,6 +18,7 @@ interface AnamnezisEtcSectionProps {
   setValue: UseFormSetValue<Patient>;
   errors: FieldErrors<Patient>;
   isViewOnly: boolean;
+  alwaysEditing?: boolean;
   selectedIndok: string | null | undefined;
   radioterapia: boolean | undefined;
   chemoterapia: boolean | undefined;
@@ -43,11 +44,13 @@ export function AnamnezisSection({
   setValue,
   errors,
   isViewOnly,
+  alwaysEditing = false,
   selectedIndok,
   radioterapia,
   chemoterapia,
 }: AnamnezisEtcSectionProps) {
-  const [editing, setEditing] = useState(false);
+  const [sectionEditing, setEditing] = useState(false);
+  const editing = alwaysEditing || sectionEditing;
 
   const kezelesreErkezesIndoka = watch('kezelesreErkezesIndoka');
   const diagnozis = watch('diagnozis');
@@ -72,7 +75,7 @@ export function AnamnezisSection({
       missingCount={missingCount}
       editing={editing}
       onToggleEdit={() => setEditing(e => !e)}
-      isViewOnly={isViewOnly}
+      isViewOnly={isViewOnly || alwaysEditing}
     >
       {editing ? (
         <div className="space-y-4">
@@ -96,12 +99,13 @@ export function AnamnezisSection({
             <input {...register('dohanyzasSzam')} className="form-input" placeholder="pl. 10 szál/nap" readOnly={isViewOnly} />
           </div>
           <div>
-            <label className="form-label">BNO</label>
+            <label htmlFor="episode-bno" className="form-label">BNO-kód keresése</label>
             <BNOAutocomplete
+              id="episode-bno"
               value={watch('bno') || ''}
               onChange={(kod, nev) => {
                 setValue('bno', kod, { shouldDirty: true, shouldValidate: true });
-                setValue('diagnozis', nev, { shouldDirty: true, shouldValidate: true });
+                if (nev) setValue('diagnozis', nev, { shouldDirty: true, shouldValidate: true });
               }}
               placeholder="Kezdjen el gépelni a BNO kód vagy név alapján..."
               readOnly={isViewOnly}
@@ -109,8 +113,8 @@ export function AnamnezisSection({
             />
           </div>
           <div>
-            <label className={`form-label ${isReq('diagnozis') ? 'form-label-required' : ''}`}>Diagnózis</label>
-            <input {...register('diagnozis')} className="form-input" placeholder="Diagnózis" readOnly={isViewOnly} />
+            <label htmlFor="episode-diagnosis" className={`form-label ${isReq('diagnozis') ? 'form-label-required' : ''}`}>Diagnózis</label>
+            <input id="episode-diagnosis" {...register('diagnozis')} className="form-input" placeholder="Diagnózis" readOnly={isViewOnly} />
           </div>
 
           {selectedIndok === 'traumás sérülés' && (

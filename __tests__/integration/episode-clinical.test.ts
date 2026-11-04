@@ -1,6 +1,8 @@
 import { afterEach,describe,expect,it } from 'vitest';
 import { getDbPool } from '@/lib/db';
 import { reviewCommandSchema,clinicalTemplate,type EpisodeClinicalContent } from '@/lib/episode-clinical/model';
+import { loadClinicalWorkspace } from '@/lib/prosthesis-lifecycle/service';
+import { patientForEpisodeExport } from '@/lib/episode-clinical/service';
 import { loadEpisodeClinical,saveEpisodeReview } from '@/lib/episode-clinical/service';
 import { GET,POST } from '@/app/api/patients/[id]/episodes/[episodeId]/clinical/route';
 import { authedRequest } from './helpers/auth';
@@ -8,7 +10,7 @@ import { createTestUser,createTestPatient,createTestEpisode,cleanupCreated } fro
 import { getOhipPatientContext } from '@/lib/ohip14-stage';
 import { GET as getOhip } from '@/app/api/patients/[id]/ohip14/route';
 const patients:string[]=[];
-afterEach(async()=>{for(const id of patients){await getDbPool().query('DELETE FROM ohip14_responses WHERE patient_id=$1',[id]);await getDbPool().query('DELETE FROM episode_clinical_reviews WHERE patient_id=$1',[id]);await getDbPool().query('DELETE FROM prosthesis_clinical_events WHERE patient_id=$1',[id]);}patients.length=0;await cleanupCreated();});
+afterEach(async()=>{for(const id of patients){await getDbPool().query('DELETE FROM ohip14_responses WHERE patient_id=$1',[id]);await getDbPool().query('DELETE FROM episode_clinical_reviews WHERE patient_id=$1',[id]);await getDbPool().query('DELETE FROM clinical_dental_states WHERE patient_id=$1',[id]);await getDbPool().query('DELETE FROM prosthesis_clinical_events WHERE patient_id=$1',[id]);}patients.length=0;await cleanupCreated();});
 async function setup(){
   const user=await createTestUser(undefined,{role:'admin'}),patient=await createTestPatient();patients.push(patient.id);
   const episode=await createTestEpisode(undefined,patient.id,{reason:'onkológiai kezelés utáni állapot'});
@@ -70,6 +72,27 @@ describe('Episode as the clinical observation unit',()=>{
     expect((await GET(await request('GET'),{params:{id:s.patient.id,episodeId:s.episode.id}})).status).toBe(200);
     expect((await POST(await request('POST',s.command()),{params:{id:s.patient.id,episodeId:s.episode.id}})).status).toBe(200);
     expect((await s.load()).history).toHaveLength(1);
+  });
+  it('brings the full legacy dental chart through review, a real clinical state and the episode export without changing shared data',async()=>{
+    const s=await setup();
+    const implants=Object.fromEntries(['12','15','22','23','24','34','35','44','45'].map(position=>[position,`Implantátum ${position}\nREF: ref-${position} LOT: lot-${position}`]));
+    await getDbPool().query(`INSERT INTO patient_dental_status(patient_id,meglevo_fogak,meglevo_implantatumok,nem_ismert_poziciokban_implantatum_reszletek)
+      VALUES($1,$2::jsonb,$3::jsonb,$4) ON CONFLICT(patient_id) DO UPDATE SET meglevo_fogak=EXCLUDED.meglevo_fogak,meglevo_implantatumok=EXCLUDED.meglevo_implantatumok,nem_ismert_poziciokban_implantatum_reszletek=EXCLUDED.nem_ismert_poziciokban_implantatum_reszletek`,
+      [s.patient.id,JSON.stringify({'11':{},'12':{status:'M'}}),JSON.stringify(implants),'Ismeretlen pozíció: korábbi feljegyzés']);
+    const before=await s.load();expect(before.current).toBeNull();expect(before.template.dental?.meglevoImplantatumok).toEqual(implants);
+    expect((await loadClinicalWorkspace(s.patient.id)).legacyDental.meglevoImplantatumok).toEqual(implants);
+    expect((await getDbPool().query('SELECT count(*)::int AS n FROM clinical_dental_states WHERE patient_id=$1',[s.patient.id])).rows[0].n).toBe(0);
+    const command=s.command({content:before.template});const saved=await s.save(command);
+    expect(saved.review.content.baselineStateId).toBeTruthy();expect(saved.review.content.dental?.meglevoImplantatumok).toEqual(implants);
+    const clinical=await loadClinicalWorkspace(s.patient.id);const state=clinical.states.find(state=>state.id===saved.review.content.baselineStateId)!;
+    expect(state.layers.teeth['12']).toEqual({status:'M'});expect(state.layers.teeth['11']).toEqual({});
+    expect(Object.keys(state.layers.implants)).toHaveLength(9);expect(state.layers.implants['35']).toEqual({present:true,description:implants['35']});
+    expect(state.occurred_on).toBe(command.effectiveOn);expect(state.recorded_by).toBe(s.user.id);
+    const exported=await patientForEpisodeExport(getDbPool(),s.patient as any,s.patient.id,new URLSearchParams({episodeId:s.episode.id}));
+    expect(exported.patient.meglevoImplantatumok).toEqual(implants);expect(exported.patient.nemIsmertPoziciokbanImplantatumRészletek).toBe('Ismeretlen pozíció: korábbi feljegyzés');
+    await getDbPool().query("UPDATE patient_dental_status SET meglevo_implantatumok='{}'::jsonb WHERE patient_id=$1",[s.patient.id]);
+    expect((await s.load()).current?.content.dental?.meglevoImplantatumok).toEqual(implants);
+    expect(await s.save(command)).toEqual(saved);
   });
   it('rejects cross-patient episode and source references',async()=>{
     const s=await setup(),other=await setup();const source=await other.save(other.command());

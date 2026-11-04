@@ -250,6 +250,7 @@ interface BetegvizsgalatSectionProps {
   patient: Patient | null | undefined;
   showToast: (message: string, type?: 'success' | 'error' | 'info', duration?: number) => string;
   sectionErrors: Record<string, number>;
+  showToothTreatments?: boolean;
   /**
    * A fog-kezelés lezárása után a szerver érvényteleníti a beteg zár-tokenjét.
    * Ezen keresztül jut vissza az új token a formhoz — az átvétel feltételeit a
@@ -278,6 +279,7 @@ export function BetegvizsgalatSection({
   patient,
   showToast,
   sectionErrors,
+  showToothTreatments = true,
   onPatientLockTokenRefreshed,
 }: BetegvizsgalatSectionProps) {
   const [showPerio, setShowPerio] = useState(false);
@@ -359,7 +361,7 @@ export function BetegvizsgalatSection({
           )}
 
           {/* Fogankénti kezelési igények */}
-          {(() => {
+          {showToothTreatments && (() => {
             const presentTeeth = Object.keys(fogak)
               .filter((toothNumber) => isPresent(readConditions(fogak[toothNumber])))
               .sort();

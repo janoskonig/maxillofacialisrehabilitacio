@@ -808,32 +808,21 @@ export function PatientForm({
 
   const handleToothToggle = (toothNumber: string) => {
     if (isViewOnly) return;
-    
-    setImplantatumok(prev => {
-      const currentValue = prev[toothNumber];
-      if (currentValue !== undefined && currentValue !== null) {
-        // Kipipálás - törlés
-        const newState = { ...prev };
-        delete newState[toothNumber];
-        return newState;
-      } else {
-        // Pipálás - hozzáadás üres stringgel
-        return { ...prev, [toothNumber]: '' };
-      }
-    });
+
+    const next = { ...implantatumok };
+    if (toothNumber in next) delete next[toothNumber];
+    else next[toothNumber] = '';
+    setImplantatumok(next);
+    setValue('meglevoImplantatumok', next, { shouldDirty: true });
   };
 
   const handleImplantatumDetailsChange = (toothNumber: string, details: string) => {
     if (isViewOnly) return;
-    setImplantatumok(prev => {
-      // Ha üres a leírás, töröljük a kulcsot
-      if (!details || details.trim() === '') {
-        const newState = { ...prev };
-        delete newState[toothNumber];
-        return newState;
-      }
-      return { ...prev, [toothNumber]: details };
-    });
+    // A pozíció létezése és a szöveges leírás külön adat: üres leírás
+    // esetén is megmarad az implantátum. Törölni a pozíció kapcsolójával lehet.
+    const next = { ...implantatumok, [toothNumber]: details };
+    setImplantatumok(next);
+    setValue('meglevoImplantatumok', next, { shouldDirty: true });
   };
 
   // Háromállapotú toggle: üres → jelen → hiányzik → üres

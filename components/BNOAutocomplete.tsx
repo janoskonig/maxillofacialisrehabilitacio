@@ -1,6 +1,6 @@
 'use client';
 
-import { useState, useEffect, useRef } from 'react';
+import { useEffect, useId, useMemo, useRef, useState } from 'react';
 
 interface BNOCode {
   kod: string;
@@ -8,6 +8,7 @@ interface BNOCode {
 }
 
 interface BNOAutocompleteProps {
+  id?: string;
   value: string;
   onChange: (kod: string, nev: string) => void;
   placeholder?: string;
@@ -16,361 +17,188 @@ interface BNOAutocompleteProps {
   disabled?: boolean;
 }
 
-// Normalizálja a BNO kódot: ha kevesebb mint 5 karakter, akkor 0-kkal pótoljuk ki
-function normalizeBNOCode(kod: string): string {
-  if (!kod) return '';
-  
-  // Ha már 5 karakter vagy több, visszaadjuk
-  if (kod.length >= 5) {
-    return kod.substring(0, 5).toUpperCase();
-  }
-  
-  // Ha kevesebb mint 5 karakter, 0-kkal pótoljuk ki
-  const padded = kod.toUpperCase().padEnd(5, '0');
-  return padded;
-}
+const normalizeText = (text: string) => text.normalize('NFD').replace(/[\u0300-\u036f]/g, '').toLowerCase().trim();
+const normalizeCode = (text: string) => text.replace(/[.\s]/g, '').toUpperCase();
 
 export function BNOAutocomplete({
+  id,
   value,
   onChange,
-  placeholder = 'Kezdjen el gépelni a BNO kód vagy név alapján...',
+  placeholder = 'Keresés BNO-kódra vagy diagnózisnévre...',
   className = 'form-input',
   readOnly = false,
   disabled = false,
 }: BNOAutocompleteProps) {
+  const listId = useId();
   const [searchTerm, setSearchTerm] = useState(value || '');
-  const [filteredCodes, setFilteredCodes] = useState<BNOCode[]>([]);
   const [bnoCodes, setBnoCodes] = useState<BNOCode[]>([]);
   const [isLoadingCodes, setIsLoadingCodes] = useState(true);
+  const [loadFailed, setLoadFailed] = useState(false);
+  const [loadAttempt, setLoadAttempt] = useState(0);
   const [showDropdown, setShowDropdown] = useState(false);
   const [selectedIndex, setSelectedIndex] = useState(-1);
-  const inputRef = useRef<HTMLInputElement>(null);
   const dropdownRef = useRef<HTMLDivElement>(null);
-  const isSelectingRef = useRef(false);
-  const lastSelectedKodRef = useRef<string>('');
+  const canEdit = !readOnly && !disabled;
 
-  // BNO kódok betöltése az API-ból
   useEffect(() => {
-    const loadBNOCodes = async () => {
+    const controller = new AbortController();
+    setIsLoadingCodes(true);
+    setLoadFailed(false);
+    async function loadCodes() {
       try {
-        const response = await fetch('/api/bno-codes');
-        if (response.ok) {
-          const codes = await response.json();
-          console.log(`Loaded ${codes.length} BNO codes from API`);
-          setBnoCodes(codes);
-        } else {
-          const errorData = await response.json().catch(() => ({}));
-          console.error('Failed to load BNO codes:', response.status, errorData);
-        }
-      } catch (error) {
-        console.error('Error loading BNO codes:', error);
+        const response = await fetch('/api/bno-codes', { signal: controller.signal });
+        if (!response.ok) throw new Error('BNO-törzs betöltése sikertelen');
+        const codes: unknown = await response.json();
+        if (!Array.isArray(codes) || codes.length === 0 || !codes.every(code =>
+          typeof code?.kod === 'string' && typeof code?.nev === 'string'
+        )) throw new Error('Hiányos BNO-törzs');
+        if (!controller.signal.aborted) setBnoCodes(codes);
+      } catch {
+        if (!controller.signal.aborted) setLoadFailed(true);
       } finally {
-        setIsLoadingCodes(false);
+        if (!controller.signal.aborted) setIsLoadingCodes(false);
       }
-    };
+    }
+    void loadCodes();
+    return () => controller.abort();
+  }, [loadAttempt]);
 
-    loadBNOCodes();
-  }, []);
-
-  // Debounced filtering to avoid re-filtering on every keystroke
+  // A kiválasztott kód és a keresőszöveg külön érték. A gépelés nem írja felül
+  // a mentett BNO-t / diagnózist, a külső reset viszont mindig érvényesül.
   useEffect(() => {
-    if (isLoadingCodes || bnoCodes.length === 0) {
-      return;
-    }
-
-    if (searchTerm.trim() === '') {
-      setFilteredCodes([]);
-      setShowDropdown(false);
-      return;
-    }
-
-    const timer = setTimeout(() => {
-      const term = searchTerm.toLowerCase();
-      const filtered = bnoCodes
-        .filter(code => {
-          const kodMatch = code.kod.toLowerCase().includes(term);
-          const nevMatch = code.nev.toLowerCase().includes(term);
-          return kodMatch || nevMatch;
-        })
-        .slice(0, 15);
-
-      setFilteredCodes(filtered);
-      setShowDropdown(filtered.length > 0);
-      setSelectedIndex(-1);
-    }, 300);
-
-    return () => clearTimeout(timer);
-  }, [searchTerm, bnoCodes, isLoadingCodes]);
-
-  // Input érték szinkronizálása a value prop-pal
-  // A BNO mezőben csak a kód jelenik meg
-  useEffect(() => {
-    // Ha éppen kiválasztás történt, ne módosítsuk a searchTerm-et
-    if (isSelectingRef.current) {
-      return;
-    }
-    
-    // Ha van kiválasztott kód, ne módosítsuk a searchTerm-et, hacsak nem változott explicit módon
-    if (lastSelectedKodRef.current) {
-      // Ha a value megegyezik a kiválasztott kóddal, ne csináljunk semmit
-      if (lastSelectedKodRef.current === value) {
-        return;
-      }
-      // Ha a value üres lett, de van kiválasztott kód, ne töröljük
-      if (!value || value === '') {
-        return;
-      }
-    }
-    
-    // Ha a value üres és van searchTerm, csak akkor töröljük, ha nem volt kiválasztás
-    if ((!value || value === '') && searchTerm !== '' && !lastSelectedKodRef.current) {
-      setSearchTerm('');
-      return;
-    }
-    
-    // Ha a value változott és nem üres, és nem egyezik a searchTerm-mel
-    // Csak akkor frissítjük, ha nem egyezik a kiválasztott kóddal
-    if (value && value !== searchTerm && value !== lastSelectedKodRef.current) {
-      setSearchTerm(value);
-      // Ha a value külsőleg változott (pl. form reset), töröljük a ref-et
-      if (!lastSelectedKodRef.current || lastSelectedKodRef.current !== value) {
-        lastSelectedKodRef.current = '';
-      }
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [value]);
-
-  // Kiválasztás kezelése
-  const handleSelect = (code: BNOCode) => {
-    isSelectingRef.current = true;
-    // Csak a kódot jelenítjük meg a mezőben
-    // Ha a kód kevesebb mint 5 karakter, normalizáljuk
-    let finalKod = code.kod;
-    if (code.kod.length < 5) {
-      finalKod = normalizeBNOCode(code.kod);
-    }
-    
-    // Mentjük az utolsó kiválasztott kódot ELŐSZÖR
-    lastSelectedKodRef.current = finalKod;
-    
-    // Először beállítjuk a searchTerm-et
-    setSearchTerm(finalKod);
-    
-    // Utána hívjuk meg az onChange-t
-    onChange(finalKod, code.nev);
-    
+    setSearchTerm(value || '');
     setShowDropdown(false);
     setSelectedIndex(-1);
-    
-    // Ne hívjuk meg a blur-t, csak jelöljük meg, hogy kiválasztás történt
-    // A blur csak akkor fut le, ha a felhasználó máshova kattint
-    setTimeout(() => {
-      isSelectingRef.current = false;
-    }, 1000); // Hosszabb timeout, hogy biztosan ne törölje
-  };
+  }, [value]);
 
-  // Input változás kezelése
-  const handleInputChange = (e: React.ChangeEvent<HTMLInputElement>) => {
-    const newValue = e.target.value;
-    setSearchTerm(newValue);
-    // Ha a felhasználó gépel, töröljük az utolsó kiválasztott kódot
-    lastSelectedKodRef.current = '';
-    if (newValue.trim() === '') {
-      onChange('', '');
-    }
-  };
+  const searchableCodes = useMemo(() => bnoCodes.map(code => ({
+    code,
+    name: normalizeText(code.nev),
+    key: normalizeCode(code.kod),
+  })), [bnoCodes]);
 
-  // Blur kezelése - ha érvényes BNO kódot tartalmaz, beállítjuk a diagnózist is
-  const handleBlur = () => {
-    if (isSelectingRef.current) {
-      return;
-    }
-    
-    // Ha már van kiválasztott kód, ne futtassuk le a blur logikát
-    if (lastSelectedKodRef.current && searchTerm === lastSelectedKodRef.current) {
-      setShowDropdown(false);
-      setSelectedIndex(-1);
-      return;
-    }
-    
-    setTimeout(() => {
-      if (document.activeElement !== inputRef.current && !isSelectingRef.current) {
-        const trimmedValue = searchTerm.trim().toUpperCase();
-        
-        // Ha már van kiválasztott kód és az megegyezik a searchTerm-mel, ne csináljunk semmit
-        if (lastSelectedKodRef.current && trimmedValue === lastSelectedKodRef.current.toUpperCase()) {
-          setShowDropdown(false);
-          setSelectedIndex(-1);
-          return;
-        }
-        
-        if (trimmedValue) {
-          // Először próbáljuk meg pontos egyezést találni
-          let foundCode = bnoCodes.find(code => 
-            code.kod.toUpperCase() === trimmedValue
-          );
-          
-          // Ha nem találunk pontos egyezést és a kód kevesebb mint 5 karakter,
-          // akkor normalizáljuk és újra keresünk
-          if (!foundCode && trimmedValue.length < 5) {
-            const normalizedKod = normalizeBNOCode(trimmedValue);
-            foundCode = bnoCodes.find(code => 
-              code.kod.toUpperCase() === normalizedKod
-            );
-            
-            if (foundCode) {
-              setSearchTerm(normalizedKod);
-              lastSelectedKodRef.current = normalizedKod;
-              onChange(normalizedKod, foundCode.nev);
-            } else {
-              // Ha még mindig nem található, próbáljuk meg prefix kereséssel
-              const prefixMatch = bnoCodes.find(code => 
-                code.kod.toUpperCase().startsWith(trimmedValue)
-              );
-              
-              if (prefixMatch) {
-                setSearchTerm(prefixMatch.kod);
-                lastSelectedKodRef.current = prefixMatch.kod;
-                onChange(prefixMatch.kod, prefixMatch.nev);
-              } else {
-                // Ha nem található és nincs kiválasztott kód, töröljük
-                if (!lastSelectedKodRef.current) {
-                  setSearchTerm('');
-                  onChange('', '');
-                }
-              }
-            }
-          } else if (foundCode) {
-            // Ha találtunk pontos egyezést
-            setSearchTerm(foundCode.kod);
-            lastSelectedKodRef.current = foundCode.kod;
-            onChange(foundCode.kod, foundCode.nev);
-          } else {
-            // Ha nem található és nincs kiválasztott kód, töröljük
-            if (!lastSelectedKodRef.current) {
-              setSearchTerm('');
-              onChange('', '');
-            }
-          }
-        } else {
-          // Ha üres és nincs kiválasztott kód, töröljük az értékeket
-          if (!lastSelectedKodRef.current) {
-            onChange('', '');
-          }
-        }
-        setShowDropdown(false);
-        setSelectedIndex(-1);
-      }
-    }, 200);
-  };
+  const filteredCodes = useMemo(() => {
+    const words = normalizeText(searchTerm).split(/\s+/).filter(Boolean);
+    if (words.length === 0) return [];
+    const codeTerm = normalizeCode(searchTerm);
+    return searchableCodes
+      .filter(row => row.key.includes(codeTerm) || words.every(word => row.name.includes(word)))
+      .slice(0, 15)
+      .map(row => row.code);
+  }, [searchTerm, searchableCodes]);
 
-  // Fókusz kezelése
-  const handleFocus = () => {
-    if (searchTerm.trim() !== '' && filteredCodes.length > 0) {
-      setShowDropdown(true);
-    }
-  };
+  const open = canEdit && showDropdown && searchTerm.trim() !== '' && !isLoadingCodes && !loadFailed;
 
-  // Billentyűzet navigáció
-  const handleKeyDown = (e: React.KeyboardEvent<HTMLInputElement>) => {
-    if (readOnly || disabled) return;
+  function selectCode(code: BNOCode) {
+    // Kizárólag a törzsben létező kódot mentjük; nem gyártunk kódot csonkolással.
+    setSearchTerm(code.kod);
+    setShowDropdown(false);
+    setSelectedIndex(-1);
+    onChange(code.kod, code.nev);
+  }
 
-    if (e.key === 'ArrowDown') {
-      e.preventDefault();
-      if (showDropdown && filteredCodes.length > 0) {
-        setSelectedIndex(prev => 
-          prev < filteredCodes.length - 1 ? prev + 1 : prev
-        );
-      }
-    } else if (e.key === 'ArrowUp') {
-      e.preventDefault();
-      if (showDropdown) {
-        setSelectedIndex(prev => (prev > 0 ? prev - 1 : -1));
-      }
-    } else if (e.key === 'Enter') {
-      e.preventDefault();
-      if (showDropdown && selectedIndex >= 0 && selectedIndex < filteredCodes.length) {
-        handleSelect(filteredCodes[selectedIndex]);
-      } else {
-        // Ha nincs kiválasztott elem, próbáljuk meg a blur logikát futtatni
-        handleBlur();
-      }
-    } else if (e.key === 'Escape') {
-      setShowDropdown(false);
-      setSelectedIndex(-1);
-      if (inputRef.current) {
-        inputRef.current.blur();
-      }
-    }
-  };
+  function resolveCode() {
+    const key = normalizeCode(searchTerm);
+    return bnoCodes.find(code => normalizeCode(code.kod) === key)
+      || (/^[A-Z]\d{2,3}$/.test(key)
+        ? bnoCodes.find(code => normalizeCode(code.kod) === key.padEnd(5, '0'))
+        : undefined)
+      || bnoCodes.find(code => normalizeText(code.nev) === normalizeText(searchTerm));
+  }
 
-  // Kattintás kezelése a dropdown-on kívül
   useEffect(() => {
-    const handleClickOutside = (event: MouseEvent) => {
-      if (
-        dropdownRef.current &&
-        !dropdownRef.current.contains(event.target as Node) &&
-        inputRef.current &&
-        !inputRef.current.contains(event.target as Node)
-      ) {
-        setShowDropdown(false);
-        setSelectedIndex(-1);
-      }
-    };
-
-    document.addEventListener('mousedown', handleClickOutside);
-    return () => {
-      document.removeEventListener('mousedown', handleClickOutside);
-    };
-  }, []);
-
-  // Scroll a kiválasztott elemhez
-  useEffect(() => {
-    if (selectedIndex >= 0 && dropdownRef.current) {
-      const selectedElement = dropdownRef.current.children[selectedIndex] as HTMLElement;
-      if (selectedElement) {
-        selectedElement.scrollIntoView({ block: 'nearest', behavior: 'smooth' });
-      }
+    if (selectedIndex >= 0 && open) {
+      dropdownRef.current?.children[selectedIndex]?.scrollIntoView?.({ block: 'nearest' });
     }
-  }, [selectedIndex]);
+  }, [selectedIndex, open]);
 
   return (
     <div className="relative">
       <input
-        ref={inputRef}
+        id={id}
         type="text"
+        role="combobox"
+        aria-label={id ? undefined : 'BNO-kód vagy diagnózis keresése'}
+        aria-autocomplete="list"
+        aria-expanded={open}
+        aria-controls={open ? listId : undefined}
+        aria-activedescendant={open && selectedIndex >= 0 ? `${listId}-${selectedIndex}` : undefined}
+        aria-busy={isLoadingCodes}
         value={searchTerm}
-        onChange={handleInputChange}
-        onFocus={handleFocus}
-        onBlur={handleBlur}
-        onKeyDown={handleKeyDown}
-        placeholder={isLoadingCodes ? 'BNO kódok betöltése...' : placeholder}
+        onChange={event => {
+          const next = event.target.value;
+          setSearchTerm(next);
+          setShowDropdown(true);
+          setSelectedIndex(-1);
+          if (!next.trim()) onChange('', '');
+        }}
+        onFocus={() => setShowDropdown(true)}
+        onBlur={() => {
+          if (canEdit && searchTerm !== value) {
+            const exact = resolveCode();
+            if (exact) selectCode(exact);
+            else setSearchTerm(value || '');
+          }
+          setShowDropdown(false);
+          setSelectedIndex(-1);
+        }}
+        onKeyDown={event => {
+          if (!canEdit) return;
+          if (event.key === 'ArrowDown' || event.key === 'ArrowUp') {
+            event.preventDefault();
+            setShowDropdown(true);
+            setSelectedIndex(index => event.key === 'ArrowDown'
+              ? Math.min(index + 1, filteredCodes.length - 1)
+              : Math.max(index - 1, -1));
+          } else if (event.key === 'Enter') {
+            event.preventDefault();
+            const code = open && selectedIndex >= 0 ? filteredCodes[selectedIndex]
+              : resolveCode() || (open && filteredCodes.length === 1 ? filteredCodes[0] : undefined);
+            if (code) selectCode(code);
+          } else if (event.key === 'Escape') {
+            event.preventDefault();
+            setSearchTerm(value || '');
+            setShowDropdown(false);
+            setSelectedIndex(-1);
+          }
+        }}
+        placeholder={isLoadingCodes ? 'BNO-kódok betöltése...' : placeholder}
         className={className}
         readOnly={readOnly}
-        disabled={disabled || isLoadingCodes}
+        disabled={disabled}
         autoComplete="off"
-        maxLength={5}
       />
-      {showDropdown && filteredCodes.length > 0 && (
+      {loadFailed && (
+        <p role="status" className="mt-1 text-sm text-amber-700 dark:text-amber-300">
+          A BNO-kereső nem tölthető be.
+          {canEdit && <button type="button" className="ml-2 underline" onClick={() => setLoadAttempt(n => n + 1)}>Újrapróbálás</button>}
+        </p>
+      )}
+      {open && (
         <div
           ref={dropdownRef}
+          id={listId}
+          role="listbox"
+          aria-label="BNO-találatok"
           className="absolute z-50 w-full mt-1 bg-white dark:bg-gray-900 border border-gray-300 dark:border-gray-700 rounded-md shadow-lg max-h-60 overflow-auto"
         >
+          {filteredCodes.length === 0 && <p role="status" className="px-4 py-3 text-sm text-gray-500">Nincs találat. Keressen kódrészletre vagy a diagnózis egy szavára.</p>}
           {filteredCodes.map((code, index) => (
             <div
-              key={`${code.kod}-${index}`}
-              onMouseDown={(e) => {
-                e.preventDefault();
-                handleSelect(code);
+              key={code.kod}
+              id={`${listId}-${index}`}
+              role="option"
+              aria-selected={index === selectedIndex}
+              onMouseDown={event => {
+                event.preventDefault();
+                selectCode(code);
               }}
-              className={`px-4 py-2 cursor-pointer text-sm border-b border-gray-100 dark:border-gray-800 last:border-b-0 ${
-                index === selectedIndex
-                  ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-900 dark:text-blue-200'
-                  : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'
-              }`}
+              className={`px-4 py-2 cursor-pointer text-sm border-b border-gray-100 dark:border-gray-800 last:border-b-0 ${index === selectedIndex
+                ? 'bg-blue-100 dark:bg-blue-950/50 text-blue-900 dark:text-blue-200'
+                : 'text-gray-700 dark:text-gray-300 hover:bg-gray-100 dark:hover:bg-gray-700'}`}
             >
-              <div className="font-medium">{code.kod}</div>
-              <div className="text-xs text-gray-600 dark:text-gray-400">{code.nev}</div>
+              <span className="font-medium">{code.kod}</span>
+              <span className="block text-xs text-gray-600 dark:text-gray-400">{code.nev}</span>
             </div>
           ))}
         </div>

@@ -15,9 +15,10 @@ interface ToothCheckboxProps {
   onChange: () => void;
   disabled?: boolean;
   idPrefix?: string;
+  ariaLabel?: string;
 }
 
-export function ToothCheckbox({ toothNumber, value, onChange, disabled, idPrefix = 'tooth' }: ToothCheckboxProps) {
+export function ToothCheckbox({ toothNumber, value, onChange, disabled, idPrefix = 'tooth', ariaLabel }: ToothCheckboxProps) {
   const state = getToothState(value);
   const isPresent = state === 'present';
   const isMissing = state === 'missing';
@@ -91,6 +92,7 @@ export function ToothCheckbox({ toothNumber, value, onChange, disabled, idPrefix
         >
           <input
             id={checkboxId}
+            aria-label={ariaLabel}
             type="checkbox"
             checked={isChecked}
             onChange={(e) => {
