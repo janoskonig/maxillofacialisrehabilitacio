@@ -8,7 +8,7 @@ import { FileText, Download } from 'lucide-react';
 import { ReadField, ReadGrid, SectionShell, isEmptyValue } from './read/ReadView';
 import { FieldErrorText, fieldAriaProps } from './field-a11y';
 import Link from 'next/link';
-import { episodeOverviewHref } from '@/lib/episode-overview';
+import { episodeAnamnesisHref } from '@/lib/episode-overview';
 
 interface MeltanyossagiSectionProps {
   episodeId?:string|null;
@@ -76,7 +76,7 @@ export function MeltanyossagiSection({
       onToggleEdit={() => setEditing(e => !e)}
       isViewOnly={isViewOnly||!!episodeId}
     >
-      {episodeId?<p className="text-sm">A kórtörténeti összefoglaló és a szakorvosi vélemény a kiválasztott epizód megőrzött adatfelvételéből készül. <Link className="underline" href={`${episodeOverviewHref(patientId!,episodeId)}#adatfelulvizsgalat`}>Epizód adatfelülvizsgálata</Link></p>:editing ? (
+      {episodeId?<p className="text-sm">A kórtörténeti összefoglaló és a szakorvosi vélemény a kiválasztott epizód megőrzött adatfelvételéből készül. <Link className="underline" href={episodeAnamnesisHref(patientId!,episodeId)}>Epizód adatfelülvizsgálata</Link></p>:editing ? (
         <div className="space-y-4">
           <div>
             <label className="form-label">Kórtörténeti összefoglaló (3 hónapnál nem régebbi)</label>

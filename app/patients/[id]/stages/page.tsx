@@ -1,7 +1,7 @@
 'use client';
 
 import { useEffect, useState, useCallback } from 'react';
-import { useRouter, useParams } from 'next/navigation';
+import { useRouter, useParams, useSearchParams } from 'next/navigation';
 import { getCurrentUser } from '@/lib/auth';
 import { Patient } from '@/lib/types';
 import type { AftercareWorkspace } from '@/lib/aftercare/model';
@@ -11,9 +11,12 @@ import { useTimelineData } from '@/components/TreatmentPlanGantt/useTimelineData
 import type { TimelineStep } from '@/components/TreatmentPlanGantt/types';
 import { PatientTreatmentJourney } from '@/components/PatientTreatmentJourney';
 import { PatientAftercare } from '@/components/aftercare/PatientAftercare';
+import { ProsthesisLifecycle } from '@/components/prosthesis-lifecycle/ProsthesisLifecycle';
+import { FormModeSwitch } from '@/components/prosthesis-lifecycle/FormMode';
 import type { PatientEpisode, PatientStageEntry, StageEventEntry } from '@/lib/types';
 import Link from 'next/link';
-import { BarChart3, ChevronDown, Plus } from 'lucide-react';
+import { BarChart3, CalendarClock, ChevronDown, HeartPulse, Plus } from 'lucide-react';
+import { ToothIcon } from '@/components/icons/ToothIcon';
 import { AppShell } from '@/components/layout/AppShell';
 import { PatientHeaderBar } from '@/components/PatientHeaderBar';
 import { PatientTabsNav } from '@/components/PatientTabsNav';
@@ -24,7 +27,7 @@ import { PatientStageSelector } from '@/components/PatientStageSelector';
 import { PatientStageStepper } from '@/components/PatientStageStepper';
 import { PatientCareTimeline } from '@/components/PatientCareTimeline';
 import { PatientQuickTaskBlock } from '@/components/PatientQuickTaskBlock';
-import { episodeOverviewHref } from '@/lib/episode-overview';
+import { episodeOverviewHref, episodeAnamnesisHref } from '@/lib/episode-overview';
 import { EpisodeRecallPanel } from '@/components/EpisodeRecallPanel';
 import { EpisodeObstaclesPanel } from '@/components/EpisodeObstaclesPanel';
 import { useToast } from '@/contexts/ToastContext';
@@ -48,7 +51,10 @@ export default function PatientStagesPage() {
   const router = useRouter();
   const params = useParams();
   const patientId = params.id as string;
-  const { showToast } = useToast();
+  const workspaceQuery=useSearchParams().toString();
+  const { showToast, confirm } = useToast();
+  const [entryState,setEntryState]=useState({dirty:false,saving:false});
+  const canLeaveWork=async()=>!entryState.saving&&(!entryState.dirty||await confirm('A kitöltött ellátási adatok még nincsenek mentve. Elveted őket és továbblépsz?'));
   const [authorized, setAuthorized] = useState(false);
   const [patient, setPatient] = useState<Patient | null>(null);
   const [loading, setLoading] = useState(true);
@@ -66,7 +72,7 @@ export default function PatientStagesPage() {
   const [recallOpen, setRecallOpen] = useState(false);
   const [tasksOpen, setTasksOpen] = useState(false);
   const [historyOpen, setHistoryOpen] = useState(false);
-  const [workView, setWorkView] = useState<'plan' | 'aftercare' | null>(null);
+  const [workView, setWorkView] = useState<'plan' | 'aftercare' | 'prostheses' | null>(null);
   const [care, setCare] = useState<AftercareWorkspace | null>(null);
   const [careError, setCareError] = useState('');
   const [careRetry, setCareRetry] = useState(0);
@@ -105,14 +111,14 @@ export default function PatientStagesPage() {
   const [selectedEpisodeId, setSelectedEpisodeId] = useState<string | null>(null);
 
   useEffect(() => {
-    const query = new URLSearchParams(window.location.search);
-    const episodeId = query.get('episodeId');
-    if (episodeId) setSelectedEpisodeId(episodeId);
-    if (query.get('view') === 'aftercare') setWorkView('aftercare');
-    if (query.get('view') === 'plan') setWorkView('plan');
+    const query = new URLSearchParams(workspaceQuery);
+    setSelectedEpisodeId(query.get('episodeId'));
+    const view=query.get('view');
+    setWorkView(view==='aftercare'||view==='plan'||view==='prostheses'?view:null);
+    setRequestedAppointment(query.get('appointmentId')??undefined);
     if (!query.get('appointmentId')&&(query.get('plan')==='1'||['#kezelesi-terv','#finanszirozas'].includes(window.location.hash))){router.replace(episodeOverviewHref(patientId,query.get('episodeId'),window.location.hash==='#finanszirozas'?'financing':'plan'));return;}
-    if (query.get('appointmentId')) { setRequestedAppointment(query.get('appointmentId')!); setWorkView('aftercare'); }
-  }, [router,patientId]);
+    if (query.get('appointmentId')) { setRequestedAppointment(query.get('appointmentId')!); if(query.get('view')!=='prostheses')setWorkView('aftercare'); }
+  }, [router,patientId,workspaceQuery]);
 
   const refreshStagesAndEpisodes = useCallback(() => {
     setRefreshKey((k) => k + 1);
@@ -217,6 +223,13 @@ export default function PatientStagesPage() {
   const aftercareDefault = phase === 'aftercare' || (phase === 'mixed' && ['STAGE_6', 'STAGE_7'].includes(timelineEpisode?.currentStageCode ?? ''));
   const shownView = workView ?? (aftercareDefault ? 'aftercare' : 'plan');
   const currentStageDisplay = stageDisplay(timelineEpisode?.currentStageCode);
+  async function chooseWorkView(view:'plan'|'aftercare'|'prostheses'){
+    if(view===shownView||!await canLeaveWork())return;
+    setWorkView(view);setRequestedAppointment(undefined);setEntryState({dirty:false,saving:false});
+    const query=new URLSearchParams({view});if(activeEpisode)query.set('episodeId',activeEpisode.id);
+    window.history.replaceState(null,'',`/patients/${patientId}/stages?${query}${view==='prostheses'?'#fogpotlasok':view==='aftercare'?'#gondozas':''}`);
+  }
+  useEffect(()=>{if(!entryState.dirty)return;const guard=(e:BeforeUnloadEvent)=>{e.preventDefault();e.returnValue='';};window.addEventListener('beforeunload',guard);return()=>window.removeEventListener('beforeunload',guard);},[entryState.dirty]);
   useEffect(() => {
     if (!requestedAppointment || !care) return;
     const appointment = care.appointments.find((a) => a.id === requestedAppointment);
@@ -224,14 +237,23 @@ export default function PatientStagesPage() {
   }, [requestedAppointment, care]);
   const openTimelineStep = async (step: TimelineStep) => {
     if (step.appointmentId && (step.stepCode.startsWith('care:') || step.status === 'completed')) {
-      setRequestedAppointment(step.appointmentId);
-      setWorkView('aftercare');
+      await openCareVisit(step.appointmentId);
     } else if (step.appointmentId && step.status === 'booked') openAppointments(step.appointmentId);
-    else setWorkView('plan');
+    else await chooseWorkView('plan');
   };
+  async function openCareVisit(appointmentId:string){
+    if(shownView==='aftercare'&&requestedAppointment===appointmentId)return;
+    if(!await canLeaveWork())return;
+    const episodeId=care?.appointments.find(a=>a.id===appointmentId)?.episodeId??activeEpisode?.id;
+    setRequestedAppointment(appointmentId);setWorkView('aftercare');setEntryState({dirty:false,saving:false});
+    if(episodeId)setSelectedEpisodeId(episodeId);
+    const query=new URLSearchParams({view:'aftercare',appointmentId});if(episodeId)query.set('episodeId',episodeId);
+    window.history.replaceState(null,'',`/patients/${patientId}/stages?${query}#gondozas`);
+  }
   useEffect(() => {
     if (workView === 'plan') document.getElementById('kezelesi-alkalmak')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
     if (workView === 'aftercare' && requestedAppointment) document.getElementById('gondozas')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
+    if (workView === 'prostheses') document.getElementById('fogpotlasok')?.scrollIntoView({ behavior: 'smooth', block: 'start' });
   }, [workView, requestedAppointment]);
   const isDeceased = Boolean(patient?.halalDatum);
   const canEditEpisodeSettings = userRole === 'admin' || userRole === 'fogpótlástanász';
@@ -255,16 +277,17 @@ export default function PatientStagesPage() {
 
   return (
     <AppShell
-      title="Beteg profil"
+      title="Kezelés és gondozás"
       backTo={`/patients/${patientId}/view`}
       maxWidth="xl"
       actions={
         <Link
           href={`/treatment-plans?tplan_patient=${patientId}&tplan_status=all&tplan_view=merged`}
-          className="inline-flex items-center gap-2 px-3 py-2 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50"
+          aria-label="Várólista és idővonal"
+          className="inline-flex shrink-0 items-center gap-2 px-2 py-2 sm:px-3 rounded-lg border border-gray-200 dark:border-gray-800 bg-white dark:bg-gray-900 text-sm font-medium text-gray-700 dark:text-gray-300 hover:bg-gray-50 dark:hover:bg-gray-800/50"
         >
-          <BarChart3 className="w-4 h-4" />
-          Várólista és idővonal
+          <BarChart3 className="w-4 h-4 shrink-0" />
+          <span className="hidden sm:inline">Várólista és idővonal</span>
         </Link>
       }
     >
@@ -278,16 +301,16 @@ export default function PatientStagesPage() {
       />
 
       {/* Közös fülsor a profillal — itt a „Kezelés menete" fül az aktív */}
-      <PatientTabsNav patientId={patientId} activeTab="stadiumok" episodeId={activeEpisode?.id} />
+      <PatientTabsNav patientId={patientId} activeTab="stadiumok" episodeId={activeEpisode?.id} onNavigate={async href=>{if(await canLeaveWork())router.push(href);}}/>
 
       <div className="space-y-4">
-        <div><h1 className="text-2xl font-semibold">Kezelés menete</h1><p className="mt-1 text-sm text-slate-500">Az epizód munkafázisai, időpontjai és elvégzett ellátásai. Az indokot, a célt és a finanszírozást az Epizód és terv fülön találod.</p></div>
+        <div className="flex flex-wrap items-start justify-between gap-3"><div><h1 className="text-2xl font-semibold">Kezelés, fogpótlások és gondozás</h1><p className="mt-1 text-sm text-slate-500">Közös idővonal az elkészítéstől az átadáson át a kontrollokig.</p></div><FormModeSwitch/></div>
         <section className="rounded-xl border border-gray-200 bg-white px-4 py-3 dark:border-gray-800 dark:bg-gray-900">
           <div className="flex items-center justify-between gap-3 flex-wrap">
             <div className="min-w-0 flex-1">
               {activeEpisode ? <>
                 {selectableEpisodes.length > 1 ? <label className="block text-xs text-gray-500 dark:text-gray-400">Epizód kiválasztása
-                  <select value={activeEpisode.id} onChange={async (e) => { const id = e.target.value; setSelectedEpisodeId(id); setWorkView(null); setRequestedAppointment(undefined); }} className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm font-medium text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
+                  <select value={activeEpisode.id} onChange={async (e) => { const id = e.target.value;if(!await canLeaveWork())return; setSelectedEpisodeId(id); setWorkView(null); setRequestedAppointment(undefined);setEntryState({dirty:false,saving:false});const query=new URLSearchParams({episodeId:id});window.history.replaceState(null,'',`/patients/${patientId}/stages?${query}`); }} className="mt-1 block w-full rounded-lg border border-gray-300 bg-white px-2 py-1.5 text-sm font-medium text-gray-900 dark:border-gray-700 dark:bg-gray-900 dark:text-gray-100">
                     {selectableEpisodes.map((ep) => <option key={ep.id} value={ep.id}>{ep.caseTitle || ep.chiefComplaint}{ep.status === 'closed' ? ' · Lezárt' : ep.status === 'paused' ? ' · Szünetel' : ''}</option>)}
                   </select>
                 </label> : <>
@@ -300,7 +323,7 @@ export default function PatientStagesPage() {
               </> : <p className="text-sm text-gray-500 dark:text-gray-400">{isDeceased ? 'Az ellátás lezárult.' : 'Nincs aktív kezelés.'}</p>}
             </div>
             <div className="flex items-center gap-4">
-              {activeEpisode&&<Link href={episodeOverviewHref(patientId,activeEpisode.id)} className="text-sm font-medium text-medical-primary underline">Epizód és terv megnyitása</Link>}
+              {activeEpisode&&<Link href={episodeOverviewHref(patientId,activeEpisode.id)} onClick={async e=>{e.preventDefault();if(await canLeaveWork())router.push(episodeOverviewHref(patientId,activeEpisode.id));}} className="text-sm font-medium text-medical-primary underline">Epizód és terv megnyitása</Link>}
               {!activeEpisode&&!isDeceased&&<Link href={`${episodeOverviewHref(patientId)}?new=1`} className="inline-flex items-center gap-1 text-sm font-medium text-medical-primary"><Plus className="h-4 w-4"/>Új epizód indítása</Link>}
               {activeEpisode&&<button type="button" onClick={()=>setDetailsOpen(v=>!v)} aria-expanded={detailsOpen} className="inline-flex items-center gap-1 text-sm text-gray-500">Stádium módosítása<ChevronDown className={`h-4 w-4 ${detailsOpen?'rotate-180':''}`}/></button>}
             </div>
@@ -322,17 +345,25 @@ export default function PatientStagesPage() {
         {activeEpisode && <>
           {timelineEpisode && <PatientTreatmentJourney key={`journey-${activeEpisode.id}`} episode={timelineEpisode} care={care} serverNow={timeline.meta?.serverNow} onOpenStep={openTimelineStep} />}
           {timeline.error && <p role="alert" className="text-sm text-amber-700 dark:text-amber-300">Az idővonal nem tölthető be. <button type="button" className="underline" onClick={() => setSettingsVersion((v) => v + 1)}>Újra</button></p>}
-          <div className="flex items-center justify-between gap-3 flex-wrap">
-            <div role="group" aria-label="Kezelési munkanézet" className="inline-flex rounded-lg border border-gray-200 p-1 dark:border-gray-800">
-              <button type="button" aria-pressed={shownView === 'plan'} onClick={() => { setWorkView('plan'); setRequestedAppointment(undefined); }} className={`rounded-md px-3 py-1.5 text-sm ${shownView === 'plan' ? 'bg-medical-primary text-white' : 'text-gray-600 dark:text-gray-300'}`}>Kezelési alkalmak</button>
-              <button type="button" aria-pressed={shownView === 'aftercare'} onClick={async () => { setWorkView('aftercare'); setRequestedAppointment(undefined); }} className={`rounded-md px-3 py-1.5 text-sm ${shownView === 'aftercare' ? 'bg-medical-primary text-white' : 'text-gray-600 dark:text-gray-300'}`}>Gondozás / igazítás</button>
-            </div>
-            {phase === 'mixed' && <span className="text-xs text-amber-700 dark:text-amber-300">Készítés és gondozás párhuzamosan</span>}
-            {(phase === 'assessment' || phase === 'planning') && <Link href={`/patients/${patientId}/view?tab=anamnezis`} className="text-sm text-medical-primary hover:underline">Vizsgálati adatok</Link>}
-          </div>
+        </>}
+        <div role="group" aria-label="Kezelési munkanézet" className="grid gap-2 sm:grid-cols-3">
+          {([
+            {id:'plan',title:'Kezelési alkalmak',hint:'Munkafázisok és időpontok',icon:CalendarClock},
+            {id:'prostheses',title:'Fogpótlások',hint:'Készülékek, átadás és javítások',icon:ToothIcon},
+            {id:'aftercare',title:'Gondozás / igazítás',hint:'Vizitek és visszarendelés',icon:HeartPulse},
+          ] as const).map(item=><button key={item.id} type="button" aria-label={item.title} aria-pressed={shownView===item.id} disabled={!activeEpisode&&item.id!=='prostheses'} onClick={()=>{void chooseWorkView(item.id);}}
+            className={`flex items-center gap-3 rounded-2xl border p-3 text-left disabled:opacity-40 sm:p-4 ${shownView===item.id?'border-blue-600 bg-blue-50 text-blue-900 dark:bg-blue-950 dark:text-blue-100':'border-slate-200 bg-white text-slate-700 hover:border-blue-300 dark:border-slate-700 dark:bg-slate-950 dark:text-slate-200'}`}>
+            <item.icon className="h-6 w-6 shrink-0"/><span><span className="block text-sm font-semibold">{item.title}</span><span className="mt-1 block text-xs opacity-70">{item.hint}</span></span>
+          </button>)}
+        </div>
+        {phase==='mixed'&&<p className="text-xs text-amber-700 dark:text-amber-300">Készítés és gondozás párhuzamosan</p>}
+        {activeEpisode&&(phase==='assessment'||phase==='planning')&&<Link href={episodeAnamnesisHref(patientId,activeEpisode.id)} className="inline-block text-sm text-medical-primary underline">Anamnézis és vizsgálati adatok</Link>}
+        {shownView==='prostheses'?<section id="fogpotlasok" className="scroll-mt-24">
+          <ProsthesisLifecycle key={`devices-${activeEpisode?.id??'all'}-${requestedAppointment??''}`} patientId={patientId} selectedEpisodeId={activeEpisode?.id} initialAppointmentId={requestedAppointment} embedded onStateChange={setEntryState} onOpenLegacyVisit={id=>{void openCareVisit(id);}} onSaved={()=>{setCareRetry(v=>v+1);refreshStagesAndEpisodes();setSettingsVersion(v=>v+1);}}/>
+        </section>:activeEpisode&&<>
           {shownView === 'aftercare' ? <div id="gondozas" className="scroll-mt-24 rounded-xl border border-gray-200 bg-white p-4 dark:border-gray-800 dark:bg-gray-900">
-            <Link href={`/patients/${patientId}/prostheses`} className="mb-4 inline-block font-medium text-medical-primary underline">Fogpótlások teljes története, javítások és utólagos dokumentálás</Link>
-            {care ? <PatientAftercare key={`aftercare-${activeEpisode.id}`} patientId={patientId} selectedEpisodeId={activeEpisode.id} embedded workspace={care} initialAppointmentId={requestedAppointment} onWorkspaceChanged={handleCareChanged} onRequestScheduling={() => { setRecallOpen(true); openAppointments(); }} />
+            <button type="button" onClick={()=>{void chooseWorkView('prostheses');}} className="mb-4 text-sm font-medium text-medical-primary underline">Fogpótlások, javítások és gondozási előzmények</button>
+            {care ? <PatientAftercare key={`aftercare-${activeEpisode.id}`} patientId={patientId} selectedEpisodeId={activeEpisode.id} embedded workspace={care} onStateChange={setEntryState} initialAppointmentId={requestedAppointment} onWorkspaceChanged={handleCareChanged} onRequestScheduling={() => { setRecallOpen(true); openAppointments(); }} />
               : careError ? <p role="alert" className="text-sm text-amber-700 dark:text-amber-300">{careError} <button type="button" className="underline" onClick={() => setCareRetry((v) => v + 1)}>Újrapróbálás</button></p>
                 : <p role="status" className="text-sm text-gray-500">Gondozási adatok betöltése…</p>}
           </div> : <div id="kezelesi-alkalmak" className="scroll-mt-24 space-y-3">

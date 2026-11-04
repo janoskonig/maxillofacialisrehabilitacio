@@ -15,7 +15,7 @@ import { FollowupForm } from './FollowupForm';
 type Mode = { kind: 'register' } | { kind: 'visit'; encounter?: CareEncounter; appointmentId?: string } | { kind: 'delivery' | 'followup'; prosthesis: Prosthesis } | null;
 const labelCodes = (codes: string[], labels: Record<string, string>) => codes.map((code) => labels[code] || code).join(' · ');
 
-export function PatientAftercare({ patientId, initialAppointmentId, selectedEpisodeId, embedded = false, workspace, onWorkspaceChanged, onRequestScheduling }: {
+export function PatientAftercare({ patientId, initialAppointmentId, selectedEpisodeId, embedded = false, workspace, onWorkspaceChanged, onRequestScheduling, onStateChange }: {
   patientId: string;
   initialAppointmentId?: string;
   selectedEpisodeId?: string;
@@ -23,13 +23,17 @@ export function PatientAftercare({ patientId, initialAppointmentId, selectedEpis
   workspace?: AftercareWorkspace;
   onWorkspaceChanged?: (data: AftercareWorkspace) => void;
   onRequestScheduling?: () => void;
+  onStateChange?: (state: {dirty: boolean; saving: boolean}) => void;
 }) {
+  const [dirty,setDirty]=useState(false);
   const [localData, setData] = useState<AftercareWorkspace | null>(null);
   const data = workspace ?? localData;
   const [error, setError] = useState('');
   const [message, setMessage] = useState('');
   const [busy, setBusy] = useState(false);
   const [mode, setMode] = useState<Mode>(null);
+  useEffect(()=>{onStateChange?.({dirty,saving:busy});},[dirty,busy,onStateChange]);
+  useEffect(()=>()=>onStateChange?.({dirty:false,saving:false}),[onStateChange]);
   const [episodeId, setEpisodeId] = useState(selectedEpisodeId ?? '');
   const openedAppointment = useRef(false);
   const url = `/api/patients/${patientId}/aftercare`;
@@ -41,7 +45,7 @@ export function PatientAftercare({ patientId, initialAppointmentId, selectedEpis
   }, [url, onWorkspaceChanged]);
   const externallyLoaded = workspace !== undefined;
   useEffect(() => { if (!externallyLoaded) load().catch((e) => setError(e.message)); }, [load, externallyLoaded]);
-  useEffect(() => { openedAppointment.current = false; }, [initialAppointmentId]);
+  useEffect(() => { openedAppointment.current = false;setDirty(false); }, [initialAppointmentId]);
   useEffect(() => {
     if (!data || openedAppointment.current || !data.prostheses.length) return;
     if (!initialAppointmentId) {
@@ -58,7 +62,7 @@ export function PatientAftercare({ patientId, initialAppointmentId, selectedEpis
   }, [data, initialAppointmentId, selectedEpisodeId]);
   async function save(body: unknown) {
     setBusy(true); setError(''); setMessage('');
-    try { await requestJson(url, body); await load(); setMode(null); setMessage('Mentve a betegkartonba.'); }
+    try { await requestJson(url, body); await load(); setMode(null);setDirty(false); setMessage('Mentve a betegkartonba.'); }
     catch (e) { setError((e as Error).message); }
     finally { setBusy(false); }
   }
@@ -69,7 +73,7 @@ export function PatientAftercare({ patientId, initialAppointmentId, selectedEpis
   const missingVisits = data?.appointments.filter((a) => a.episodeId === episodeId && attended(a.appointmentStatus) && a.occurredOn <= today
     && !data.encounters.some((c) => c.appointmentId === a.id) && !data.prostheses.some((p) => p.deliveryAppointmentId === a.id)) ?? [];
 
-  return <div className="space-y-5 text-gray-900 dark:text-gray-100">
+  return <div className="space-y-5 text-gray-900 dark:text-gray-100" onChangeCapture={()=>{if(mode)setDirty(true);}}>
     {error && <div role="alert" className="rounded-lg border border-red-300 bg-red-50 p-3 text-sm text-red-800 dark:bg-red-950 dark:text-red-200">{error}
       {!data && <button className="ml-3 underline" onClick={() => { setError(''); load().catch((e) => setError(e.message)); }}>Újrapróbálás</button>}</div>}
     {message && <p role="status" className="text-sm text-teal-700 dark:text-teal-300">{message}</p>}
@@ -96,10 +100,10 @@ export function PatientAftercare({ patientId, initialAppointmentId, selectedEpis
       })}</ul>}
       {data.deceased && <p className="text-sm text-gray-500 dark:text-gray-400">Elhunyt beteg · korábbi ellátási adatok.</p>}
       {mode && <section className={panel}>
-        {mode.kind === 'register' && <RegisterForm episodeId={episodeId} busy={busy} onSave={save} onCancel={() => setMode(null)} />}
-        {mode.kind === 'delivery' && <DeliveryForm data={data} prosthesis={mode.prosthesis} busy={busy} onSave={save} onCancel={() => setMode(null)} />}
-        {mode.kind === 'visit' && <VisitForm key={mode.encounter?.id ?? mode.appointmentId ?? 'new-visit'} data={data} preferredEpisodeId={selectedEpisodeId} editing={mode.encounter} initialAppointmentId={mode.appointmentId} busy={busy} onSave={save} onCancel={() => setMode(null)} />}
-        {mode.kind === 'followup' && <FollowupForm prosthesis={mode.prosthesis} busy={busy} onSave={save} onCancel={() => setMode(null)} />}
+        {mode.kind === 'register' && <RegisterForm episodeId={episodeId} busy={busy} onSave={save} onCancel={() => {setMode(null);setDirty(false);}} />}
+        {mode.kind === 'delivery' && <DeliveryForm data={data} prosthesis={mode.prosthesis} busy={busy} onSave={save} onCancel={() => {setMode(null);setDirty(false);}} />}
+        {mode.kind === 'visit' && <VisitForm key={mode.encounter?.id ?? mode.appointmentId ?? 'new-visit'} data={data} preferredEpisodeId={selectedEpisodeId} editing={mode.encounter} initialAppointmentId={mode.appointmentId} busy={busy} onSave={save} onCancel={() => {setMode(null);setDirty(false);}} />}
+        {mode.kind === 'followup' && <FollowupForm prosthesis={mode.prosthesis} busy={busy} onSave={save} onCancel={() => {setMode(null);setDirty(false);}} />}
       </section>}
       {!prostheses.length && mode?.kind !== 'register' && <section className={panel}><h2 className="font-semibold">Fogpótlás beállítása</h2>
         <p className="mt-2 text-sm text-gray-500 dark:text-gray-400">Ezt egyszer kell megadni, a későbbi vizitek már ehhez kapcsolódnak.</p>

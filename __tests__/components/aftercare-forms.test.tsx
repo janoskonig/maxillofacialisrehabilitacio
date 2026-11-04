@@ -1,5 +1,5 @@
 import { afterEach, expect, it, vi } from 'vitest';
-import { cleanup, fireEvent, render, screen } from '@testing-library/react';
+import { cleanup, fireEvent, render, screen, waitFor } from '@testing-library/react';
 import { PatientAftercare } from '@/components/aftercare/PatientAftercare';
 import { VisitForm } from '@/components/aftercare/VisitForm';
 import { FollowupForm } from '@/components/aftercare/FollowupForm';
@@ -10,6 +10,16 @@ const p: Prosthesis = { id: '11111111-1111-4111-8111-111111111111', patientId: '
   prosthesisType: 'obturator', label: 'Felső obturátor', deliveryDate: '2025-01-31', deliveryAppointmentId: 'delivery', baseline: {}, originalPlan: {}, createdAt: '2025-01-01' };
 const data: AftercareWorkspace = { patientName: 'Test', deceased: false, episodes: [], prostheses: [p], encounters: [], requests: [],
   appointments: [{ id: '22222222-2222-4222-8222-222222222222', episodeId: 'episode', startTime: '2025-02-10T10:00:00Z', occurredOn: '2025-02-10', clinician: 'Doctor', appointmentStatus: 'completed' }] };
+
+it('reports an unsaved care draft to the shared page and resets it for a newly opened visit',async()=>{
+  const second={...data.appointments[0],id:'44444444-4444-4444-8444-444444444444'};
+  const workspace={...data,appointments:[...data.appointments,second]};const onStateChange=vi.fn();
+  const {rerender}=render(<PatientAftercare patientId="patient" selectedEpisodeId="episode" embedded workspace={workspace} initialAppointmentId={data.appointments[0].id} onStateChange={onStateChange}/>);
+  fireEvent.click(await screen.findByLabelText('Nincs panasz'));
+  await waitFor(()=>expect(onStateChange).toHaveBeenLastCalledWith({dirty:true,saving:false}));
+  rerender(<PatientAftercare patientId="patient" selectedEpisodeId="episode" embedded workspace={workspace} initialAppointmentId={second.id} onStateChange={onStateChange}/>);
+  await waitFor(()=>expect(onStateChange).toHaveBeenLastCalledWith({dirty:false,saving:false}));
+});
 
 it('records one shared set of findings without an obligatory return appointment', () => {
   const onSave = vi.fn().mockResolvedValue(undefined);

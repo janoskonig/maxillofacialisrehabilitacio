@@ -8,10 +8,11 @@ import { careWorkspace, prosthesis, timelineEpisode, timelineStep } from '../fix
 import PatientStagesPage from '@/app/patients/[id]/stages/page';
 
 const mocks = vi.hoisted(() => ({ router: { push: vi.fn(),replace:vi.fn() }, toast: vi.fn(), confirm: vi.fn(), user: vi.fn(), timeline: [] as TimelineEpisode[] }));
-vi.mock('next/navigation', () => ({ useRouter: () => mocks.router, useParams: () => ({ id: 'patient' }) }));
+vi.mock('next/navigation', () => ({ useRouter: () => mocks.router, useParams: () => ({ id: 'patient' }),useSearchParams:()=>new URLSearchParams(window.location.search) }));
 vi.mock('@/components/TreatmentPlanGantt/useTimelineData', () => ({ useTimelineData: () => ({ episodes: mocks.timeline, meta: null, error: null }) }));
 vi.mock('@/components/PatientTreatmentJourney', () => ({ PatientTreatmentJourney: ({ episode }: { episode: TimelineEpisode }) => <div data-testid="journey">{episode.episodeId}</div> }));
 vi.mock('@/components/aftercare/PatientAftercare', () => ({ PatientAftercare: ({ selectedEpisodeId, initialAppointmentId }: { selectedEpisodeId: string; initialAppointmentId?: string }) => <div data-testid="aftercare">{selectedEpisodeId}:{initialAppointmentId}</div> }));
+vi.mock('@/components/prosthesis-lifecycle/ProsthesisLifecycle',()=>({ProsthesisLifecycle:({selectedEpisodeId,initialAppointmentId,onStateChange,onOpenLegacyVisit}:any)=><div data-testid="prostheses">{selectedEpisodeId}:{initialAppointmentId}<button onClick={()=>onStateChange({dirty:true,saving:false})}>Nem mentett fogpótlás</button><button onClick={()=>onOpenLegacyVisit('legacy-visit')}>Korábbi vizit megnyitása</button></div>}));
 vi.mock('@/lib/auth', () => ({ getCurrentUser: mocks.user }));
 vi.mock('@/contexts/ToastContext', () => ({ useToast: () => ({ showToast: mocks.toast, confirm: mocks.confirm }) }));
 vi.mock('@/components/layout/AppShell', () => ({ AppShell: ({ children }: { children: ReactNode }) => <main>{children}</main> }));
@@ -51,6 +52,31 @@ async function setup({ deceased = false, stage = 'STAGE_5', prostheses = [], pen
 afterEach(() => { cleanup(); vi.unstubAllGlobals(); vi.clearAllMocks(); window.history.replaceState(null, '', '/'); });
 
 describe('Treatment plan and appointments page', () => {
+  it('opens appliances within the treatment workspace and preserves the episode in the URL',async()=>{
+    await setup();await screen.findByTestId('plan');
+    await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Fogpótlások'}));});
+    expect(screen.getByTestId('prostheses')).toHaveTextContent('upper:');expect(screen.queryByTestId('plan')).not.toBeInTheDocument();
+    expect(new URLSearchParams(window.location.search).get('episodeId')).toBe('upper');expect(new URLSearchParams(window.location.search).get('view')).toBe('prostheses');
+    fireEvent.click(screen.getByRole('button',{name:'Nem mentett fogpótlás'}));mocks.confirm.mockResolvedValue(false);
+    await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Kezelési alkalmak'}));});
+    expect(screen.getByTestId('prostheses')).toBeInTheDocument();expect(screen.queryByTestId('plan')).not.toBeInTheDocument();
+    await act(async()=>{fireEvent.change(screen.getByLabelText('Epizód kiválasztása'),{target:{value:'lower'}});});
+    expect(screen.getByTestId('prostheses')).toHaveTextContent('upper:');
+    mocks.confirm.mockResolvedValue(true);
+    await act(async()=>{fireEvent.change(screen.getByLabelText('Epizód kiválasztása'),{target:{value:'lower'}});});
+    expect(screen.getByTestId('plan')).toHaveTextContent('lower:workspace');
+  });
+  it('preserves a prosthesis visit link without switching to the legacy care form',async()=>{
+    window.history.replaceState(null,'','/?episodeId=lower&view=prostheses&appointmentId=clinical-visit');
+    await setup();expect(screen.getByTestId('prostheses')).toHaveTextContent('lower:clinical-visit');expect(screen.queryByTestId('aftercare')).not.toBeInTheDocument();
+  });
+  it('opens a legacy visit from appliance history on its own episode within the same page',async()=>{
+    window.history.replaceState(null,'','/?episodeId=upper&view=prostheses');
+    await setup({appointments:[{id:'legacy-visit',episodeId:'lower',startTime:'2026-10-01T10:00:00Z',occurredOn:'2026-10-01',appointmentStatus:'completed',clinician:'Doctor'}]});
+    await act(async()=>{fireEvent.click(screen.getByRole('button',{name:'Korábbi vizit megnyitása'}));});
+    expect(screen.getByTestId('aftercare')).toHaveTextContent('lower:legacy-visit');expect(screen.queryByTestId('prostheses')).not.toBeInTheDocument();
+    const query=new URLSearchParams(window.location.search);expect(query.get('episodeId')).toBe('lower');expect(query.get('appointmentId')).toBe('legacy-visit');expect(query.get('view')).toBe('aftercare');
+  });
   it('loads the daily overview without mounting secondary workflows', async () => {
     await setup();
     expect(await screen.findByTestId('plan')).toHaveTextContent('upper:workspace');

@@ -11,7 +11,7 @@ import {
   FolderOpen,
   ClipboardList,
 } from 'lucide-react';
-import { episodeOverviewHref } from '@/lib/episode-overview';
+import { episodeOverviewHref, episodeAnamnesisHref } from '@/lib/episode-overview';
 
 /** A betegkarton fülei, amik a profil oldalon (/patients/[id]/view) élnek. */
 export type PatientProfileTabId =
@@ -27,10 +27,9 @@ export type PatientTabId = PatientProfileTabId | 'stadiumok' | 'aftercare' | 'ep
 const TABS: Array<{ id: PatientTabId; label: string; shortLabel: string; icon: ReactNode }> = [
   { id: 'attekintes', label: 'Áttekintés', shortLabel: 'Áttekintés', icon: <LayoutDashboard className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'torzsadatok', label: 'Törzsadatok', shortLabel: 'Törzs', icon: <User className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
-  { id: 'anamnezis', label: 'Anamnézis & vizsgálat', shortLabel: 'Anamnézis', icon: <Stethoscope className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
+  { id: 'anamnezis', label: 'Anamnézis és vizsgálat', shortLabel: 'Anamnézis', icon: <Stethoscope className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'epizod', label: 'Epizód és terv', shortLabel: 'Epizód', icon: <ClipboardList className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
-  { id: 'stadiumok', label: 'Kezelés', shortLabel: 'Kezelés', icon: <CalendarClock className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
-  { id: 'aftercare', label: 'Fogpótlások és gondozás', shortLabel: 'Fogpótlások', icon: <Stethoscope className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
+  { id: 'stadiumok', label: 'Kezelés, fogpótlások és gondozás', shortLabel: 'Kezelés és gondozás', icon: <CalendarClock className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'kommunikacio', label: 'Kommunikáció', shortLabel: 'Üzenet', icon: <MessageCircle className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
   { id: 'adminisztracio', label: 'Dokumentumok és adminisztráció', shortLabel: 'Dok. és admin', icon: <FolderOpen className="w-3.5 h-3.5 sm:w-4 sm:h-4" /> },
 ];
@@ -57,12 +56,12 @@ export function PatientTabsNav({ patientId, activeTab, onTabChange, showStadiumo
   const episodeTabs=new Set<PatientTabId>(['epizod','anamnezis','stadiumok','aftercare']);
   const groups=[
     {label:'Beteg',tabs:TABS.filter(t=>!episodeTabs.has(t.id))},
-    {label:'Ellátási epizód',tabs:showStadiumok?['epizod','anamnezis','stadiumok','aftercare'].map(id=>TABS.find(t=>t.id===id)!):[]},
+    {label:'Ellátási epizód',tabs:showStadiumok?['epizod','anamnezis','stadiumok'].map(id=>TABS.find(t=>t.id===id)!):[]},
   ];
 
   const classFor = (id: PatientTabId) =>
     `flex items-center gap-1 sm:gap-2 px-2 sm:px-4 py-2 sm:py-3 text-xs sm:text-sm font-medium whitespace-nowrap border-b-2 transition-colors flex-shrink-0 ${
-      (activeTab === id)
+      (activeTab === id || activeTab === 'aftercare' && id === 'stadiumok')
         ? 'text-medical-primary border-medical-primary'
         : 'text-gray-700 dark:text-gray-300 hover:text-medical-primary border-transparent hover:border-medical-primary'
     }`;
@@ -90,7 +89,7 @@ export function PatientTabsNav({ patientId, activeTab, onTabChange, showStadiumo
             );
           }
           const href =
-            id==='anamnezis'?`${episodeOverviewHref(patientId,episodeId)}#adatfelulvizsgalat`:id==='epizod'?episodeOverviewHref(patientId,episodeId):id === 'stadiumok'
+            id==='anamnezis'?episodeAnamnesisHref(patientId,episodeId):id==='epizod'?episodeOverviewHref(patientId,episodeId):id === 'stadiumok'
               ? `/patients/${patientId}/stages${episodeId?`?episodeId=${encodeURIComponent(episodeId)}`:''}`
               : id === 'aftercare' ? `/patients/${patientId}/prostheses${episodeId?`?episodeId=${encodeURIComponent(episodeId)}`:''}` : `/patients/${patientId}/view?tab=${id}${episodeId?`&episodeId=${encodeURIComponent(episodeId)}`:''}`;
           return (
@@ -98,7 +97,7 @@ export function PatientTabsNav({ patientId, activeTab, onTabChange, showStadiumo
               key={id}
               href={href}
               className={classFor(id)}
-              aria-current={activeTab === id ? 'page' : undefined}
+              aria-current={activeTab === id || activeTab === 'aftercare' && id === 'stadiumok' ? 'page' : undefined}
               onClick={onNavigate?e=>{if(e.metaKey||e.ctrlKey||e.shiftKey||e.altKey)return;e.preventDefault();void onNavigate(href);}:undefined}
             >
               {inner}

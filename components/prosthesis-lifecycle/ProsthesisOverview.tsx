@@ -12,10 +12,10 @@ import { financingAt,financingSummary,formatFinancingAmount } from '@/lib/episod
 
 const day=(value:unknown)=>String(value??'').slice(0,10);
 
-export function ProsthesisOverview({data,patientId,onAction}:{data:ClinicalWorkspace;patientId:string;onAction:(value:Record<string,any>)=>void}) {
+export function ProsthesisOverview({data,patientId,onAction,episodeScoped=false}:{data:ClinicalWorkspace;patientId:string;onAction:(value:Record<string,any>)=>void;episodeScoped?:boolean}) {
   const active=data.events.filter(e=>e.active);
   return <div className="space-y-5">
-    {!data.prostheses.length&&<div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center dark:border-slate-700 dark:bg-slate-950"><ToothIcon className="mx-auto mb-3 h-10 w-10 text-teal-600"/><h2 className="font-semibold">Még nincs nyilvántartott fogpótlás</h2><p className="mx-auto mt-2 max-w-md text-sm text-slate-500">Vedd fel a készülő vagy már meglévő készüléket. Utána a saját kártyáján követheted a tervet, az átadást és a gondozást.</p><button type="button" onClick={()=>onAction({action:'register'})} className="mt-4 rounded-xl bg-blue-700 px-4 py-2 text-sm font-medium text-white">Első fogpótlás felvétele</button></div>}
+    {!data.prostheses.length&&<div className="rounded-2xl border border-dashed border-slate-300 bg-white px-6 py-10 text-center dark:border-slate-700 dark:bg-slate-950"><ToothIcon className="mx-auto mb-3 h-10 w-10 text-teal-600"/><h2 className="font-semibold">{episodeScoped?'Ehhez az epizódhoz még nincs fogpótlás kapcsolva':'Még nincs nyilvántartott fogpótlás'}</h2><p className="mx-auto mt-2 max-w-md text-sm text-slate-500">Vedd fel a készülő vagy már meglévő készüléket. Utána a saját kártyáján követheted a tervet, az átadást és a gondozást.</p><button type="button" onClick={()=>onAction({action:'register'})} className="mt-4 rounded-xl bg-blue-700 px-4 py-2 text-sm font-medium text-white">{episodeScoped?'Fogpótlás felvétele':'Első fogpótlás felvétele'}</button></div>}
     <div className="grid gap-4 xl:grid-cols-2">{data.prostheses.map(p=>{
       const events=active.filter(e=>e.prosthesis_id===p.id);
       const accepted=events.find(e=>e.kind==='accepted'),delivered=events.find(e=>e.kind==='delivered');

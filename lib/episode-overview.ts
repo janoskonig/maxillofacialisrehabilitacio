@@ -7,6 +7,10 @@ export function episodeOverviewHref(patientId:string,episodeId?:string|null,sect
   const query=new URLSearchParams();if(episodeId)query.set('episodeId',episodeId);
   return `/patients/${patientId}/episodes${query.size?`?${query}`:''}${section==='financing'?'#finanszirozas':section==='plan'?'#kezelesi-terv':''}`;
 }
+export function episodeAnamnesisHref(patientId:string,episodeId?:string|null){
+  const query=new URLSearchParams();if(episodeId)query.set('episodeId',episodeId);
+  return `/patients/${patientId}/anamnesis${query.size?`?${query}`:''}`;
+}
 export function episodeDevices(data:Pick<ClinicalWorkspace,'prostheses'|'episodeLinks'>,episodeId:string){
   const links=(data.episodeLinks??[]).filter(l=>l.episode_id===episodeId);
   return data.prostheses.filter(p=>links.some(l=>l.prosthesis_id===p.id)||p.episode_id===episodeId);

@@ -12,7 +12,7 @@ import { PatientOverviewTab } from '@/components/PatientOverviewTab';
 import { PatientCommunicationTab } from '@/components/PatientCommunicationTab';
 import { treatmentWorkspaceHref } from '@/lib/treatment-workspace';
 import { PatientTabsNav, type PatientProfileTabId } from '@/components/PatientTabsNav';
-import { episodeOverviewHref } from '@/lib/episode-overview';
+import { episodeAnamnesisHref } from '@/lib/episode-overview';
 
 type TabType = PatientProfileTabId;
 
@@ -155,7 +155,7 @@ export default function PatientViewPage() {
 
     if (!resolved || !VALID_TABS.includes(resolved)) return;
     if(resolved==='anamnezis'&&userRole!=='technikus'){
-      router.replace(`${episodeOverviewHref(patientId,episodeContextId)}#adatfelulvizsgalat`);
+      router.replace(episodeAnamnesisHref(patientId,episodeContextId));
       return;
     }
     setActiveTab(resolved);
@@ -203,7 +203,7 @@ export default function PatientViewPage() {
   };
 
   const handleTabChange = useCallback((tab: TabType) => {
-    if(tab==='anamnezis'){router.push(`${episodeOverviewHref(patientId,episodeContextId)}#adatfelulvizsgalat`);return;}
+    if(tab==='anamnezis'){router.push(episodeAnamnesisHref(patientId,episodeContextId));return;}
     setActiveTab(tab);
     setLoadedTabs((prev) => (prev.has(tab) ? prev : new Set<TabType>([...Array.from(prev), tab])));
   }, [router,patientId,episodeContextId]);
@@ -288,7 +288,7 @@ export default function PatientViewPage() {
         )}
 
         {activeTab === 'anamnezis' && loadedTabs.has('anamnezis') && (
-          <a className="text-sm underline" href={`${episodeOverviewHref(patientId,episodeContextId)}#adatfelulvizsgalat`}>Az epizód anamnézisének és műtéti előzményeinek megnyitása</a>
+          <a className="text-sm underline" href={episodeAnamnesisHref(patientId,episodeContextId)}>Az epizód anamnézisének és műtéti előzményeinek megnyitása</a>
         )}
 
         {activeTab === 'kommunikacio' && loadedTabs.has('kommunikacio') && patient?.id && (

@@ -2,12 +2,19 @@ import { beforeEach, expect, it, vi } from "vitest";
 import { redirect } from "next/navigation";
 import Home from "@/app/page";
 import { visibleGroups } from "@/lib/navigation";
+import PatientProsthesesPage from '@/app/patients/[id]/prostheses/page';
+import PatientAftercarePage from '@/app/patients/[id]/aftercare/page';
 vi.mock("next/navigation", () => ({
   redirect: vi.fn((url: string) => {
     throw new Error(url);
   }),
 }));
 beforeEach(() => vi.clearAllMocks());
+
+it('keeps old prosthesis and care bookmarks in one treatment workspace with their exact episode and visit',()=>{
+  expect(()=>PatientProsthesesPage({params:{id:'patient'},searchParams:{episodeId:'closed-episode',appointmentId:'clinical-visit'}})).toThrow('/patients/patient/stages?view=prostheses&episodeId=closed-episode&appointmentId=clinical-visit#fogpotlasok');
+  expect(()=>PatientAftercarePage({params:{id:'patient'},searchParams:{episodeId:'closed-episode',appointmentId:'legacy-visit'}})).toThrow('/patients/patient/stages?view=aftercare&episodeId=closed-episode&appointmentId=legacy-visit#gondozas');
+});
 
 it("starts at the daily workspace and preserves old filtered directory links", () => {
   expect(() => Home({ searchParams: {} })).toThrow("/today");
