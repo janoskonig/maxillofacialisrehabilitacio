@@ -12,7 +12,7 @@ vi.mock('@/components/EpisodePathwayEditor',()=>({EpisodePathwayEditor:()=>null}
 vi.mock('@/components/PatientEpisodeForm',()=>({PatientEpisodeForm:()=>null}));
 vi.mock('@/components/episode-overview/EpisodeClinicalReviewPanel',()=>({EpisodeClinicalReviewPanel:()=>null}));
 vi.mock('@/components/OHIP14Section',()=>({OHIP14Section:()=>null}));
-vi.mock('@/components/EpisodeTreatmentPlanEditor',()=>({EpisodeTreatmentPlanEditor:({episodeId,unified}:any)=><section data-testid="plan-editor">{episodeId}:{String(unified)}</section>}));
+vi.mock('@/components/EpisodeTreatmentPlanEditor',()=>({EpisodeTreatmentPlanEditor:({episodeId,unified,planVisible}:any)=><><section hidden={!planVisible} data-testid="plan-editor">{episodeId}:{String(unified)}</section><section aria-label="Az epizód finanszírozása">Három költségcsoport</section></>}));
 vi.mock('@/components/prosthesis-lifecycle/ClinicalEntryForm',()=>({ClinicalEntryForm:({initial}:any)=>{mocks.registered(initial);return <p>Fogpótlás rögzítése az epizódhoz</p>;}}));
 const patientId=crypto.randomUUID(),upper=crypto.randomUUID(),lower=crypto.randomUUID(),device=crypto.randomUUID(),planId=crypto.randomUUID();
 const episodes=[{id:upper,patientId,status:'open',caseTitle:'Felső végleges',chiefComplaint:'Felső foghiány rehabilitációja',reason:'traumás sérülés',openedAt:'2026-09-01T10:00:00Z',assignedProviderName:'Dr. Felelős'},
@@ -32,7 +32,7 @@ describe('Episode overview',()=>{
     expect(screen.getByText('Felső foghiány rehabilitációja')).toBeTruthy();expect(screen.getByText('Felső lemezes készülék')).toBeTruthy();
     expect(screen.getByText('Felső fogpótlás elkészítése')).toBeTruthy();expect(screen.queryByText('Másik állcsont megőrzött régi szövege')).toBeNull();
     expect(screen.getByText('Dr. Felelős')).toBeTruthy();expect(within(screen.getByRole('region',{name:'Az epizód finanszírozásának összefoglalója'})).getByText(/Egyedi méltányosság/)).toBeTruthy();
-    expect(screen.queryByTestId('plan-editor')).toBeNull();expect(screen.getByRole('link',{name:'Kezelés megnyitása'}).getAttribute('href')).toBe(`/patients/${patientId}/stages?episodeId=${upper}`);
+    expect(screen.getByTestId('plan-editor').hasAttribute('hidden')).toBe(true);expect(screen.getByRole('region',{name:'Az epizód finanszírozása'})).toBeTruthy();expect(screen.getByRole('link',{name:'Kezelés megnyitása'}).getAttribute('href')).toBe(`/patients/${patientId}/stages?episodeId=${upper}`);
     expect(within(screen.getByRole('navigation',{name:'Betegkarton fülök'})).getByRole('link',{name:/^Kezelés/}).getAttribute('href')).toContain(`episodeId=${upper}`);
   });
   it('keeps an explicitly chosen closed episode in context and does not silently substitute another episode',async()=>{
@@ -42,7 +42,7 @@ describe('Episode overview',()=>{
   });
   it('preserves unsaved context edits while rejecting episode and tab navigation',async()=>{
     setup(upper);await screen.findByText('Felső foghiány rehabilitációja');
-    fireEvent.click(screen.getByRole('button',{name:'Epizód, terv és finanszírozás szerkesztése'}));
+    fireEvent.click(screen.getByRole('button',{name:'Epizód és kezelési terv szerkesztése'}));
     fireEvent.change(screen.getByLabelText('Miért indult ez az epizód?'),{target:{value:'Saját még nem mentett indok'}});mocks.confirm.mockResolvedValue(false);
     fireEvent.change(screen.getByLabelText('Epizód kiválasztása'),{target:{value:lower}});
     await waitFor(()=>expect(mocks.confirm).toHaveBeenCalledTimes(1));
@@ -58,16 +58,16 @@ describe('Episode overview',()=>{
   });
   it('offers the free jaw in the same episode and preselects it',async()=>{
     setup(upper);await screen.findByText('Felső lemezes készülék');
-    fireEvent.click(screen.getByRole('button',{name:'Másik állcsont fogpótlásának megadása'}));
+    fireEvent.click(screen.getByRole('button',{name:'Újabb fogpótlás megadása'}));
     expect(mocks.registered).toHaveBeenLastCalledWith({action:'register',episodeId:upper,episodeMode:'existing',origin:'local',jaw:'also'});
   });
-  it('shows both appliances and their independent acceptance progress and offers no third device',async()=>{
+  it('shows both appliances and their independent acceptance progress and allows further fixed devices',async()=>{
     const lowerDevice=crypto.randomUUID();
     setup(upper,false,{...clinical,prostheses:[...clinical.prostheses,{...clinical.prostheses[0],id:lowerDevice,jaw:'also',label:'Alsó készülék'}],episodeLinks:[...clinical.episodeLinks,{episode_id:upper,prosthesis_id:lowerDevice}],events:[{active:true,prosthesis_id:device,kind:'accepted'}]});
     await screen.findByText('Alsó készülék');
     expect(screen.getByText('Ebben az epizódban: Felső klinikailag kész · Alsó még készül')).toBeTruthy();
-    expect(screen.getByText(/mindkét fogpótlás klinikai elfogadása/)).toBeTruthy();
-    expect(screen.queryByRole('button',{name:'Másik állcsont fogpótlásának megadása'})).toBeNull();
+    expect(screen.getByText(/minden fogpótlás klinikai elfogadása/)).toBeTruthy();
+    expect(screen.getByRole('button',{name:'Újabb fogpótlás megadása'})).toBeTruthy();
   });
   it('reports a mismatched episode link instead of displaying an unrelated current episode',async()=>{
     setup(crypto.randomUUID());await screen.findByText(/A hivatkozott epizód nem található/);expect(screen.queryByRole('region',{name:'Az epizód áttekintése'})).toBeNull();

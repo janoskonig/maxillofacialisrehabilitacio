@@ -30,10 +30,11 @@ export function episodePlanFromRow(row:any):EpisodeTreatmentPlanRecord {
   const texts:JawTreatmentPlans=row.episodePlanVersion!=null ? row.content.narratives : row;
   const devices:NonNullable<EpisodeTreatmentPlanRecord['devices']>=row.devices??(row.prosthesisId?[{id:row.prosthesisId,jaw:row.jaw,label:row.prosthesisLabel,positions:row.prosthesisPositions??[]}]:[]);
   const single=devices.length===1?devices[0]:null;
+  const sameJaw=devices.length&&devices.every(p=>p.jaw===devices[0].jaw)?devices[0].jaw:null;
   const signature=(items:any[])=>canonical(items.map(p=>({id:p.id,jaw:p.jaw,role:p.role,positions:p.positions??[]})).sort((a,b)=>a.id.localeCompare(b.id)));
   const plan:EpisodeTreatmentPlanRecord={episodeId:row.episodeId,patientId:row.patientId,version:row.version,
     treatmentPlan:texts.treatmentPlan??null,treatmentPlanUpper:texts.treatmentPlanUpper??null,treatmentPlanLower:texts.treatmentPlanLower??null,
-    jaw:single?.jaw??null,prosthesisId:single?.id??null,prosthesisLabel:devices.map(p=>p.label).filter(Boolean).join(' · ')||null,
+    jaw:sameJaw||null,prosthesisId:single?.id??null,prosthesisLabel:devices.map(p=>p.label).filter(Boolean).join(' · ')||null,
     device:single?{id:single.id,positions:single.positions}:null,devices,
     requiresDeviceReview:!!row.planId&&signature(devices)!==signature(row.content.devices??[]),
     unified:row.episodePlanVersion!=null,clinicalPlan:null,legacyClinicalDescription:null};
@@ -101,7 +102,7 @@ export async function persistEpisodeTreatmentPlan(db:Db,patientId:string,actor:s
     narratives.treatmentPlanLower&&`Alsó állcsont: ${narratives.treatmentPlanLower}`,
     getUnassignedLegacyPlan(narratives),
   ].filter(Boolean).join('\n\n');
-  if(c.approved&&(!baseline||!devices.length||devices.length>2||!description.trim()))throw new HttpError(409,'Jóváhagyáshoz saját fogpótlás, dokumentált kiindulási státusz és tervleírás szükséges');
+  if(c.approved&&(!baseline||!devices.length||devices.length>64||!description.trim()))throw new HttpError(409,'Jóváhagyáshoz saját fogpótlás, dokumentált kiindulási státusz és tervleírás szükséges');
   if(c.approved&&devices.some(p=>!(p.jaw==='felso'?narratives.treatmentPlanUpper:narratives.treatmentPlanLower)?.trim()))throw new HttpError(409,'Minden érintett állcsonthoz külön tervleírás szükséges a jóváhagyáshoz');
   const phases=await db.query(`SELECT w.*,COALESCE((SELECT jsonb_agg(prosthesis_id) FROM work_phase_prostheses WHERE work_phase_id=w.id),'[]') AS prosthesis_ids
     FROM episode_work_phases w WHERE w.episode_id=$1 ORDER BY COALESCE(w.seq,w.pathway_order_index),w.id`,[c.episodeId]);

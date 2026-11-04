@@ -1,3 +1,4 @@
+import { canAddDevice } from '@/lib/prosthesis-types';
 import { randomUUID } from 'crypto';
 import type { PoolClient } from 'pg';
 import { getDbPool } from '@/lib/db';
@@ -66,19 +67,19 @@ async function insertDevice(db:Db, patientId:string, actor:string, c:Extract<Cli
   if (c.episodeId) await episode(db,patientId,c.episodeId);
   const upper = c.jaw==='felso';
   if (c.positions.some(p => upper !== (p.tooth<30))) fail('A pozíció nem a kiválasztott állcsonthoz tartozik',400);
-  // A construction episode has one appliance per jaw. The explicit existing
-  // mode adds the other jaw; the default keeps separate-episode provenance.
+  // A jaw can have multiple fixed appliances and one removable appliance.
+  // Existing-episode mode keeps their plan shared; new mode preserves separate provenance.
   const ownLink=c.action==='review_mapping'&&c.episodeId ? await db.query("SELECT 1 FROM prosthesis_episode_links WHERE episode_id=$1 AND prosthesis_id=$2 AND purpose='construction'",[c.episodeId,c.prosthesisId]):{rows:[]};
   let actualEpisodeId:string|null=null;
   if(c.episodeMode==='existing'){
     if(c.action!=='register'||c.origin!=='local'||!c.episodeId)fail('Az epizódhoz helyben készülő, új fogpótlás kapcsolható.',400);
     const ep=await episode(db,patientId,c.episodeId!);
     if(ep.status!=='open')fail('Fogpótlás nyitott elkészítési epizódhoz kapcsolható.');
-    const assigned=await db.query(`SELECT DISTINCT p.id,p.jaw,l.purpose FROM prostheses p
+    const assigned=await db.query(`SELECT DISTINCT p.id,p.jaw,p.prosthesis_type,l.purpose FROM prostheses p
       LEFT JOIN prosthesis_episode_links l ON l.prosthesis_id=p.id AND l.episode_id=$1
       WHERE p.episode_id=$1 OR l.episode_id=$1`,[ep.id]);
     if(assigned.rows.some(p=>p.purpose==='repair'))fail('A javítás saját epizódhoz tartozik; új készülékhez elkészítési epizód szükséges.');
-    if(assigned.rows.some(p=>p.jaw===c.jaw)||assigned.rows.length>=2)fail('Egy epizódban állcsontonként legfeljebb egy fogpótlás lehet: egy felső és egy alsó.');
+    if(!canAddDevice(assigned.rows,c.jaw,c.prosthesisType))fail('Állcsontonként egy kivehető fogpótlás lehet; rögzítettből több is megadható.');
     actualEpisodeId=ep.id;
   }else if(c.origin==='local')actualEpisodeId=ownLink.rows.length?c.episodeId:await newEpisode(db,patientId,actor,c.episodeId,`${c.jaw==='felso'?'Felső':'Alsó'} ${c.role==='provisional'?'ideiglenes':'fogpótlás'} – ${c.label}`,c.occurredOn,c.episodeReason);
   const values = [patientId,actualEpisodeId,c.jaw,c.prosthesisType,c.label,actor,c.origin,c.role,JSON.stringify(c.specification),JSON.stringify(c.positions)];
@@ -176,8 +177,9 @@ async function perform(db:PoolClient, patientId:string, actor:string, c:Clinical
         if (!accepted.rows.length) fail('Lezárt epizódhoz csak már dokumentált klinikai elfogadással kapcsolható utólag pótlási cél');
       }
       if (c.baselineStateId) await baselineAt(db,patientId,c.baselineStateId,c.occurredOn);
-      const r=await db.query(`INSERT INTO episode_prosthesis_goals(patient_id,episode_id,jaw,definitive_prosthesis_id,baseline_state_id,created_by)
-        VALUES($1,$2,$3,$4,$5,$6) ON CONFLICT(episode_id,jaw) DO UPDATE SET definitive_prosthesis_id=EXCLUDED.definitive_prosthesis_id,baseline_state_id=EXCLUDED.baseline_state_id RETURNING id`,[patientId,ep.id,p.jaw,p.id,c.baselineStateId,actor]);
+      const previousGoal=(await db.query('SELECT id FROM episode_prosthesis_goals WHERE episode_id=$1 AND definitive_prosthesis_id=$2',[ep.id,p.id])).rows[0];
+      const r=previousGoal?await db.query('UPDATE episode_prosthesis_goals SET baseline_state_id=$2 WHERE id=$1 RETURNING id',[previousGoal.id,c.baselineStateId]):await db.query(`INSERT INTO episode_prosthesis_goals(patient_id,episode_id,jaw,definitive_prosthesis_id,baseline_state_id,created_by)
+        VALUES($1,$2,$3,$4,$5,$6) RETURNING id`,[patientId,ep.id,p.jaw,p.id,c.baselineStateId,actor]);
       const ev=await append(db,patientId,actor,c,'goal_set',{episodeId:ep.id,prosthesisId:p.id,entityId:r.rows[0].id});
       await closeIfAccepted(db,patientId,actor,c,ep.id);
       return ev;
@@ -366,7 +368,7 @@ async function saveWork(db:PoolClient,patientId:string,actor:string,c:Extract<Cl
       SELECT $1,'custom',COALESCE(MAX(pathway_order_index),-1)+1,COALESCE(MAX(seq),-1)+1,'work',30,7,$2,$3,$4,$5 FROM episode_work_phases WHERE episode_id=$1 RETURNING id`,[c.episodeId,c.label,visit.id,c.scope,c.repairCaseId??null]);
     id=r.rows[0].id;
   }
-  for (const p of c.prosthesisIds) await db.query(`INSERT INTO work_phase_prostheses(work_phase_id,prosthesis_id,goal_id) SELECT $1,$2,(SELECT g.id FROM episode_prosthesis_goals g JOIN prostheses p ON p.jaw=g.jaw AND p.episode_id=g.episode_id WHERE g.episode_id=$3 AND p.id=$2)`,[id,p,c.episodeId]);
+  for (const p of c.prosthesisIds) await db.query(`INSERT INTO work_phase_prostheses(work_phase_id,prosthesis_id,goal_id) SELECT $1,$2,(SELECT g.id FROM episode_prosthesis_goals g WHERE g.episode_id=$3 AND g.definitive_prosthesis_id=$2)`,[id,p,c.episodeId]);
   for (const required of c.requiresPhaseIds) {
     await one(db,'SELECT id FROM episode_work_phases WHERE id=$1 AND episode_id=$2',[required,c.episodeId]);
     const cycle=await db.query(`WITH RECURSIVE chain(id) AS (SELECT $1::uuid UNION SELECT d.requires_phase_id FROM clinical_work_dependencies d JOIN chain c ON c.id=d.work_phase_id) SELECT 1 FROM chain WHERE id=$2`,[required,id]);

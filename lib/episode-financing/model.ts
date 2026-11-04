@@ -5,6 +5,19 @@ export const FINANCING_MODES={unknown:'Nincs meghatározva',neak:'NEAK / közfin
 export const FINANCING_STATUSES={unknown:'Nem ismert',pending:'Egyeztetés / elbírálás alatt',approved:'Elfogadva / jóváhagyva',rejected:'Elutasítva',withdrawn:'Visszavonva / megszűnt'} as const;
 const amount=z.preprocess(v=>v===''?null:v,z.string().trim().transform(v=>v.replace(/\s/g,'').replace(',','.')).refine(v=>/^\d{1,12}(\.\d{1,2})?$/.test(v),'Legfeljebb két tizedesjegyű, nem negatív összeg szükséges').transform(v=>{const [whole,decimal='']=v.split('.');return `${BigInt(whole)}.${decimal.padEnd(2,'0')}`;}).nullable());
 const cents=(v:string)=>BigInt(v.replace('.',''));
+export const COST_COMPONENTS = { laboratory:'Fogtechnikai költség', clinical:'NEAK térítési kategória', implant:'Implantációs alkatrészek' } as const;
+const costItem = z.object({ enabled:z.boolean(), totalAmount:amount.default(null), fundedAmount:amount.default(null), patientAmount:amount.default(null), quoteDocumentIds:z.array(z.string().uuid()).max(50).default([]) });
+export const costBreakdownSchema = z.object({ laboratory:costItem, clinical:costItem.extend({ neakCategory:z.string().regex(/^\d{2}$/, 'Kétjegyű NEAK térítési kategória szükséges.').nullable() }), implant:costItem });
+export type CostBreakdown = z.infer<typeof costBreakdownSchema>;
+export function costTotals(costs:CostBreakdown) {
+  const active=Object.values(costs).filter(item=>item.enabled);
+  const total=(key:'totalAmount'|'fundedAmount'|'patientAmount')=>{
+    if(!active.length||active.some(item=>item[key]===null))return null;
+    const sum=active.reduce((n,item)=>n+cents(item[key]!),BigInt(0));
+    return `${sum/BigInt(100)}.${(sum%BigInt(100)).toString().padStart(2,'0')}`;
+  };
+  return {totalAmount:total('totalAmount'),fundedAmount:total('fundedAmount'),patientAmount:total('patientAmount')};
+}
 export const financingCommandSchema=z.object({
   action:z.literal('financing'),episodeId:z.string().uuid(),requestKey:z.string().uuid(),expectedVersion:z.number().int().min(0).max(2147483646),
   occurredOn:clinicalDay,occurredAt:z.string().datetime({offset:true}).nullable().default(null),precision:z.enum(['day','exact']).default('day'),
@@ -15,6 +28,7 @@ export const financingCommandSchema=z.object({
   totalAmount:amount.default(null),fundedAmount:amount.default(null),patientAmount:amount.default(null),
   reason:z.string().trim().min(1).max(2000),decisionReference:z.string().trim().max(200).default(''),
   documentIds:z.array(z.string().uuid()).max(50).default([]),correctsId:z.string().uuid().optional(),
+  costBreakdown:costBreakdownSchema.optional(),
 }).superRefine((c,ctx)=>{
   const fail=(message:string)=>ctx.addIssue({code:'custom',message});
   if(c.status==='approved'&&(!c.planVersionId||c.mode==='unknown'))fail('Elfogadott finanszírozáshoz konkrét tervváltozat és finanszírozási mód szükséges');
@@ -27,6 +41,25 @@ export const financingCommandSchema=z.object({
     if(c.patientAmount!==null&&cents(c.patientAmount)>cents(c.totalAmount))fail('A beteg terhe meghaladja a teljes összeget');
     if(c.fundedAmount!==null&&c.patientAmount!==null&&cents(c.fundedAmount)+cents(c.patientAmount)!==cents(c.totalAmount))fail('A finanszírozói rész és a beteg terhe együtt a teljes összeg legyen');
   }
+  if(c.costBreakdown){
+    const entries=Object.entries(c.costBreakdown) as Array<[keyof typeof COST_COMPONENTS,CostBreakdown['laboratory']]>;
+    if(!entries.some(([,item])=>item.enabled))fail('Legalább egy költségcsoportot jelölj meg.');
+    for(const [key,item] of entries.filter(([,item])=>item.enabled)){
+      if(c.status==='approved'&&!item.quoteDocumentIds.length)fail(`${COST_COMPONENTS[key]}: csatolt árajánlat szükséges a jóváhagyáshoz.`);
+      if(item.totalAmount!==null){
+        if(item.fundedAmount!==null&&cents(item.fundedAmount)>cents(item.totalAmount)||item.patientAmount!==null&&cents(item.patientAmount)>cents(item.totalAmount))fail(`${COST_COMPONENTS[key]}: a részösszeg nem lehet több a teljes költségnél.`);
+        if(item.fundedAmount!==null&&item.patientAmount!==null&&cents(item.fundedAmount)+cents(item.patientAmount)!==cents(item.totalAmount))fail(`${COST_COMPONENTS[key]}: a két részösszeg összege eltér a költségtől.`);
+      }
+    }
+    const clinical=c.costBreakdown.clinical;
+    if(c.status==='approved'&&clinical.enabled&&!clinical.neakCategory)fail('A NEAK térítési kategóriát add meg.');
+    if(clinical.enabled&&clinical.neakCategory==='04'){
+      if(clinical.fundedAmount!==null&&cents(clinical.fundedAmount)!==BigInt(0))fail('04-es térítési kategória esetén a klinikai költség fizetős.');
+      if(clinical.totalAmount!==null&&clinical.patientAmount!==clinical.totalAmount)fail('04-es kategóriában a teljes klinikai költséget a beteg fizeti.');
+    }
+    const totals=costTotals(c.costBreakdown);
+    for(const key of ['totalAmount','fundedAmount','patientAmount'] as const)if(c[key]!==totals[key])fail('Az összesített összeg nem egyezik a költségcsoportokkal.');
+  }
 });
 export type FinancingCommand=z.infer<typeof financingCommandSchema>;
 export interface FinancingEvent {
@@ -34,6 +67,7 @@ export interface FinancingEvent {
   effective_on:string;occurred_on:string;occurred_at:string|null;time_precision:'day'|'exact';recorded_at:string;recorded_by:string;recorder:string;
   source:string;note:string;mode:keyof typeof FINANCING_MODES;status:keyof typeof FINANCING_STATUSES;payer:string;currency:'HUF'|'EUR';
   total_amount:string|null;funded_amount:string|null;patient_amount:string|null;reason:string;decision_reference:string;document_ids:string[];corrects_id:string|null;active:boolean;
+  cost_breakdown?:CostBreakdown|null;
 }
 export interface FinancingSnapshot {asOf:string;event:FinancingEvent|null;requiresReview:boolean;historical?:boolean}
 export interface EpisodeFinancing {revision:number;current:FinancingSnapshot;history:FinancingEvent[];upcoming:FinancingEvent[]}
@@ -59,5 +93,6 @@ export function financingLines(snapshot:FinancingSnapshot|undefined):string[] {
   return [financingSummary(snapshot),`Döntés napja: ${e.occurred_on}; hatályos: ${e.effective_on}; rögzítve: ${e.recorded_at}; rögzítette: ${e.recorder}`,
     `Finanszírozó: ${e.payer||'Nincs megadva'}; hivatkozás: ${e.decision_reference||'Nincs megadva'}`,
     `Teljes összeg: ${formatFinancingAmount(e.total_amount,e.currency)}; finanszírozói rész: ${formatFinancingAmount(e.funded_amount,e.currency)}; beteg terhe: ${formatFinancingAmount(e.patient_amount,e.currency)}`,
+    ...Object.entries(e.cost_breakdown??{}).filter(([,item])=>item.enabled).map(([key,item])=>`${COST_COMPONENTS[key as keyof typeof COST_COMPONENTS]}: ${formatFinancingAmount(item.totalAmount,e.currency)}; beteg terhe: ${formatFinancingAmount(item.patientAmount,e.currency)}; árajánlat: ${item.quoteDocumentIds.join(', ')||'Még nincs'}${key==='clinical'?`; NEAK kategória: ${e.cost_breakdown?.clinical.neakCategory||'Még nincs'}`:''}`),
     `Indok: ${e.reason}; forrás: ${e.source}`,`Finanszírozási változat: ${e.version}; döntésazonosító: ${e.id}; tervváltozat: ${e.plan_version_id||'Epizódszintű egyeztetés'}`];
 }

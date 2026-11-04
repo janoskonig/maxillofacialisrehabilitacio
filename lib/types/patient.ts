@@ -1,4 +1,5 @@
 import { z } from 'zod';
+import { existingProsthesisTypesSchema } from '../prosthesis-types';
 import { TOOTH_BASES } from '../tooth-base';
 
 /** DB / űrlap null értékeket adhat vissza; Zod default csak undefined-re vonatkozik. */
@@ -134,6 +135,8 @@ export const patientSchema = z.object({
       })
     ])
   ).optional(),
+  felsoFogpotlasTipusok: existingProsthesisTypesSchema.optional().nullable(),
+  alsoFogpotlasTipusok: existingProsthesisTypesSchema.optional().nullable(),
   felsoFogpotlasTipus: z.enum([
     'zárólemez', 'részleges akrilátlemezes fogpótlás', 'teljes lemezes fogpótlás',
     'fedőlemezes fogpótlás', 'kapocselhorgonyzású részleges fémlemezes fogpótlás',
@@ -273,6 +276,8 @@ export interface PatientDentalStatus {
   felsoFogpotlasKeszito: string | null;
   felsoFogpotlasElegedett: boolean | null;
   felsoFogpotlasProblema: string | null;
+  felsoFogpotlasTipusok?: string[] | null;
+  alsoFogpotlasTipusok?: string[] | null;
   felsoFogpotlasTipus: string | null;
   alsoFogpotlasVan: boolean | null;
   alsoFogpotlasMikor: string | null;

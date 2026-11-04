@@ -17,9 +17,10 @@ interface Props {
   onStateChange?: (state: { dirty: boolean; saving: boolean }) => void;
   onRecordChange?: (plan: EpisodeTreatmentPlanRecord) => void;
   unified?: boolean;
+  planVisible?: boolean;
 }
 
-export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange, onRecordChange, unified=false }: Props) {
+export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange, onRecordChange, unified=false, planVisible=true }: Props) {
   const { showToast } = useToast();
   const {expert}=useClinicalFormMode();
   const allSections=expert||unified;
@@ -112,8 +113,8 @@ export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange, 
     } finally { setSaving(false); }
   };
 
-  return (
-    <section aria-label="Epizód kezelési terve" className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-5 dark:border-slate-700 dark:bg-slate-900">
+  return (<>
+    <section hidden={!planVisible} aria-label="Epizód kezelési terve" className="rounded-2xl border border-slate-200 bg-white p-3 sm:p-5 dark:border-slate-700 dark:bg-slate-900">
       <div className="flex flex-wrap items-start justify-between gap-3">
         <div><h3 className="text-lg font-semibold text-slate-900 dark:text-slate-100">{plan?.jaw?`${plan.jaw==='felso'?'Felső':'Alsó'} fogpótlás kezelési terve`:plan?.devices?.length===2?'Felső és alsó fogpótlás kezelési terve':'Kezelési tervek állcsontonként'}</h3><p className="mt-1 text-sm text-slate-500 dark:text-slate-400">{plan?.prosthesisLabel||'Írd le a tervezett ellátást, majd add meg a finanszírozást.'}</p></div>
         {plan?.clinicalPlan&&<span className={`inline-flex items-center gap-1.5 rounded-full px-3 py-1 text-xs font-semibold ${plan.clinicalPlan.approved&&!dirty&&!plan.requiresDeviceReview?'bg-teal-50 text-teal-800 dark:bg-teal-950 dark:text-teal-200':'bg-amber-50 text-amber-800 dark:bg-amber-950 dark:text-amber-200'}`}><ClipboardCheck className="h-3.5 w-3.5"/>{plan.clinicalPlan.version}. változat · {plan.requiresDeviceReview?'fogpótlások miatt felülvizsgálandó':dirty?'módosított tervezet':plan.clinicalPlan.approved?'jóváhagyott':'tervezet'}</span>}
@@ -174,7 +175,6 @@ export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange, 
         </> : <><EpisodePlanVisual plan={plan} baselineStateId={plan.clinicalPlan?.baselineStateId??null} treatments={plan.clinicalPlan?.treatments??[]}/><div className="mt-4 grid grid-cols-1 md:grid-cols-2 gap-4 text-sm">{jaws.map(j=><div key={j.jaw}><p className="font-semibold">{j.label}</p><p className="mt-1 whitespace-pre-wrap break-words">{(j.jaw==='upper'?plan.treatmentPlanUpper:plan.treatmentPlanLower)||'Nincs rögzített kezelési terv.'}</p></div>)}</div></>
       ) : <button type="button" onClick={() => load()} className="text-sm underline">Újrapróbálás</button>}
       </div>
-      {plan&&!loading&&<div hidden={!allSections&&section!=='financing'}><EpisodeFinancingPanel key={episodeId} plan={plan} canEdit={canEdit} disabled={saving} planUnsaved={dirty||!!plan.requiresDeviceReview} onStateChange={setFinancingState} onChanged={financing=>setPlan(p=>p?{...p,financing}:p)}/></div>}
       {legacy && <div className="mt-3 rounded border border-amber-200 dark:border-amber-700 p-3 text-sm">
         <p className="font-semibold">Korábban rögzített közös terv</p>
         <p className="mt-1">A korábbi szöveg megmaradt. Az állcsont szerinti besorolását Ön adhatja meg.</p>
@@ -192,7 +192,10 @@ export function EpisodeTreatmentPlanEditor({ episodeId, canEdit, onStateChange, 
         <p className="mt-2 font-semibold">Alsó állcsont</p><p className="whitespace-pre-wrap break-words">{plan.treatmentPlanLower || 'Nincs rögzített alsó kezelési terv.'}</p>
       </div>}
     </section>
-  );
+      {!planVisible&&loading&&<p id="finanszirozas" role="status" className="p-4">Finanszírozás betöltése…</p>}
+      {!planVisible&&error&&!plan&&<div id="finanszirozas" role="alert" className="rounded-xl border p-4"><p>{error}</p><button type="button" className="mt-2 underline" onClick={()=>load()}>Újrapróbálás</button></div>}
+      {plan&&!loading&&<div hidden={planVisible&&!allSections&&section!=='financing'}><EpisodeFinancingPanel key={episodeId} plan={plan} canEdit={canEdit} disabled={saving} planUnsaved={dirty||!!plan.requiresDeviceReview} onStateChange={setFinancingState} onChanged={financing=>setPlan(p=>p?{...p,financing}:p)}/></div>}
+  </>);
 }
 
 /** Historical episodes load their saved plan only when expanded. */

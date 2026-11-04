@@ -1212,9 +1212,9 @@ export function PatientForm({
         'nyelvmozgásokAkadályozottak', 'gombocosBeszed', 'nyalmirigyAllapot',
         'tnmStaging',
         'felsoFogpotlasVan', 'felsoFogpotlasMikor', 'felsoFogpotlasKeszito',
-        'felsoFogpotlasElegedett', 'felsoFogpotlasProblema', 'felsoFogpotlasTipus',
+        'felsoFogpotlasElegedett', 'felsoFogpotlasProblema', 'felsoFogpotlasTipus', 'felsoFogpotlasTipusok',
         'alsoFogpotlasVan', 'alsoFogpotlasMikor', 'alsoFogpotlasKeszito',
-        'alsoFogpotlasElegedett', 'alsoFogpotlasProblema', 'alsoFogpotlasTipus',
+        'alsoFogpotlasElegedett', 'alsoFogpotlasProblema', 'alsoFogpotlasTipus', 'alsoFogpotlasTipusok',
         'fabianFejerdyProtetikaiOsztalyFelso', 'fabianFejerdyProtetikaiOsztalyAlso',
         'fabianFejerdyProtetikaiOsztaly',
         'kezeleoorvos', 'kezeleoorvosIntezete', 'felvetelDatuma',
@@ -1249,9 +1249,9 @@ export function PatientForm({
         'nyelvmozgásokAkadályozottak', 'gombocosBeszed', 'nyalmirigyAllapot',
         'tnmStaging',
         'felsoFogpotlasVan', 'felsoFogpotlasMikor', 'felsoFogpotlasKeszito',
-        'felsoFogpotlasElegedett', 'felsoFogpotlasProblema', 'felsoFogpotlasTipus',
+        'felsoFogpotlasElegedett', 'felsoFogpotlasProblema', 'felsoFogpotlasTipus', 'felsoFogpotlasTipusok',
         'alsoFogpotlasVan', 'alsoFogpotlasMikor', 'alsoFogpotlasKeszito',
-        'alsoFogpotlasElegedett', 'alsoFogpotlasProblema', 'alsoFogpotlasTipus',
+        'alsoFogpotlasElegedett', 'alsoFogpotlasProblema', 'alsoFogpotlasTipus', 'alsoFogpotlasTipusok',
         'fabianFejerdyProtetikaiOsztalyFelso', 'fabianFejerdyProtetikaiOsztalyAlso',
         'fabianFejerdyProtetikaiOsztaly',
         'kezeleoorvos', 'kezeleoorvosIntezete', 'felvetelDatuma',
@@ -1342,10 +1342,10 @@ export function PatientForm({
         'tnmStaging',
         // Protézis - felső
         'felsoFogpotlasVan', 'felsoFogpotlasMikor', 'felsoFogpotlasKeszito',
-        'felsoFogpotlasElegedett', 'felsoFogpotlasProblema', 'felsoFogpotlasTipus',
+        'felsoFogpotlasElegedett', 'felsoFogpotlasProblema', 'felsoFogpotlasTipus', 'felsoFogpotlasTipusok',
         // Protézis - alsó
         'alsoFogpotlasVan', 'alsoFogpotlasMikor', 'alsoFogpotlasKeszito',
-        'alsoFogpotlasElegedett', 'alsoFogpotlasProblema', 'alsoFogpotlasTipus',
+        'alsoFogpotlasElegedett', 'alsoFogpotlasProblema', 'alsoFogpotlasTipus', 'alsoFogpotlasTipusok',
         // Fogazati státusz
         'fabianFejerdyProtetikaiOsztalyFelso', 'fabianFejerdyProtetikaiOsztalyAlso',
         'fabianFejerdyProtetikaiOsztaly',
@@ -1403,10 +1403,10 @@ export function PatientForm({
           'tnmStaging',
           // Protézis - felső
           'felsoFogpotlasVan', 'felsoFogpotlasMikor', 'felsoFogpotlasKeszito',
-          'felsoFogpotlasElegedett', 'felsoFogpotlasProblema', 'felsoFogpotlasTipus',
+          'felsoFogpotlasElegedett', 'felsoFogpotlasProblema', 'felsoFogpotlasTipus', 'felsoFogpotlasTipusok',
           // Protézis - alsó
           'alsoFogpotlasVan', 'alsoFogpotlasMikor', 'alsoFogpotlasKeszito',
-          'alsoFogpotlasElegedett', 'alsoFogpotlasProblema', 'alsoFogpotlasTipus',
+          'alsoFogpotlasElegedett', 'alsoFogpotlasProblema', 'alsoFogpotlasTipus', 'alsoFogpotlasTipusok',
           // Fogazati státusz
           'fabianFejerdyProtetikaiOsztalyFelso', 'fabianFejerdyProtetikaiOsztalyAlso',
           'fabianFejerdyProtetikaiOsztaly',

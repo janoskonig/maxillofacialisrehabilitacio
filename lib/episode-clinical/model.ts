@@ -42,11 +42,13 @@ export const surgerySchema=z.object({
 }).refine(s=>!s.occurredOn||!s.approximateDate,'Pontos nap vagy hozzávetőleges időszak adható meg.');
 /** Kept in the review JSON, so later edits to the shared chart cannot alter an episode. */
 export const DENTAL_FIELDS = [
+  'felsoFogpotlasTipusok','alsoFogpotlasTipusok',
   'meglevoFogak','meglevoImplantatumok','nemIsmertPoziciokbanImplantatum','nemIsmertPoziciokbanImplantatumRészletek',
   'felsoFogpotlasVan','felsoFogpotlasMikor','felsoFogpotlasKeszito','felsoFogpotlasElegedett','felsoFogpotlasProblema','felsoFogpotlasTipus',
   'alsoFogpotlasVan','alsoFogpotlasMikor','alsoFogpotlasKeszito','alsoFogpotlasElegedett','alsoFogpotlasProblema','alsoFogpotlasTipus',
 ] as const;
 export const episodeDentalSchema = patientSchema.pick({
+  felsoFogpotlasTipusok:true,alsoFogpotlasTipusok:true,
   meglevoFogak:true,meglevoImplantatumok:true,nemIsmertPoziciokbanImplantatum:true,nemIsmertPoziciokbanImplantatumRészletek:true,
   felsoFogpotlasVan:true,felsoFogpotlasMikor:true,felsoFogpotlasKeszito:true,felsoFogpotlasElegedett:true,felsoFogpotlasProblema:true,felsoFogpotlasTipus:true,
   alsoFogpotlasVan:true,alsoFogpotlasMikor:true,alsoFogpotlasKeszito:true,alsoFogpotlasElegedett:true,alsoFogpotlasProblema:true,alsoFogpotlasTipus:true,
@@ -67,7 +69,8 @@ export function dentalLayers(dental:EpisodeDentalStatus):ClinicalLayers {
 export function hasDentalData(dental:EpisodeDentalStatus|undefined):boolean {
   return !!dental && (Object.keys(dental.meglevoFogak??{}).length>0 || Object.keys(dental.meglevoImplantatumok??{}).length>0
     || !!dental.nemIsmertPoziciokbanImplantatum || !!dental.nemIsmertPoziciokbanImplantatumRészletek?.trim()
-    || dental.felsoFogpotlasVan===true || dental.alsoFogpotlasVan===true);
+    || dental.felsoFogpotlasVan===true || dental.alsoFogpotlasVan===true
+    || !!dental.felsoFogpotlasTipus || !!dental.alsoFogpotlasTipus || !!dental.felsoFogpotlasTipusok?.length || !!dental.alsoFogpotlasTipusok?.length);
 }
 
 export const clinicalContentSchema=z.object({
@@ -122,6 +125,7 @@ export function clinicalTemplate(patient:Partial<Patient>,reason:EpisodeClinical
 export function patientAtReview(patient:Patient,review:EpisodeClinicalReview):Patient {
   return {...patient,...review.content.basics,...review.content.anamnesis,kezelesreErkezesIndoka:review.content.reason,
     kezelesiTervFelso:[],kezelesiTervAlso:[],kezelesiTervArcotErinto:[],kezelesiTervMelleklet:null,
+    felsoFogpotlasTipusok:null,alsoFogpotlasTipusok:null,
     meglevoFogak:{},meglevoImplantatumok:{},nemIsmertPoziciokbanImplantatum:false,nemIsmertPoziciokbanImplantatumRészletek:null,
     felsoFogpotlasVan:null,felsoFogpotlasMikor:null,felsoFogpotlasKeszito:null,felsoFogpotlasElegedett:null,felsoFogpotlasProblema:null,felsoFogpotlasTipus:null,
     alsoFogpotlasVan:null,alsoFogpotlasMikor:null,alsoFogpotlasKeszito:null,alsoFogpotlasElegedett:null,alsoFogpotlasProblema:null,alsoFogpotlasTipus:null,

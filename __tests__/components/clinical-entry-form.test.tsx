@@ -10,7 +10,7 @@ const data={episodes:[{id:episodeId,status:'open',case_title:'Kiinduló kezelés
   {id:lower,label:'Alsó ideiglenes',jaw:'also',role:'provisional',positions:[],episode_id:crypto.randomUUID()},
 ],states:[{id:crypto.randomUUID(),event_id:crypto.randomUUID(),occurred_on:'2026-10-01',mode:'assessment',layers:{...emptyLayers(),teeth:{'11':{base:'sound'}}}}],work:[],tasks:[],appointments:[],repairs:[],events:[],documents:[],legacyStates:[],pathways:[]} as unknown as ClinicalWorkspace;
 afterEach(()=>{cleanup();window.localStorage.clear();});
-function input(label:string,value:string){fireEvent.change(screen.getByLabelText(label),{target:{value}});}
+function input(label:string,value:string){const choices:Record<string,string>={felso:'Felső',also:'Alsó',definitive:'Végleges',provisional:'Ideiglenes',removable:'Kivehető fogpótlás'};if(['Állcsont','Ideiglenes vagy végleges?','Típus'].includes(label)){fireEvent.click(within(screen.getByRole('group',{name:label})).getByRole('button',{name:choices[value]}));}else fireEvent.change(screen.getByLabelText(label),{target:{value}});}
 function evidence(){input('Melyik napon történt?','2026-09-10');input('Mi alapján rögzíted?','Korabeli karton');}
 function review(){fireEvent.click(screen.getByRole('button',{name:'Adatok ellenőrzése'}));}
 function activity(index:number,pid:string,phase:string,outcome:string){
@@ -21,7 +21,7 @@ describe('Guided clinical documentation',()=>{
   it('requires an explicit jaw, type and origin, lets the user pick positions visually, and reviews before writing',async()=>{
     const save=vi.fn().mockResolvedValue(undefined);
     render(<ClinicalEntryForm data={data} initial={{action:'register'}} onSave={save} onCancel={vi.fn()} busy={false}/>);
-    expect((screen.getByLabelText('Állcsont') as HTMLSelectElement).value).toBe('');
+    expect(within(screen.getByRole('group',{name:'Állcsont'})).getAllByRole('button').every(b=>b.getAttribute('aria-pressed')==='false')).toBe(true);
     evidence();review();expect(screen.getByRole('alert').textContent).toContain('Állcsont');expect(save).not.toHaveBeenCalled();
     for(const [label,value] of [['Megnevezés','Felső lemezes'],['Állcsont','felso'],['Eredet','local'],['Ideiglenes vagy végleges?','definitive'],['Típus','removable'],['Miért indul az új elkészítési epizód?','Felső foghiány rehabilitációja']])input(label,value);
     fireEvent.click(screen.getByText(/A pótlás helye a fogíven/));
@@ -34,8 +34,8 @@ describe('Guided clinical documentation',()=>{
     const save=vi.fn().mockResolvedValue(undefined);
     render(<ClinicalEntryForm data={data} initial={{action:'register'}} onSave={save} onCancel={vi.fn()} busy={false}/>);
     evidence();input('Eredet','local');input('Hogyan kapcsolódjon az epizódhoz?','existing');
-    expect((screen.getByLabelText('Állcsont') as HTMLSelectElement).value).toBe('also');
-    expect((screen.getByRole('option',{name:'Felső'}) as HTMLOptionElement).disabled).toBe(true);
+    expect(screen.getByRole('button',{name:'Alsó'}).getAttribute('aria-pressed')).toBe('true');
+    expect((screen.getByRole('button',{name:'Felső'}) as HTMLButtonElement).disabled).toBe(true);
     input('Megnevezés','Új alsó');input('Ideiglenes vagy végleges?','definitive');input('Típus','removable');
     review();fireEvent.click(screen.getByRole('button',{name:'Mentés a kartonba'}));await waitFor(()=>expect(save).toHaveBeenCalledTimes(1));
     expect(save.mock.calls[0][0]).toMatchObject({episodeMode:'existing',episodeId,jaw:'also'});

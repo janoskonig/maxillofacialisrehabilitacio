@@ -10,6 +10,7 @@ import { AnamnezisSection } from '@/components/patient-form/AnamnezisSection';
 import { BetegvizsgalatSection } from '@/components/patient-form/BetegvizsgalatSection';
 import { ImplantatumokSection } from '@/components/patient-form/ImplantatumokSection';
 import { Odontogram } from '@/components/patient-form/odontogram/Odontogram';
+import { existingTypes } from '@/lib/prosthesis-types';
 
 function formPatient(content?: EpisodeClinicalContent, dental?: EpisodeDentalStatus): Patient {
   const snapshot = content?.dental ?? dental;
@@ -104,6 +105,19 @@ export function EpisodeClinicalFields({ content, dental, onChange, readOnly = fa
     {dentalOnly && <div className="card"><h4 className="mb-3 font-semibold">Fogazati státusz</h4>
       <Odontogram fogak={fogak} setFogak={setFogak} editing={!disabled} isViewOnly={disabled} />
     </div>}
+    {dentalOnly && <div className="grid gap-3 sm:grid-cols-2">{(['felso','also'] as const).map(jaw=>{
+      const patient=getValues();
+      const types=existingTypes(patient[`${jaw}FogpotlasTipusok`],patient[`${jaw}FogpotlasTipus`]);
+      const present=patient[`${jaw}FogpotlasVan`];
+      return <div key={jaw} className="card"><h4 className="mb-2 font-semibold">{jaw==='felso'?'Felső':'Alsó'} · meglévő fogpótlások</h4>
+        {present===false?<p className="text-sm text-slate-500">Nincs meglévő fogpótlás</p>:<>
+          {types.length?<div className="flex flex-wrap gap-2">{types.map(type=><span key={type} className="rounded-lg bg-blue-50 px-2 py-1 text-sm text-blue-900 dark:bg-blue-950 dark:text-blue-100">{type}</span>)}</div>:<p className="text-sm text-slate-500">A típus még nincs megadva.</p>}
+          {patient[`${jaw}FogpotlasMikor`]&&<p className="mt-2 text-sm">Készült: {patient[`${jaw}FogpotlasMikor`]}</p>}
+          {patient[`${jaw}FogpotlasKeszito`]&&<p className="mt-1 text-sm">Készítő: {patient[`${jaw}FogpotlasKeszito`]}</p>}
+          {patient[`${jaw}FogpotlasProblema`]&&<p className="mt-1 whitespace-pre-wrap text-sm">{patient[`${jaw}FogpotlasProblema`]}</p>}
+        </>}
+      </div>;
+    })}</div>}
     <ImplantatumokSection register={register} watch={watch} isViewOnly={disabled} implantatumok={implants}
       nemIsmertPoziciokbanImplantatum={watch('nemIsmertPoziciokbanImplantatum')}
       handleToothToggle={position => {

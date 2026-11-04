@@ -2,7 +2,7 @@
 
 import { Dispatch, SetStateAction, useState } from 'react';
 import { UseFormRegister, UseFormWatch, UseFormSetValue, FieldErrors, UseFormRegisterReturn } from 'react-hook-form';
-import { Patient, kezelesiTervOptions, fabianFejerdyProtetikaiOsztalyOptions } from '@/lib/types';
+import { Patient, fabianFejerdyProtetikaiOsztalyOptions } from '@/lib/types';
 import { isHardRequiredField } from '@/lib/clinical-rules';
 import { type ToothStatus } from '@/hooks/usePatientAutoSave';
 import { Calendar, Download, Check, CircleDashed, AlertTriangle, AlertCircle, Activity, Layers, type LucideIcon } from 'lucide-react';
@@ -26,8 +26,9 @@ import { describeSurfaces } from './odontogram/tooth-surfaces';
 import { applyTreatmentOutcome } from '@/lib/tooth-treatment-outcome';
 import { PerioChart } from './perio/PerioChart';
 import { DefectRaster } from './DefectRaster';
+import { ProsthesisTypeChoices } from './ProsthesisTypeChoices';
+import { existingTypes } from '@/lib/prosthesis-types';
 
-const FOGPOTLAS_TIPUS_OPTIONS = kezelesiTervOptions.filter((o) => o !== 'sebészi sablon készítése');
 
 /** Egységes csoport-fejléc ikonos jelöléssel (Meglévő fogpótlások / Defektusok / Funkcionális állapot). */
 function GroupHeader({ icon: Icon, title, subtitle }: { icon: LucideIcon; title: string; subtitle?: string }) {
@@ -141,7 +142,8 @@ function FogpotlasCard({
   onVanChange,
   elegedett,
   onElegedettChange,
-  tipusField,
+  tipusok,
+  onTipusokChange,
   mikorField,
   keszitoField,
   problemaField,
@@ -152,7 +154,8 @@ function FogpotlasCard({
   onVanChange: (v: boolean) => void;
   elegedett: boolean | null;
   onElegedettChange: (v: boolean) => void;
-  tipusField: UseFormRegisterReturn;
+  tipusok: string[];
+  onTipusokChange: (types:string[]) => void;
   mikorField: UseFormRegisterReturn;
   keszitoField: UseFormRegisterReturn;
   problemaField: UseFormRegisterReturn;
@@ -175,15 +178,7 @@ function FogpotlasCard({
       </div>
       {van === true ? (
         <div className="space-y-3">
-          <div>
-            <label className="form-label">Típus</label>
-            <select {...tipusField} className="form-input" disabled={isViewOnly}>
-              <option value="">Válasszon...</option>
-              {FOGPOTLAS_TIPUS_OPTIONS.map((option) => (
-                <option key={option} value={option}>{option}</option>
-              ))}
-            </select>
-          </div>
+          <ProsthesisTypeChoices jaw={jawLabel} value={tipusok} onChange={onTipusokChange} disabled={isViewOnly}/>
           <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
             <div>
               <label className="form-label">Mikor készült?</label>
@@ -496,7 +491,8 @@ export function BetegvizsgalatSection({
               onVanChange={(v) => setValue('felsoFogpotlasVan', v, { shouldDirty: true })}
               elegedett={felsoFogpotlasElegedett ?? null}
               onElegedettChange={(v) => setValue('felsoFogpotlasElegedett', v, { shouldDirty: true })}
-              tipusField={register('felsoFogpotlasTipus')}
+              tipusok={existingTypes(watch('felsoFogpotlasTipusok'),watch('felsoFogpotlasTipus'))}
+              onTipusokChange={types=>{setValue('felsoFogpotlasTipusok',types as Patient['felsoFogpotlasTipusok'],{shouldDirty:true});setValue('felsoFogpotlasTipus',(types[0]??'') as Patient['felsoFogpotlasTipus'],{shouldDirty:true});}}
               mikorField={register('felsoFogpotlasMikor')}
               keszitoField={register('felsoFogpotlasKeszito')}
               problemaField={register('felsoFogpotlasProblema')}
@@ -508,7 +504,8 @@ export function BetegvizsgalatSection({
               onVanChange={(v) => setValue('alsoFogpotlasVan', v, { shouldDirty: true })}
               elegedett={alsoFogpotlasElegedett ?? null}
               onElegedettChange={(v) => setValue('alsoFogpotlasElegedett', v, { shouldDirty: true })}
-              tipusField={register('alsoFogpotlasTipus')}
+              tipusok={existingTypes(watch('alsoFogpotlasTipusok'),watch('alsoFogpotlasTipus'))}
+              onTipusokChange={types=>{setValue('alsoFogpotlasTipusok',types as Patient['alsoFogpotlasTipusok'],{shouldDirty:true});setValue('alsoFogpotlasTipus',(types[0]??'') as Patient['alsoFogpotlasTipus'],{shouldDirty:true});}}
               mikorField={register('alsoFogpotlasMikor')}
               keszitoField={register('alsoFogpotlasKeszito')}
               problemaField={register('alsoFogpotlasProblema')}

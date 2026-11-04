@@ -1,3 +1,4 @@
+import { probeColumnExists } from '@/lib/schema-probe';
 import { randomUUID } from 'crypto';
 import type { PoolClient } from 'pg';
 import { getDbPool } from '@/lib/db';
@@ -27,6 +28,7 @@ export async function saveEpisodeFinancing(patientId:string,actor:string,c:Finan
   const db=await getDbPool().connect();
   try {
     await db.query('BEGIN');
+    if(c.costBreakdown&&!await probeColumnExists(db,'episode_financing_events','cost_breakdown'))throw new HttpError(503,'A háromrészes költségbontáshoz a 115-ös adatbázis-frissítés szükséges.');
     if(!(await db.query('SELECT id FROM patients WHERE id=$1 FOR UPDATE',[patientId])).rowCount)throw new HttpError(404,'Beteg nem található');
     const ep=(await db.query('SELECT id FROM patient_episodes WHERE id=$1 AND patient_id=$2 FOR UPDATE',[c.episodeId,patientId])).rows[0];
     if(!ep)throw new HttpError(404,'A beteg ellátási epizódja nem található');
@@ -45,7 +47,7 @@ export async function saveEpisodeFinancing(patientId:string,actor:string,c:Finan
     }
     const previous=c.correctsId?history.find(e=>e.id===c.correctsId&&e.active):null;
     if(c.correctsId&&!previous)throw new HttpError(409,'A korrigálandó döntés már javított, vagy nem ehhez az epizódhoz tartozik');
-    const ids=Array.from(new Set(c.documentIds));
+    const ids=Array.from(new Set([...c.documentIds,...Object.values(c.costBreakdown??{}).flatMap(item=>item.enabled?item.quoteDocumentIds:[])]));
     if(ids.length&&(await db.query('SELECT id FROM patient_documents WHERE patient_id=$1 AND id=ANY($2::uuid[])',[patientId,ids])).rowCount!==ids.length)throw new HttpError(400,'Másik beteg vagy hiányzó dokumentum nem kapcsolható');
     const linked=(await db.query('SELECT prosthesis_id FROM prosthesis_episode_links WHERE episode_id=$1',[c.episodeId])).rows;
     const prosthesisId=linked.length===1?linked[0].prosthesis_id:null;
@@ -53,8 +55,8 @@ export async function saveEpisodeFinancing(patientId:string,actor:string,c:Finan
     await db.query(`INSERT INTO prosthesis_clinical_events(id,patient_id,episode_id,prosthesis_id,kind,occurred_on,occurred_at,time_precision,source,note,payload,recorded_by,request_key,supersedes_id)
       VALUES($1,$2,$3,$4,'financing_changed',$5,$6,$7,$8,$9,$10::jsonb,$11,$12,$13)`,[eventId,patientId,c.episodeId,prosthesisId,c.occurredOn,c.occurredAt,c.precision,c.source,c.note||c.reason,
       JSON.stringify({command:c,entityId:id}),actor,c.requestKey,previous?.event_id??null]);
-    await db.query(`INSERT INTO episode_financing_events(id,event_id,patient_id,episode_id,prosthesis_id,plan_version_id,version,effective_on,mode,status,payer,currency,total_amount,funded_amount,patient_amount,reason,decision_reference,document_ids,corrects_id)
-      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19)`,[id,eventId,patientId,c.episodeId,prosthesisId,c.planVersionId,revision+1,c.effectiveOn,c.mode,c.status,c.payer,c.currency,c.totalAmount,c.fundedAmount,c.patientAmount,c.reason,c.decisionReference,ids,c.correctsId??null]);
+    await db.query(`INSERT INTO episode_financing_events(id,event_id,patient_id,episode_id,prosthesis_id,plan_version_id,version,effective_on,mode,status,payer,currency,total_amount,funded_amount,patient_amount,reason,decision_reference,document_ids,corrects_id,cost_breakdown)
+      VALUES($1,$2,$3,$4,$5,$6,$7,$8,$9,$10,$11,$12,$13,$14,$15,$16,$17,$18,$19,$20::jsonb)`,[id,eventId,patientId,c.episodeId,prosthesisId,c.planVersionId,revision+1,c.effectiveOn,c.mode,c.status,c.payer,c.currency,c.totalAmount,c.fundedAmount,c.patientAmount,c.reason,c.decisionReference,ids,c.correctsId??null,c.costBreakdown?JSON.stringify(c.costBreakdown):null]);
     await db.query('COMMIT');return {id,eventId};
   }catch(e){await db.query('ROLLBACK');throw e;}finally{db.release();}
 }

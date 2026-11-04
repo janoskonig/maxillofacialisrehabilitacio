@@ -3,7 +3,7 @@ import { createHash } from 'crypto';
 import { getDbPool } from '@/lib/db';
 import { clinicalCommandSchema,emptyLayers } from '@/lib/prosthesis-lifecycle/model';
 import { executeClinicalCommand,loadClinicalWorkspace } from '@/lib/prosthesis-lifecycle/service';
-import { financingCommandSchema } from '@/lib/episode-financing/model';
+import { costBreakdownSchema,costTotals,financingCommandSchema } from '@/lib/episode-financing/model';
 import { loadEpisodeFinancing,saveEpisodeFinancing } from '@/lib/episode-financing/service';
 import { createClinicalPackage,packageSchema } from '@/lib/prosthesis-lifecycle/packages';
 import { loadEpisodeTreatmentPlan } from '@/lib/prosthesis-lifecycle/plans';
@@ -39,6 +39,18 @@ async function setup(){
   return {doctor,patient,episode,device,base,plan,run,command,finance,load};
 }
 describe('Episode financing with clinical plan changes',()=>{
+  it('stores separate costs and quote links, includes them in export, and refuses another patient’s quote',async()=>{
+    const s=await setup(),other=await setup(),db=getDbPool();
+    const quote=(await db.query(`INSERT INTO patient_documents(patient_id,filename,file_path,file_size,mime_type,uploaded_by) VALUES($1,'arajanlat.pdf','test/quote.pdf',50,'application/pdf',$2) RETURNING id`,[s.patient.id,s.doctor.id])).rows[0].id;
+    const item={enabled:true,totalAmount:'100',fundedAmount:'0',patientAmount:'100',quoteDocumentIds:[quote]};
+    const costBreakdown=costBreakdownSchema.parse({laboratory:item,clinical:{...item,neakCategory:'04'},implant:{...item,enabled:false}});
+    const result=await s.finance({mode:'self_pay',costBreakdown,...costTotals(costBreakdown)});
+    const loaded=await s.load();expect(loaded.current.event).toMatchObject({id:result.id,total_amount:'200.00',document_ids:[quote],cost_breakdown:costBreakdown});
+    const text=buildTreatmentExportContent({},await loadNeakTreatmentSources(db,s.patient.id)).sections.flatMap(s=>s.lines).join('\n');
+    expect(text).toContain('Fogtechnikai költség');expect(text).toContain('NEAK kategória: 04');
+    await expect(other.finance({mode:'self_pay',costBreakdown,...costTotals(costBreakdown)})).rejects.toMatchObject({status:400});
+  });
+
   it('changes financing within the same episode, leaves clinical data untouched, and exports the selected decision',async()=>{
     const s=await setup(),db=getDbPool(),before=await loadClinicalWorkspace(s.patient.id);
     await s.finance();

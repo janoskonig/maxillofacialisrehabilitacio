@@ -1,9 +1,20 @@
 import { describe,expect,it } from 'vitest';
-import { financingAt,financingCommandSchema,financingForPlan,financingSummary,type FinancingEvent } from '@/lib/episode-financing/model';
+import { costBreakdownSchema,costTotals,financingAt,financingCommandSchema,financingForPlan,financingSummary,type FinancingEvent } from '@/lib/episode-financing/model';
 const plan='11111111-1111-4111-8111-111111111111';
 const command={action:'financing',episodeId:crypto.randomUUID(),requestKey:crypto.randomUUID(),expectedVersion:0,occurredOn:'2026-09-10',effectiveOn:'2026-09-10',source:'Korabeli határozat',planVersionId:plan,mode:'equity',status:'approved',reason:'Kérelem elbírálva'};
 const event=(fields:Partial<FinancingEvent>):FinancingEvent=>({id:crypto.randomUUID(),version:1,effective_on:'2026-09-10',occurred_on:'2026-09-10',active:true,plan_version_id:plan,mode:'equity',status:'approved',...fields} as FinancingEvent);
 describe('Dated financing decisions',()=>{
+  it('checks category 04, exact component sums and quotes before approval',()=>{
+    const item={enabled:true,totalAmount:'100',fundedAmount:'0',patientAmount:'100',quoteDocumentIds:[crypto.randomUUID()]};
+    const costs=costBreakdownSchema.parse({laboratory:item,clinical:{...item,neakCategory:'04'},implant:{...item,enabled:false}});
+    expect(costTotals(costs)).toEqual({totalAmount:'200.00',fundedAmount:'0.00',patientAmount:'200.00'});
+    const input={...command,mode:'self_pay',costBreakdown:costs,...costTotals(costs)};
+    expect(financingCommandSchema.safeParse(input).success).toBe(true);
+    expect(financingCommandSchema.safeParse({...input,costBreakdown:{...costs,laboratory:{...costs.laboratory,quoteDocumentIds:[]}}}).success).toBe(false);
+    expect(financingCommandSchema.safeParse({...input,costBreakdown:{...costs,clinical:{...costs.clinical,fundedAmount:'10.00',patientAmount:'90.00'}}}).success).toBe(false);
+    expect(financingCommandSchema.safeParse({...input,totalAmount:'201.00'}).success).toBe(false);
+  });
+
   it('preserves unknown amounts separately from a documented zero and normalizes decimal input exactly',()=>{
     expect(financingCommandSchema.parse({...command,totalAmount:'',fundedAmount:'0',patientAmount:'0,00'})).toMatchObject({totalAmount:null,fundedAmount:'0.00',patientAmount:'0.00'});
     expect(financingCommandSchema.parse({...command,totalAmount:'1 000,30',fundedAmount:'1000.10',patientAmount:'0,20'})).toMatchObject({totalAmount:'1000.30',fundedAmount:'1000.10',patientAmount:'0.20'});

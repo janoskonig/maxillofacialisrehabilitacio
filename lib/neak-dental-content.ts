@@ -51,7 +51,8 @@ export function buildDentalExportContent(patient: Partial<Patient>) {
 export function dentalProsthesisLines(patient: Partial<Patient>, jaw: 'upper' | 'lower'): string[] {
   const upper = jaw === 'upper';
   const present = upper ? patient.felsoFogpotlasVan : patient.alsoFogpotlasVan;
-  const type = upper ? patient.felsoFogpotlasTipus : patient.alsoFogpotlasTipus;
+  const types = upper ? patient.felsoFogpotlasTipusok : patient.alsoFogpotlasTipusok;
+  const type = types?.join(', ') ?? (upper ? patient.felsoFogpotlasTipus : patient.alsoFogpotlasTipus);
   const when = upper ? patient.felsoFogpotlasMikor : patient.alsoFogpotlasMikor;
   const maker = upper ? patient.felsoFogpotlasKeszito : patient.alsoFogpotlasKeszito;
   const satisfied = upper ? patient.felsoFogpotlasElegedett : patient.alsoFogpotlasElegedett;

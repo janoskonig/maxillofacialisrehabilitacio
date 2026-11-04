@@ -58,6 +58,8 @@ export class PatientRepository {
               felso_fogpotlas_elegedett as "felsoFogpotlasElegedett",
               felso_fogpotlas_problema as "felsoFogpotlasProblema",
               felso_fogpotlas_tipus as "felsoFogpotlasTipus",
+  to_jsonb(patient_dental_status)->'felso_fogpotlas_tipusok' as "felsoFogpotlasTipusok",
+  to_jsonb(patient_dental_status)->'also_fogpotlas_tipusok' as "alsoFogpotlasTipusok",
               also_fogpotlas_van as "alsoFogpotlasVan",
               also_fogpotlas_mikor as "alsoFogpotlasMikor",
               also_fogpotlas_keszito as "alsoFogpotlasKeszito",

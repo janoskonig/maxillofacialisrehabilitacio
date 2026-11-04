@@ -60,6 +60,8 @@ export const patientSelectColumns = (): readonly string[] =>
     'also_fogpotlas_problema as "alsoFogpotlasProblema"',
     'meglevo_fogak as "meglevoFogak"',
     'felso_fogpotlas_tipus as "felsoFogpotlasTipus"',
+    `to_jsonb(patients_full)->'felso_fogpotlas_tipusok' as "felsoFogpotlasTipusok"`,
+    `to_jsonb(patients_full)->'also_fogpotlas_tipusok' as "alsoFogpotlasTipusok"`,
     'also_fogpotlas_tipus as "alsoFogpotlasTipus"',
     'meglevo_implantatumok as "meglevoImplantatumok"',
     'nem_ismert_poziciokban_implantatum as "nemIsmertPoziciokbanImplantatum"',

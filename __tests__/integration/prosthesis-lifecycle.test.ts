@@ -54,6 +54,23 @@ async function editorSave(s:Awaited<ReturnType<typeof setup>>,episodeId:string,b
   }),{params:{id:episodeId}});
 }
 describe('prosthesis lifecycle with clinical dates',()=>{
+  it('keeps multiple fixed appliances and one removable per jaw in one plan, with separate goals and acceptance',async()=>{
+    const s=await setup(),removable=await s.register(),base=await s.baseline();
+    const add=(type:string,jaw='felso')=>s.run({action:'register',episodeId:removable.episodeId,episodeMode:'existing',origin:'local',role:'definitive',jaw,prosthesisType:type,label:type,positions:[]});
+    const fixed=await add('fixed'),bridge=await add('screw_retained_implant_bridge'),lower=await add('removable','also');
+    await expect(add('removable')).rejects.toMatchObject({status:409});
+    await expect(getDbPool().query("UPDATE prostheses SET prosthesis_type='removable' WHERE id=$1",[fixed.id])).rejects.toMatchObject({code:'23514'});
+    const devices=[removable,fixed,bridge,lower];
+    for(const p of devices)await s.run({action:'set_goal',episodeId:removable.episodeId,prosthesisId:p.id,baselineStateId:base.id});
+    const work=await s.run({action:'work',episodeId:removable.episodeId,scope:'prosthesis',prosthesisIds:devices.map(p=>p.id),label:'Közös próba'});
+    expect((await getDbPool().query('SELECT goal_id FROM work_phase_prostheses WHERE work_phase_id=$1',[work.id])).rows.every(r=>r.goal_id)).toBe(true);
+    const saved=await editorSave(s,removable.episodeId,{expectedVersion:0,treatmentPlanUpper:'Több rögzített és egy kivehető',treatmentPlanLower:'Alsó kivehető',clinical:{baselineStateId:base.id,treatments:[],approved:true,occurredOn:'2026-01-02',source:'Tervezés',requestKey:crypto.randomUUID()}});
+    expect(saved.status).toBe(200);expect((await saved.json()).plan.devices).toHaveLength(4);
+    for(const p of devices.slice(0,3))await s.milestone(p.id,'accepted');
+    expect((await s.load()).episodes.find(e=>e.id===removable.episodeId)?.status).toBe('open');
+    await s.milestone(lower.id,'accepted');expect((await s.load()).episodes.find(e=>e.id===removable.episodeId)?.status).toBe('closed');
+  });
+
   it('attaches an upper and a lower appliance to the selected episode and rejects a third or duplicate jaw',async()=>{
     const s=await setup(),requestKey=crypto.randomUUID();
     const input={action:'register',episodeId:s.episode.id,episodeMode:'existing',requestKey,jaw:'felso',role:'definitive',origin:'local',prosthesisType:'removable',label:'Tervezett felső fogpótlás'};

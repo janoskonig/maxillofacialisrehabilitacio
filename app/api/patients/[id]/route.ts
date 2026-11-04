@@ -1,3 +1,4 @@
+import { savePatientProsthesisTypes } from '@/lib/patient-prosthesis-types';
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { patientSchema } from '@/lib/types';
@@ -299,6 +300,8 @@ async function executePatientUpdate(
         [patientId, Array.isArray(patient.kezelesiTervFelso) ? JSON.stringify(patient.kezelesiTervFelso) : '[]', Array.isArray(patient.kezelesiTervAlso) ? JSON.stringify(patient.kezelesiTervAlso) : '[]', Array.isArray(patient.kezelesiTervArcotErinto) ? JSON.stringify(patient.kezelesiTervArcotErinto) : '[]', patient.kortortenetiOsszefoglalo||null, patient.kezelesiTervMelleklet||null, patient.szakorvosiVelemény||null]
       ),
     ]);
+
+    await savePatientProsthesisTypes(client,patientId,patient);
     await client.query('COMMIT');
   } catch (err) {
     await client.query('ROLLBACK');

@@ -1,3 +1,4 @@
+import { savePatientProsthesisTypes } from '@/lib/patient-prosthesis-types';
 import { NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { normalizeToTreatmentTypeCode } from '@/lib/treatment-type-normalize';
@@ -553,6 +554,8 @@ export const POST = authedHandler(async (req, { auth }) => {
       ),
     ]);
 
+
+    await savePatientProsthesisTypes(client,newId,p);
     await client.query('COMMIT');
 
     // Kezelőorvos: a form a nevet küldi → feloldjuk user_id-ra és KÉZI
