@@ -36,16 +36,16 @@ export function archDifferences(before:ClinicalLayers,after:ClinicalLayers) {
   return [...UPPER_ROW,...LOWER_ROW].filter(n=>canonical(comparable(before,n))!==canonical(comparable(after,n)));
 }
 
-export function ClinicalArch({layers,jaw,selected=[],changed=[],marked=[],onSelect,label,compact=false}:{
+export function ClinicalArch({layers,jaw,selected=[],changed=[],marked=[],onSelect,label,compact=false,annotations={}}:{
   layers:ClinicalLayers;jaw?:'felso'|'also'|null;selected?:number[];changed?:number[];marked?:number[];
-  onSelect?:(tooth:number)=>void;label:string;compact?:boolean;
+  onSelect?:(tooth:number)=>void;label:string;compact?:boolean;annotations?:Record<number,string>;
 }) {
   const rows=jaw==='felso'?[{name:'Felső állcsont',teeth:UPPER_ROW,upper:true}]:jaw==='also'?[{name:'Alsó állcsont',teeth:LOWER_ROW,upper:false}]:[
     {name:'Felső állcsont',teeth:UPPER_ROW,upper:true},{name:'Alsó állcsont',teeth:LOWER_ROW,upper:false},
   ];
   return <div aria-label={label} className={compact?'space-y-3':'space-y-5'}>
     {rows.map(row=><div key={row.name}>
-      <div className="mb-2 flex items-center justify-between text-xs font-medium text-slate-500 dark:text-slate-400"><span>{row.name}</span>{!compact&&<span>A beteg jobb oldala ← → bal oldala</span>}</div>
+      <div className="mb-2 flex flex-wrap items-center justify-between gap-x-2 gap-y-1 text-xs font-medium text-slate-500 dark:text-slate-400"><span className="whitespace-nowrap">{row.name}</span>{!compact&&<span>A beteg jobb oldala ← → bal oldala</span>}</div>
       <div className="grid grid-cols-1 gap-3 min-[560px]:grid-cols-2">
         {[row.teeth.slice(0,8),row.teeth.slice(8)].map((quadrant,q)=><div key={q} className="grid grid-cols-8 gap-0.5 rounded-2xl bg-slate-50 px-1 py-2 dark:bg-slate-900/70">
           {quadrant.map((n,i)=>{
@@ -62,6 +62,7 @@ export function ClinicalArch({layers,jaw,selected=[],changed=[],marked=[],onSele
                 {!!p.prostheses.length&&<path d={geometry.crown} transform={row.upper?'translate(0,40) scale(1,-1)':undefined} fill="#99f6e4" fillOpacity="0.8" stroke="#0f766e" strokeWidth="1.1" strokeDasharray="2 1"/>}
               </svg>
               <span className="flex h-3 items-center justify-center gap-0.5 text-[9px] font-bold"><span className={implant?'text-violet-700 dark:text-violet-300':'text-slate-300 dark:text-slate-700'}>{implant?'I':'·'}</span><span className={p.prostheses.length?'text-teal-700 dark:text-teal-300':'text-slate-300 dark:text-slate-700'}>{p.prostheses.length?'P':'·'}</span></span>
+              {Object.keys(annotations).length>0&&<span className="h-3 text-[9px] font-bold text-blue-700 dark:text-blue-300">{annotations[n]??''}</span>}
             </>;
             const style={paddingTop:compact?2:Math.round((q===0?i:7-i)*1.5)+2,paddingBottom:4};
             return onSelect?<button key={n} type="button" aria-label={text} aria-pressed={active} title={text} onClick={()=>onSelect(n)} className={`flex min-w-0 flex-col items-center rounded-xl border-2 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 ${color}`} style={style}>{body}</button>:

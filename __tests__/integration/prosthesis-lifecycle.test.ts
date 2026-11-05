@@ -54,6 +54,14 @@ async function editorSave(s:Awaited<ReturnType<typeof setup>>,episodeId:string,b
   }),{params:{id:episodeId}});
 }
 describe('prosthesis lifecycle with clinical dates',()=>{
+  it('round-trips detailed prosthesis classification and existing-appliance findings without creating a tooth-state event',async()=>{
+    const s=await setup();
+    const specification={clinicalType:'cementezett rögzítésű implantációs korona/híd',madeWhen:'2023 tavasz',madeBy:'Korábbi rendelő',satisfied:false,complaint:'Instabil',historicalCustom:'Megőrzött szabadszöveg'};
+    const device=await s.run({action:'register',episodeId:s.episode.id,episodeMode:'existing',origin:'local',jaw:'felso',role:'definitive',prosthesisType:'fixed',label:'Felső implantációs híd',positions:[{tooth:14,role:'implant'},{tooth:15,role:'pontic'},{tooth:16,role:'implant'}],specification});
+    const workspace=await s.load(),saved=workspace.prostheses.find(p=>p.id===device.id);
+    expect(saved.specification).toEqual(specification);expect(saved.positions).toEqual([{tooth:14,role:'implant'},{tooth:15,role:'pontic'},{tooth:16,role:'implant'}]);
+    expect(workspace.states).toEqual([]);expect(workspace.actual).toEqual(emptyLayers());
+  });
   it('keeps multiple fixed appliances and one removable per jaw in one plan, with separate goals and acceptance',async()=>{
     const s=await setup(),removable=await s.register(),base=await s.baseline();
     const add=(type:string,jaw='felso')=>s.run({action:'register',episodeId:removable.episodeId,episodeMode:'existing',origin:'local',role:'definitive',jaw,prosthesisType:type,label:type,positions:[]});

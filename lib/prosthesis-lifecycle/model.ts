@@ -1,5 +1,6 @@
 import { z } from 'zod';
 import { applyTreatmentOutcome } from '@/lib/tooth-treatment-outcome';
+import { lifecycleCategoryForType } from '@/lib/prosthesis-types';
 
 export const clinicalDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(s => {
   const d = new Date(`${s}T00:00:00Z`);
@@ -70,6 +71,10 @@ export const clinicalCommandSchema = z.discriminatedUnion('action', [
   if (c.action === 'work' && ((c.scope==='episode') !== (c.prosthesisIds.length===0))) fail('Epizódszintű munka vagy konkrét fogpótlás-hivatkozás szükséges');
   if (c.action === 'work' && !c.episodeId&&!c.repairCaseId) fail('Készítési epizód vagy önálló javítási ügy szükséges');
   if ((c.action==='register' || c.action==='review_mapping') && c.origin==='local' && !c.episodeId) fail('Helyben készített pótláshoz epizód szükséges');
+  if(c.action==='register'||c.action==='review_mapping'){
+    const category=typeof c.specification.clinicalType==='string'?lifecycleCategoryForType(c.specification.clinicalType):null;
+    if(category&&category!==c.prosthesisType)fail('A részletes fogpótlástípus és a rögzítési kategória eltér.');
+  }
   if (c.action==='status' && c.mode==='change' && !c.expectedBefore) fail('Változáshoz az előző értékek megerősítése szükséges');
   if (c.action==='status' && c.mode==='change' && !c.sourceEventId) fail('Változáshoz dokumentált eredmény forráseseménye szükséges');
   if (c.action==='visit' && new Set(c.links.map(l => `${l.prosthesisId}:${l.workPhaseId ?? l.activity}`)).size !== c.links.length) fail('Ismétlődő vizittevékenység');
