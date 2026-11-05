@@ -1,6 +1,8 @@
 'use client';
 
-import { BASE_OPTIONS, BASE_LABELS, supportsSurfaces, type ToothConditions } from './tooth-conditions';
+import { NATURAL_TOOTH_BASE_OPTIONS, BASE_LABELS, supportsSurfaces, type ToothConditions } from './tooth-conditions';
+import { ProsthesisComponentPicker } from '@/components/ProsthesisComponentPicker';
+import { positionLabel } from '@/lib/prosthesis-components';
 import { ToothSurfacePicker } from './ToothSurfacePicker';
 import type { ToothBase } from '@/hooks/usePatientAutoSave';
 
@@ -16,7 +18,7 @@ export function BaseChips({
 }) {
   return (
     <div className="flex flex-wrap gap-1.5">
-      {BASE_OPTIONS.map((b) => (
+      {NATURAL_TOOTH_BASE_OPTIONS.map((b) => (
         <button
           key={b}
           type="button"
@@ -46,17 +48,31 @@ export function ToothEditor({
   conditions,
   onChange,
   touch = false,
+  showBase = true,
+  disabled = false,
 }: {
   fdi: number | string;
   conditions: ToothConditions;
   onChange: (patch: Partial<ToothConditions>) => void;
   touch?: boolean;
+  showBase?: boolean;
+  disabled?: boolean;
 }) {
   return (
-    <div>
-      <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Állapot</div>
+    <fieldset disabled={disabled} className="min-w-0 space-y-4">
+      {showBase&&<div>
+      <div className="text-xs text-gray-500 dark:text-gray-400 mb-1">Saját fog állapota</div>
       <div className="mb-3">
         <BaseChips value={conditions.base} onPick={(b) => onChange({ base: b })} touch={touch} />
+        {!NATURAL_TOOTH_BASE_OPTIONS.includes(conditions.base)&&<p className="mt-2 text-xs text-amber-700 dark:text-amber-300">Korábbi összetett jelölés: {BASE_LABELS[conditions.base]}. Ez megmarad; a részletes elemeket külön adhatod meg.</p>}
+      </div>
+      </div>}
+
+      <div className="min-w-0 rounded-xl border border-blue-200 p-3 dark:border-blue-900">
+        <h5 className="mb-1 text-sm font-semibold">Megfigyelt fogpótlási elemek</h5>
+        <p className="mb-3 text-xs text-slate-500">Ugyanaz a választék, mint a fogpótlás rögzítésénél. Egy foghelyhez több elem is megadható.</p>
+        <ProsthesisComponentPicker value={conditions.components??[]} onToggle={role=>onChange({components:conditions.components?.includes(role)?conditions.components.filter(value=>value!==role):[...(conditions.components??[]),role]})} disabled={disabled}/>
+        {!!conditions.components?.length&&<ul className="mt-3 space-y-1 border-t pt-2 text-xs" aria-label="Rögzített fogpótlási elemek">{conditions.components.map(role=><li key={role}>{positionLabel(role,true)}</li>)}</ul>}
       </div>
 
       {supportsSurfaces(conditions.base) && (
@@ -128,6 +144,6 @@ export function ToothEditor({
           placeholder="Opcionális megjegyzés a foghoz"
         />
       </div>
-    </div>
+    </fieldset>
   );
 }

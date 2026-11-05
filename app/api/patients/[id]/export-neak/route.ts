@@ -10,6 +10,7 @@ import { buildStructuredAnamnesisSummary } from '@/lib/anamnesis-summary';
 import { normalizeTags, safeFilename, ExportLimiter } from '@/lib/utils';
 import { buildNeakExportPlan, NEAK_EXPORT_LIMITS, withNeakDownloadTimeout } from '@/lib/neak-export';
 import { generateDentalStatusPDF } from '@/lib/pdf/generateDentalStatusPDF';
+import { teethWithObservedComponents } from '@/lib/prosthesis-findings';
 import { markdownToPDF, generatePatientSummaryMarkdown, generateMedicalHistoryMarkdown } from '@/lib/pdf/markdown-to-pdf';
 import { generateEquityRequestPDF } from '@/lib/pdf/equity-request';
 import { generatePatientDataEquityPDF } from '@/lib/pdf/equity-request-patient';
@@ -162,7 +163,7 @@ export const GET = authedHandler(async (req, { params, correlationId, auth }) =>
         if(!states.some(s=>s.id===clinicalReview.content.baselineStateId))return NextResponse.json({error:'A rögzített kiindulási státusz nem érhető el.'},{status:409});
         const replay=replayStates(states,clinicalReview.content.baselineStateId);
         if(replay.conflicts.length)return NextResponse.json({error:'A kiindulási státusz idővonalát felül kell vizsgálni.'},{status:409});
-        scopedLayers=replay.layers;patient.meglevoFogak=replay.layers.teeth as Patient['meglevoFogak'];
+        scopedLayers=replay.layers;patient.meglevoFogak=teethWithObservedComponents(replay.layers);
       }
     }
 

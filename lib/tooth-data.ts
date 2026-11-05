@@ -1,4 +1,5 @@
 import type { ToothBase } from '@/lib/tooth-base';
+import type { ProsthesisComponent } from '@/lib/prosthesis-components';
 
 /**
  * Odontogram alapállapot — egy fog egy alapállapota (a `caries` ettől függetlenül
@@ -19,6 +20,8 @@ export type ToothConditionObject = {
   mobility?: number;
   /** Felszín-szintű státusz (meziális/disztális/vesztibuláris/orális/okkluzális). */
   surfaces?: Partial<Record<ToothSurfaceKey, ToothSurfaceMark>>;
+  /** Observed prosthetic elements; independent of the natural tooth's base state. */
+  components?: ProsthesisComponent[];
 };
 
 export type ToothSurfaceKey = 'mesial' | 'distal' | 'vestibular' | 'oral' | 'occlusal';
@@ -42,6 +45,7 @@ export function normalizeToothData(
       value.caries === true ||
       value.periapical === true ||
       (value.mobility != null && value.mobility > 0) ||
+      (value.components != null && value.components.length > 0) ||
       (value.surfaces != null && Object.keys(value.surfaces).length > 0);
 
     if (meaningful) return value;

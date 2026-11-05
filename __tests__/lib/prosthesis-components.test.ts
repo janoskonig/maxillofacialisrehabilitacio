@@ -4,10 +4,10 @@ import { positionsSchema,emptyLayers,projectClinicalPlan } from '@/lib/prosthesi
 import { describeClinicalValue } from '@/lib/prosthesis-lifecycle/pdf';
 
 describe('Clinician-supplied prosthetic component catalog',()=>{
-  it('has the exact three contexts and 8 / 2 / 8 entries',()=>{
+  it('has the exact three contexts and 14 / 3 / 8 entries',()=>{
     expect(Object.values(COMPONENT_CONTEXTS)).toEqual(['Fogakra','Fogak helyére','Implantátumra']);
-    expect(['tooth','position','implant'].map(context=>COMPONENT_IDS.filter(id=>PROSTHESIS_COMPONENTS[id].context===context).length)).toEqual([8,2,8]);
-    expect(COMPONENT_IDS.map(id=>PROSTHESIS_COMPONENTS[id].label)).toEqual(['Szólókorona','Horgonykorona','Inlay/onlay (betét)','Hézagfog (pontic)','Kapocstartó korona','Gyökércsapos műcsonk','Gyökércsapos műcsonk gömbretenciós felépítménnyel','Primer teleszkóp','Műfog','Implantátum','Szólókorona cementezett','Szólókorona csavarozott','Horgonykorona cementezett','Horgonykorona csavarozott','Hézagfog','Gömbretenciós fej','Locator fej','Stéghorgony']);
+    expect(['tooth','position','implant'].map(context=>COMPONENT_IDS.filter(id=>PROSTHESIS_COMPONENTS[id].context===context).length)).toEqual([14,3,8]);
+    expect(COMPONENT_IDS.map(id=>PROSTHESIS_COMPONENTS[id].label)).toEqual(['Szólókorona','Horgonykorona','Inlay/onlay (betét)','Hézagfog (pontic)','Kapocstartó korona','Gyökércsapos műcsonk','Gyökércsapos műcsonk gömbretenciós felépítménnyel','Primer teleszkóp','Héj','Overlay / részleges korona','Endokorona','Szekunder teleszkóp','Kapocs','Rejtett elhorgonyzási eszköz','Műfog','Implantátum','Stégtest','Szólókorona cementezett','Szólókorona csavarozott','Horgonykorona cementezett','Horgonykorona csavarozott','Hézagfog','Gömbretenciós fej','Locator fej','Stéghorgony']);
   });
   it.each(COMPONENT_IDS)('preserves the exact identity of %s through command validation',role=>{
     expect(positionsSchema.parse([{tooth:14,role}])).toEqual([{tooth:14,role}]);

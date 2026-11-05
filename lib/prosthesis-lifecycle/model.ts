@@ -2,6 +2,7 @@ import { z } from 'zod';
 import { applyTreatmentOutcome } from '@/lib/tooth-treatment-outcome';
 import { lifecycleCategoryForType } from '@/lib/prosthesis-types';
 import { POSITION_ROLE_VALUES,MAX_PROSTHESIS_POSITIONS } from '@/lib/prosthesis-components';
+import { addToothComponentFindings } from '@/lib/prosthesis-findings';
 
 export const clinicalDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(s => {
   const d = new Date(`${s}T00:00:00Z`);
@@ -143,7 +144,7 @@ export function replayStates(states: StateEvidence[], untilId?: string) {
 }
 /** A prosthetic role never erases natural tooth loss. */
 export function projectClinicalPlan(baseline: ClinicalLayers, treatments: Array<{ toothNumber: number; treatmentCode: string }>, devices: Array<{ id:string; positions:Position[];jaw?:'felso'|'also' }>): ClinicalLayers {
-  const out = structuredClone(baseline);
+  const out = addToothComponentFindings(baseline);
   for (const t of treatments) {
     const key = String(t.toothNumber);
     if (t.treatmentCode==='implantacio') out.implants[key] = { present:true, planned:true };

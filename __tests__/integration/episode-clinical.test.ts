@@ -10,6 +10,7 @@ import { authedRequest } from './helpers/auth';
 import { createTestUser,createTestPatient,createTestEpisode,cleanupCreated } from './helpers/factories';
 import { getOhipPatientContext } from '@/lib/ohip14-stage';
 import { GET as getOhip } from '@/app/api/patients/[id]/ohip14/route';
+import { COMPONENT_IDS } from '@/lib/prosthesis-components';
 const patients:string[]=[];
 afterEach(async()=>{for(const id of patients){await getDbPool().query('DELETE FROM ohip14_responses WHERE patient_id=$1',[id]);await getDbPool().query('DELETE FROM episode_clinical_reviews WHERE patient_id=$1',[id]);await getDbPool().query('DELETE FROM clinical_dental_states WHERE patient_id=$1',[id]);await getDbPool().query('DELETE FROM prosthesis_clinical_events WHERE patient_id=$1',[id]);}patients.length=0;await cleanupCreated();});
 async function setup(){
@@ -20,6 +21,18 @@ async function setup(){
   return {user,patient,episode,content,command,save:(c:ReturnType<typeof command>)=>saveEpisodeReview(patient.id,episode.id,user.id,c),load:()=>loadEpisodeClinical(patient.id,episode.id)};
 }
 describe('Episode as the clinical observation unit',()=>{
+  it('freezes the same detailed component catalog in the reviewed intake state and preserves it after later chart edits',async()=>{
+    const s=await setup();
+    const finding={base:'root_canal',periapical:true,mobility:2,description:'Korábbi részletes lelet',components:COMPONENT_IDS};
+    const dental={...s.content.dental,meglevoFogak:{14:finding},meglevoImplantatumok:{16:'REF: eredeti LOT: megőrzött'}};
+    const saved=await s.save(s.command({content:{...s.content,dental}}));
+    const workspace=await loadClinicalWorkspace(s.patient.id),state=workspace.states.find(state=>state.id===saved.review.content.baselineStateId)!;
+    expect(state.layers.teeth[14]).toEqual(finding);expect(Object.keys(state.layers.prostheses)).toHaveLength(COMPONENT_IDS.length);
+    expect(state.layers.implants[16]).toEqual({present:true,description:'REF: eredeti LOT: megőrzött'});
+    await getDbPool().query("UPDATE patient_dental_status SET meglevo_fogak='{}'::jsonb WHERE patient_id=$1",[s.patient.id]);
+    expect((await s.load()).current?.content.dental?.meglevoFogak?.['14']).toEqual(finding);
+    expect(workspace.actual.teeth[14]).toEqual(finding);
+  });
   it('reads a selected closed episode questionnaire without substituting an open episode or unassigned legacy response',async()=>{
     const s=await setup(),newer=await createTestEpisode(undefined,s.patient.id);await getDbPool().query("UPDATE patient_episodes SET status='closed',closed_at=now() WHERE id=$1",[s.episode.id]);
     await getDbPool().query("INSERT INTO ohip14_responses(patient_id,episode_id,timepoint,notes) VALUES($1,$2,'T0','Korábbi epizód'),($1,$3,'T0','Másik nyitott epizód'),($1,NULL,'T1','Nem megfeleltetett régi válasz')",[s.patient.id,s.episode.id,newer.id]);

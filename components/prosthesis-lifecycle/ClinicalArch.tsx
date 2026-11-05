@@ -6,22 +6,31 @@ import { GEO } from '@/components/patient-form/odontogram/ToothShape';
 import type { ToothStatus } from '@/hooks/usePatientAutoSave';
 import { canonical, type ClinicalLayers } from '@/lib/prosthesis-lifecycle/model';
 import { POSITION_LABELS,positionLabel } from '@/lib/prosthesis-components';
+import { observedComponents } from '@/lib/prosthesis-findings';
+import { normalizeToothData } from '@/lib/tooth-data';
+import { describeSurfaces } from '@/components/patient-form/odontogram/tooth-surfaces';
 
 export const POSITION_ROLES=POSITION_LABELS;
 
 export function clinicalPosition(layers:ClinicalLayers,tooth:number) {
-  return {tooth:layers.teeth[tooth],implant:layers.implants[tooth],prostheses:Object.values(layers.prostheses).filter((p:any)=>p?.tooth===tooth)};
+  const components=normalizeToothData(layers.teeth[tooth] as ToothStatus)?.components??[];
+  const prostheses=Object.values(layers.prostheses).filter((p:any)=>p?.tooth===tooth);
+  for(const role of components)if(!prostheses.some((p:any)=>p?.role===role))prostheses.push({tooth,role,observed:true});
+  return {tooth:layers.teeth[tooth],implant:layers.implants[tooth]??(components.includes('position_implant')?{present:true}:undefined),prostheses};
 }
 
 export function positionDescription(layers:ClinicalLayers,tooth:number) {
   const p=clinicalPosition(layers,tooth),value=p.tooth as {base?:string;status?:string}|undefined;
   const legacy=value?.status&&['D','F','M'].includes(value.status)?readConditions(p.tooth as ToothStatus):null;
   const natural=legacy?BASE_LABELS[legacy.base]:value?.base?BASE_LABELS[value.base as keyof typeof BASE_LABELS]??value.base:p.tooth?'Dokumentált, alapállapota nem ismert':'Ismeretlen';
-  const implant=p.implant===undefined?'nem ismert':(p.implant as {present?:boolean})?.present===false?'nincs':'jelen';
+  const presence=(p.implant as {present?:boolean})?.present;
+  const implant=presence===true?'jelen':presence===false?'nincs':'nem ismert';
   const implantDescription=(p.implant as {description?:unknown})?.description;
   const detail=typeof implantDescription==='string'&&implantDescription?`; ${implantDescription}`:'';
-  const roles=p.prostheses.map((v:any)=>positionLabel(v.role)).join(', ');
-  return `Saját fog: ${natural}; implantátum: ${implant}${detail}${roles?`; fogpótlás: ${roles}`:''}`;
+  const roles=Array.from(new Set([...p.prostheses.map((v:any)=>v.role),...observedComponents(layers,tooth)])).map(role=>positionLabel(role,true)).join(', ');
+  const finding=normalizeToothData(p.tooth as ToothStatus),surfaces=describeSurfaces(tooth,finding?.surfaces??{});
+  const findings=[finding?.caries||finding?.status==='D'?'Szuvas':null,finding?.periapical?'Gyökércsúcsi eltérés':null,finding?.mobility?`Mobilitás: ${finding.mobility}`:null,surfaces?`Felszínek: ${surfaces}`:null,finding?.description].filter(Boolean);
+  return `Saját fog: ${natural}; implantátum: ${implant}${detail}${roles?`; fogpótlás: ${roles}`:''}${findings.length?`; lelet: ${findings.join('; ')}`:''}`;
 }
 
 export function archDifferences(before:ClinicalLayers,after:ClinicalLayers) {

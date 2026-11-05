@@ -27,7 +27,7 @@ describe('Odontogram components supplied by the clinician',()=>{
     clickTooth(11);choose('position','Műfog');expect(screen.getByRole('alert').textContent).toContain('Egy fogpótlás egy állcsonthoz');expect(changed).toHaveBeenCalledTimes(1);
     fireEvent.click(screen.getByRole('button',{name:'Összes elem törlése'}));choose('position','Műfog');expect(changed.mock.lastCall?.[0].jaw).toBe('felso');
   });
-  it('offers exactly the 18 supplied components in the three separate contexts',()=>{
+  it('offers the complete shared catalog of 25 components in the three separate contexts',()=>{
     setup();clickTooth(14);
     for(const context of Object.keys(COMPONENT_CONTEXTS) as ComponentContext[]){
       fireEvent.click(screen.getByRole('button',{name:COMPONENT_CONTEXTS[context]}));
@@ -35,7 +35,7 @@ describe('Odontogram components supplied by the clinician',()=>{
       const expected=COMPONENT_IDS.filter(id=>PROSTHESIS_COMPONENTS[id].context===context).map(id=>PROSTHESIS_COMPONENTS[id].label);
       expect(group.getAllByRole('button').map(button=>button.getAttribute('aria-label'))).toEqual(expected);
     }
-    expect(COMPONENT_IDS).toHaveLength(18);
+    expect(COMPONENT_IDS).toHaveLength(25);
   });
   it('keeps a post/core and crown on the same tooth, and an implant and screwed crown separately',()=>{
     const changed=setup();clickTooth(14);choose('tooth','Gyökércsapos műcsonk');choose('tooth','Szólókorona');

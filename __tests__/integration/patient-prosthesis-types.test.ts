@@ -5,7 +5,19 @@ import {PUT} from '@/app/api/patients/[id]/route';
 import {authedRequest} from './helpers/auth';
 import {createTestPatient,createTestUser,cleanupCreated} from './helpers/factories';
 import {FIXED_TYPES,REMOVABLE_TYPES} from '@/lib/prosthesis-types';
+import {COMPONENT_IDS} from '@/lib/prosthesis-components';
 afterEach(cleanupCreated);
+it('round-trips every detailed prosthetic element through the intake API without losing tooth findings or implant details',async()=>{
+ const patient=await createTestPatient(),doctor=await createTestUser(undefined,{role:'admin'});
+ const meglevoFogak={14:{base:'root_canal',periapical:true,mobility:2,description:'Korábbi lelet',surfaces:{mesial:'filling'},components:COMPONENT_IDS},16:{base:'missing',components:['position_implant','implant_single_crown_screwed']}};
+ const meglevoImplantatumok={16:'REF: eredeti LOT: megőrzött'};
+ const row=(await getDbPool().query('SELECT updated_at FROM patients WHERE id=$1',[patient.id])).rows[0];
+ const req=await authedRequest(`http://test.local/api/patients/${patient.id}`,{method:'PUT',user:{id:doctor.id,email:doctor.email,role:'admin'},body:{nev:'Szintetikus közös elemkatalógus-teszt',meglevoFogak,meglevoImplantatumok}});
+ req.headers.set('if-match',new Date(row.updated_at).toISOString());
+ const response=await PUT(req,{params:{id:patient.id}});expect(response.status).toBe(200);
+ const saved=(await getDbPool().query('SELECT meglevo_fogak,meglevo_implantatumok FROM patient_dental_status WHERE patient_id=$1',[patient.id])).rows[0];
+ expect(saved.meglevo_fogak).toEqual(meglevoFogak);expect(saved.meglevo_implantatumok).toEqual(meglevoImplantatumok);
+});
 it('round-trips multiple types through the patient API and preserves them when an old client omits the array',async()=>{
  const patient=await createTestPatient(),doctor=await createTestUser(undefined,{role:'admin'});
  const types=[FIXED_TYPES[0],FIXED_TYPES[1],REMOVABLE_TYPES[0]];

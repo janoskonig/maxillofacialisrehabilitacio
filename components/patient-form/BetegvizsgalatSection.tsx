@@ -304,8 +304,9 @@ export function BetegvizsgalatSection({
             )}
           </div>
           <p className="text-sm text-gray-600 dark:text-gray-400 mb-3">
-            Kattintson egy fogra a státusza beállításához (ép, hiányzó, tömött, korona,
-            gyökértömött, implantátum stb.). A szuvasodás külön rátehető.
+            Kattintson egy foghelyre a saját fog állapotának, a vizsgálati leletnek és a meglévő
+            fogpótlási elemeknek a megadásához. A fogpótlásoknál is használt három csoportból
+            egy foghelyhez több elem választható.
           </p>
           <Odontogram
             fogak={fogak}

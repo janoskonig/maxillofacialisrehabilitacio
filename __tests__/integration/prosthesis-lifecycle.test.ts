@@ -64,7 +64,7 @@ describe('prosthesis lifecycle with clinical dates',()=>{
     const baseline=await s.run({action:'status',episodeId:s.episode.id,mode:'assessment',layers:{...emptyLayers(),teeth:{14:{base:'sound'}}}});
     await s.run({action:'plan',episodeId:s.episode.id,baselineStateId:baseline.id,approved:false,description:'Elemek megőrzése a tervben'});
     workspace=await s.load();const plan=workspace.plans.find(p=>p.episode_id===s.episode.id);
-    expect(plan.content.devices[0].positions).toEqual(positions);expect(Object.keys(plan.content.target.prostheses)).toHaveLength(18);
+    expect(plan.content.devices[0].positions).toEqual(positions);expect(Object.keys(plan.content.target.prostheses)).toHaveLength(COMPONENT_IDS.length);
     expect(plan.content.target.prostheses[`${device.id}:14:tooth_post_core`].role).toBe('tooth_post_core');
     expect(plan.content.target.prostheses[`${device.id}:14:tooth_single_crown`].role).toBe('tooth_single_crown');
     expect(plan.content.target.teeth[14]).toEqual({base:'sound'});

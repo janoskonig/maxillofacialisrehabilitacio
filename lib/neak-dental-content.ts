@@ -2,6 +2,7 @@ import { normalizeToothData, type ToothStatus } from '@/lib/tooth-data';
 import { BASE_LABELS, readConditions, hasCaries, computeDMFT, UPPER_ROW, LOWER_ROW } from '@/components/patient-form/odontogram/tooth-conditions';
 import { describeSurfaces } from '@/components/patient-form/odontogram/tooth-surfaces';
 import type { Patient } from '@/lib/types';
+import { positionLabel } from '@/lib/prosthesis-components';
 
 export const DENTAL_CODES = {
   sound: 'É', missing: 'H', filled: 'T', crown: 'K', root_canal: 'GY', inlay: 'IN',
@@ -29,6 +30,7 @@ export function buildDentalExportContent(patient: Partial<Patient>) {
       const surfaces = describeSurfaces(number, condition.surfaces ?? {});
       if (surfaces) parts.push(`Felszínek - ${surfaces}`);
       if (condition.description?.trim()) parts.push(`Megjegyzés: ${condition.description.trim()}`);
+      if (condition.components?.length) parts.push(`Fogpótlási elemek: ${condition.components.map(role=>positionLabel(role,true)).join('; ')}`);
       if (parts.length === 0) parts.push('Nincs részletes jelölés');
     }
     return {

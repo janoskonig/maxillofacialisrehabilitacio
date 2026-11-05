@@ -1,4 +1,7 @@
 import { z } from 'zod';
+import { addToothComponentFindings } from '@/lib/prosthesis-findings';
+import { positionLabel } from '@/lib/prosthesis-components';
+import { normalizeToothData } from '@/lib/tooth-data';
 import { REASON_VALUES, patientSchema, type Patient } from '@/lib/types';
 import { budapestToday } from '@/lib/aftercare/model';
 import { normalizeDefectRaster } from '@/lib/defect-raster';
@@ -64,7 +67,7 @@ export function dentalLayers(dental:EpisodeDentalStatus):ClinicalLayers {
   for(const [position,description] of Object.entries(dental.meglevoImplantatumok??{})) {
     layers.implants[position]={present:true,description};
   }
-  return layers;
+  return addToothComponentFindings(layers);
 }
 export function hasDentalData(dental:EpisodeDentalStatus|undefined):boolean {
   return !!dental && (Object.keys(dental.meglevoFogak??{}).length>0 || Object.keys(dental.meglevoImplantatumok??{}).length>0
@@ -140,6 +143,7 @@ export function clinicalReviewText(review:EpisodeClinicalReview):string{
     ...CLINICAL_TEXT_FIELDS.filter(([key])=>c.anamnesis[key]).map(([key,label])=>`${label}: ${c.anamnesis[key]}`),
     ...CLINICAL_BOOLEAN_FIELDS.map(([key,label])=>`${label}: ${c.anamnesis[key]===null?'Nem ismert':c.anamnesis[key]?'Igen':'Nem'}`),
     ...c.surgeries.map(s=>`Műtét: ${s.occurredOn||s.approximateDate||'Időpontja nem ismert'}; ${s.procedure}; indok: ${s.indication||'Nincs adat'}; ${s.institution}; forrás: ${s.source}`),
+    ...Object.entries(c.dental?.meglevoFogak??{}).sort(([a],[b])=>Number(a)-Number(b)).flatMap(([position,value])=>(normalizeToothData(value)?.components??[]).map(role=>`${position}. foghely: ${positionLabel(role,true)}`)),
     ...Object.entries(c.dental?.meglevoImplantatumok??{}).sort(([a],[b])=>a.localeCompare(b)).map(([position,description])=>`Implantátum ${position}: ${description||'Részletek nincsenek megadva.'}`),
     ...(c.dental?.nemIsmertPoziciokbanImplantatumRészletek?[`Implantátum ismeretlen pozícióban: ${c.dental.nemIsmertPoziciokbanImplantatumRészletek}`]:[]),
     ...(c.surgeries.length?[]:[c.surgicalHistory==='none'?'Műtéti előzmény: felülvizsgálva, nem jeleztek.':'Műtéti előzmény: nem ismert.']),review.note].filter(Boolean).join('\n\n');

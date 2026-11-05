@@ -1,10 +1,15 @@
 'use client';
 
 import { useState } from 'react';
-import { BASE_LABELS,UPPER_ROW,LOWER_ROW } from '@/components/patient-form/odontogram/tooth-conditions';
+import { BASE_LABELS,NATURAL_TOOTH_BASE_OPTIONS,readConditions,patchToothConditions,UPPER_ROW,LOWER_ROW,type ToothConditions } from '@/components/patient-form/odontogram/tooth-conditions';
 import { emptyLayers, type ClinicalLayers, type Position } from '@/lib/prosthesis-lifecycle/model';
 import { ClinicalArch } from './ClinicalArch';
 import { formInput } from './WorkflowForm';
+import { ToothEditor } from '@/components/patient-form/odontogram/ToothEditor';
+import { normalizeToothData,type ToothStatus } from '@/lib/tooth-data';
+import { observedComponents,setObservedComponents } from '@/lib/prosthesis-findings';
+import { useBreakpoint } from '@/hooks/useBreakpoint';
+import { MobileBottomSheet } from '@/components/mobile/MobileBottomSheet';
 import { COMPONENT_CONTEXTS,COMPONENT_IDS,PROSTHESIS_COMPONENTS,positionLabel,MAX_PROSTHESIS_POSITIONS } from '@/lib/prosthesis-components';
 
 export function ProsthesisPositionField({jaw,positions,onChange,expanded=false}:{expanded?:boolean;jaw:'felso'|'also'|'';positions:Position[];onChange:(positions:Position[])=>void}) {
@@ -20,21 +25,50 @@ export function ProsthesisPositionField({jaw,positions,onChange,expanded=false}:
   </div></details>;
 }
 
-export function DentalAssessmentField({layers,onChange,expanded=false}:{layers:ClinicalLayers;onChange:(layers:ClinicalLayers)=>void;expanded?:boolean}) {
-  const [selected,setSelected]=useState<number|null>(null);
-  function update(layer:'teeth'|'implants',value:unknown,tooth=selected){
-    if(tooth===null)return;const next=structuredClone(layers);
-    if(value===undefined)delete next[layer][String(tooth)];else next[layer][String(tooth)]=value;
+export function DentalAssessmentField({layers,onChange,expanded=false,disabled=false}:{layers:ClinicalLayers;onChange:(layers:ClinicalLayers)=>void;expanded?:boolean;disabled?:boolean}) {
+  const [selected,setSelected]=useState<number|null>(null),[sheetOpen,setSheetOpen]=useState(false);
+  const mobile=useBreakpoint()==='mobile';
+  function updateBase(tooth:number,value:string){
+    const next=structuredClone(layers),finding={...(normalizeToothData(next.teeth[tooth] as ToothStatus)??{})};
+    if(finding.status==='D'&&finding.caries===undefined)finding.caries=true;
+    delete finding.status;
+    if(value)finding.base=value as NonNullable<typeof finding.base>;else delete finding.base;
+    if(Object.keys(finding).length)next.teeth[tooth]=finding;else delete next.teeth[tooth];
     onChange(next);
   }
-  const fields=(tooth:number)=><div className="grid gap-3 sm:grid-cols-2">
-    <label className="text-sm">Saját fog állapota<select aria-label={`${tooth}. saját fog`} className={formInput} value={(layers.teeth[tooth] as any)?.base??''} onChange={e=>update('teeth',e.target.value?{base:e.target.value}:undefined,tooth)}><option value="">Nem ismert / nincs bejegyzés</option>{Object.entries(BASE_LABELS).filter(([id])=>!['implant','bridge_pontic','denture_tooth'].includes(id)).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label>
-    <label className="text-sm">Implantátum<select aria-label={`${tooth}. implantátum`} className={formInput} value={layers.implants[tooth]===undefined?'':(layers.implants[tooth] as any)?.present?'yes':'no'} onChange={e=>update('implants',e.target.value?{present:e.target.value==='yes'}:undefined,tooth)}><option value="">Nem ismert / nincs bejegyzés</option><option value="yes">Implantátum jelen</option><option value="no">Implantátum nincs</option></select></label>
-  </div>;
-  return <div className="space-y-4 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
-    <div><h3 className="text-sm font-semibold">Mit mutatott a vizsgálat?</h3><p className="mt-1 text-xs text-slate-500">{expanded?'Minden fog adata közvetlenül szerkeszthető az alábbi mezőkben.':'Kattints egy fogra, majd add meg a megfigyelt állapotát.'} A nem vizsgált vagy nem ismert adatok üresen maradnak.</p></div>
-    <ClinicalArch layers={layers} selected={selected===null?[]:[selected]} label="Vizsgált fog kiválasztása" onSelect={expanded?undefined:setSelected}/>
-    {expanded?[UPPER_ROW,LOWER_ROW].map((row,i)=><fieldset key={i}><legend className="mb-2 text-sm font-semibold">{i?'Alsó':'Felső'} állcsont · minden fog</legend><div className="grid gap-2 md:grid-cols-2">{row.map(tooth=><div key={tooth} className="rounded-xl bg-slate-50 p-3 dark:bg-slate-900"><p className="mb-2 font-semibold">{tooth}. foghely</p>{fields(tooth)}</div>)}</div></fieldset>):selected!==null?<fieldset className="rounded-xl bg-blue-50 p-3 dark:bg-blue-950/40"><legend className="text-sm font-semibold">{selected}. foghely</legend>{fields(selected)}</fieldset>:<p className="text-sm text-slate-500">Válassz egy foghelyet a fenti ábrán.</p>}
-    <p className="text-xs text-slate-500">Saját fog és implantátum külön adat. A hiányzó saját fog helyén implantátum és fogpótlás is jelen lehet.</p>
+  function patchFinding(tooth:number,patch:Partial<ToothConditions>){
+    if(disabled)return;
+    if(patch.components){onChange(setObservedComponents(layers,tooth,patch.components));return;}
+    const next=structuredClone(layers),value=patchToothConditions(next.teeth[tooth] as ToothStatus,patch);
+    if(value===undefined)delete next.teeth[tooth];else next.teeth[tooth]=value;
+    onChange(next);
+  }
+  const fields=(tooth:number)=>{
+    const raw=normalizeToothData(layers.teeth[tooth] as ToothStatus);
+    const base=raw?.base??(raw?.status?readConditions(raw).base:''),components=observedComponents(layers,tooth);
+    const detail=<ToothEditor fdi={tooth} conditions={{...readConditions(layers.teeth[tooth] as ToothStatus),components}} showBase={false} onChange={patch=>patchFinding(tooth,patch)} disabled={disabled} touch={mobile}/>;
+    return <fieldset disabled={disabled} className="min-w-0 space-y-3">
+      <div className="grid gap-3 sm:grid-cols-2">
+        <label className="text-sm">Saját fog állapota<select aria-label={`${tooth}. saját fog`} className={formInput} value={base} onChange={e=>updateBase(tooth,e.target.value)}><option value="">Nem ismert / nincs bejegyzés</option>{base&&!NATURAL_TOOTH_BASE_OPTIONS.includes(base)&&<option value={base}>{BASE_LABELS[base as keyof typeof BASE_LABELS]??base} · korábbi jelölés</option>}{NATURAL_TOOTH_BASE_OPTIONS.map(id=><option key={id} value={id}>{BASE_LABELS[id]}</option>)}</select></label>
+        <label className="text-sm">Implantátum<select aria-label={`${tooth}. implantátum`} className={formInput} value={layers.implants[tooth]===undefined?'':(layers.implants[tooth] as any)?.present===true?'yes':(layers.implants[tooth] as any)?.present===false?'no':''} onChange={e=>{
+          const next=structuredClone(layers);for(const [key,value] of Object.entries(next.prostheses))if((value as any)?.tooth===tooth&&(value as any)?.role==='position_implant')delete next.prostheses[key];
+          const raw=normalizeToothData(next.teeth[tooth] as ToothStatus);if(raw?.components)next.teeth[tooth]={...raw,components:raw.components.filter(role=>role!=='position_implant')};
+          if(e.target.value)next.implants[tooth]={...(next.implants[tooth] as object??{}),present:e.target.value==='yes'};
+          else {const {present,...detail}=(next.implants[tooth]??{}) as Record<string,unknown>;if(Object.keys(detail).length)next.implants[tooth]=detail;else delete next.implants[tooth];}
+          onChange(next);
+        }}><option value="">Nem ismert / nincs bejegyzés</option><option value="yes">Implantátum jelen</option><option value="no">Implantátum nincs</option></select></label>
+      </div>
+      {expanded?<details><summary className="cursor-pointer text-sm">Részletes lelet és fogpótlási elemek · {components.length}</summary><div className="mt-3">{detail}</div></details>:detail}
+    </fieldset>;
+  };
+  const panel=selected!==null?<fieldset className="min-w-0 rounded-xl bg-blue-50 p-3 dark:bg-blue-950/40"><legend className="text-sm font-semibold">{selected}. foghely</legend>{fields(selected)}</fieldset>:null;
+  return <div className="min-w-0 space-y-4 rounded-xl border border-slate-200 p-3 dark:border-slate-700">
+    <div><h3 className="text-sm font-semibold">Mit mutatott a vizsgálat?</h3><p className="mt-1 text-xs text-slate-500">Kattints egy foghelyre. A vizsgálati lelet és a megfigyelt fogpótlási elemek külön megadhatók; a nem ismert adatokat hagyd üresen.</p></div>
+    <ClinicalArch layers={layers} selected={selected===null?[]:[selected]} label="Vizsgált fog kiválasztása" onSelect={expanded||disabled?undefined:tooth=>{setSelected(tooth);if(mobile)setSheetOpen(true);}}/>
+    {expanded?[UPPER_ROW,LOWER_ROW].map((row,i)=><fieldset key={i}><legend className="mb-2 text-sm font-semibold">{i?'Alsó':'Felső'} állcsont · minden fog</legend><div className="grid gap-2 md:grid-cols-2">{row.map(tooth=><div key={tooth} className="min-w-0 rounded-xl bg-slate-50 p-3 dark:bg-slate-900"><p className="mb-2 font-semibold">{tooth}. foghely</p>{fields(tooth)}</div>)}</div></fieldset>):mobile?<>
+      {selected!==null&&<button type="button" className="w-full rounded-xl border p-3 text-sm" onClick={()=>setSheetOpen(true)}>{selected}. foghely · lelet és fogpótlási elemek</button>}
+      <MobileBottomSheet open={sheetOpen} onOpenChange={setSheetOpen} title="Vizsgált foghely">{panel}<button type="button" className="mt-4 w-full rounded-xl bg-blue-700 p-3 text-sm text-white" onClick={()=>setSheetOpen(false)}>Kész – vissza a fogívhez</button></MobileBottomSheet>
+    </>:panel??<p className="text-sm text-slate-500">Válassz egy foghelyet a fenti ábrán.</p>}
+    <p className="text-xs text-slate-500">A megfigyelt elemek a vizsgálat leletét rögzítik. A készüléknyilvántartást és a kezelési tervet külön dokumentáljuk.</p>
   </div>;
 }

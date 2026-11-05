@@ -12,7 +12,7 @@ export function describeClinicalValue(v:unknown):string {
   if (typeof v==='string') return v;
   if (typeof v!=='object') return String(v);
   const o=v as Record<string,unknown>;
-  return Object.entries(o).map(([k,x])=>k==='base' ? (BASE_LABELS[x as keyof typeof BASE_LABELS]??String(x)) : k==='role'?positionLabel(String(x),true): `${k}: ${typeof x==='object'?JSON.stringify(x):String(x)}`).join('; ');
+  return Object.entries(o).map(([k,x])=>k==='base' ? (BASE_LABELS[x as keyof typeof BASE_LABELS]??String(x)) : k==='role'?positionLabel(String(x),true):k==='components'&&Array.isArray(x)?`Fogpótlási elemek: ${x.map(role=>positionLabel(String(role),true)).join(', ')}`: `${k}: ${typeof x==='object'?JSON.stringify(x):String(x)}`).join('; ');
 }
 export async function writeClinicalLayers(doc:ClinicalDocument,layers:ClinicalLayers) {
   doc.text('A hiányzó bejegyzés ismeretlen állapotot jelent. A saját fog, az implantátum és a pótlás külön réteg.',9);

@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { existingProsthesisTypesSchema } from '../prosthesis-types';
 import { TOOTH_BASES } from '../tooth-base';
+import { COMPONENT_IDS } from '../prosthesis-components';
 
 /** DB / űrlap null értékeket adhat vissza; Zod default csak undefined-re vonatkozik. */
 function patientBoolean(defaultValue: boolean) {
@@ -125,6 +126,7 @@ export const patientSchema = z.object({
         caries: z.boolean().optional(),
         periapical: z.boolean().optional(),
         mobility: z.number().int().min(0).max(3).optional(),
+        components: z.array(z.enum(COMPONENT_IDS)).max(COMPONENT_IDS.length).refine(values=>new Set(values).size===values.length,'Ismétlődő fogpótlási elem').optional(),
         // Felszín-szintű státusz.
         surfaces: z
           .record(

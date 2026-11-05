@@ -1,4 +1,5 @@
 import type { ToothBase, ToothSurfaceKey, ToothSurfaceMark } from '@/hooks/usePatientAutoSave';
+import type { ProsthesisComponent } from '@/lib/prosthesis-components';
 
 type SurfaceMap = Partial<Record<ToothSurfaceKey, ToothSurfaceMark>>;
 
@@ -79,6 +80,7 @@ interface ResolvedTooth {
   mobility: number;
   description?: string;
   surfaces: SurfaceMap;
+  components?:ProsthesisComponent[];
 }
 
 function resolveSurfaces(value: unknown): SurfaceMap {
@@ -139,6 +141,7 @@ function resolveStored(value: unknown): ResolvedTooth {
     mobility: typeof v.mobility === 'number' ? v.mobility : 0,
     description: typeof v.description === 'string' ? v.description : undefined,
     surfaces: resolveSurfaces(v.surfaces),
+    ...(Array.isArray(v.components)?{components:[...v.components] as ProsthesisComponent[]}:{}),
   };
 }
 
@@ -151,6 +154,7 @@ function toStored(t: ResolvedTooth): Record<string, unknown> | undefined {
     !t.periapical &&
     (!t.mobility || t.mobility === 0) &&
     !t.description &&
+    !t.components?.length &&
     surfaceCount === 0;
   if (isDefault) return undefined;
   const out: Record<string, unknown> = { base: t.base };
@@ -159,6 +163,7 @@ function toStored(t: ResolvedTooth): Record<string, unknown> | undefined {
   if (t.mobility && t.mobility > 0) out.mobility = t.mobility;
   if (t.description) out.description = t.description;
   if (surfaceCount > 0) out.surfaces = t.surfaces;
+  if (t.components?.length) out.components = [...t.components];
   return out;
 }
 
@@ -173,7 +178,7 @@ export function applyTreatmentOutcome(
 ): { changed: boolean; next: Record<string, unknown> | undefined } {
   const rule = TREATMENT_OUTCOME_RULES[treatmentCode];
   const resolved = resolveStored(current);
-  if (!rule) return { changed: false, next: toStored(resolved) };
+  if (!rule) return { changed: false, next:resolved.components?.length?structuredClone(current as Record<string,unknown>):toStored(resolved) };
 
   const next: ResolvedTooth = {
     base: rule.base,
@@ -182,6 +187,7 @@ export function applyTreatmentOutcome(
     mobility: rule.clearMobility ? 0 : resolved.mobility,
     description: resolved.description,
     surfaces: nextSurfaces(resolved.surfaces, rule),
+    components: resolved.components,
   };
 
   const before = toStored(resolved);

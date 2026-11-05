@@ -3,6 +3,7 @@ import { dentalLayers } from '@/lib/episode-clinical/model';
 import { FIXED_TYPES, REMOVABLE_TYPES, lifecycleCategoryForType } from '@/lib/prosthesis-types';
 import { emptyLayers, replayStates, type Position } from '@/lib/prosthesis-lifecycle/model';
 import type { ClinicalWorkspace } from '@/lib/prosthesis-lifecycle/service';
+import { addToothComponentFindings } from '@/lib/prosthesis-findings';
 
 export const CLINICAL_PROSTHESIS_TYPES = [...FIXED_TYPES, ...REMOVABLE_TYPES] as const;
 export const prosthesisCategory=lifecycleCategoryForType;
@@ -26,7 +27,7 @@ export function registrationBackground(data:Pick<ClinicalWorkspace,'states'|'leg
     return {layers:result.layers,label:`Dokumentált fogstátusz · ${latest.occurred_on}`,conflicted:result.conflicts.length>0};
   }
   const snapshot=(data.legacyStates??[]).filter(s=>s.effective_date<=day).sort((a,b)=>a.effective_date.localeCompare(b.effective_date)).at(-1);
-  if(snapshot)return {layers:{...emptyLayers(),teeth:structuredClone(snapshot.fogak??{})},label:`Korábbi fogstátusz · ${snapshot.effective_date}`,conflicted:false};
+  if(snapshot)return {layers:addToothComponentFindings({...emptyLayers(),teeth:structuredClone(snapshot.fogak??{})}),label:`Korábbi fogstátusz · ${snapshot.effective_date}`,conflicted:false};
   if(day===budapestToday()&&!(data.states??[]).length&&data.legacyDental){
     return {layers:dentalLayers(data.legacyDental),label:'Megőrzött kartonadatok · dátumuk nem igazolt',conflicted:false};
   }

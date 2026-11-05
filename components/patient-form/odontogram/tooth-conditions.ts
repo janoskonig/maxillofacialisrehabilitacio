@@ -9,6 +9,7 @@ import {
   countSurfaceMarks,
   type SurfaceMap,
 } from './tooth-surfaces';
+import { type ProsthesisComponent } from '@/lib/prosthesis-components';
 
 export type ToothGroup = 'incisor' | 'canine' | 'premolar' | 'molar';
 
@@ -21,6 +22,7 @@ export interface ToothConditions {
   description?: string;
   /** Felszín-szintű jelölések (hiányzó/üres térkép = nincs felszín-adat). */
   surfaces?: SurfaceMap;
+  components?: ProsthesisComponent[];
 }
 
 export const UPPER_ROW = [18, 17, 16, 15, 14, 13, 12, 11, 21, 22, 23, 24, 25, 26, 27, 28];
@@ -58,6 +60,7 @@ export function readConditions(value: ToothStatus | undefined): ToothConditions 
     mobility: norm.mobility ?? 0,
     description: norm.description,
     surfaces: readSurfaces(norm.surfaces),
+    ...(norm.components?.length?{components:[...norm.components]}:{}),
   };
 }
 
@@ -77,7 +80,7 @@ export function hasCaries(c: ToothConditions): boolean {
 
 /** Van-e tömés a fogon (alapállapot vagy felszín-szintű jelölés alapján). */
 export function hasFilling(c: ToothConditions): boolean {
-  return RESTORED.includes(c.base) || hasSurfaceMark(surfacesOf(c), 'filling');
+  return RESTORED.includes(c.base) || hasSurfaceMark(surfacesOf(c), 'filling') || !!c.components?.some(role=>RESTORED_COMPONENTS.includes(role));
 }
 
 /** Értelmezhetők-e felszínek ezen a fogon (hiányzó / gyökérmaradvány / retineált nem). */
@@ -96,6 +99,7 @@ export function writeConditions(c: ToothConditions): ToothStatus | undefined {
     !c.periapical &&
     (!c.mobility || c.mobility === 0) &&
     !c.description &&
+    !c.components?.length &&
     surfaceCount === 0;
   if (isDefault) return undefined;
   const out: ToothStatus = { base: c.base };
@@ -104,8 +108,24 @@ export function writeConditions(c: ToothConditions): ToothStatus | undefined {
   if (c.mobility && c.mobility > 0) out.mobility = c.mobility;
   if (c.description) out.description = c.description;
   if (surfaceCount > 0) out.surfaces = surfaces;
+  if (c.components?.length) out.components = [...c.components];
   return out;
 }
+
+/** Component edits preserve the original finding, including legacy text and unknown base states. */
+export function patchToothConditions(value:ToothStatus|undefined,patch:Partial<ToothConditions>):ToothStatus|undefined {
+  if(Object.keys(patch).every(key=>key==='components')){
+    const next={...(normalizeToothData(value)??{})};
+    if(patch.components?.length)next.components=[...patch.components];else delete next.components;
+    return Object.keys(next).length?next:undefined;
+  }
+  const next=writeConditions({...readConditions(value),...patch}),previous=normalizeToothData(value);
+  if(next&&typeof next==='object'&&!previous?.base&&!previous?.status&&patch.base===undefined)delete next.base;
+  return next;
+}
+
+/** Prosthetic base markers remain readable, but new elements use the shared component catalog. */
+export const NATURAL_TOOTH_BASE_OPTIONS:ToothBase[]=['sound','missing','filled','root_canal','root_remnant','impacted','necrotic'];
 
 /**
  * A természetes fog hiányzik-e. A hídtest és a kivehető pótlás műfoga is hiányzó
@@ -154,6 +174,7 @@ export const BASE_OPTIONS: ToothBase[] = [
 ];
 
 const RESTORED: ToothBase[] = ['filled', 'crown', 'root_canal', 'inlay'];
+const RESTORED_COMPONENTS:ProsthesisComponent[]=['tooth_single_crown','tooth_anchor_crown','tooth_clasp_crown','tooth_inlay_onlay','tooth_veneer','tooth_overlay','tooth_endocrown'];
 
 /** DMF-T index a feloldott állapotokból. */
 export function computeDMFT(fogak: Record<string, ToothStatus>): {

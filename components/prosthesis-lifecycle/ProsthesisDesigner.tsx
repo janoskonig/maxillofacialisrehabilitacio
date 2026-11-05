@@ -3,7 +3,8 @@
 import { useState } from 'react';
 import { useBreakpoint } from '@/hooks/useBreakpoint';
 import { MobileBottomSheet } from '@/components/mobile/MobileBottomSheet';
-import { COMPONENT_CONTEXTS,COMPONENT_IDS,PROSTHESIS_COMPONENTS,MAX_PROSTHESIS_POSITIONS,isDetailedPositionRole,positionLabel,positionAnnotations,type ComponentContext,type ProsthesisComponent } from '@/lib/prosthesis-components';
+import { COMPONENT_IDS,MAX_PROSTHESIS_POSITIONS,isDetailedPositionRole,positionLabel,positionAnnotations,type ProsthesisComponent } from '@/lib/prosthesis-components';
+import { ProsthesisComponentPicker } from '@/components/ProsthesisComponentPicker';
 import { Check, Layers, Link2, MoreHorizontal, RotateCcw } from 'lucide-react';
 import { UPPER_ROW,LOWER_ROW } from '@/components/patient-form/odontogram/tooth-conditions';
 import { FIXED_TYPES,REMOVABLE_TYPES,isFixedDevice } from '@/lib/prosthesis-types';
@@ -22,7 +23,6 @@ export function ProsthesisDesigner({value,onChange,background,backgroundLabel,co
 }){
   const mobile=useBreakpoint()==='mobile';
   const [selected,setSelected]=useState<number[]>([]),[multiple,setMultiple]=useState(false),[sheetOpen,setSheetOpen]=useState(false);
-  const [context,setContext]=useState<ComponentContext>('tooth');
   const initialType=String(value.specification.clinicalType??'');
   const [group,setGroup]=useState<'fixed'|'removable'|'other'|''>((FIXED_TYPES as readonly string[]).includes(initialType)?'fixed':(REMOVABLE_TYPES as readonly string[]).includes(initialType)?'removable':'');
   const [error,setError]=useState('');
@@ -55,12 +55,7 @@ export function ProsthesisDesigner({value,onChange,background,backgroundLabel,co
   const inspector=<fieldset disabled={disabled} aria-label="Foghelyhez rendelt elemek" className="min-w-0 space-y-3">
     <div><h4 className="font-semibold">{selected.length?`${selected.join(', ')}. foghely${selected.length>1?'ek':''}`:'Válassz foghelyet az ábrán'}</h4><p className="mt-1 text-xs text-slate-500">Egy foghelyhez több elem is rendelhető. A kiválasztott elemre újra kattintva eltávolíthatod.</p></div>
     {selected.length>0&&<>
-      <div role="group" aria-label="Az elem helye" className="grid grid-cols-3 gap-1">{(Object.entries(COMPONENT_CONTEXTS) as Array<[ComponentContext,string]>).map(([id,label])=><button key={id} type="button" aria-pressed={context===id} className={`min-w-0 rounded-lg border px-2 py-2 text-xs ${context===id?selectedClass:plainClass}`} onClick={()=>setContext(id)}>{label}</button>)}</div>
-      <div role="group" aria-label={`${COMPONENT_CONTEXTS[context]} választható elemek`} className="grid gap-1.5 sm:grid-cols-2 xl:grid-cols-1">{COMPONENT_IDS.filter(id=>PROSTHESIS_COMPONENTS[id].context===context).map(id=>{
-        const item=PROSTHESIS_COMPONENTS[id],count=selected.filter(tooth=>value.positions.some(p=>p.tooth===tooth&&p.role===id)).length;
-        const checked=count===selected.length,mixed=count>0&&!checked;
-        return <button key={id} type="button" aria-label={item.label} aria-pressed={mixed?'mixed':checked} className={`flex min-w-0 items-start gap-2 rounded-xl border p-2.5 text-left text-sm ${checked?selectedClass:mixed?'border-amber-400 bg-amber-50 dark:bg-amber-950':plainClass}`} onClick={()=>toggleComponent(id)}><span className="mt-0.5 flex h-4 w-4 shrink-0 items-center justify-center rounded border">{checked&&<Check className="h-3 w-3"/>}{mixed&&'−'}</span><span>{item.label}</span></button>;
-      })}</div>
+      <ProsthesisComponentPicker compact value={COMPONENT_IDS.filter(id=>selected.every(tooth=>value.positions.some(p=>p.tooth===tooth&&p.role===id)))} mixed={COMPONENT_IDS.filter(id=>selected.some(tooth=>value.positions.some(p=>p.tooth===tooth&&p.role===id))&&!selected.every(tooth=>value.positions.some(p=>p.tooth===tooth&&p.role===id)))} onToggle={toggleComponent} disabled={disabled}/>
       {value.positions.some(p=>selected.includes(p.tooth))&&<div className="space-y-1 border-t pt-2 text-xs"><p className="font-medium">Ehhez a kijelöléshez rögzítve</p>{value.positions.filter(p=>selected.includes(p.tooth)).map(p=><p key={`${p.tooth}:${p.role}`}>{p.tooth} · {positionLabel(p.role,true)}</p>)}</div>}
     </>}
     {error&&<p role="alert" className="rounded-lg bg-amber-50 p-3 text-sm text-amber-900 dark:bg-amber-950 dark:text-amber-100">{error}</p>}

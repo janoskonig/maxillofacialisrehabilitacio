@@ -15,6 +15,7 @@ import { OdontogramStyleToggle, useOdontogramStyle, type OdontogramStyle } from 
 import {
   readConditions,
   writeConditions,
+  patchToothConditions,
   archSummary,
   supportsSurfaces,
   surfacesOf,
@@ -35,6 +36,8 @@ import {
   SURFACE_MARK_LABELS,
   type SurfaceKey,
 } from './tooth-surfaces';
+import { positionCode,positionLabel } from '@/lib/prosthesis-components';
+import { normalizeToothData } from '@/lib/tooth-data';
 
 interface OdontogramProps {
   fogak: Record<string, ToothStatus>;
@@ -87,9 +90,7 @@ function applyTooth(
   patch: Partial<ToothConditions>
 ) {
   setFogak((prev) => {
-    const current = readConditions(prev[tooth]);
-    const next: ToothConditions = { ...current, ...patch };
-    const stored = writeConditions(next);
+    const stored = patchToothConditions(prev[tooth],patch);
     const ns = { ...prev };
     if (stored === undefined) delete ns[tooth];
     else ns[tooth] = stored;
@@ -150,9 +151,11 @@ function setArchMissing(
     const ns = { ...prev };
     for (const t of teeth) {
       if (allMissing) {
-        delete ns[t];
+        const finding={...(normalizeToothData(prev[t])??{})};delete finding.base;if(finding.status==='M')delete finding.status;
+        if(Object.keys(finding).length)ns[t]=finding;else delete ns[t];
       } else {
-        ns[t] = { base: 'missing' };
+        const finding={...(normalizeToothData(prev[t])??{}),base:'missing' as const};delete finding.surfaces;
+        ns[t] = finding;
       }
     }
     return ns;
@@ -251,6 +254,7 @@ function Arch({
         onClick={handleSelect}
         style={onSelect ? { cursor: 'pointer' } : undefined}
       >
+        <title>{t}. fog · {BASE_LABELS[conditions.base]}{conditions.components?.length?` · ${conditions.components.map(role=>positionLabel(role,true)).join('; ')}`:''}</title>
         {/* Kattintás-felület a fog teljes oszlopán — a rajz ALATT, hogy a
             felszín-mezők kattintása elérje a rajzot. */}
         {onSelect && (
@@ -298,6 +302,7 @@ function Arch({
         >
           {tooth}
         </text>
+        {!!conditions.components?.length&&<text x={x+TW/2} y={numberPosition==='above'?51:58} textAnchor="middle" fontSize="6" fill="#0f766e">{conditions.components.length<=2?conditions.components.map(positionCode).join('+'):`P${conditions.components.length}`}</text>}
       </g>
     );
   }
@@ -308,7 +313,7 @@ function Arch({
 
   return (
     <svg
-      viewBox={`0 ${growUp ? -pad : 0} ${W} ${VH + pad}`}
+      viewBox={`0 ${growUp ? -pad : 0} ${W} ${VH + pad + (teeth.some(tooth=>readConditions(fogak[String(tooth)]).components?.length)?8:0)}`}
       width="100%"
       preserveAspectRatio="xMidYMid meet"
       style={{ display: 'block', overflow: 'visible' }}
@@ -445,6 +450,7 @@ export function Odontogram({
             <span className="text-sm font-medium text-gray-900 dark:text-gray-100">{selected}. fog</span>
             <span className="text-xs text-gray-500 dark:text-gray-400">{BASE_LABELS[sel.base]}</span>
           </div>
+          {!!sel.components?.length&&<p className="mt-2 text-xs text-teal-700 dark:text-teal-300">{sel.components.map(role=>positionLabel(role,true)).join(' · ')}</p>}
           {selSurfacesEditable && (
             <>
               <p className="text-[11px] text-gray-600 dark:text-gray-300 mt-1.5">
@@ -503,6 +509,8 @@ export function Odontogram({
           Felső: {upper.present} megvan · {upper.missing} hiányzó · Alsó: {lower.present} megvan · {lower.missing} hiányzó
         </span>
       </div>
+
+      {!canEdit&&Object.entries(fogak).some(([,value])=>readConditions(value).components?.length)&&<details className="mt-3 rounded-xl border p-3 text-sm"><summary className="cursor-pointer font-medium">Megfigyelt fogpótlási elemek foghelyenként</summary><ul className="mt-2 space-y-2 text-xs">{Object.entries(fogak).sort(([a],[b])=>Number(a)-Number(b)).flatMap(([tooth,value])=>(readConditions(value).components??[]).map(role=><li key={`${tooth}:${role}`}>{tooth}. foghely · {positionLabel(role,true)}</li>))}</ul></details>}
 
       {canEdit && (
         <p className="text-[11px] text-gray-400 dark:text-gray-500 mt-2">
