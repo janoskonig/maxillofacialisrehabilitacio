@@ -164,6 +164,7 @@ export function PatientForm({
     id: string;
     szoveg: string;
     datuma: string;
+    hasBeenSent?: boolean;
     lastEmailStatus?: 'sent' | 'failed' | null;
     lastEmailSentAt?: string | null;
     lastEmailSentBy?: string | null;

@@ -37,6 +37,13 @@ export const GET = authedHandler(async (req, { params }) => {
         lqr.updated_at as "updatedAt",
         lqr.created_by as "createdBy",
         lqr.updated_by as "updatedBy",
+        EXISTS (
+          SELECT 1
+          FROM outbound_email_log sent_email
+          WHERE sent_email.email_type = 'lab_quote'
+            AND sent_email.status = 'sent'
+            AND sent_email.metadata->>'quoteId' = lqr.id::text
+        ) as "hasBeenSent",
         el.status as "lastEmailStatus",
         el.created_at as "lastEmailSentAt",
         el.sent_by as "lastEmailSentBy",
