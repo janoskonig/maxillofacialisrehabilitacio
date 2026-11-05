@@ -26,19 +26,19 @@ describe('Guided clinical documentation',()=>{
     fireEvent.click(within(screen.getByRole('group',{name:'Eredet'})).getByRole('button',{name:'Itt készül vagy készült'}));
     input('Megnevezés','Felső lemezes');input('Ideiglenes vagy végleges?','definitive');input('Miért indul az új elkészítési epizód?','Felső foghiány rehabilitációja');
     fireEvent.click(screen.getByRole('button',{name:'Kivehető / zárólemez'}));fireEvent.click(screen.getByRole('button',{name:'teljes lemezes fogpótlás'}));
-    fireEvent.click(screen.getByRole('button',{name:/^11. fog ·/}));
-    review();expect(screen.getByRole('region',{name:'Mentés előtti összefoglaló'}).textContent).toContain('11: Műfog');expect(save).not.toHaveBeenCalled();
+    fireEvent.click(screen.getByRole('button',{name:/^11. fog ·/}));fireEvent.click(screen.getByRole('button',{name:'Fogak helyére'}));fireEvent.click(within(screen.getByRole('group',{name:'Fogak helyére választható elemek'})).getByRole('button',{name:'Műfog'}));
+    review();expect(screen.getByRole('region',{name:'Mentés előtti összefoglaló'}).textContent).toContain('11: Fogak helyére · Műfog');expect(save).not.toHaveBeenCalled();
     fireEvent.click(screen.getByRole('button',{name:'Mentés a kartonba'}));await waitFor(()=>expect(save).toHaveBeenCalledTimes(1));
-    expect(save.mock.calls[0][0]).toMatchObject({action:'register',episodeId,jaw:'felso',role:'definitive',origin:'local',occurredOn:'2026-09-10',positions:[{tooth:11,role:'denture_tooth'}],specification:{clinicalType:'teljes lemezes fogpótlás'}});
+    expect(save.mock.calls[0][0]).toMatchObject({action:'register',episodeId,jaw:'felso',role:'definitive',origin:'local',occurredOn:'2026-09-10',positions:[{tooth:11,role:'position_denture_tooth'}],specification:{clinicalType:'teljes lemezes fogpótlás'}});
   });
   it('keeps the jaw chosen on the odontogram and blocks a second removable appliance without discarding positions',async()=>{
     const save=vi.fn().mockResolvedValue(undefined);
     render(<ClinicalEntryForm data={data} initial={{action:'register'}} onSave={save} onCancel={vi.fn()} busy={false}/>);
     evidence();fireEvent.click(within(screen.getByRole('group',{name:'Eredet'})).getByRole('button',{name:'Itt készül vagy készült'}));input('Hogyan kapcsolódjon az epizódhoz?','existing');
-    fireEvent.click(screen.getByRole('button',{name:/^11. fog ·/}));fireEvent.click(screen.getByRole('button',{name:'Kivehető / zárólemez'}));
+    fireEvent.click(screen.getByRole('button',{name:/^11. fog ·/}));fireEvent.click(screen.getByRole('button',{name:'Fogak helyére'}));fireEvent.click(within(screen.getByRole('group',{name:'Fogak helyére választható elemek'})).getByRole('button',{name:'Műfog'}));fireEvent.click(screen.getByRole('button',{name:'Kivehető / zárólemez'}));
     expect((screen.getByRole('button',{name:'teljes lemezes fogpótlás'}) as HTMLButtonElement).disabled).toBe(true);
     expect(screen.getByRole('button',{name:/^11. fog ·/}).getAttribute('aria-pressed')).toBe('true');
-    fireEvent.click(screen.getByRole('button',{name:'Kijelölés törlése'}));fireEvent.click(screen.getByRole('button',{name:/^31. fog ·/}));
+    fireEvent.click(screen.getByRole('button',{name:'Összes elem törlése'}));fireEvent.click(screen.getByRole('button',{name:/^31. fog ·/}));fireEvent.click(screen.getByRole('button',{name:'Fogak helyére'}));fireEvent.click(within(screen.getByRole('group',{name:'Fogak helyére választható elemek'})).getByRole('button',{name:'Műfog'}));
     fireEvent.click(screen.getByRole('button',{name:'teljes lemezes fogpótlás'}));input('Ideiglenes vagy végleges?','definitive');
     review();fireEvent.click(screen.getByRole('button',{name:'Mentés a kartonba'}));await waitFor(()=>expect(save).toHaveBeenCalledTimes(1));
     expect(save.mock.calls[0][0]).toMatchObject({episodeMode:'existing',episodeId,jaw:'also'});

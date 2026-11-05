@@ -14,6 +14,7 @@ import { clinicalTemplate,reviewCommandSchema } from '@/lib/episode-clinical/mod
 import { saveEpisodeReview } from '@/lib/episode-clinical/service';
 import { financingCommandSchema } from '@/lib/episode-financing/model';
 import { saveEpisodeFinancing } from '@/lib/episode-financing/service';
+import { COMPONENT_IDS } from '@/lib/prosthesis-components';
 const patientIds:string[]=[];
 afterEach(async()=>{
   const db=getDbPool();
@@ -54,6 +55,20 @@ async function editorSave(s:Awaited<ReturnType<typeof setup>>,episodeId:string,b
   }),{params:{id:episodeId}});
 }
 describe('prosthesis lifecycle with clinical dates',()=>{
+  it('stores every detailed component identity and keeps combined parts in a frozen plan',async()=>{
+    const s=await setup();
+    const positions=COMPONENT_IDS.map(role=>({tooth:14,role}));
+    const device=await s.run({action:'register',episodeId:s.episode.id,episodeMode:'existing',origin:'local',jaw:'felso',role:'definitive',prosthesisType:'fixed',label:'Szintetikus komponenskatalógus-teszt',positions});
+    let workspace=await s.load();expect(workspace.prostheses.find(p=>p.id===device.id).positions).toEqual(positions);
+    expect(workspace.actual).toEqual(emptyLayers());expect(workspace.states).toEqual([]);
+    const baseline=await s.run({action:'status',episodeId:s.episode.id,mode:'assessment',layers:{...emptyLayers(),teeth:{14:{base:'sound'}}}});
+    await s.run({action:'plan',episodeId:s.episode.id,baselineStateId:baseline.id,approved:false,description:'Elemek megőrzése a tervben'});
+    workspace=await s.load();const plan=workspace.plans.find(p=>p.episode_id===s.episode.id);
+    expect(plan.content.devices[0].positions).toEqual(positions);expect(Object.keys(plan.content.target.prostheses)).toHaveLength(18);
+    expect(plan.content.target.prostheses[`${device.id}:14:tooth_post_core`].role).toBe('tooth_post_core');
+    expect(plan.content.target.prostheses[`${device.id}:14:tooth_single_crown`].role).toBe('tooth_single_crown');
+    expect(plan.content.target.teeth[14]).toEqual({base:'sound'});
+  });
   it('round-trips detailed prosthesis classification and existing-appliance findings without creating a tooth-state event',async()=>{
     const s=await setup();
     const specification={clinicalType:'cementezett rögzítésű implantációs korona/híd',madeWhen:'2023 tavasz',madeBy:'Korábbi rendelő',satisfied:false,complaint:'Instabil',historicalCustom:'Megőrzött szabadszöveg'};

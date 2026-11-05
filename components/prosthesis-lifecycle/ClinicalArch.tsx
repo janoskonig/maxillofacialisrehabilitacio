@@ -5,8 +5,9 @@ import { ToothShapeChart } from '@/components/patient-form/odontogram/ToothShape
 import { GEO } from '@/components/patient-form/odontogram/ToothShape';
 import type { ToothStatus } from '@/hooks/usePatientAutoSave';
 import { canonical, type ClinicalLayers } from '@/lib/prosthesis-lifecycle/model';
+import { POSITION_LABELS,positionLabel } from '@/lib/prosthesis-components';
 
-export const POSITION_ROLES:Record<string,string>={abutment:'Pillér',pontic:'Hídtest',denture_tooth:'Műfog',implant:'Implantátum',clasp:'Kapocs',attachment:'Elhorgonyzás'};
+export const POSITION_ROLES=POSITION_LABELS;
 
 export function clinicalPosition(layers:ClinicalLayers,tooth:number) {
   return {tooth:layers.teeth[tooth],implant:layers.implants[tooth],prostheses:Object.values(layers.prostheses).filter((p:any)=>p?.tooth===tooth)};
@@ -19,7 +20,7 @@ export function positionDescription(layers:ClinicalLayers,tooth:number) {
   const implant=p.implant===undefined?'nem ismert':(p.implant as {present?:boolean})?.present===false?'nincs':'jelen';
   const implantDescription=(p.implant as {description?:unknown})?.description;
   const detail=typeof implantDescription==='string'&&implantDescription?`; ${implantDescription}`:'';
-  const roles=p.prostheses.map((v:any)=>POSITION_ROLES[v.role]??v.role).join(', ');
+  const roles=p.prostheses.map((v:any)=>positionLabel(v.role)).join(', ');
   return `Saját fog: ${natural}; implantátum: ${implant}${detail}${roles?`; fogpótlás: ${roles}`:''}`;
 }
 
@@ -62,7 +63,7 @@ export function ClinicalArch({layers,jaw,selected=[],changed=[],marked=[],onSele
                 {!!p.prostheses.length&&<path d={geometry.crown} transform={row.upper?'translate(0,40) scale(1,-1)':undefined} fill="#99f6e4" fillOpacity="0.8" stroke="#0f766e" strokeWidth="1.1" strokeDasharray="2 1"/>}
               </svg>
               <span className="flex h-3 items-center justify-center gap-0.5 text-[9px] font-bold"><span className={implant?'text-violet-700 dark:text-violet-300':'text-slate-300 dark:text-slate-700'}>{implant?'I':'·'}</span><span className={p.prostheses.length?'text-teal-700 dark:text-teal-300':'text-slate-300 dark:text-slate-700'}>{p.prostheses.length?'P':'·'}</span></span>
-              {Object.keys(annotations).length>0&&<span className="h-3 text-[9px] font-bold text-blue-700 dark:text-blue-300">{annotations[n]??''}</span>}
+              {Object.keys(annotations).length>0&&<span className="h-3 max-w-full truncate text-[9px] font-bold text-blue-700 dark:text-blue-300">{annotations[n]??''}</span>}
             </>;
             const style={paddingTop:compact?2:Math.round((q===0?i:7-i)*1.5)+2,paddingBottom:4};
             return onSelect?<button key={n} type="button" aria-label={text} aria-pressed={active} title={text} onClick={()=>onSelect(n)} className={`flex min-w-0 flex-col items-center rounded-xl border-2 transition-colors focus-visible:outline focus-visible:outline-2 focus-visible:outline-blue-500 ${color}`} style={style}>{body}</button>:

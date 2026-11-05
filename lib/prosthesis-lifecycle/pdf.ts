@@ -1,4 +1,5 @@
 import { rgb } from 'pdf-lib';
+import { positionLabel } from '@/lib/prosthesis-components';
 import type { Patient } from '@/lib/types';
 import { ClinicalDocument } from '@/lib/pdf/clinical-document';
 import { LAYOUT } from '@/lib/pdf/layout';
@@ -11,7 +12,7 @@ export function describeClinicalValue(v:unknown):string {
   if (typeof v==='string') return v;
   if (typeof v!=='object') return String(v);
   const o=v as Record<string,unknown>;
-  return Object.entries(o).map(([k,x])=>k==='base' ? (BASE_LABELS[x as keyof typeof BASE_LABELS]??String(x)) : `${k}: ${typeof x==='object'?JSON.stringify(x):String(x)}`).join('; ');
+  return Object.entries(o).map(([k,x])=>k==='base' ? (BASE_LABELS[x as keyof typeof BASE_LABELS]??String(x)) : k==='role'?positionLabel(String(x),true): `${k}: ${typeof x==='object'?JSON.stringify(x):String(x)}`).join('; ');
 }
 export async function writeClinicalLayers(doc:ClinicalDocument,layers:ClinicalLayers) {
   doc.text('A hiányzó bejegyzés ismeretlen állapotot jelent. A saját fog, az implantátum és a pótlás külön réteg.',9);
@@ -53,7 +54,7 @@ export async function clinicalPlanPDF(patient:Partial<Patient>, plan:{version:nu
   for (const p of plan.content.devices) {
     doc.text(`${p.label} | ${p.id} | ${p.jaw} | ${p.role} | ${p.prosthesis_type}`,10,true);
     doc.text(describeClinicalValue(p.specification),9);
-    for (const position of p.positions) doc.text(`${position.tooth}: ${position.role}`,9);
+    for (const position of p.positions) doc.text(`${position.tooth}: ${positionLabel(position.role,true)}`,9);
   }
   doc.heading('Munkafázisok');
   for (const w of plan.content.workPhases) doc.text(`${w.custom_label??w.work_phase_code} | pótlások: ${(w.prosthesis_ids??[]).join(', ')||'epizódszintű / ellenőrzendő'}`,9);

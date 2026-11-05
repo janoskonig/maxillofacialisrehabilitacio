@@ -1,6 +1,7 @@
 import { z } from 'zod';
 import { applyTreatmentOutcome } from '@/lib/tooth-treatment-outcome';
 import { lifecycleCategoryForType } from '@/lib/prosthesis-types';
+import { POSITION_ROLE_VALUES,MAX_PROSTHESIS_POSITIONS } from '@/lib/prosthesis-components';
 
 export const clinicalDay = z.string().regex(/^\d{4}-\d{2}-\d{2}$/).refine(s => {
   const d = new Date(`${s}T00:00:00Z`);
@@ -14,8 +15,8 @@ export type ClinicalLayers = z.infer<typeof layersSchema>;
 export const emptyLayers = (): ClinicalLayers => ({ teeth: {}, implants: {}, prostheses: {} });
 export const positionsSchema = z.array(z.object({
   tooth: z.number().int().refine(n => /^[1-4][1-8]$/.test(String(n)), 'FDI fogszám szükséges'),
-  role: z.enum(['abutment','pontic','denture_tooth','implant','clasp','attachment']),
-})).max(32).refine(p => new Set(p.map(x => `${x.tooth}:${x.role}`)).size === p.length, 'Ismétlődő pozíció');
+  role: z.enum(POSITION_ROLE_VALUES),
+})).max(MAX_PROSTHESIS_POSITIONS).refine(p => new Set(p.map(x => `${x.tooth}:${x.role}`)).size === p.length, 'Ismétlődő pozíció');
 export type Position = z.infer<typeof positionsSchema>[number];
 const meta = {
   requestKey: uuid, occurredOn: clinicalDay, occurredAt: z.string().datetime({ offset: true }).nullable().default(null),

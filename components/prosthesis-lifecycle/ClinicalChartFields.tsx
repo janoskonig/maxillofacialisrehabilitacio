@@ -3,19 +3,19 @@
 import { useState } from 'react';
 import { BASE_LABELS,UPPER_ROW,LOWER_ROW } from '@/components/patient-form/odontogram/tooth-conditions';
 import { emptyLayers, type ClinicalLayers, type Position } from '@/lib/prosthesis-lifecycle/model';
-import { ClinicalArch, POSITION_ROLES } from './ClinicalArch';
+import { ClinicalArch } from './ClinicalArch';
 import { formInput } from './WorkflowForm';
+import { COMPONENT_CONTEXTS,COMPONENT_IDS,PROSTHESIS_COMPONENTS,positionLabel,MAX_PROSTHESIS_POSITIONS } from '@/lib/prosthesis-components';
 
-const roleHints:Record<string,string>={denture_tooth:'A pótlás műfoga ezen a helyen.',pontic:'A híd hiányzó fogat helyettesítő része.',abutment:'A pótlást tartó pillérfog.',implant:'A pótláshoz tartozó implantátum helye.',clasp:'Kapocs helye.',attachment:'Egyéb elhorgonyzó elem helye.'};
 export function ProsthesisPositionField({jaw,positions,onChange,expanded=false}:{expanded?:boolean;jaw:'felso'|'also'|'';positions:Position[];onChange:(positions:Position[])=>void}) {
-  const [role,setRole]=useState<Position['role']>('denture_tooth');
+  const [role,setRole]=useState<Position['role']|''>('');
   const selected=positions.filter(p=>p.role===role).map(p=>p.tooth);
   const layers=emptyLayers();for(const p of positions)layers.prostheses[`${p.tooth}:${p.role}`]=p;
   return <details className="rounded-xl border border-slate-200 p-3 dark:border-slate-700" open={expanded}><summary className="cursor-pointer text-sm font-medium">A pótlás helye a fogíven · {positions.length?`${positions.length} megadott pozíció`:'ha ismert'}</summary><div className="mt-3 space-y-3">
-    <p className="text-xs text-slate-500">Válassz szerepet, majd kattints a megfelelő foghelyekre. Ugyanarra a foghelyre több különböző szerepet is megadhatsz.</p>
-    <label className="block text-sm font-medium">Mit jelölsz a fogíven?<select className={formInput} value={role} onChange={e=>setRole(e.target.value as Position['role'])}>{Object.entries(POSITION_ROLES).map(([id,label])=><option key={id} value={id}>{label}</option>)}</select></label><p className="text-xs text-slate-500">{roleHints[role]}</p>
-    {!jaw?<p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">Előbb válaszd ki, hogy felső vagy alsó fogpótlásról van szó.</p>:<ClinicalArch jaw={jaw} layers={layers} selected={selected} label="Fogpótlás helyének kijelölése" onSelect={tooth=>onChange(selected.includes(tooth)?positions.filter(p=>!(p.tooth===tooth&&p.role===role)):[...positions,{tooth,role}])}/>}
-    {!!positions.length&&<div className="flex flex-wrap gap-2">{positions.map((p,i)=><button key={`${p.tooth}:${p.role}`} type="button" aria-label={`${p.tooth}. ${POSITION_ROLES[p.role]} eltávolítása`} className="rounded-lg border px-2 py-1 text-xs" onClick={()=>onChange(positions.filter((_,j)=>j!==i))}>{p.tooth} · {POSITION_ROLES[p.role]} ×</button>)}</div>}
+    <p className="text-xs text-slate-500">Válassz elemet, majd kattints a megfelelő foghelyekre. Egy foghelyhez több elem is rendelhető; a korábbi jelölések megmaradnak.</p>
+    <label className="block text-sm font-medium">Mit jelölsz a fogíven?<select className={formInput} value={role} onChange={e=>setRole(e.target.value as Position['role'])}><option value="">Válassz elemet…</option>{Object.entries(COMPONENT_CONTEXTS).map(([context,label])=><optgroup key={context} label={label}>{COMPONENT_IDS.filter(id=>PROSTHESIS_COMPONENTS[id].context===context).map(id=><option key={id} value={id}>{PROSTHESIS_COMPONENTS[id].label}</option>)}</optgroup>)}</select></label>{!role&&<p className="text-xs text-slate-500">Előbb válassz konkrét elemet a három csoport egyikéből.</p>}
+    {!jaw?<p className="rounded-xl bg-amber-50 p-3 text-sm text-amber-900">Előbb válaszd ki, hogy felső vagy alsó fogpótlásról van szó.</p>:<ClinicalArch jaw={jaw} layers={layers} selected={selected} label="Fogpótlás helyének kijelölése" onSelect={role?tooth=>{if(selected.includes(tooth))onChange(positions.filter(p=>!(p.tooth===tooth&&p.role===role)));else if(positions.length<MAX_PROSTHESIS_POSITIONS)onChange([...positions,{tooth,role}]);}:undefined}/>}
+    {!!positions.length&&<div className="flex flex-wrap gap-2">{positions.map((p,i)=><button key={`${p.tooth}:${p.role}`} type="button" aria-label={`${p.tooth}. ${positionLabel(p.role,true)} eltávolítása`} className="rounded-lg border px-2 py-1 text-xs" onClick={()=>onChange(positions.filter((_,j)=>j!==i))}>{p.tooth} · {positionLabel(p.role,true)} ×</button>)}</div>}
     <p className="text-xs text-slate-500">A pótlás helyének kijelölése a saját fogak vizsgálati állapotát nem módosítja.</p>
   </div></details>;
 }
