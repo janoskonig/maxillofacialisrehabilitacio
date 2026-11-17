@@ -11,6 +11,7 @@ import { ResearchConsentCard } from '@/components/patient-portal/ResearchConsent
 import { PrivacyNoticeCard } from '@/components/patient-portal/PrivacyNoticeCard';
 import { DisplayScaleCard } from '@/components/patient-portal/DisplayScaleCard';
 import { HealthHabitsCard } from '@/components/patient-portal/HealthHabitsCard';
+import { QuestionnaireReminderOptOutCard } from '@/components/QuestionnaireReminderOptOutCard';
 
 interface Patient {
   id: string;
@@ -502,6 +503,8 @@ export function PatientProfileView() {
       <HealthHabitsCard />
 
       <DisplayScaleCard />
+
+      <QuestionnaireReminderOptOutCard mode="portal" />
 
       <PrivacyNoticeCard />
 

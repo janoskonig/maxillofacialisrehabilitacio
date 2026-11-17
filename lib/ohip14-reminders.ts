@@ -8,6 +8,7 @@ import {
   pushPatientOhipReminder,
   escalateOhipToKezeloorvos,
   closeOpenOhipPatientTasks,
+  closeOpenOhipEscalationTasks,
 } from '@/lib/ohip14-patient-tasks';
 import { OHIP14_TIMEPOINTS, type OHIP14Timepoint } from '@/lib/types';
 
@@ -22,6 +23,8 @@ interface ReminderResult {
   tasksCreated: number;
   /** Kezelőorvoshoz eszkalált esetek száma. */
   escalated: number;
+  /** Leiratkozott (kerdoiv_emlekezteto_tiltva) betegek száma — nekik semmi nem megy. */
+  optedOut: number;
 }
 
 /**
@@ -31,7 +34,7 @@ interface ReminderResult {
  */
 export async function sendOhipReminders(): Promise<ReminderResult> {
   const pool = getDbPool();
-  const result: ReminderResult = { sent: 0, skipped: 0, errors: 0, tasksCreated: 0, escalated: 0 };
+  const result: ReminderResult = { sent: 0, skipped: 0, errors: 0, tasksCreated: 0, escalated: 0, optedOut: 0 };
   const envUrl = process.env.NEXT_PUBLIC_BASE_URL || '';
   const baseUrl = envUrl && !envUrl.includes('localhost') ? envUrl : 'https://rehabilitacios-protetika.hu';
 
@@ -42,6 +45,7 @@ export async function sendOhipReminders(): Promise<ReminderResult> {
       p.nev,
       p.nem,
       p.email,
+      p.kerdoiv_emlekezteto_tiltva AS opted_out,
       pe.id AS episode_id
     FROM patients p
     JOIN patient_episodes pe ON pe.patient_id = p.id AND pe.status = 'open'
@@ -56,6 +60,16 @@ export async function sendOhipReminders(): Promise<ReminderResult> {
   for (const row of patientsRes.rows) {
     try {
       const { patient_id, nev, nem, email, episode_id: openEpisodeId } = row;
+
+      // A beteg nem kér kérdőív-emlékeztetőt → se e-mail, se push/portál-feladat,
+      // se orvosi eszkaláció; a már nyitott feladatokat lezárjuk.
+      if (row.opted_out === true) {
+        await closeOpenOhipPatientTasks(patient_id);
+        await closeOpenOhipEscalationTasks(patient_id);
+        result.optedOut++;
+        result.skipped++;
+        continue;
+      }
 
       const ohipCtx = await getOhipPatientContext(pool, patient_id);
       const episode_id = ohipCtx.episodeId ?? openEpisodeId;

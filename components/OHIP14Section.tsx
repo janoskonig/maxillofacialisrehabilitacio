@@ -14,6 +14,7 @@ import { ohip14Questions, calculateOHIP14Scores } from '@/lib/ohip14-questions';
 import { getTimepointAvailability, type TimepointAvailability } from '@/lib/ohip14-timepoint-stage';
 import { getOhip14ImpactBand } from '@/lib/ohip14-score-interpretation';
 import { Ohip14StaffScoreGuide } from '@/components/Ohip14StaffScoreGuide';
+import { QuestionnaireReminderOptOutCard } from '@/components/QuestionnaireReminderOptOutCard';
 import { useToast } from '@/contexts/ToastContext';
 import { FileText, Save, Loader2, CheckCircle, AlertCircle, Lock, CalendarClock, Mail } from 'lucide-react';
 
@@ -507,6 +508,13 @@ export function OHIP14Section({
           response={activeTimepoint ? responses[activeTimepoint] : null}
         />
       )}
+
+      <QuestionnaireReminderOptOutCard
+        mode={isPatientPortal ? 'portal' : 'staff'}
+        patientId={patientId}
+        readOnly={isViewOnly}
+        compact
+      />
 
       {!isPatientPortal && reminderEmailLogs.length > 0 && (
         <div className="mb-6 p-3 bg-gray-50 dark:bg-gray-800/60 border border-gray-200 dark:border-gray-800 rounded-lg">
