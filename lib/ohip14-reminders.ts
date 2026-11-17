@@ -11,6 +11,7 @@ import {
   closeOpenOhipEscalationTasks,
 } from '@/lib/ohip14-patient-tasks';
 import { OHIP14_TIMEPOINTS, type OHIP14Timepoint } from '@/lib/types';
+import { activePatientSql } from './patient-inactivation-sql';
 
 const ALL_TIMEPOINTS: readonly OHIP14Timepoint[] = OHIP14_TIMEPOINTS;
 const REMINDER_COOLDOWN_DAYS = 7;
@@ -51,6 +52,7 @@ export async function sendOhipReminders(): Promise<ReminderResult> {
     JOIN patient_episodes pe ON pe.patient_id = p.id AND pe.status = 'open'
     WHERE p.email IS NOT NULL AND p.email != ''
       AND p.halal_datum IS NULL
+        AND ${activePatientSql('p')}
     ORDER BY p.id
   `);
 

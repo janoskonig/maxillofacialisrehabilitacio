@@ -129,7 +129,7 @@ export function DocumentLinkPicker({
       setLoadingPatientSearch(true);
       try {
         const res = await fetch(
-          `/api/patients?q=${encodeURIComponent(q)}&limit=20`,
+          `/api/patients?q=${encodeURIComponent(q)}&status=all&limit=20`,
           { credentials: 'include' },
         );
         if (!res.ok) throw new Error('Beteglista hiba');

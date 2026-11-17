@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
+import { activePatientSql } from '@/lib/patient-inactivation-sql';
 
 export const dynamic = 'force-dynamic';
 
@@ -19,12 +20,13 @@ export const GET = authedHandler(async (req, { auth }) => {
       pcs.notes
     FROM patient_current_stage pcs
     JOIN patients p ON p.id = pcs.patient_id
+    WHERE ${activePatientSql('p')}
   `;
 
   const queryParams: string[] = [];
 
   if (stage) {
-    query += ` WHERE pcs.stage = $1`;
+    query += ` AND pcs.stage = $1`;
     queryParams.push(stage);
   }
 

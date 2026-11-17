@@ -350,6 +350,8 @@ export async function searchPatients(
     phase?: import('./patient-list-filters').PatientQuickView;
     filters?: import('./patient-list-filters').PatientAdditionalFilter[];
     includeFilterCounts?: boolean;
+    /** Inaktivált betegek (116): alapból 'active'. */
+    status?: 'active' | 'inactive' | 'all';
     limit?: number;
     offset?: number;
     sort?: string;
@@ -359,6 +361,7 @@ export async function searchPatients(
   patients: Patient[];
   total: number;
   filterCounts?: import('./patient-list-filters').PatientFilterCounts;
+  inactiveTotal?: number;
 }> {
   try {
     const params = new URLSearchParams();
@@ -376,6 +379,9 @@ export async function searchPatients(
     }
     if (options?.filters?.length) {
       params.append('filters', options.filters.join(','));
+    }
+    if (options?.status && options.status !== 'active') {
+      params.append('status', options.status);
     }
     if (options?.includeFilterCounts != null) {
       params.append('includeFilterCounts', String(options.includeFilterCounts));
@@ -404,9 +410,15 @@ export async function searchPatients(
       patients: Patient[];
       total?: number;
       filterCounts?: import('./patient-list-filters').PatientFilterCounts;
+      inactiveTotal?: number;
     }>(response);
     if (options?.limit != null && typeof data.total === 'number') {
-      return { patients: data.patients, total: data.total, filterCounts: data.filterCounts };
+      return {
+        patients: data.patients,
+        total: data.total,
+        filterCounts: data.filterCounts,
+        inactiveTotal: data.inactiveTotal,
+      };
     }
     return data.patients;
   } catch (error) {

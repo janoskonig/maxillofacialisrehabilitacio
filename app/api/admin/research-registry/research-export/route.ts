@@ -12,6 +12,7 @@ import {
   ResearchExportBlockedError,
   filterPatientsEligibleForResearchExport,
 } from '@/lib/research-registry/research-export-gate';
+import { activePatientSql } from '@/lib/patient-inactivation-sql';
 
 export const dynamic = 'force-dynamic';
 
@@ -83,6 +84,8 @@ export const POST = roleHandler(['admin', 'fogpótlástanász'], async (req, { a
         FROM patient_field_na
         WHERE patient_id = p.id
       ) na ON true
+      -- Inaktivált (nem célcsoport, duplikált stb.) betegek nem kerülnek a registrybe.
+      WHERE ${activePatientSql('p')}
     `);
     const allIds = patients.rows.map((r) => String(r.id));
     const { eligible, excluded } = await filterPatientsEligibleForResearchExport(

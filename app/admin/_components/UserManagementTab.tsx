@@ -365,7 +365,7 @@ export function UserManagementTab() {
     const timer = setTimeout(async () => {
       setPatientsLoading(true);
       try {
-        const res = await fetch(`/api/patients?q=${encodeURIComponent(patientSearchQuery)}`, { credentials: 'include' });
+        const res = await fetch(`/api/patients?q=${encodeURIComponent(patientSearchQuery)}&status=all`, { credentials: 'include' });
         if (res.ok) { const data = await res.json(); setPatients((data.patients || []).slice(0, 20)); } else { setPatients([]); }
       } catch { setPatients([]); } finally { setPatientsLoading(false); }
     }, 300);

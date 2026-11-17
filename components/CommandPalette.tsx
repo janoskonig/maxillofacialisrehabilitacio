@@ -72,7 +72,7 @@ export function CommandPalette({ role }: CommandPaletteProps) {
     setSearching(true);
     const timer = window.setTimeout(async () => {
       try {
-        const res = await fetch(`/api/patients?q=${encodeURIComponent(q)}&limit=8`, {
+        const res = await fetch(`/api/patients?q=${encodeURIComponent(q)}&status=all&limit=8`, {
           credentials: 'include',
           signal: controller.signal,
         });

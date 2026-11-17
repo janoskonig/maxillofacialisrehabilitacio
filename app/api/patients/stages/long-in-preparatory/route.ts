@@ -1,6 +1,7 @@
 import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { roleHandler } from '@/lib/api/route-handler';
+import { activePatientSql } from '@/lib/patient-inactivation-sql';
 
 const PREPARATORY_STAGES = ['STAGE_0', 'STAGE_1', 'STAGE_2', 'STAGE_3', 'STAGE_4'];
 
@@ -32,6 +33,7 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
       JOIN patients p ON p.id = e.patient_id
       LEFT JOIN patient_referral r ON r.patient_id = p.id
       WHERE e.status = 'open'
+        AND ${activePatientSql('p')}
       ${institutionFilter}
       ORDER BY e.patient_id, e.id, s.at DESC
     ),

@@ -8,6 +8,11 @@ import { Patient, PatientStageEntry } from '@/lib/types';
 import { User } from 'lucide-react';
 import { AppShell } from '@/components/layout/AppShell';
 import { PatientHeaderBar } from '@/components/PatientHeaderBar';
+import {
+  PatientInactivateButton,
+  PatientInactiveBanner,
+  usePatientInactivation,
+} from '@/components/PatientInactivation';
 import { PatientOverviewTab } from '@/components/PatientOverviewTab';
 import { PatientCommunicationTab } from '@/components/PatientCommunicationTab';
 import { treatmentWorkspaceHref } from '@/lib/treatment-workspace';
@@ -71,6 +76,7 @@ export default function PatientViewPage() {
   const [activeTab, setActiveTab] = useState<TabType>('attekintes');
   const [loadedTabs, setLoadedTabs] = useState<Set<TabType>>(new Set<TabType>(['attekintes']));
   const [currentStage, setCurrentStage] = useState<PatientStageEntry | null>(null);
+  const { state: inactivation, setState: setInactivation } = usePatientInactivation(patientId);
 
   useEffect(() => {
     const checkAuth = async () => {
@@ -208,6 +214,8 @@ export default function PatientViewPage() {
     setLoadedTabs((prev) => (prev.has(tab) ? prev : new Set<TabType>([...Array.from(prev), tab])));
   }, [router,patientId,episodeContextId]);
 
+  const canManageInactivation = userRole === 'admin' || userRole === 'fogpótlástanász';
+
   const isSchedulingRole =
     userRole === 'admin' || userRole === 'beutalo_orvos' || userRole === 'fogpótlástanász';
 
@@ -229,18 +237,35 @@ export default function PatientViewPage() {
       backTo="/patients"
       maxWidth="xl"
       actions={
-        userRole === 'admin' && patientId ? (
-          <button
-            onClick={handleImpersonate}
-            className="btn-secondary flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-sm text-purple-600 dark:text-purple-300 hover:text-purple-700"
-            title="Belépés betegként"
-          >
-            <User className="w-4 h-4" />
-            <span className="hidden sm:inline">Belépés betegként</span>
-          </button>
+        canManageInactivation && patientId ? (
+          <>
+            <PatientInactivateButton
+              patientId={patientId}
+              patientName={patient.nev}
+              state={inactivation}
+              onChanged={setInactivation}
+            />
+            {userRole === 'admin' && (
+              <button
+                onClick={handleImpersonate}
+                className="btn-secondary flex items-center gap-1 sm:gap-2 px-2 sm:px-3 py-1.5 sm:py-2 text-sm text-purple-600 dark:text-purple-300 hover:text-purple-700"
+                title="Belépés betegként"
+              >
+                <User className="w-4 h-4" />
+                <span className="hidden sm:inline">Belépés betegként</span>
+              </button>
+            )}
+          </>
         ) : undefined
       }
     >
+      <PatientInactiveBanner
+        patientId={patientId}
+        state={inactivation}
+        canManage={canManageInactivation}
+        onChanged={setInactivation}
+      />
+
       {/* Állandó beteg-fejléc — minden fülön */}
       <PatientHeaderBar
         patient={patient}

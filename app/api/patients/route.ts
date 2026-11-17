@@ -7,6 +7,7 @@ import { logActivity, logActivityWithAuth } from '@/lib/activity';
 import { authedHandler } from '@/lib/api/route-handler';
 import { logger } from '@/lib/logger';
 import { PATIENT_LIST_FIELDS, PATIENT_SELECT_FIELDS } from '@/lib/queries/patient-fields';
+import { activePatientSql, inactivePatientSql, inactivationSelectSql } from '@/lib/patient-inactivation-sql';
 import { REQUIRED_DOC_TAGS } from '@/lib/clinical-rules';
 import { getPatientCompletenessRow } from '@/lib/patient-data-completeness';
 import { normalizeDefectRaster } from '@/lib/defect-raster';
@@ -140,6 +141,14 @@ export const GET = authedHandler(async (req, { auth }) => {
   const searchParams = req.nextUrl.searchParams;
   const query = searchParams.get('q');
   const forMention = searchParams.get('forMention') === 'true';
+  // Inaktivált betegek (117): alapból rejtettek; `status=inactive` csak őket,
+  // `status=all` mindenkit mutat (globális kereső, összevonás, @-említés).
+  const statusParam = searchParams.get('status');
+  const patientStatus: 'active' | 'inactive' | 'all' = forMention
+    ? 'all'
+    : statusParam === 'inactive' || statusParam === 'all'
+      ? statusParam
+      : 'active';
   const view = searchParams.get('view') as ViewPreset | null;
   const requestedScope = searchParams.get('scope');
   const requestedQuickView = searchParams.get('phase');
@@ -183,6 +192,9 @@ export const GET = authedHandler(async (req, { auth }) => {
   // $1 minden listalekérdezésben a bejelentkezett user. A filter_user join
   // biztosítja az intézményhelyes „következő konzílium” meghatározását is.
   const baseParams: unknown[] = [auth.userId];
+  if (patientStatus !== 'all') {
+    baseConditions.push(patientStatus === 'inactive' ? inactivePatientSql('p') : activePatientSql('p'));
+  }
 
   // When forMention=true and query is in mention format (contains +),
   // skip SQL ILIKE (which can't match accented names with spaces) and
@@ -220,7 +232,7 @@ export const GET = authedHandler(async (req, { auth }) => {
   }
   const fromClause = fromParts.join('\n       ');
 
-  const selectFields = prefixedListFields;
+  const selectFields = `${prefixedListFields}, ${inactivationSelectSql('p')}`;
   const orderBy = `p.${sortColumn}`;
 
   if (sqlQuery) {
@@ -318,11 +330,16 @@ export const GET = authedHandler(async (req, { auth }) => {
       )
     : Promise.resolve(null);
 
-  const [result, countResult, scopeCountsResult, filterCountsResult] = await Promise.all([
+  const inactiveCountPromise = includeFilterCounts
+    ? pool.query(`SELECT COUNT(*)::int AS total FROM patients p WHERE ${inactivePatientSql('p')}`)
+    : Promise.resolve(null);
+
+  const [result, countResult, scopeCountsResult, filterCountsResult, inactiveCountResult] = await Promise.all([
     resultPromise,
     totalPromise,
     scopeCountsPromise,
     filterCountsPromise,
+    inactiveCountPromise,
   ]);
   
   const total = Number(countResult.rows[0]?.total ?? 0);
@@ -418,6 +435,7 @@ export const GET = authedHandler(async (req, { auth }) => {
     patients,
     total,
     filterCounts,
+    inactiveTotal: inactiveCountResult ? Number(inactiveCountResult.rows[0]?.total ?? 0) : undefined,
   }, { status: 200 });
 });
 

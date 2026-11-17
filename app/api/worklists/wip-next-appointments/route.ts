@@ -23,6 +23,7 @@ import { enrichWorklistBookableWindows } from '@/lib/worklist-bookable-windows';
 import { enrichWorklistPriorAttempts } from '@/lib/worklist-prior-attempts';
 import { probeColumnExists } from '@/lib/schema-probe';
 import { z } from 'zod';
+import { activePatientSql } from '@/lib/patient-inactivation-sql';
 
 export const dynamic = 'force-dynamic';
 
@@ -83,6 +84,7 @@ export const GET = authedHandler(async (req, { auth }) => {
        FROM stage_events ORDER BY episode_id, at DESC
      ) se ON pe.id = se.episode_id
      WHERE pe.status = 'open'
+     AND ${activePatientSql('p')}
      AND (se.stage_code IS NULL OR se.stage_code IN (${wipStageList}))
      ${extraWhere}
      ORDER BY pe.opened_at ASC`,

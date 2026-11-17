@@ -2,6 +2,7 @@ import { NextRequest, NextResponse } from 'next/server';
 import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
 import { fetchVirtualAppointments } from '@/lib/virtual-appointments-service';
+import { activePatientSql } from '@/lib/patient-inactivation-sql';
 
 const REASON_VALUES = ['traumás sérülés', 'veleszületett rendellenesség', 'onkológiai kezelés utáni állapot'];
 
@@ -47,6 +48,10 @@ export const GET = authedHandler(async (req, { auth }) => {
     LEFT JOIN patient_referral r ON r.patient_id = e.patient_id
     WHERE 1=1
   `;
+  // Inaktivált betegek (117) csak az egy betegre szűrt nézetben látszanak.
+  if (!patientId) {
+    episodeQuery += ` AND ${activePatientSql('p')}`;
+  }
   const params: (string | number)[] = [];
   let paramIdx = 1;
   if (patientId) {

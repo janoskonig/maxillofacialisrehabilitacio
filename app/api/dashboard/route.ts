@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
 import { fetchQualitySummary } from '@/lib/research-registry/quality-summary';
 import { TODAYS_APPOINTMENTS_QUERY } from '@/lib/queries/todays-appointments';
+import { activePatientSql } from '@/lib/patient-inactivation-sql';
 
 export const dynamic = 'force-dynamic';
 
@@ -59,6 +60,7 @@ export const GET = authedHandler(async (req, { auth }) => {
       FROM patients p
       LEFT JOIN patient_referral r ON r.patient_id = p.id
       WHERE p.kezeleoorvos_user_id IS NULL
+        AND ${activePatientSql('p')}
         AND (p.kezeleoorvos IS NULL OR p.kezeleoorvos = '')
         AND p.created_by IS NULL
       ORDER BY p.created_at ASC`

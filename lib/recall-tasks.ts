@@ -22,6 +22,7 @@
 import type { Pool, PoolClient } from 'pg';
 import { getDbPool } from './db';
 import { RECALL_CADENCE_DAYS, recallCadenceForRisk, recallLabelForInterval } from './recall-cadence';
+import { activePatientSql } from './patient-inactivation-sql';
 
 /**
  * @deprecated A rizikó-alapú kadencia váltotta ki (lib/recall-cadence.ts);
@@ -78,7 +79,8 @@ export async function ensureRecallTasksForEpisode(
        JOIN patients p ON p.id = pe.patient_id
       WHERE pe.id = $1
         AND pe.status = 'open'
-        AND p.halal_datum IS NULL`,
+        AND p.halal_datum IS NULL
+        AND ${activePatientSql('p')}`,
     [episodeId],
   );
   if (episodeResult.rows.length === 0) return 0;

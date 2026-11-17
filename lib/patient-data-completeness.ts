@@ -11,6 +11,7 @@ import {
 import type { Patient } from '@/lib/types';
 import { getPlausibilityWarnings, type PlausibilityWarning } from '@/lib/data-plausibility';
 import { isDefectRasterEmpty } from '@/lib/defect-raster';
+import { activePatientSql } from './patient-inactivation-sql';
 
 /** Mindig értelmezhető klinikai tételek száma: kötelező mezők + kötelező dokumentumok. */
 const CLINICAL_APPLICABLE = REQUIRED_FIELDS.length + REQUIRED_DOC_RULES.length;
@@ -267,7 +268,10 @@ export async function getPatientDataCompleteness(
   const pool = getDbPool();
 
   const params: unknown[] = [];
-  let whereClause = '';
+  // A teljes (minden betegre kiterjedő) riport — emlékeztetők, munkalisták,
+  // admin-riport — az inaktivált betegeket kihagyja; az egy betegre szóló
+  // lekérdezés (karton) őt is kiértékeli.
+  let whereClause = `WHERE ${activePatientSql('p')}`;
   if (options?.patientId) {
     params.push(options.patientId);
     whereClause = `WHERE p.id = $1`;

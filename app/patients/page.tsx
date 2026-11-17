@@ -7,7 +7,7 @@ import { Patient } from "@/lib/types";
 import { searchPatients } from "@/lib/storage";
 import { PatientList } from "@/components/PatientList";
 import { useToast } from "@/contexts/ToastContext";
-import { Plus, Search, Filter, RotateCcw } from "lucide-react";
+import { Plus, Search, Filter, RotateCcw, Archive } from "lucide-react";
 import { IntakeRecommendationBadge } from "@/components/widgets/IntakeRecommendationBadge";
 import { getCurrentUser } from "@/lib/auth";
 import { AppShell } from "@/components/layout/AppShell";
@@ -214,6 +214,9 @@ export default function PatientsPage() {
   const [fotoViewerPatient, setFotoViewerPatient] = useState<Patient | null>(
     null,
   );
+  // Inaktivált betegek nézete (117) — nem perzisztált, csak URL-ben (?status=inactive).
+  const [showInactive, setShowInactive] = useState(false);
+  const [inactiveTotal, setInactiveTotal] = useState<number | null>(null);
   const [listStatus, setListStatus] = useState<"loading" | "error" | "success">(
     "loading",
   );
@@ -242,6 +245,7 @@ export default function PatientsPage() {
         const urlParams = new URLSearchParams(window.location.search);
         const initialSearch = urlParams.get("q") ?? "";
         setSearchInput(initialSearch);
+        setShowInactive(urlParams.get("status") === "inactive");
         dispatch({ type: "SET_SEARCH", query: initialSearch });
         let stored: {
           scope?: string;
@@ -364,6 +368,7 @@ export default function PatientsPage() {
           phase: quickView,
           filters: additionalFilters,
           includeFilterCounts: true,
+          status: showInactive ? "inactive" : "active",
           limit: PAGE_SIZE,
           offset: (page - 1) * PAGE_SIZE,
           sort: sortField || undefined,
@@ -378,6 +383,7 @@ export default function PatientsPage() {
               patients: Patient[];
               total: number;
               filterCounts?: PatientFilterCounts;
+              inactiveTotal?: number;
             })
           : null;
         const pList = paginated ? paginated.patients : (result as Patient[]);
@@ -386,6 +392,7 @@ export default function PatientsPage() {
         dispatch({ type: "SEARCH_RESULTS", patients: pList, total });
         setListStatus("success");
         setFilterCounts(paginated?.filterCounts ?? null);
+        setInactiveTotal(paginated?.inactiveTotal ?? null);
 
         const url = new URL(window.location.href);
         url.searchParams.delete("view");
@@ -397,6 +404,8 @@ export default function PatientsPage() {
         if (additionalFilters.length > 0)
           url.searchParams.set("filters", additionalFilters.join(","));
         else url.searchParams.delete("filters");
+        if (showInactive) url.searchParams.set("status", "inactive");
+        else url.searchParams.delete("status");
         window.history.replaceState({}, "", url.toString());
         try {
           window.localStorage.setItem(
@@ -426,6 +435,7 @@ export default function PatientsPage() {
     additionalFilters,
     sortField,
     sortDirection,
+    showInactive,
     refreshKey,
     page,
     isAuthorized,
@@ -733,6 +743,27 @@ export default function PatientsPage() {
                   </div>
                 </details>
 
+                {(showInactive || (inactiveTotal ?? 0) > 0) && (
+                  <button
+                    type="button"
+                    aria-pressed={showInactive}
+                    onClick={() => {
+                      setShowInactive((value) => !value);
+                      dispatch({ type: "SET_PAGE", page: 1 });
+                    }}
+                    title="Inaktivált betegek: nem célcsoport, máshová irányítva stb. Ezek alapból nem jelennek meg a listában."
+                    className={`inline-flex items-center gap-1.5 rounded-lg border px-3 py-1.5 text-sm font-medium transition-colors ${
+                      showInactive
+                        ? "border-gray-700 bg-gray-700 text-white dark:border-gray-300 dark:bg-gray-300 dark:text-gray-900"
+                        : "border-gray-300 dark:border-gray-700 bg-white dark:bg-gray-900 text-gray-600 dark:text-gray-400 hover:border-gray-500"
+                    }`}
+                  >
+                    <Archive className="w-4 h-4" />
+                    Inaktív betegek
+                    {inactiveTotal != null ? ` (${inactiveTotal})` : ""}
+                  </button>
+                )}
+
                 {hasNonDefaultFilters && (
                   <button
                     type="button"
@@ -748,6 +779,14 @@ export default function PatientsPage() {
               </div>
             </section>
           </div>
+
+          {showInactive && (
+            <div className="rounded-lg border border-gray-300 dark:border-gray-700 bg-gray-50 dark:bg-gray-800/60 px-3 py-2 text-sm text-gray-700 dark:text-gray-300">
+              <strong>Inaktivált betegek.</strong> Nem jelennek meg a beteglistán és a
+              munkalistákon, és nem kapnak automatikus emlékeztetőt. A kartonjukon
+              újraaktiválhatók.
+            </div>
+          )}
 
           {/* Találatszám — kompakt felirat a lista fölött (a külön „Páciensek" kártya helyett) */}
           <p

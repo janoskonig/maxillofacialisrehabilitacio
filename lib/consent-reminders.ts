@@ -24,6 +24,7 @@ import {
 } from '@/lib/ohip14-patient-tasks';
 import { sendPushNotification } from '@/lib/push-notifications';
 import { logger } from '@/lib/logger';
+import { activePatientSql } from './patient-inactivation-sql';
 
 type Db = Pool | PoolClient;
 
@@ -97,6 +98,7 @@ export async function sendConsentReminders(): Promise<ReminderResult> {
     FROM patients p
     WHERE p.email IS NOT NULL AND p.email <> ''
       AND p.halal_datum IS NULL
+        AND ${activePatientSql('p')}
       AND EXISTS (
         SELECT 1 FROM patient_episodes pe
         WHERE pe.patient_id = p.id AND pe.status = 'open'
