@@ -37,6 +37,8 @@ export interface SelfFillReminderResult {
   emailsSent: number;
   skipped: number;
   errors: number;
+  /** Leiratkozott (kerdoiv_emlekezteto_tiltva) betegek száma. */
+  optedOut: number;
 }
 
 export async function sendPatientSelfFillReminders(): Promise<SelfFillReminderResult> {
@@ -48,17 +50,33 @@ export async function sendPatientSelfFillReminders(): Promise<SelfFillReminderRe
     emailsSent: 0,
     skipped: 0,
     errors: 0,
+    optedOut: 0,
   };
 
   // Csak nyitott epizódú betegeket nudge-olunk (lezárt ellátásnál nem).
   const openRes = await pool.query(
-    `SELECT DISTINCT pe.patient_id
+    `SELECT DISTINCT pe.patient_id, p.kerdoiv_emlekezteto_tiltva AS opted_out
        FROM patient_episodes pe
        JOIN patients p ON p.id = pe.patient_id
       WHERE pe.status = 'open'
         AND p.halal_datum IS NULL`,
   );
-  const openIds = new Set<string>(openRes.rows.map((r: any) => r.patient_id));
+  // A kérdőív-emlékeztetőkről leiratkozott betegek semmilyen nudge-ot nem kapnak.
+  const optedOutIds = new Set<string>(
+    openRes.rows.filter((r: any) => r.opted_out === true).map((r: any) => r.patient_id),
+  );
+  const openIds = new Set<string>(
+    openRes.rows.filter((r: any) => r.opted_out !== true).map((r: any) => r.patient_id),
+  );
+  for (const patientId of Array.from(optedOutIds)) {
+    try {
+      result.tasksClosed += await closeOpenSelfFillTasks(patientId);
+      result.optedOut += 1;
+    } catch (err) {
+      logger.error(`[selffill-reminders] leiratkozott feladat-zárás hiba (${patientId}):`, err);
+      result.errors += 1;
+    }
+  }
   if (openIds.size === 0) return result;
 
   // Egyetlen forrás-igazság: a completeness-riport (a hiány + N/A logika közös).
@@ -85,7 +103,8 @@ export async function sendPatientSelfFillReminders(): Promise<SelfFillReminderRe
       // Heti e-mail cooldown.
       const emailRes = await pool.query(
         `SELECT p.email FROM patients p
-          WHERE p.id = $1 AND p.email IS NOT NULL AND btrim(p.email) <> ''`,
+          WHERE p.id = $1 AND p.email IS NOT NULL AND btrim(p.email) <> ''
+            AND NOT p.kerdoiv_emlekezteto_tiltva`,
         [row.patientId],
       );
       const email: string | undefined = emailRes.rows[0]?.email;
