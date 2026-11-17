@@ -31,7 +31,7 @@ export function PatientQuickSearch({ onSelect, autoFocus = false, placeholder = 
     const timer = setTimeout(async () => {
       setLoading(true);
       try {
-        const res = await fetch(`/api/patients?q=${encodeURIComponent(q)}&limit=20`, {
+        const res = await fetch(`/api/patients?q=${encodeURIComponent(q)}&status=all&limit=20`, {
           credentials: 'include',
         });
         if (!res.ok) throw new Error('Beteglista hiba');

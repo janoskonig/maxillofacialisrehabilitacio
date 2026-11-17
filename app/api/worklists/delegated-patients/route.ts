@@ -3,6 +3,7 @@ import { getDbPool } from '@/lib/db';
 import { authedHandler } from '@/lib/api/route-handler';
 import { validateUUID } from '@/lib/validation';
 import { getPatientDataCompleteness } from '@/lib/patient-data-completeness';
+import { activePatientSql } from '@/lib/patient-inactivation-sql';
 
 export const dynamic = 'force-dynamic';
 
@@ -68,6 +69,7 @@ export const GET = authedHandler(async (req, { auth }) => {
        JOIN users ku ON ku.id = p.kezeleoorvos_user_id
        LEFT JOIN users ab ON ab.id = p.kezeleoorvos_assigned_by
       WHERE ${whereDoctor}
+        AND ${activePatientSql('p')}
       ORDER BY "doctorName", p.nev`,
     params
   );
@@ -113,7 +115,7 @@ export const GET = authedHandler(async (req, { auth }) => {
   let noOwner: Array<{ id: string; nev: string | null; completenessScore: number | null; missing: number }> = [];
   if (!doctorId && role === 'admin') {
     const noOwnerRes = await pool.query(
-      `SELECT p.id, p.nev FROM patients p WHERE p.kezeleoorvos_user_id IS NULL`,
+      `SELECT p.id, p.nev FROM patients p WHERE p.kezeleoorvos_user_id IS NULL AND ${activePatientSql('p')}`,
     );
     noOwner = noOwnerRes.rows
       .map((r: any) => {

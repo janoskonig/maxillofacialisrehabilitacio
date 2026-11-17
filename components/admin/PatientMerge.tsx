@@ -37,7 +37,7 @@ export function PatientMerge() {
 
   const searchPatientsApi = useCallback(async (query: string): Promise<PatientSummary[]> => {
     if (!query || query.length < 2) return [];
-    const res = await fetch(`/api/patients?q=${encodeURIComponent(query)}&limit=10`, {
+    const res = await fetch(`/api/patients?q=${encodeURIComponent(query)}&status=all&limit=10`, {
       credentials: 'include',
     });
     if (!res.ok) return [];

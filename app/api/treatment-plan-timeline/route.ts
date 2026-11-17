@@ -9,6 +9,7 @@ import {
 import { isReadPlanItemsEnabled } from '@/lib/plan-items-flags';
 import { loadPlanItemLinksByLegacyEwp } from '@/lib/episode-plan-read-model';
 import type { EpisodeObstacle } from '@/lib/episode-obstacles';
+import { activePatientSql } from '@/lib/patient-inactivation-sql';
 
 export const dynamic = 'force-dynamic';
 
@@ -94,6 +95,8 @@ export const GET = roleHandler(['admin', 'beutalo_orvos', 'fogpótlástanász'],
   // A patient workspace also includes custom plans and aftercare without a template.
   const whereParts: string[] = patientId ? [] : [
     `(pe.care_pathway_id IS NOT NULL OR EXISTS (SELECT 1 FROM episode_pathways ep2 WHERE ep2.episode_id = pe.id))`,
+    // Inaktivált betegek (117) csak a saját kartonjukon látszanak.
+    activePatientSql('p'),
   ];
   const params: unknown[] = [];
   let pi = 1;

@@ -8,6 +8,7 @@ import {
 import { sendPushNotification } from '@/lib/push-notifications';
 import { sendEmail, getBaseUrlForEmail } from '@/lib/email';
 import { logger } from '@/lib/logger';
+import { activePatientSql } from './patient-inactivation-sql';
 
 /**
  * Beteg-önkitöltési nudge (az "önjáró adatgyűjtés" beteg-oldali ága).
@@ -56,7 +57,8 @@ export async function sendPatientSelfFillReminders(): Promise<SelfFillReminderRe
        FROM patient_episodes pe
        JOIN patients p ON p.id = pe.patient_id
       WHERE pe.status = 'open'
-        AND p.halal_datum IS NULL`,
+        AND p.halal_datum IS NULL
+        AND ${activePatientSql('p')}`,
   );
   const openIds = new Set<string>(openRes.rows.map((r: any) => r.patient_id));
   if (openIds.size === 0) return result;
